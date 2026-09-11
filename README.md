@@ -2,14 +2,7 @@
 
 Unified entertainment operating system.
 
-**How to work with Cursor:** do not paste 25 prompts at once.
 
-1. Read [`docs/prompts/00_CURSOR_OPERATING_SYSTEM.md`](docs/prompts/00_CURSOR_OPERATING_SYSTEM.md).
-2. Confirm architecture in [`docs/README.md`](docs/README.md). Do not implement yet.
-3. Run **one** phase prompt (`PHASE N`) + matching `docs/modules/*.md`.
-4. Inside a phase: Design → DB → Domain → API → Frontend → QA — each **STOP**. See [`docs/prompts/MODULE_MASTER_TEMPLATE.md`](docs/prompts/MODULE_MASTER_TEMPLATE.md) and [`docs/prompts/README.md`](docs/prompts/README.md).
-
-**Phase numbering:** Phase 0 = architecture docs (expanded pack in `docs/`; summary [`docs/PHASE_00_SUMMARY.md`](docs/PHASE_00_SUMMARY.md)). Phase 1 = platform foundation code (may already be in `apps/`). Do not auto-advance. Do not start Events/Ticketing/Music from a foundation chat.
 
 Backend is a **Python FastAPI** modular monolith. Next.js is UI only — no domain, finance, or royalty logic in Server Actions.
 
@@ -99,10 +92,3 @@ python -m pytest
 
 If Docker is available, tests will try Testcontainers Postgres automatically.
 
-## What Phase 1 is not
-
-Events, ticketing, music, streaming, royalties, campaigns, and payments are not in scope for foundation. Do not add them from a Phase 1 prompt. Full 15-phase map: [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
-
-## Secrets
-
-Copy `.env.example` to `.env`. Never commit `.env` or JWT/storage credentials.
