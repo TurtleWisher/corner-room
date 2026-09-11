@@ -108,6 +108,7 @@ def decide_authorize(
     if resource_type in {
         "event",
         "venue",
+        "campaign",
         "product",
         "offer",
         "subscription_plan",

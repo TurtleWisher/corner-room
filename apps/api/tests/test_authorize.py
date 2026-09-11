@@ -495,6 +495,62 @@ def test_event_resource_grant() -> None:
     )
 
 
+def test_campaign_org_scoped_write() -> None:
+    user_id = uuid4()
+    org_a, org_b = uuid4(), uuid4()
+    campaign_a, campaign_b = uuid4(), uuid4()
+    assignments = [
+        RolePermissionView(
+            permission_key="campaign.write",
+            organization_id=org_a,
+            expires_at=None,
+            assignment_status="ACTIVE",
+        )
+    ]
+    assert (
+        decide_authorize(
+            permission="campaign.write",
+            now=NOW,
+            assignments=assignments,
+            grants=[],
+            memberships=[],
+            user_id=user_id,
+            resource_type="campaign",
+            resource_id=campaign_a,
+            scope_organization_id=org_a,
+        )
+        is True
+    )
+    assert (
+        decide_authorize(
+            permission="campaign.write",
+            now=NOW,
+            assignments=assignments,
+            grants=[],
+            memberships=[],
+            user_id=user_id,
+            resource_type="campaign",
+            resource_id=campaign_b,
+            scope_organization_id=org_b,
+        )
+        is False
+    )
+    assert (
+        decide_authorize(
+            permission="campaign.write",
+            now=NOW,
+            assignments=[],
+            grants=[],
+            memberships=[MembershipView(organization_id=org_a, user_id=user_id, status="ACTIVE")],
+            user_id=user_id,
+            resource_type="campaign",
+            resource_id=campaign_a,
+            scope_organization_id=org_a,
+        )
+        is False
+    )
+
+
 def test_track_org_scoped_permission() -> None:
     user_id = uuid4()
     org_a, org_b = uuid4(), uuid4()

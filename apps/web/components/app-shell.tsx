@@ -30,6 +30,7 @@ function NavAuth() {
         <Link href="/royalties">Royalties</Link>
         <Link href="/staff/royalties">Royalty ops</Link>
         <Link href="/staff/finance">Finance</Link>
+        <Link href="/staff/campaigns">Campaigns</Link>
         <Link href="/account">Account</Link>
         <button type="button" className="underline" onClick={() => void logout()}>
           Sign out

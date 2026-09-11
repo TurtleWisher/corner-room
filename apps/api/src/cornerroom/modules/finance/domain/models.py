@@ -200,6 +200,7 @@ class Expense(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, VersionMixin, Bas
         CheckConstraint("amount_minor >= 0", name="amount_non_negative"),
         UniqueConstraint("source_type", "source_id", "category", name="uq_expenses_recognition"),
         Index("ix_expenses_org_status", "organization_id", "status"),
+        Index("ix_expenses_campaign_id", "campaign_id"),
         {"schema": "finance"},
     )
 
@@ -219,6 +220,7 @@ class Expense(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, VersionMixin, Bas
         nullable=True,
     )
     event_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    campaign_id: Mapped[UUID | None] = mapped_column(nullable=True)
     approved_by: Mapped[UUID | None] = mapped_column(nullable=True)
     __mapper_args__ = {"version_id_col": "version"}
 

@@ -92,6 +92,7 @@ async def pg_session(postgres_available: str | None) -> AsyncIterator[AsyncSessi
             "finance",
             "subscriptions",
             "royalties",
+            "campaigns",
         ):
             await conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
         await conn.run_sync(Base.metadata.create_all)
@@ -142,6 +143,7 @@ async def client(settings: Settings, postgres_available: str | None) -> AsyncIte
             "finance",
             "subscriptions",
             "royalties",
+            "campaigns",
         ):
             await conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
         await conn.run_sync(Base.metadata.create_all)

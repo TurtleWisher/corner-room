@@ -44,6 +44,7 @@ FOUNDATION_PERMISSIONS = (
     "commerce.grant",
     "royalty.read",
     "royalty.run",
+    "campaign.write",
 )
 
 RESOURCE_TYPES = (

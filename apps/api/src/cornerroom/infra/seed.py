@@ -29,7 +29,7 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
         "Event Manager",
         ("event.read", "event.write", "event.publish", "event.cancel", "venue.read"),
     ),
-    "marketing_manager": ("Marketing Manager", ()),
+    "marketing_manager": ("Marketing Manager", ("campaign.write", "event.read")),
     "finance_manager": (
         "Finance Manager",
         (
@@ -149,6 +149,8 @@ async def seed_foundation(session: AsyncSession, settings: Settings) -> None:
         ("subscription.cancelled", "Your subscription is cancelled. Access continues until the current period ends."),
         ("royalty.statement_issued", "A royalty statement is available."),
         ("royalty.statement_adjusted", "A royalty statement was adjusted."),
+        ("campaign.task_assigned", "A campaign task was assigned to you."),
+        ("campaign.task_completed", "A campaign task was completed."),
     ):
         found = (
             await session.execute(

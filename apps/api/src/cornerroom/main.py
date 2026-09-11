@@ -14,6 +14,7 @@ from cornerroom.api.v1.artists import router as artists_router
 from cornerroom.api.v1.audit import router as audit_router
 from cornerroom.api.v1.auth import router as auth_router
 from cornerroom.api.v1.bands import router as bands_router
+from cornerroom.api.v1.campaigns import router as campaigns_router
 from cornerroom.api.v1.events import router as events_router
 from cornerroom.api.v1.ticketing import router as ticketing_router
 from cornerroom.api.v1.tracks import router as tracks_router
@@ -104,6 +105,7 @@ def create_app(settings: Settings | None = None, *, enable_lifespan: bool = True
     app.include_router(subscriptions_router, prefix="/api/v1")
     app.include_router(royalties_router, prefix="/api/v1")
     app.include_router(finance_router, prefix="/api/v1")
+    app.include_router(campaigns_router, prefix="/api/v1")
     app.include_router(roles_router, prefix="/api/v1")
     app.include_router(audit_router, prefix="/api/v1")
     app.include_router(notifications_router, prefix="/api/v1")

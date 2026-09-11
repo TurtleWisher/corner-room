@@ -17,6 +17,7 @@ from cornerroom.infra.settings import Settings, get_settings
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.artists.application.service import ArtistService
 from cornerroom.modules.authorization.application.service import AuthorizationService
+from cornerroom.modules.campaigns.application.service import CampaignService
 from cornerroom.modules.commerce.application.catalog import CatalogCommerceService
 from cornerroom.modules.commerce.application.service import CheckoutService
 from cornerroom.modules.finance.application.accrual import FinanceRoyaltyAccrual
@@ -29,6 +30,7 @@ from cornerroom.modules.subscriptions.application.service import SubscriptionSer
 from cornerroom.modules.events.application.service import EventService
 from cornerroom.modules.identity.application.organization_service import OrganizationService
 from cornerroom.modules.music.application.service import MusicService
+from cornerroom.modules.notifications.application.service import NotificationService
 from cornerroom.modules.streaming.application.service import StreamingService
 from cornerroom.modules.royalties.application.service import RoyaltyService
 from cornerroom.modules.ticketing.application.service import TicketingService
@@ -72,6 +74,10 @@ async def organization_service(
 
 async def event_service(session: AsyncSession = Depends(db_session)) -> EventService:
     return EventService(session)
+
+
+async def campaign_service(session: AsyncSession = Depends(db_session)) -> CampaignService:
+    return CampaignService(session, notifications=NotificationService(session))
 
 
 async def artist_service(session: AsyncSession = Depends(db_session)) -> ArtistService:

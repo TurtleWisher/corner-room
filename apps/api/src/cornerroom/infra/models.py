@@ -31,6 +31,14 @@ from cornerroom.modules.authorization.domain.models import (
     RoleAssignment,
     RolePermission,
 )
+from cornerroom.modules.campaigns.domain.models import (
+    Campaign,
+    CampaignAsset,
+    CampaignChannel,
+    CampaignKpiTarget,
+    CampaignLink,
+    CampaignTask,
+)
 from cornerroom.modules.documents.domain.models import (
     Document,
     DocumentAcl,
@@ -115,6 +123,12 @@ __all__ = [
     "AuditLog",
     "Band",
     "BandMember",
+    "Campaign",
+    "CampaignAsset",
+    "CampaignChannel",
+    "CampaignKpiTarget",
+    "CampaignLink",
+    "CampaignTask",
     "CheckIn",
     "Credit",
     "CustomerProfile",

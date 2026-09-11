@@ -131,13 +131,62 @@ class FinanceOpsService:
         source_type: str,
         source_id: UUID,
         event_id: UUID | None = None,
+        campaign_id: UUID | None = None,
     ) -> Expense:
         org_id = self._workspace(ctx)
         await self._staff(ctx, "finance.post", org_id)
+        return await self._insert_draft_expense(
+            ctx,
+            organization_id=org_id,
+            category=category,
+            amount_minor=amount_minor,
+            currency_code=currency_code,
+            source_type=source_type,
+            source_id=source_id,
+            event_id=event_id,
+            campaign_id=campaign_id,
+        )
+
+    async def create_campaign_expense_draft(
+        self,
+        ctx: AuthContext,
+        *,
+        campaign_id: UUID,
+        category: str,
+        amount_minor: int,
+        currency_code: str,
+        source_id: UUID,
+    ) -> Expense:
+        """DRAFT only. Caller is Campaigns (campaign.write). Does not post ledger."""
+        org_id = self._workspace(ctx)
+        return await self._insert_draft_expense(
+            ctx,
+            organization_id=org_id,
+            category=category,
+            amount_minor=amount_minor,
+            currency_code=currency_code,
+            source_type="CAMPAIGN_EXPENSE_REQUEST",
+            source_id=source_id,
+            campaign_id=campaign_id,
+        )
+
+    async def _insert_draft_expense(
+        self,
+        ctx: AuthContext,
+        *,
+        organization_id: UUID,
+        category: str,
+        amount_minor: int,
+        currency_code: str,
+        source_type: str,
+        source_id: UUID,
+        event_id: UUID | None = None,
+        campaign_id: UUID | None = None,
+    ) -> Expense:
         cat = (
             await self.session.execute(
                 select(ExpenseCategory).where(
-                    ExpenseCategory.organization_id == org_id,
+                    ExpenseCategory.organization_id == organization_id,
                     ExpenseCategory.code == category,
                     ExpenseCategory.status == "ACTIVE",
                 )
@@ -152,7 +201,7 @@ class FinanceOpsService:
             )
         money = Money(amount_minor, currency_code)
         row = Expense(
-            organization_id=org_id,
+            organization_id=organization_id,
             status="DRAFT",
             category=category,
             source_type=source_type,
@@ -160,6 +209,7 @@ class FinanceOpsService:
             amount_minor=money.amount_minor,
             currency_code=money.currency_code,
             event_id=event_id,
+            campaign_id=campaign_id,
             created_by=ctx.user_id,
             updated_by=ctx.user_id,
         )
@@ -173,10 +223,54 @@ class FinanceOpsService:
             action="expense.drafted",
             entity_type="Expense",
             entity_id=row.id,
-            new_state={"status": row.status, "amount_minor": row.amount_minor},
-            organization_id=org_id,
+            new_state={
+                "status": row.status,
+                "amount_minor": row.amount_minor,
+                "campaign_id": str(campaign_id) if campaign_id else None,
+            },
+            organization_id=organization_id,
         )
         return row
+
+    async def committed_campaign_spend(
+        self,
+        organization_id: UUID,
+        campaign_id: UUID,
+    ) -> tuple[int, str | None]:
+        rows = list(
+            (
+                await self.session.execute(
+                    select(Expense).where(
+                        Expense.organization_id == organization_id,
+                        Expense.campaign_id == campaign_id,
+                        Expense.status.in_(("DRAFT", "APPROVED", "RECOGNIZED")),
+                    )
+                )
+            ).scalars()
+        )
+        if not rows:
+            return 0, None
+        currencies = {row.currency_code for row in rows}
+        if len(currencies) > 1:
+            raise AppError(
+                "CURRENCY_MISMATCH",
+                "Campaign expenses mix currencies",
+                409,
+            )
+        return sum(row.amount_minor for row in rows), next(iter(currencies))
+
+    async def list_campaign_expenses(self, organization_id: UUID, campaign_id: UUID) -> list[Expense]:
+        rows = (
+            await self.session.execute(
+                select(Expense)
+                .where(
+                    Expense.organization_id == organization_id,
+                    Expense.campaign_id == campaign_id,
+                )
+                .order_by(Expense.created_at.asc(), Expense.id.asc())
+            )
+        ).scalars().all()
+        return list(rows)
 
     async def approve_expense(self, ctx: AuthContext, expense_id: UUID) -> Expense:
         org_id = self._workspace(ctx)
@@ -207,18 +301,31 @@ class FinanceOpsService:
             )
         ).scalar_one_or_none()
         account_code = cat.account_code if cat else CODE_EXPENSE
+        source_module = "CAMPAIGNS" if row.campaign_id is not None else "FINANCE"
         journal = await self.ledger.post(
             ctx,
             organization_id=org_id,
             journal_type="EXPENSE",
-            source_module="FINANCE",
+            source_module=source_module,
             source_type="EXPENSE",
             source_id=row.id,
             currency_code=row.currency_code,
             idempotency_key=f"expense:{row.id}",
             lines=[
-                LedgerLineInput(account_code, "DEBIT", row.amount_minor, event_id=row.event_id),
-                LedgerLineInput(CODE_AP, "CREDIT", row.amount_minor, event_id=row.event_id),
+                LedgerLineInput(
+                    account_code,
+                    "DEBIT",
+                    row.amount_minor,
+                    event_id=row.event_id,
+                    campaign_id=row.campaign_id,
+                ),
+                LedgerLineInput(
+                    CODE_AP,
+                    "CREDIT",
+                    row.amount_minor,
+                    event_id=row.event_id,
+                    campaign_id=row.campaign_id,
+                ),
             ],
         )
         row.status = "RECOGNIZED"

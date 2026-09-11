@@ -80,6 +80,7 @@ class ExpenseCreate(BaseModel):
     source_type: str
     source_id: UUID
     event_id: UUID | None = None
+    campaign_id: UUID | None = None
 
 
 class ExpenseOut(BaseModel):
@@ -88,6 +89,7 @@ class ExpenseOut(BaseModel):
     category: str
     amount_minor: int
     currency_code: str
+    campaign_id: UUID | None = None
 
 
 class ExpenseCategoryCreate(BaseModel):
@@ -294,6 +296,7 @@ async def create_expense(
         source_type=body.source_type,
         source_id=body.source_id,
         event_id=body.event_id,
+        campaign_id=body.campaign_id,
     )
     return ExpenseOut(
         id=row.id,
@@ -301,6 +304,7 @@ async def create_expense(
         category=row.category,
         amount_minor=row.amount_minor,
         currency_code=row.currency_code,
+        campaign_id=row.campaign_id,
     )
 
 
@@ -317,6 +321,7 @@ async def approve_expense(
         category=row.category,
         amount_minor=row.amount_minor,
         currency_code=row.currency_code,
+        campaign_id=row.campaign_id,
     )
 
 
@@ -333,6 +338,7 @@ async def recognize_expense(
         category=row.category,
         amount_minor=row.amount_minor,
         currency_code=row.currency_code,
+        campaign_id=row.campaign_id,
     )
 
 
