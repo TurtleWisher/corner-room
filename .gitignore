@@ -1,0 +1,53 @@
+# Secrets and local env
+.env
+.env.local
+.env.*.local
+.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.cover
+
+# Node
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Local storage and runtime
+var/
+*.log
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Test / tool leftovers
+.coverage.*
+coverage.xml
+.tox/
+.hypothesis/
+
+# Private internal project documentation
+/docs/
+/.cursor/

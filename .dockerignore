@@ -1,0 +1,9 @@
+**/__pycache__
+**/.venv
+**/.next
+**/node_modules
+**/.pytest_cache
+**/*.egg-info
+.git
+.env
+var

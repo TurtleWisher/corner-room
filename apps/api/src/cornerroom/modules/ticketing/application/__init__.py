@@ -1,0 +1,1 @@
+"""Ticketing application services."""
