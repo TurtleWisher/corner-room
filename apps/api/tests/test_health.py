@@ -19,7 +19,7 @@ async def test_live() -> None:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.get("/health/live")
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    assert response.json()["status"] == "HEALTHY"
     assert "x-request-id" in {k.lower() for k in response.headers}
 
 
@@ -46,9 +46,14 @@ async def test_ready_without_deps_is_unavailable() -> None:
             response = await client.get("/health/ready")
         assert response.status_code == 503
         body = response.json()
-        assert body["status"] == "unavailable"
-        assert "database" in body["checks"]
-        assert "redis" in body["checks"]
+        assert body["status"] == "UNAVAILABLE"
+        assert body["checks"]["database"]["status"] == "UNAVAILABLE"
+        assert body["checks"]["redis"]["status"] == "UNAVAILABLE"
+        assert body["checks"]["email"]["honesty"] == "EMAIL STUB"
+        dumped = response.text.lower()
+        assert "password" not in dumped
+        assert "jwt" not in dumped
+        assert "secret" not in dumped
     finally:
         await dispose_engine()
         await dispose_redis()

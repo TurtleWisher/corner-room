@@ -131,6 +131,12 @@ class Settings(BaseSettings):
             raise ValueError("COOKIE_SECURE must be true in production")
         if self.storage_backend == "s3" and not self.s3_bucket:
             raise ValueError("S3_BUCKET is required when STORAGE_BACKEND=s3 in production")
+        if not self.cors_origins:
+            raise ValueError("CORS_ORIGINS must be an explicit origin list in production")
+        if any(origin.strip() == "*" for origin in self.cors_origins):
+            raise ValueError("CORS_ORIGINS must not use a wildcard in production")
+        if self.log_level.upper() == "DEBUG":
+            raise ValueError("LOG_LEVEL must not be DEBUG in production")
         return self
 
     @property

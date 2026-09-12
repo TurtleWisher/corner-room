@@ -37,6 +37,10 @@ function NavAuth() {
         {flags.showFinance ? <Link href="/staff/finance">Finance</Link> : null}
         <Link href="/staff/campaigns">Campaigns</Link>
         {flags.showAnalytics ? <Link href="/staff/analytics">Analytics</Link> : null}
+        {flags.showOps ? <Link href="/staff/ops">Ops</Link> : null}
+        {flags.showOps ? <Link href="/staff/audit">Audit</Link> : null}
+        {flags.showUsers ? <Link href="/staff/users">Users</Link> : null}
+        {flags.showOrgs ? <Link href="/staff/organizations">Org inspect</Link> : null}
         <NotificationBell />
         <Link href="/account">Account</Link>
         <button type="button" className="underline" onClick={() => void logout()}>

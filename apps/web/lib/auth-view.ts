@@ -37,10 +37,16 @@ export function loginFormState(submitting: boolean, error: string | null): "idle
 export function staffNavFlags(permissions: string[] | undefined): {
   showAnalytics: boolean;
   showFinance: boolean;
+  showOps: boolean;
+  showUsers: boolean;
+  showOrgs: boolean;
 } {
   const perms = permissions ?? [];
   return {
     showAnalytics: perms.includes("analytics.read"),
     showFinance: perms.includes("finance.read"),
+    showOps: perms.includes("audit.read"),
+    showUsers: perms.includes("user.admin"),
+    showOrgs: perms.includes("org.admin"),
   };
 }

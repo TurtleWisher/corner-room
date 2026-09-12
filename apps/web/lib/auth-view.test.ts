@@ -51,6 +51,9 @@ describe("staff nav is UX-only", () => {
     expect(staffNavFlags(["analytics.read"])).toEqual({
       showAnalytics: true,
       showFinance: false,
+      showOps: false,
+      showUsers: false,
+      showOrgs: false,
     });
   });
 
@@ -58,6 +61,19 @@ describe("staff nav is UX-only", () => {
     expect(staffNavFlags(["finance.read", "analytics.read"])).toEqual({
       showAnalytics: true,
       showFinance: true,
+      showOps: false,
+      showUsers: false,
+      showOrgs: false,
+    });
+  });
+
+  it("shows ops and admin inspect from existing permissions only", () => {
+    expect(staffNavFlags(["audit.read", "user.admin", "org.admin"])).toEqual({
+      showAnalytics: false,
+      showFinance: false,
+      showOps: true,
+      showUsers: true,
+      showOrgs: true,
     });
   });
 });

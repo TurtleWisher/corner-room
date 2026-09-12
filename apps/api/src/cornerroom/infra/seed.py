@@ -49,7 +49,15 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
     "label_manager": ("Label Manager", ("artist.manage", "music.write")),
     "ops_manager": (
         "Operations Manager",
-        ("event.read", "event.write", "event.publish", "event.cancel", "venue.read", "venue.write"),
+        (
+            "event.read",
+            "event.write",
+            "event.publish",
+            "event.cancel",
+            "venue.read",
+            "venue.write",
+            "audit.read",
+        ),
     ),
     "checkin_staff": ("Check-in Staff", ("event.read", "ticket.checkin")),
     "support": ("Support", ()),

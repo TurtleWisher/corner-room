@@ -27,6 +27,7 @@ from cornerroom.api.v1.royalties import router as royalties_router
 from cornerroom.api.v1.finance import router as finance_router
 from cornerroom.api.v1.me import router as me_router
 from cornerroom.api.v1.notifications import router as notifications_router
+from cornerroom.api.v1.ops import router as ops_router
 from cornerroom.api.v1.organizations import router as orgs_router
 from cornerroom.api.v1.roles import router as roles_router
 from cornerroom.api.v1.search import router as search_router
@@ -71,13 +72,14 @@ def create_app(settings: Settings | None = None, *, enable_lifespan: bool = True
         await dispose_redis()
         await dispose_engine()
 
+    docs_enabled = not cfg.is_production
     app = FastAPI(
         title="Corner Room API",
         version=__version__,
         description="Corner Room API — modular monolith platform foundation.",
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
         lifespan=lifespan if enable_lifespan else None,
     )
     app.add_middleware(RequestContextMiddleware)
@@ -110,6 +112,7 @@ def create_app(settings: Settings | None = None, *, enable_lifespan: bool = True
     app.include_router(campaigns_router, prefix="/api/v1")
     app.include_router(roles_router, prefix="/api/v1")
     app.include_router(audit_router, prefix="/api/v1")
+    app.include_router(ops_router, prefix="/api/v1")
     app.include_router(notifications_router, prefix="/api/v1")
     app.include_router(search_router, prefix="/api/v1")
     app.include_router(analytics_router, prefix="/api/v1")

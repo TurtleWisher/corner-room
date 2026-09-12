@@ -1,11 +1,12 @@
 import { ErrorState } from "@/components/async-state";
 import { Card } from "@/components/ui/card";
 import { fetchHealth } from "@/lib/api";
+import { checkLabel, healthLabel } from "@/lib/ops-view";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  let health: { status: string; checks?: { database: boolean; redis: boolean } } | null = null;
+  let health: Awaited<ReturnType<typeof fetchHealth>> | null = null;
   let error: string | null = null;
   try {
     health = await fetchHealth();
@@ -31,11 +32,13 @@ export default async function HomePage() {
         ) : (
           <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
             <dt>Status</dt>
-            <dd>{health?.status}</dd>
+            <dd>{healthLabel(health?.status)}</dd>
             <dt>Database</dt>
-            <dd>{health?.checks?.database ? "ready" : "down"}</dd>
+            <dd>{checkLabel(health?.checks?.database)}</dd>
             <dt>Redis</dt>
-            <dd>{health?.checks?.redis ? "ready" : "down"}</dd>
+            <dd>{checkLabel(health?.checks?.redis)}</dd>
+            <dt>Email</dt>
+            <dd>{checkLabel(health?.checks?.email)}</dd>
           </dl>
         )}
       </Card>

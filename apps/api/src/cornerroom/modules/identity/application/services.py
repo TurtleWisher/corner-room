@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,8 +35,10 @@ from cornerroom.kernel.events import (
 )
 from cornerroom.kernel.ids import new_uuid
 from cornerroom.kernel.outbox import event_bus
+from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
+from cornerroom.modules.authorization.domain.models import Role, RoleAssignment
 from cornerroom.modules.identity.application.credentials import (
     hash_secret,
     hash_user_password,
@@ -48,13 +50,21 @@ from cornerroom.modules.identity.application.rate_limit import enforce_auth_rate
 from cornerroom.modules.identity.domain.models import (
     CustomerProfile,
     IdentityChallenge,
+    OrganizationMembership,
     Session,
     User,
+    USER_STATUSES,
 )
 
 
 def _normalize_email(email: str) -> str:
     return email.strip().lower()
+
+
+def _search_token(query: str | None) -> str:
+    if not query:
+        return ""
+    return "".join(ch for ch in query.strip().lower() if ch not in "%_")
 
 
 class IdentityService:
@@ -645,6 +655,111 @@ class IdentityService:
             new_state={"status": user.status},
         )
         return user
+
+    async def list_users(
+        self,
+        *,
+        query: str | None = None,
+        status: str | None = None,
+        cursor: str | None = None,
+        limit: int | None = None,
+        organization_id: UUID | None = None,
+    ) -> tuple[list[User], str | None]:
+        page = clamp_limit(limit, default=self.settings.pagination_default_limit)
+        stmt = select(User).where(User.deleted_at.is_(None))
+        if organization_id is not None:
+            member_ids = select(OrganizationMembership.user_id).where(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.status == "ACTIVE",
+                OrganizationMembership.deleted_at.is_(None),
+            )
+            stmt = stmt.where(User.id.in_(member_ids))
+        if status:
+            if status not in USER_STATUSES:
+                raise AppError("VALIDATION_ERROR", "Invalid user status", 422)
+            stmt = stmt.where(User.status == status)
+        cleaned = _search_token(query)
+        if cleaned:
+            pattern = f"%{cleaned}%"
+            stmt = stmt.where(
+                or_(User.email.ilike(pattern), User.phone.ilike(pattern))
+            )
+        stmt = stmt.order_by(User.created_at.desc(), User.id.desc())
+        if cursor:
+            try:
+                data = decode_cursor(cursor)
+            except Exception as exc:
+                raise AppError("VALIDATION_ERROR", "Invalid cursor", 422) from exc
+            stmt = stmt.where(User.created_at < data["t"])
+        stmt = stmt.limit(page + 1)
+        rows = list((await self.session.execute(stmt)).scalars().all())
+        next_cursor = None
+        if len(rows) > page:
+            last = rows[page - 1]
+            next_cursor = encode_cursor(last.created_at.isoformat(), last.id)
+            rows = rows[:page]
+        return rows, next_cursor
+
+    async def inspect_user(
+        self,
+        user_id: UUID,
+        *,
+        organization_id: UUID | None = None,
+    ) -> tuple[User, list[dict], list[dict]]:
+        user = await self.get_user_row(user_id)
+        if organization_id is not None:
+            membership = (
+                await self.session.execute(
+                    select(OrganizationMembership).where(
+                        OrganizationMembership.user_id == user.id,
+                        OrganizationMembership.organization_id == organization_id,
+                        OrganizationMembership.status == "ACTIVE",
+                        OrganizationMembership.deleted_at.is_(None),
+                    )
+                )
+            ).scalar_one_or_none()
+            if membership is None:
+                raise NotFoundError("User not found")
+        assignment_rows = (
+            await self.session.execute(
+                select(RoleAssignment, Role.key)
+                .join(Role, Role.id == RoleAssignment.role_id)
+                .where(
+                    RoleAssignment.user_id == user.id,
+                    RoleAssignment.deleted_at.is_(None),
+                    Role.deleted_at.is_(None),
+                )
+                .order_by(Role.key)
+            )
+        ).all()
+        assignments = [
+            {
+                "id": assignment.id,
+                "role_key": role_key,
+                "organization_id": assignment.organization_id,
+                "status": assignment.status,
+            }
+            for assignment, role_key in assignment_rows
+        ]
+        membership_rows = list(
+            (
+                await self.session.execute(
+                    select(OrganizationMembership).where(
+                        OrganizationMembership.user_id == user.id,
+                        OrganizationMembership.deleted_at.is_(None),
+                    )
+                )
+            ).scalars().all()
+        )
+        memberships = [
+            {
+                "id": row.id,
+                "organization_id": row.organization_id,
+                "status": row.status,
+            }
+            for row in membership_rows
+        ]
+        return user, assignments, memberships
 
     async def list_sessions(self, user_id: UUID) -> list[Session]:
         stmt = (

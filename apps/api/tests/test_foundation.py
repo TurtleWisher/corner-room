@@ -67,6 +67,20 @@ def test_invalid_configuration_rejected() -> None:
             jwt_secret="a-sufficiently-long-production-secret!!",
             cookie_secure=False,
         )
+    with pytest.raises(ValidationError):
+        Settings(
+            app_env="production",
+            jwt_secret="a-sufficiently-long-production-secret!!",
+            cookie_secure=True,
+            cors_origins=["*"],
+        )
+    with pytest.raises(ValidationError):
+        Settings(
+            app_env="production",
+            jwt_secret="a-sufficiently-long-production-secret!!",
+            cookie_secure=True,
+            log_level="DEBUG",
+        )
 
 
 @pytest.mark.asyncio
@@ -92,10 +106,12 @@ async def test_postgres_and_redis_unavailable_ready_is_503() -> None:
             ready = await client.get("/health/ready")
             health = await client.get("/health")
         assert ready.status_code == 503
-        assert ready.json()["checks"]["database"] is False
-        assert ready.json()["checks"]["redis"] is False
+        assert ready.json()["checks"]["database"]["ok"] is False
+        assert ready.json()["checks"]["redis"]["ok"] is False
         assert health.status_code == 200
-        assert health.json()["status"] == "degraded"
+        assert health.json()["status"] == "UNAVAILABLE"
+        assert "password" not in health.text.lower()
+        assert "secret" not in health.text.lower()
     finally:
         await dispose_engine()
         await dispose_redis()
@@ -109,7 +125,7 @@ async def test_health_and_live_and_security_headers() -> None:
         live = await client.get("/health/live")
         health = await client.get("/health")
     assert live.status_code == 200
-    assert live.json()["status"] == "ok"
+    assert live.json()["status"] == "HEALTHY"
     assert health.headers.get("x-content-type-options") == "nosniff"
     assert health.headers.get("x-frame-options") == "DENY"
     assert "x-request-id" in {k.lower() for k in live.headers}
