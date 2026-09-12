@@ -58,6 +58,14 @@ class ArtistService:
         self.audit = AuditService(session)
         self.authz = AuthorizationService(session, clock=self.clock)
 
+    async def list_ids_for_projection(self) -> list[UUID]:
+        stmt = select(Artist.id).where(Artist.deleted_at.is_(None))
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def list_ids_for_projection_bands(self) -> list[UUID]:
+        stmt = select(Band.id).where(Band.deleted_at.is_(None))
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def _org(self, org_id: UUID) -> Organization:
         org = await self.session.get(Organization, org_id)
         if org is None or org.deleted_at is not None:

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { loginFormState, resolveProtectedView } from "./auth-view";
+import { loginFormState, resolveProtectedView, staffNavFlags } from "./auth-view";
 
 describe("login form state", () => {
   it("shows loading while submitting", () => {
@@ -43,5 +43,21 @@ describe("protected route view", () => {
 
   it("forbids an authenticated user missing a required permission", () => {
     expect(resolveProtectedView("authenticated", user, "role.admin").kind).toBe("forbidden");
+  });
+});
+
+describe("staff nav is UX-only", () => {
+  it("shows analytics from analytics.read without granting finance", () => {
+    expect(staffNavFlags(["analytics.read"])).toEqual({
+      showAnalytics: true,
+      showFinance: false,
+    });
+  });
+
+  it("shows finance only when finance.read is present", () => {
+    expect(staffNavFlags(["finance.read", "analytics.read"])).toEqual({
+      showAnalytics: true,
+      showFinance: true,
+    });
   });
 });

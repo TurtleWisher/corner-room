@@ -91,7 +91,11 @@ function ArtistDetailBody() {
         <p className="mt-1 text-sm text-neutral-600">{artist.status}</p>
         <p className="mt-2 text-sm">
           <Link href={`/artists/${artist.id}/analytics`} className="underline">
-            Play aggregates
+            Operational play aggregates
+          </Link>
+          {" · "}
+          <Link href={`/staff/analytics/artists/${artist.id}`} className="underline">
+            Artist analytics
           </Link>
         </p>
       </div>

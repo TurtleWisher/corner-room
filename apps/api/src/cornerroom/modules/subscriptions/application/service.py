@@ -295,6 +295,12 @@ class SubscriptionService:
             )
         ).scalars().first()
 
+    async def get_subscription_row(self, subscription_id: UUID) -> Subscription:
+        row = await self.session.get(Subscription, subscription_id)
+        if row is None or row.deleted_at is not None:
+            raise NotFoundError("Subscription not found")
+        return row
+
     async def get_own(self, ctx: AuthContext, subscription_id: UUID) -> Subscription:
         row = await self.session.get(Subscription, subscription_id)
         if row is None or row.deleted_at is not None or row.user_id != ctx.user_id:

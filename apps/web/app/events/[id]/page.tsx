@@ -150,6 +150,11 @@ function EventDetailBody() {
           {event.status} · {event.timezone}
           {event.starts_at ? ` · ${event.starts_at}` : ""}
         </p>
+        <p className="mt-2 text-sm">
+          <Link href={`/staff/analytics/events/${event.id}`} className="underline">
+            Event analytics
+          </Link>
+        </p>
       </div>
       {actionError ? (
         <ErrorState title="Action failed" message={actionError} />

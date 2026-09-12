@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from cornerroom import __version__
 from cornerroom.api.health import router as health_router
+from cornerroom.api.v1.analytics import router as analytics_router
 from cornerroom.api.v1.artists import router as artists_router
 from cornerroom.api.v1.audit import router as audit_router
 from cornerroom.api.v1.auth import router as auth_router
@@ -28,6 +29,7 @@ from cornerroom.api.v1.me import router as me_router
 from cornerroom.api.v1.notifications import router as notifications_router
 from cornerroom.api.v1.organizations import router as orgs_router
 from cornerroom.api.v1.roles import router as roles_router
+from cornerroom.api.v1.search import router as search_router
 from cornerroom.api.v1.uploads import router as uploads_router
 from cornerroom.api.v1.users import router as users_router
 from cornerroom.api.v1.venues import router as venues_router
@@ -109,6 +111,8 @@ def create_app(settings: Settings | None = None, *, enable_lifespan: bool = True
     app.include_router(roles_router, prefix="/api/v1")
     app.include_router(audit_router, prefix="/api/v1")
     app.include_router(notifications_router, prefix="/api/v1")
+    app.include_router(search_router, prefix="/api/v1")
+    app.include_router(analytics_router, prefix="/api/v1")
     app.include_router(uploads_router, prefix="/api/v1")
     return app
 

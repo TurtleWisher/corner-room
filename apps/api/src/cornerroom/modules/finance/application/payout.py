@@ -59,6 +59,12 @@ class PayoutService:
         self.ledger = LedgerService(session, clock=self.clock)
         self.provider = provider or SandboxPayoutProvider()
 
+    async def get_payout_row(self, payout_id: UUID) -> Payout:
+        row = await self.session.get(Payout, payout_id)
+        if row is None:
+            raise NotFoundError("Payout not found")
+        return row
+
     def _workspace(self, ctx: AuthContext) -> UUID:
         if ctx.organization_id is None:
             raise AppError("WORKSPACE_REQUIRED", "Active organization workspace is required", 409)

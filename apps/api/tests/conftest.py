@@ -51,6 +51,17 @@ def postgres_available() -> str | None:
     return _try_testcontainers()
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def _reset_global_engine() -> AsyncIterator[None]:
+    """Dispose process-global engine/redis on the same loop that created them."""
+    yield
+    from cornerroom.infra.db import dispose_engine
+    from cornerroom.infra.redis import dispose_redis
+
+    await dispose_engine()
+    await dispose_redis()
+
+
 @pytest.fixture
 def settings() -> Settings:
     get_settings.cache_clear()
@@ -93,8 +104,11 @@ async def pg_session(postgres_available: str | None) -> AsyncIterator[AsyncSessi
             "subscriptions",
             "royalties",
             "campaigns",
+            "search",
+            "analytics",
         ):
             await conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         await conn.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
     async with factory() as session:
@@ -144,8 +158,11 @@ async def client(settings: Settings, postgres_available: str | None) -> AsyncIte
             "subscriptions",
             "royalties",
             "campaigns",
+            "search",
+            "analytics",
         ):
             await conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         await conn.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:

@@ -55,10 +55,15 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 async def dispose_engine() -> None:
     global _engine, _session_factory
-    if _engine is not None:
-        await _engine.dispose()
+    engine = _engine
     _engine = None
     _session_factory = None
+    if engine is None:
+        return
+    try:
+        await engine.dispose()
+    except RuntimeError:
+        await engine.dispose(close=False)
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:

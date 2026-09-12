@@ -15,6 +15,8 @@ from cornerroom.infra.errors import UnauthorizedError
 from cornerroom.infra.security import decode_access_token
 from cornerroom.infra.settings import Settings, get_settings
 from cornerroom.kernel.auth_context import AuthContext
+from cornerroom.kernel.ports import NullNotificationPort
+from cornerroom.modules.analytics.application.service import AnalyticsService
 from cornerroom.modules.artists.application.service import ArtistService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.campaigns.application.service import CampaignService
@@ -29,10 +31,11 @@ from cornerroom.modules.finance.application.service import PaymentService
 from cornerroom.modules.subscriptions.application.service import SubscriptionService
 from cornerroom.modules.events.application.service import EventService
 from cornerroom.modules.identity.application.organization_service import OrganizationService
-from cornerroom.modules.music.application.service import MusicService
 from cornerroom.modules.notifications.application.service import NotificationService
+from cornerroom.modules.music.application.service import MusicService
 from cornerroom.modules.streaming.application.service import StreamingService
 from cornerroom.modules.royalties.application.service import RoyaltyService
+from cornerroom.modules.search.application.service import SearchService
 from cornerroom.modules.ticketing.application.service import TicketingService
 from cornerroom.modules.identity.application.services import IdentityService
 from cornerroom.modules.identity.domain.models import Session, User
@@ -77,7 +80,7 @@ async def event_service(session: AsyncSession = Depends(db_session)) -> EventSer
 
 
 async def campaign_service(session: AsyncSession = Depends(db_session)) -> CampaignService:
-    return CampaignService(session, notifications=NotificationService(session))
+    return CampaignService(session, notifications=NullNotificationPort())
 
 
 async def artist_service(session: AsyncSession = Depends(db_session)) -> ArtistService:
@@ -142,6 +145,21 @@ async def payment_service(
     settings: Settings = Depends(settings_dep),
 ) -> PaymentService:
     return PaymentService(session, settings)
+
+
+async def notification_service(session: AsyncSession = Depends(db_session)) -> NotificationService:
+    return NotificationService(session)
+
+
+async def search_service(
+    session: AsyncSession = Depends(db_session),
+    settings: Settings = Depends(settings_dep),
+) -> SearchService:
+    return SearchService(session, settings=settings)
+
+
+async def analytics_service(session: AsyncSession = Depends(db_session)) -> AnalyticsService:
+    return AnalyticsService(session)
 
 
 async def get_optional_auth_context(

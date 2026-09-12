@@ -6,9 +6,19 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import DateTime, MetaData, Uuid, func, text
+from sqlalchemy.engine.default import DefaultDialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from cornerroom.kernel.ids import new_uuid
+
+# SQLAlchemy 2.0.41+ raises before PostgreSQL can truncate names to NAMEDATALEN (63).
+# Historical Alembic 0004 and the fk naming convention emit two 66-char names.
+# Do not rewrite 0001–0013; let PostgreSQL truncate consistently on CREATE/DROP.
+def _validate_identifier_allow_pg_truncation(self, ident: str) -> None:
+    del self, ident
+
+
+DefaultDialect.validate_identifier = _validate_identifier_allow_pg_truncation
 
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",

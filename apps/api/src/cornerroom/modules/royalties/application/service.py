@@ -1169,6 +1169,18 @@ class RoyaltyService:
         )
         return adj
 
+    async def get_statement_row(self, statement_id: UUID) -> RoyaltyStatement:
+        statement = await self.session.get(RoyaltyStatement, statement_id)
+        if statement is None:
+            raise NotFoundError("Statement not found")
+        return statement
+
+    async def get_settlement_row(self, settlement_id: UUID) -> Settlement:
+        settlement = await self.session.get(Settlement, settlement_id)
+        if settlement is None:
+            raise NotFoundError("Settlement not found")
+        return settlement
+
     async def get_statement(self, ctx: AuthContext, statement_id: UUID) -> tuple[RoyaltyStatement, list[RoyaltyLine], list[RoyaltyAdjustment]]:
         statement = await self.session.get(RoyaltyStatement, statement_id)
         if statement is None:

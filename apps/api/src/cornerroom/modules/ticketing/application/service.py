@@ -300,6 +300,12 @@ class TicketingService:
             raise NotFoundError("Ticket type not found")
         return row
 
+    async def get_ticket_row(self, ticket_id: UUID) -> Ticket:
+        ticket = await self.session.get(Ticket, ticket_id)
+        if ticket is None or ticket.deleted_at is not None:
+            raise NotFoundError("Ticket not found")
+        return ticket
+
     async def get_ticket_type(self, ctx: AuthContext, ticket_type_id: UUID) -> TicketType:
         row = await self.get_ticket_type_row(ticket_type_id)
         event = await self._event(row.event_id)

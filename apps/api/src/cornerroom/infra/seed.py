@@ -151,6 +151,18 @@ async def seed_foundation(session: AsyncSession, settings: Settings) -> None:
         ("royalty.statement_adjusted", "A royalty statement was adjusted."),
         ("campaign.task_assigned", "A campaign task was assigned to you."),
         ("campaign.task_completed", "A campaign task was completed."),
+        ("ticket.issued", "Your ticket was issued."),
+        ("order.paid", "Your order was paid."),
+        ("payment.failed", "A payment attempt failed."),
+        ("track.approved", "A track was approved."),
+        ("track.released", "A track was released."),
+        ("settlement.completed", "A settlement was completed."),
+        ("payout.completed", "A payout was completed."),
+        ("payout.failed", "A payout failed."),
+        ("subscription.past_due", "Your subscription is past due."),
+        ("password.changed", "Your password was changed."),
+        ("account.locked", "Your account was locked."),
+        ("refresh_token.replay_detected", "A sign-in token was reused. Sessions in that family were revoked."),
     ):
         found = (
             await session.execute(

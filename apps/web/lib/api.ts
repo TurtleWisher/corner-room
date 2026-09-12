@@ -1823,3 +1823,235 @@ export async function addCampaignChannel(
     retry: false,
   });
 }
+
+export type NotificationRecord = {
+  id: string;
+  type: string;
+  status: string;
+  title: string;
+  body: string;
+  locale: string;
+  read_at: string | null;
+  category?: string | null;
+  organization_id?: string | null;
+  correlation_id?: string | null;
+  aggregate_type?: string | null;
+  aggregate_id?: string | null;
+};
+
+export type NotificationPreferenceRecord = {
+  notification_type: string;
+  in_app: boolean;
+  email: boolean;
+  push: boolean;
+  sms: boolean;
+  channel_availability: Record<string, string>;
+};
+
+export async function fetchMyNotifications(limit = 50): Promise<NotificationRecord[]> {
+  return apiFetch<NotificationRecord[]>(`/api/v1/me/notifications?limit=${limit}`, { retry: false });
+}
+
+export async function markNotificationRead(id: string): Promise<NotificationRecord> {
+  return apiFetch<NotificationRecord>(`/api/v1/me/notifications/${id}/read`, {
+    method: "POST",
+    retry: false,
+  });
+}
+
+export async function fetchNotificationPreferences(): Promise<NotificationPreferenceRecord[]> {
+  return apiFetch<NotificationPreferenceRecord[]>("/api/v1/me/notification-preferences", {
+    retry: false,
+  });
+}
+
+export async function putNotificationPreference(body: {
+  notification_type: string;
+  in_app: boolean;
+  email: boolean;
+  push?: boolean;
+  sms?: boolean;
+}): Promise<NotificationPreferenceRecord> {
+  return apiFetch<NotificationPreferenceRecord>("/api/v1/me/notification-preferences", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      notification_type: body.notification_type,
+      in_app: body.in_app,
+      email: body.email,
+      push: body.push ?? false,
+      sms: body.sms ?? false,
+    }),
+    retry: false,
+  });
+}
+
+export type SearchHitRecord = {
+  entity_type: string;
+  entity_id: string;
+  title: string;
+  subtitle: string | null;
+  snippet: string;
+  organization_id: string | null;
+  visibility: string;
+  route: string | null;
+};
+
+function analyticsRangeQuery(from?: string | null, to?: string | null): string {
+  const params = new URLSearchParams();
+  if (from) {
+    params.set("from", from);
+  }
+  if (to) {
+    params.set("to", to);
+  }
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+export async function fetchSearch(params: {
+  q: string;
+  entity_type?: string | null;
+  cursor?: string | null;
+  skipAuth?: boolean;
+}): Promise<Page<SearchHitRecord>> {
+  const search = new URLSearchParams();
+  search.set("q", params.q);
+  if (params.entity_type) {
+    search.set("entity_type", params.entity_type);
+  }
+  if (params.cursor) {
+    search.set("cursor", params.cursor);
+  }
+  return apiFetch<Page<SearchHitRecord>>(`/api/v1/search?${search.toString()}`, {
+    retry: false,
+    skipAuth: params.skipAuth,
+    skipRefresh: params.skipAuth,
+  });
+}
+
+export type StaffAnalyticsOverview = {
+  organization_id: string;
+  from?: string | null;
+  from_date?: string | null;
+  to?: string | null;
+  metric_timezone: string;
+  metric_timezone_status: string;
+  tracks: {
+    play_count: number;
+    completed_play_count: number;
+    listen_duration_ms: number;
+    unique_listeners: string;
+  };
+  events: {
+    ticket_paid_count: number;
+    ticket_issued_count: number;
+    ticket_checked_in_count: number;
+  };
+  campaigns: {
+    ingested_event_count: number;
+    attribution_status: string;
+  };
+  money: { status: string };
+};
+
+export type TrackAnalyticsRecord = {
+  track_id: string;
+  from?: string | null;
+  from_date?: string | null;
+  to?: string | null;
+  metric_timezone: string;
+  metric_timezone_status: string;
+  play_count: number;
+  completed_play_count: number;
+  listen_duration_ms: number;
+  unique_listeners: string;
+};
+
+export type EventAnalyticsRecord = {
+  event_id: string;
+  from?: string | null;
+  from_date?: string | null;
+  to?: string | null;
+  metric_timezone: string;
+  metric_timezone_status: string;
+  ticket_paid_count: number;
+  ticket_issued_count: number;
+  ticket_checked_in_count: number;
+  unique_listeners: string;
+};
+
+export type CampaignAnalyticsRecord = {
+  campaign_id: string;
+  from?: string | null;
+  from_date?: string | null;
+  to?: string | null;
+  metric_timezone: string;
+  metric_timezone_status: string;
+  ingested_event_count: number;
+  attribution_status: string;
+};
+
+export type ArtistAnalyticsRecord = {
+  artist_id: string;
+  from?: string | null;
+  from_date?: string | null;
+  to?: string | null;
+  metric_timezone: string;
+  metric_timezone_status: string;
+  unique_listeners: string;
+};
+
+export async function fetchStaffAnalyticsOverview(
+  from?: string | null,
+  to?: string | null,
+): Promise<StaffAnalyticsOverview> {
+  return apiFetch<StaffAnalyticsOverview>(
+    `/api/v1/staff/analytics/overview${analyticsRangeQuery(from, to)}`,
+    { retry: false },
+  );
+}
+
+export async function fetchTrackAnalytics(
+  id: string,
+  from?: string | null,
+  to?: string | null,
+): Promise<TrackAnalyticsRecord> {
+  return apiFetch<TrackAnalyticsRecord>(
+    `/api/v1/analytics/tracks/${id}${analyticsRangeQuery(from, to)}`,
+    { retry: false },
+  );
+}
+
+export async function fetchEventAnalytics(
+  id: string,
+  from?: string | null,
+  to?: string | null,
+): Promise<EventAnalyticsRecord> {
+  return apiFetch<EventAnalyticsRecord>(
+    `/api/v1/analytics/events/${id}${analyticsRangeQuery(from, to)}`,
+    { retry: false },
+  );
+}
+
+export async function fetchCampaignAnalytics(
+  id: string,
+  from?: string | null,
+  to?: string | null,
+): Promise<CampaignAnalyticsRecord> {
+  return apiFetch<CampaignAnalyticsRecord>(
+    `/api/v1/analytics/campaigns/${id}${analyticsRangeQuery(from, to)}`,
+    { retry: false },
+  );
+}
+
+export async function fetchArtistModuleAnalytics(
+  id: string,
+  from?: string | null,
+  to?: string | null,
+): Promise<ArtistAnalyticsRecord> {
+  return apiFetch<ArtistAnalyticsRecord>(
+    `/api/v1/analytics/artists/${id}${analyticsRangeQuery(from, to)}`,
+    { retry: false },
+  );
+}

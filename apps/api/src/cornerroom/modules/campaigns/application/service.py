@@ -144,6 +144,9 @@ class CampaignService:
             raise NotFoundError("Campaign not found")
         return row
 
+    async def get_campaign_row(self, campaign_id: UUID) -> Campaign:
+        return await self._campaign(campaign_id)
+
     async def _load_writable(self, ctx: AuthContext, campaign_id: UUID) -> Campaign:
         row = await self._campaign(campaign_id)
         await self._assert_write(ctx, row)

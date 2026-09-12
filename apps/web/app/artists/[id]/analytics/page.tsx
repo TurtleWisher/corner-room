@@ -46,14 +46,31 @@ function AggregatesBody() {
     return <ErrorState title="Aggregates unavailable" message={error} />;
   }
   if (!data || data.tracks.length === 0) {
-    return <EmptyState message="Raw playback events are the source of truth. Royalty eligibility is not computed." />;
+    return (
+      <div className="space-y-3">
+        <EmptyState message="Raw playback events are the source of truth. Royalty eligibility is not computed." />
+        <p className="text-sm">
+          <Link href={`/staff/analytics/artists/${artistId}`} className="underline">
+            Open artist analytics
+          </Link>
+        </p>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Play aggregates</h1>
       <p className="text-sm text-neutral-600">
+        Operational playback events. This is not the Phase 13 analytics module.
+      </p>
+      <p className="text-sm text-neutral-600">
         {data.label}. Royalty eligibility is {data.eligibility}. Listener identities are not shown.
+      </p>
+      <p className="text-sm">
+        <Link href={`/staff/analytics/artists/${artistId}`} className="underline">
+          Open artist analytics
+        </Link>
       </p>
       {data.tracks.map((row) => (
         <Card key={row.track_id}>

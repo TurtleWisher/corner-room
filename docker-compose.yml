@@ -36,7 +36,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://cornerroom:cornerroom@postgres:5432/cornerroom
       DATABASE_URL_SYNC: postgresql+psycopg://cornerroom:cornerroom@postgres:5432/cornerroom
       REDIS_URL: redis://redis:6379/0
-      CORS_ORIGINS: http://localhost:3000
+      CORS_ORIGINS: '["http://localhost:3000"]'
     ports:
       - "8000:8000"
     depends_on:

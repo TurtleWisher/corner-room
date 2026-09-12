@@ -30,9 +30,14 @@ def get_redis() -> Redis:
 
 async def dispose_redis() -> None:
     global _redis
-    if _redis is not None:
-        await _redis.aclose()
+    client = _redis
     _redis = None
+    if client is None:
+        return
+    try:
+        await client.aclose()
+    except RuntimeError:
+        pass
 
 
 async def ping_redis() -> bool:

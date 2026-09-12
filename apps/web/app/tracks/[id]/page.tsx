@@ -103,6 +103,13 @@ export default function TrackDetailPage() {
             </Link>
           </p>
         ) : null}
+        {status === "authenticated" ? (
+          <p className="mt-2 text-sm">
+            <Link href={`/staff/analytics/tracks/${track.id}`} className="underline">
+              Track analytics
+            </Link>
+          </p>
+        ) : null}
       </div>
       {canStaff ? (
         <Card>

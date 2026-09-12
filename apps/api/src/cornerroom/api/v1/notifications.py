@@ -1,4 +1,4 @@
-"""In-app notification routes for the current user."""
+"""In-app notification routes for the current user. Phase 1 paths preserved."""
 
 from __future__ import annotations
 
@@ -6,13 +6,14 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from cornerroom.api.deps import db_session, get_current_user
-from cornerroom.modules.identity.domain.models import User
+from cornerroom.api.deps import get_auth_context, notification_service
+from cornerroom.kernel.auth_context import AuthContext
+from cornerroom.kernel.pagination import clamp_limit
 from cornerroom.modules.notifications.application.service import NotificationService
+from cornerroom.modules.notifications.domain.models import Notification
 
 router = APIRouter(tags=["notifications"])
 
@@ -25,6 +26,11 @@ class NotificationOut(BaseModel):
     body: str
     locale: str
     read_at: datetime | None
+    category: str | None = None
+    organization_id: UUID | None = None
+    correlation_id: str | None = None
+    aggregate_type: str | None = None
+    aggregate_id: UUID | None = None
 
 
 class PreferenceIn(BaseModel):
@@ -36,36 +42,10 @@ class PreferenceIn(BaseModel):
 
 
 class PreferenceOut(PreferenceIn):
-    pass
+    channel_availability: dict[str, str]
 
 
-@router.get("/me/notifications", response_model=list[NotificationOut])
-async def list_notifications(
-    user: Annotated[User, Depends(get_current_user)],
-    session: Annotated[AsyncSession, Depends(db_session)],
-) -> list[NotificationOut]:
-    rows = await NotificationService(session).list_for_user(user.id)
-    return [
-        NotificationOut(
-            id=r.id,
-            type=r.type,
-            status=r.status,
-            title=r.title,
-            body=r.body,
-            locale=r.locale,
-            read_at=r.read_at,
-        )
-        for r in rows
-    ]
-
-
-@router.post("/me/notifications/{notification_id}/read", response_model=NotificationOut)
-async def mark_read(
-    notification_id: UUID,
-    user: Annotated[User, Depends(get_current_user)],
-    session: Annotated[AsyncSession, Depends(db_session)],
-) -> NotificationOut:
-    row = await NotificationService(session).mark_read(user.id, notification_id)
+def _notification_out(row: Notification) -> NotificationOut:
     return NotificationOut(
         id=row.id,
         type=row.type,
@@ -74,15 +54,41 @@ async def mark_read(
         body=row.body,
         locale=row.locale,
         read_at=row.read_at,
+        category=row.category,
+        organization_id=row.organization_id,
+        correlation_id=row.correlation_id,
+        aggregate_type=row.aggregate_type,
+        aggregate_id=row.aggregate_id,
     )
+
+
+@router.get("/me/notifications", response_model=list[NotificationOut])
+async def list_notifications(
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[NotificationService, Depends(notification_service)],
+    limit: int = Query(default=50, ge=1, le=100),
+) -> list[NotificationOut]:
+    rows = await svc.list_for_user(ctx.user_id, limit=clamp_limit(limit))
+    return [_notification_out(r) for r in rows]
+
+
+@router.post("/me/notifications/{notification_id}/read", response_model=NotificationOut)
+async def mark_read(
+    notification_id: UUID,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[NotificationService, Depends(notification_service)],
+) -> NotificationOut:
+    row = await svc.mark_read(ctx.user_id, notification_id)
+    return _notification_out(row)
 
 
 @router.get("/me/notification-preferences", response_model=list[PreferenceOut])
 async def get_preferences(
-    user: Annotated[User, Depends(get_current_user)],
-    session: Annotated[AsyncSession, Depends(db_session)],
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[NotificationService, Depends(notification_service)],
 ) -> list[PreferenceOut]:
-    rows = await NotificationService(session).get_preferences(user.id)
+    availability = svc.channel_availability()
+    rows = await svc.get_preferences(ctx.user_id)
     return [
         PreferenceOut(
             notification_type=r.notification_type,
@@ -90,6 +96,7 @@ async def get_preferences(
             email=r.email,
             push=r.push,
             sms=r.sms,
+            channel_availability=availability,
         )
         for r in rows
     ]
@@ -98,11 +105,11 @@ async def get_preferences(
 @router.put("/me/notification-preferences", response_model=PreferenceOut)
 async def put_preference(
     body: PreferenceIn,
-    user: Annotated[User, Depends(get_current_user)],
-    session: Annotated[AsyncSession, Depends(db_session)],
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[NotificationService, Depends(notification_service)],
 ) -> PreferenceOut:
-    row = await NotificationService(session).upsert_preference(
-        user.id,
+    row = await svc.upsert_preference(
+        ctx.user_id,
         body.notification_type,
         in_app=body.in_app,
         email=body.email,
@@ -115,4 +122,5 @@ async def put_preference(
         email=row.email,
         push=row.push,
         sms=row.sms,
+        channel_availability=svc.channel_availability(),
     )

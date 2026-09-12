@@ -27,7 +27,7 @@ from cornerroom.modules.commerce.domain.models import (
     TaxLine,
 )
 from cornerroom.modules.entitlements.application.service import EntitlementService
-from cornerroom.modules.notifications.application.service import NotificationService
+from cornerroom.kernel.ports import NullNotificationPort
 from cornerroom.modules.events.domain.models import Event
 from cornerroom.modules.finance.application.service import PaymentService
 from cornerroom.modules.finance.domain.models import Payment, Refund
@@ -53,7 +53,7 @@ class CheckoutService:
         self.audit = AuditService(session)
         self.ticketing = TicketingService(session, settings=self.settings, clock=self.clock)
         self.payments = PaymentService(session, settings=self.settings, clock=self.clock)
-        notifications = NotificationService(session)
+        notifications = NullNotificationPort()
         self.entitlements = EntitlementService(session, clock=self.clock, notifications=notifications)
         self.subscriptions = SubscriptionService(session, clock=self.clock, notifications=notifications)
 
@@ -545,10 +545,14 @@ class CheckoutService:
         if existing is not None:
             await self.subscriptions.mark_past_due(None, existing.id)
 
-    async def get_order(self, ctx: AuthContext, order_id: UUID) -> Order:
+    async def get_order_row(self, order_id: UUID) -> Order:
         order = await self.session.get(Order, order_id)
         if order is None or order.deleted_at is not None:
             raise NotFoundError("Order not found")
+        return order
+
+    async def get_order(self, ctx: AuthContext, order_id: UUID) -> Order:
+        order = await self.get_order_row(order_id)
         if order.user_id != ctx.user_id:
             raise NotFoundError("Order not found")
         return order

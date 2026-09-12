@@ -116,8 +116,16 @@ from cornerroom.modules.notifications.domain.models import (
     NotificationPreference,
     NotificationTemplate,
 )
+from cornerroom.modules.search.domain.models import SearchDocument
+from cornerroom.modules.analytics.domain.models import (
+    AnalyticsEvent,
+    DailyCampaignMetrics,
+    DailyEventMetrics,
+    DailyTrackMetrics,
+)
 
 __all__ = [
+    "AnalyticsEvent",
     "Artist",
     "ArtistApplication",
     "AuditLog",
@@ -131,6 +139,9 @@ __all__ = [
     "CampaignTask",
     "CheckIn",
     "Credit",
+    "DailyCampaignMetrics",
+    "DailyEventMetrics",
+    "DailyTrackMetrics",
     "CustomerProfile",
     "IdentityChallenge",
     "Document",
@@ -197,6 +208,7 @@ __all__ = [
     "RoyaltyLine",
     "RoyaltyRule",
     "RoyaltyStatement",
+    "SearchDocument",
     "Settlement",
     "SettlementLine",
     "ResourceGrant",

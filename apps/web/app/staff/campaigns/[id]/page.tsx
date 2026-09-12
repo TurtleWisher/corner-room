@@ -207,6 +207,11 @@ function StaffCampaignDetailBody() {
         <p className="text-xs text-neutral-500">
           {campaignAttributionLabel(row.attribution_status)}. Actuals are not computed here.
         </p>
+        <p className="text-sm">
+          <Link href={`/staff/analytics/campaigns/${row.id}`} className="underline">
+            Campaign analytics
+          </Link>
+        </p>
       </div>
       {error ? <ErrorState message={error} /> : null}
       <section className="flex flex-wrap gap-2">

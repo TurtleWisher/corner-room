@@ -30,9 +30,8 @@ async def drain_outbox(ctx: dict) -> int:
             if row.status == OUTBOX_PUBLISHED:
                 continue
             try:
-                async with session.begin_nested():
-                    await dispatch_outbox(session, row)
-                    await mark_published(session, row)
+                await dispatch_outbox(session, row)
+                await mark_published(session, row)
                 published += 1
             except Exception as exc:
                 log.exception("outbox_dispatch_failed", event_id=str(row.id), event_type=row.event_type)
@@ -63,6 +62,42 @@ async def calculate_royalty_run(ctx: dict, run_id: str) -> str:
         return str(run.id)
 
 
+async def process_notification_delivery(ctx: dict) -> int:
+    """Retry email deliveries independently of OLTP. Stub sender only (Q-P13-10)."""
+    from cornerroom.modules.notifications.application.service import NotificationService
+
+    factory = get_session_factory()
+    async with factory() as session:
+        sent = await NotificationService(session).process_pending_email_deliveries()
+        await session.commit()
+        return sent
+
+
+async def rebuild_search_index(ctx: dict) -> int:
+    """Rebuild search documents for gaps (no ArtistUpdated / VenueActivated)."""
+    from cornerroom.modules.search.application.service import SearchService
+
+    factory = get_session_factory()
+    async with factory() as session:
+        count = await SearchService(session).rebuild()
+        await session.commit()
+        return count
+
+
+async def aggregate_daily_metrics(ctx: dict, metric_date: str | None = None) -> int:
+    """Idempotent daily_* rebuild from analytics_events. ASSUMED Asia/Dhaka."""
+    from datetime import date
+
+    from cornerroom.modules.analytics.application.service import AnalyticsService
+
+    parsed = date.fromisoformat(metric_date) if metric_date else None
+    factory = get_session_factory()
+    async with factory() as session:
+        count = await AnalyticsService(session).aggregate_daily_metrics(parsed)
+        await session.commit()
+        return count
+
+
 async def startup(ctx: dict) -> None:
     from cornerroom.infra import models as _models  # noqa: F401
     from cornerroom.modules.finance.application.handlers import register_finance_handlers
@@ -86,11 +121,20 @@ def _redis_settings() -> RedisSettings:
 
 
 class WorkerSettings:
-    functions = [drain_outbox, calculate_royalty_run]
+    functions = [
+        drain_outbox,
+        calculate_royalty_run,
+        process_notification_delivery,
+        rebuild_search_index,
+        aggregate_daily_metrics,
+    ]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = _redis_settings()
-    cron_jobs = [cron(drain_outbox, second={0, 15, 30, 45})]
+    cron_jobs = [
+        cron(drain_outbox, second={0, 15, 30, 45}),
+        cron(process_notification_delivery, second={5, 20, 35, 50}),
+    ]
     max_jobs = 10
     job_timeout = 120
     retry_jobs = True

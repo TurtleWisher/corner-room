@@ -32,3 +32,15 @@ export function loginFormState(submitting: boolean, error: string | null): "idle
   }
   return "idle";
 }
+
+/** UX-only nav flags. Authorization remains on the API. */
+export function staffNavFlags(permissions: string[] | undefined): {
+  showAnalytics: boolean;
+  showFinance: boolean;
+} {
+  const perms = permissions ?? [];
+  return {
+    showAnalytics: perms.includes("analytics.read"),
+    showFinance: perms.includes("finance.read"),
+  };
+}

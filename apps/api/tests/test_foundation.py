@@ -217,7 +217,7 @@ async def test_transaction_commit_and_rollback(pg_session: AsyncSession) -> None
     )
     await enqueue_outbox(pg_session, rolling)
     await pg_session.rollback()
-    await pg_session.expire_all()
+    pg_session.expire_all()
     missing = await pg_session.get(OutboxEvent, rolling.event_id)
     assert missing is None
 
@@ -259,7 +259,7 @@ async def test_outbox_same_transaction_and_worker_retry_failure_duplicate(
 
         first = await drain_outbox({})
         assert first == 0
-        await pg_session.expire_all()
+        pg_session.expire_all()
         row = await pg_session.get(OutboxEvent, event.event_id)
         assert row is not None
         assert row.status == OUTBOX_PENDING
@@ -269,14 +269,14 @@ async def test_outbox_same_transaction_and_worker_retry_failure_duplicate(
 
         second = await drain_outbox({})
         assert second == 1
-        await pg_session.expire_all()
+        pg_session.expire_all()
         row = await pg_session.get(OutboxEvent, event.event_id)
         assert row is not None
         assert row.status == OUTBOX_PUBLISHED
 
         third = await drain_outbox({})
         assert third == 0
-        await pg_session.expire_all()
+        pg_session.expire_all()
         row = await pg_session.get(OutboxEvent, event.event_id)
         assert row is not None
         assert row.status == OUTBOX_PUBLISHED
@@ -318,7 +318,7 @@ async def test_outbox_exhausts_retries(pg_session: AsyncSession, monkeypatch: py
         await enqueue_outbox(pg_session, event)
         await pg_session.commit()
         await drain_outbox({})
-        await pg_session.expire_all()
+        pg_session.expire_all()
         row = await pg_session.get(OutboxEvent, event.event_id)
         assert row is not None
         assert row.status == OUTBOX_FAILED

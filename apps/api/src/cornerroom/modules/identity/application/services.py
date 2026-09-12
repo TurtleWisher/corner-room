@@ -70,6 +70,12 @@ class IdentityService:
         self.audit = AuditService(session)
         self.authz = AuthorizationService(session, clock=self.clock)
 
+    async def get_user_row(self, user_id: UUID) -> User:
+        user = await self.session.get(User, user_id)
+        if user is None or user.deleted_at is not None:
+            raise NotFoundError("User not found")
+        return user
+
     async def register(
         self,
         *,
