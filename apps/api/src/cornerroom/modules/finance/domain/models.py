@@ -121,6 +121,7 @@ class LedgerEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_ledger_entries_account_created", "account_id", "created_at"),
         Index("ix_ledger_entries_event_id", "event_id"),
         Index("ix_ledger_entries_payee", "payee_type", "payee_id"),
+        Index("ix_ledger_entries_organization_id", "organization_id"),
         {"schema": "finance"},
     )
 
@@ -139,7 +140,10 @@ class LedgerEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     artist_id: Mapped[UUID | None] = mapped_column(nullable=True)
     track_id: Mapped[UUID | None] = mapped_column(nullable=True)
     campaign_id: Mapped[UUID | None] = mapped_column(nullable=True)
-    organization_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    organization_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("identity.organizations.id"),
+        nullable=True,
+    )
     payee_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     payee_id: Mapped[UUID | None] = mapped_column(nullable=True)
 
@@ -340,6 +344,7 @@ class Payout(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, VersionMixin, Base
         CheckConstraint("amount_minor >= 0", name="amount_non_negative"),
         UniqueConstraint("idempotency_key", name="uq_payouts_idempotency_key"),
         Index("ix_payouts_settlement_id", "settlement_id"),
+        Index("ix_payouts_organization_created", "organization_id", "created_at"),
         {"schema": "finance"},
     )
 

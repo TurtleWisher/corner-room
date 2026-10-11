@@ -1,0 +1,14 @@
+/*
+ * Ticketing module art direction: "Box Office" (docs/frontend/modules/ticketing.md).
+ * Quiet Corner Light so prices, the countdown and the action lead.
+ */
+/* Overrides apply to the Ember world inside this module only (a nested Sky or Staff region keeps its own light). */
+[data-module="ticketing"][data-theme="ember"],
+[data-module="ticketing"] [data-theme="ember"] {
+  --cr-light-size: 55% 45%;
+  --cr-light-bulb: rgb(252 244 117 / 0.06);
+  --cr-light-pool: rgb(178 31 36 / 0.55);
+  --cr-light-falloff: rgb(131 21 21 / 0.25);
+  --cr-light-counter: transparent;
+  --cr-light-sweep: transparent;
+}

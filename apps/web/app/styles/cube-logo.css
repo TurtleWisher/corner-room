@@ -1,0 +1,56 @@
+/*
+ * Corner Room letter-cube tokens (components/brand/cube-logo).
+ * Exactly three colours per theme, sampled from the official logo files (REF-001):
+ *   field  = background (saturated mid-tone)
+ *   shadow = left and top faces (darker shade, same hue family)
+ *   face   = front-face letters (near-white tint, the lit face)
+ * Inside a world, the cube follows the world's own --cr-cube-* values (tokens.css).
+ */
+[data-cr-theme="ice"] {
+  --cr-cube-field: #53c8ea;
+  --cr-cube-shadow: #4f4789;
+  --cr-cube-face: #bbedfe;
+}
+
+[data-cr-theme="fire"] {
+  --cr-cube-field: #b21f24;
+  --cr-cube-shadow: #831515;
+  --cr-cube-face: #fcf475;
+}
+
+/* Optional assembly on mount: left slides in from x-40, top from y-40, front fades. */
+.cr-cube-animate .cr-cube-left {
+  animation: cr-cube-left 600ms var(--ease-corner, ease-out) both;
+}
+.cr-cube-animate .cr-cube-top {
+  animation: cr-cube-top 600ms var(--ease-corner, ease-out) both;
+}
+.cr-cube-animate .cr-cube-front {
+  animation: cr-cube-front 600ms var(--ease-corner, ease-out) both;
+}
+
+@keyframes cr-cube-left {
+  from {
+    transform: translateX(-40px);
+    opacity: 0;
+  }
+}
+@keyframes cr-cube-top {
+  from {
+    transform: translateY(-40px);
+    opacity: 0;
+  }
+}
+@keyframes cr-cube-front {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cr-cube-animate .cr-cube-left,
+  .cr-cube-animate .cr-cube-top,
+  .cr-cube-animate .cr-cube-front {
+    animation: none;
+  }
+}

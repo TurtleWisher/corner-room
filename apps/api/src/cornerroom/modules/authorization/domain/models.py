@@ -72,6 +72,9 @@ RESOURCE_TYPES = (
     "document",
 )
 
+# 05_SECURITY_ARCHITECTURE.md §6 — do not invent extra principal kinds.
+GRANT_PRINCIPAL_TYPES = ("user", "role", "org_membership")
+
 
 class Role(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Base):
     __tablename__ = "roles"

@@ -1,0 +1,364 @@
+/*
+ * Corner Room design tokens (Phase 16, Stage 3).
+ * Source of truth: docs/frontend/BRAND_GUIDELINE.md and docs/frontend/DESIGN_SYSTEM.md.
+ *
+ * Three layers:
+ *   1. Brand primitives   @theme         -> bg-cr-signal, text-cr-lamp ...  (brand pieces only)
+ *   2. Semantic roles     @theme inline  -> bg-surface, text-fg, border-line ... (every component)
+ *   3. Theme scopes       [data-theme]   -> ember (default), sky (Music), staff (graphite)
+ *
+ * Components use semantic roles only. A module re-skins by setting data-theme (and later
+ * data-module overrides) on its layout, never by editing components.
+ */
+
+/* ---------- 1. Brand primitives ---------- */
+@theme {
+  /* Ember world */
+  --color-cr-signal: #b21f24;
+  --color-cr-oxblood: #831515;
+  --color-cr-lamp: #fcf475;
+  /* Sky world */
+  --color-cr-sky: #53c8ea;
+  --color-cr-indigo: #4f4789;
+  --color-cr-ice: #bbedfe;
+  /* Derived */
+  --color-cr-night: #140707;
+  --color-cr-deep: #120f26;
+  --color-cr-graphite: #110e0f;
+  --color-cr-cream: #f6ece6;
+  --color-cr-muted: #cdb9b3;
+  --color-cr-mist: #b9b6d6;
+  --color-cr-paper: #fbf5e6;
+  --color-cr-ink: #1c0607;
+  --color-cr-red-glow: #ff5a4e;
+  --color-cr-indigo-ink: #2e2860;
+
+  /* Motion (BRAND_GUIDELINE section 10) */
+  --ease-corner: cubic-bezier(0.2, 0.7, 0.1, 1);
+}
+
+/* ---------- 2. Semantic roles (resolve at use site, so scopes can override) ---------- */
+@theme inline {
+  --color-surface: var(--cr-surface);
+  --color-surface-raised: var(--cr-surface-raised);
+  --color-surface-sunken: var(--cr-surface-sunken);
+  --color-surface-overlay: var(--cr-surface-overlay);
+  --color-line: var(--cr-line);
+  --color-line-strong: var(--cr-line-strong);
+  --color-fg: var(--cr-fg);
+  --color-fg-muted: var(--cr-fg-muted);
+  --color-accent: var(--cr-accent);
+  --color-on-accent: var(--cr-on-accent);
+  --color-brand: var(--cr-brand);
+  --color-on-brand: var(--cr-on-brand);
+  --color-highlight: var(--cr-highlight);
+  --color-link: var(--cr-link);
+  --color-focus: var(--cr-focus);
+  --color-danger: var(--cr-danger);
+  --color-danger-fill: var(--cr-danger-fill);
+  --color-on-danger-fill: var(--cr-on-danger-fill);
+  --color-success: var(--cr-success);
+  --color-warning: var(--cr-warning);
+  --color-info: var(--cr-info);
+
+  --font-display: var(--font-sikat), var(--font-anek), "Arial Narrow", sans-serif;
+  --font-ui: var(--font-archivo), var(--font-anek), system-ui, sans-serif;
+  --font-bangla: var(--font-anek), var(--font-archivo), sans-serif;
+}
+
+/* ---------- 3. Theme scopes ---------- */
+:root,
+[data-theme="ember"] {
+  --cr-surface: #140707;
+  --cr-surface-raised: #1f0f0e;
+  --cr-surface-sunken: #0d0404;
+  --cr-surface-overlay: rgb(246 236 230 / 0.07);
+  --cr-line: rgb(246 236 230 / 0.14);
+  --cr-line-strong: rgb(246 236 230 / 0.3);
+  --cr-fg: #f6ece6;
+  --cr-fg-muted: #cdb9b3;
+  --cr-accent: #fcf475;
+  --cr-on-accent: #1c0607;
+  --cr-brand: #b21f24;
+  --cr-on-brand: #fcf475;
+  --cr-highlight: #fcf475;
+  --cr-link: #fcf475;
+  --cr-focus: #fcf475;
+  --cr-display-shadow: #b21f24;
+
+  /* Corner Light (BRAND_GUIDELINE 5.6) */
+  --cr-light-size: 70% 62%;
+  --cr-light-bulb: rgb(252 244 117 / 0.16);
+  --cr-light-pool: rgb(178 31 36 / 0.92);
+  --cr-light-falloff: rgb(131 21 21 / 0.5);
+  --cr-light-counter: rgb(131 21 21 / 0.5);
+  --cr-light-sweep: rgb(178 31 36 / 0.08);
+
+  /* Room Cube tones */
+  --cr-cube-field: #b21f24;
+  --cr-cube-face: #fcf475;
+  --cr-cube-shadow: #831515;
+}
+
+[data-theme="sky"] {
+  --cr-surface: #120f26;
+  --cr-surface-raised: #1b1838;
+  --cr-surface-sunken: #0b0919;
+  --cr-surface-overlay: rgb(187 237 254 / 0.07);
+  --cr-line: rgb(187 237 254 / 0.16);
+  --cr-line-strong: rgb(187 237 254 / 0.32);
+  --cr-fg: #f6ece6;
+  --cr-fg-muted: #b9b6d6;
+  --cr-accent: #53c8ea;
+  --cr-on-accent: #2e2860;
+  --cr-brand: #4f4789;
+  --cr-on-brand: #bbedfe;
+  --cr-highlight: #bbedfe;
+  --cr-link: #bbedfe;
+  --cr-focus: #bbedfe;
+  --cr-display-shadow: #4f4789;
+
+  --cr-light-size: 70% 62%;
+  --cr-light-bulb: rgb(187 237 254 / 0.16);
+  --cr-light-pool: rgb(83 200 234 / 0.52);
+  --cr-light-falloff: rgb(79 71 137 / 0.52);
+  --cr-light-counter: rgb(79 71 137 / 0.52);
+  --cr-light-sweep: transparent;
+
+  --cr-cube-field: #53c8ea;
+  --cr-cube-face: #bbedfe;
+  --cr-cube-shadow: #4f4789;
+}
+
+[data-theme="staff"] {
+  --cr-surface: #110e0f;
+  --cr-surface-raised: #1a1617;
+  --cr-surface-sunken: #0a0809;
+  --cr-surface-overlay: rgb(246 236 230 / 0.05);
+  --cr-line: rgb(246 236 230 / 0.12);
+  --cr-line-strong: rgb(246 236 230 / 0.26);
+  --cr-fg: #f6ece6;
+  --cr-fg-muted: #cdb9b3;
+  --cr-accent: #fcf475;
+  --cr-on-accent: #1c0607;
+  --cr-brand: #b21f24;
+  --cr-on-brand: #fcf475;
+  --cr-highlight: #fcf475;
+  --cr-link: #fcf475;
+  --cr-focus: #fcf475;
+  --cr-display-shadow: transparent;
+
+  --cr-light-size: 50% 40%;
+  --cr-light-bulb: transparent;
+  --cr-light-pool: rgb(178 31 36 / 0.2);
+  --cr-light-falloff: transparent;
+  --cr-light-counter: transparent;
+  --cr-light-sweep: transparent;
+
+  --cr-cube-field: #fbf5e6;
+  --cr-cube-face: #1c0607;
+  --cr-cube-shadow: #3b3b3b;
+}
+
+/* Status colours, identical in every world, reset on every scope so nesting never leaks.
+   Danger is a crimson, never Signal Red (OD-15, Recommended). Always paired with an icon and a label. */
+:root,
+[data-theme] {
+  --cr-danger: #ff6b81;
+  --cr-danger-fill: #c81e4f;
+  --cr-on-danger-fill: #ffffff;
+  --cr-success: #3dd68c;
+  --cr-warning: #f5a524;
+  --cr-info: #53c8ea;
+}
+
+/* Paper: light reading surface for editorial sections and documents (Stage 4, OD-23 Recommended).
+   Declared after the shared status block so its darker status colours win on a light ground. */
+[data-theme="paper"] {
+  --cr-surface: #fbf5e6;
+  --cr-surface-raised: #f3ead6;
+  --cr-surface-sunken: #fffdf7;
+  --cr-surface-overlay: rgb(28 6 7 / 0.04);
+  --cr-line: rgb(28 6 7 / 0.14);
+  --cr-line-strong: rgb(28 6 7 / 0.3);
+  --cr-fg: #1c0607;
+  --cr-fg-muted: #6b4f49;
+  --cr-accent: #b21f24;
+  --cr-on-accent: #fcf475;
+  --cr-brand: #831515;
+  --cr-on-brand: #fcf475;
+  --cr-highlight: #b21f24;
+  --cr-link: #b21f24;
+  --cr-focus: #b21f24;
+  --cr-display-shadow: #fcf475;
+
+  --cr-danger: #a8174a;
+  --cr-danger-fill: #b0174e;
+  --cr-on-danger-fill: #ffffff;
+  --cr-success: #0b6b3f;
+  --cr-warning: #8a5300;
+  --cr-info: #17607a;
+
+  --cr-light-size: 60% 50%;
+  --cr-light-bulb: transparent;
+  --cr-light-pool: rgb(178 31 36 / 0.08);
+  --cr-light-falloff: transparent;
+  --cr-light-counter: transparent;
+  --cr-light-sweep: transparent;
+
+  --cr-cube-field: #b21f24;
+  --cr-cube-face: #fcf475;
+  --cr-cube-shadow: #831515;
+}
+
+/* Motion durations (BRAND_GUIDELINE section 10) */
+:root {
+  --cr-dur-micro: 120ms;
+  --cr-dur-interaction: 180ms;
+  --cr-dur-component: 260ms;
+  --cr-dur-hero: 420ms;
+  --cr-cut: 14px;
+  --cr-cut-sm: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --cr-dur-micro: 0ms;
+    --cr-dur-interaction: 0ms;
+    --cr-dur-component: 0ms;
+    --cr-dur-hero: 0ms;
+  }
+}
+
+/* ---------- Brand utilities ---------- */
+@layer components {
+  /* A themed region: paints its own base, text colour and UI font. */
+  .cr-scope {
+    background-color: var(--cr-surface);
+    color: var(--cr-fg);
+    font-family: var(--font-archivo), var(--font-anek), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Corner Light: gradient pools from the top-left corner, grain inside the gradient only (5.7).
+     Never give this layer a z-index; place content in a positioned sibling above it. */
+  .cr-light {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      url("/brand/grain-soft.webp"),
+      radial-gradient(38% 30% at 6% 4%, var(--cr-light-bulb), transparent 70%),
+      radial-gradient(var(--cr-light-size) at 0% 0%, var(--cr-light-pool), var(--cr-light-falloff) 42%, transparent 72%),
+      radial-gradient(60% 55% at 100% 100%, var(--cr-light-counter), transparent 70%),
+      linear-gradient(117deg, transparent 38%, var(--cr-light-sweep) 52%, transparent 66%),
+      var(--cr-surface);
+    background-size: 256px 256px, auto, auto, auto, auto, auto;
+    background-blend-mode: soft-light, normal, normal, normal, normal, normal;
+  }
+
+  /* Cut corner (5.8). The fill and the border are drawn by clipped pseudo-elements, so the
+     element itself is never clipped and its focus outline stays fully visible. */
+  .cr-cut {
+    position: relative;
+    isolation: isolate;
+    --cut: var(--cr-cut);
+    --cut-fill: transparent;
+    --cut-border: transparent;
+    --cut-bw: 1px;
+  }
+  .cr-cut-sm {
+    --cut: var(--cr-cut-sm);
+  }
+  .cr-cut::before,
+  .cr-cut::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    transition: background-color var(--cr-dur-interaction) var(--ease-corner);
+  }
+  /* The border is a ring (evenodd clip with a hole), so a translucent fill never stacks on it. */
+  .cr-cut::before {
+    inset: 0;
+    background: var(--cut-border);
+    clip-path: polygon(
+      evenodd,
+      var(--cut) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cut), var(--cut) 0,
+      calc(var(--cut) + var(--cut-bw) * 0.414) var(--cut-bw),
+      calc(100% - var(--cut-bw)) var(--cut-bw),
+      calc(100% - var(--cut-bw)) calc(100% - var(--cut-bw)),
+      var(--cut-bw) calc(100% - var(--cut-bw)),
+      var(--cut-bw) calc(var(--cut) + var(--cut-bw) * 0.414),
+      calc(var(--cut) + var(--cut-bw) * 0.414) var(--cut-bw)
+    );
+  }
+  .cr-cut::after {
+    inset: var(--cut-bw);
+    background: var(--cut-fill);
+    clip-path: polygon(calc(var(--cut) - var(--cut-bw) * 0.41) 0, 100% 0, 100% 100%, 0 100%, 0 calc(var(--cut) - var(--cut-bw) * 0.41));
+  }
+
+  /* Cut corner by clipping the region itself. Only for bands and documents whose edges hold no
+     focusable control (a clip would cut its focus outline); use .cr-cut everywhere else. */
+  .cr-clip-cut {
+    clip-path: polygon(var(--cut, var(--cr-cut)) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cut, var(--cr-cut)));
+  }
+
+  /* Display type: Sikat words only, uppercase. Never numerals (slashed zero). */
+  .cr-display {
+    font-family: var(--font-sikat), var(--font-anek), "Arial Narrow", sans-serif;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    line-height: 0.86;
+  }
+  /* Two-colour print slightly out of register: display sizes (48 px and up) only. */
+  .cr-misregister {
+    text-shadow: 3px 3px 0 var(--cr-display-shadow);
+  }
+
+  /* Numerals: condensed Archivo, never Sikat. */
+  .cr-num {
+    font-family: var(--font-archivo), sans-serif;
+    font-stretch: 62%;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Eyebrow / micro-label */
+  .cr-eyebrow {
+    font-family: var(--font-archivo), sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+
+  /* The taka sign always comes from a Bengali-capable face. */
+  .cr-taka {
+    font-family: var(--font-taka), var(--font-anek), sans-serif;
+    font-stretch: 100%;
+    font-size: 1.04em;
+    margin-inline-end: 0.06em;
+  }
+
+  /* Glass, sparingly: only where content floats over the corner light. */
+  .cr-glass {
+    background: var(--cr-surface-overlay);
+    border: 1px solid var(--cr-line);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .cr-focus:focus-visible {
+    outline: 2px solid var(--cr-focus);
+    outline-offset: 2px;
+  }
+
+  .cr-scope :lang(bn) {
+    font-family: var(--font-anek), sans-serif;
+    line-height: 1.6;
+  }
+}

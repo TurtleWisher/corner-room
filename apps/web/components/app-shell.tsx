@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { AuthProvider, useAuth } from "@/components/auth-provider";
 import { NotificationBell } from "@/components/notification-bell";
@@ -64,7 +65,20 @@ function NavAuth() {
   );
 }
 
+/** Routes that draw their own full-bleed layout (Phase 16). Every other route keeps the legacy shell. */
+const BARE_ROUTES = ["/theme-kit"];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  if (BARE_ROUTES.some((r) => pathname === r || pathname?.startsWith(`${r}/`))) {
+    return (
+      <AuthProvider>
+        <WorkspaceProvider>
+          <NotificationsProvider>{children}</NotificationsProvider>
+        </WorkspaceProvider>
+      </AuthProvider>
+    );
+  }
   return (
     <AuthProvider>
       <WorkspaceProvider>

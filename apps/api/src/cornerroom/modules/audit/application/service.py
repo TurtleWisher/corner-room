@@ -121,6 +121,7 @@ class AuditService:
         *,
         entity_type: str | None = None,
         entity_id: str | None = None,
+        organization_id: UUID | None = None,
         limit: int = 50,
         cursor: str | None = None,
     ) -> tuple[list[AuditLog], str | None]:
@@ -128,6 +129,8 @@ class AuditService:
             AuditLog.occurred_at.desc(),
             AuditLog.id.desc(),
         )
+        if organization_id is not None:
+            stmt = stmt.where(AuditLog.organization_id == organization_id)
         if entity_type:
             stmt = stmt.where(AuditLog.entity_type == entity_type)
         if entity_id:

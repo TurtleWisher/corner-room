@@ -720,18 +720,24 @@ class IdentityService:
             ).scalar_one_or_none()
             if membership is None:
                 raise NotFoundError("User not found")
-        assignment_rows = (
-            await self.session.execute(
-                select(RoleAssignment, Role.key)
-                .join(Role, Role.id == RoleAssignment.role_id)
-                .where(
-                    RoleAssignment.user_id == user.id,
-                    RoleAssignment.deleted_at.is_(None),
-                    Role.deleted_at.is_(None),
-                )
-                .order_by(Role.key)
+        assignment_stmt = (
+            select(RoleAssignment, Role.key)
+            .join(Role, Role.id == RoleAssignment.role_id)
+            .where(
+                RoleAssignment.user_id == user.id,
+                RoleAssignment.deleted_at.is_(None),
+                Role.deleted_at.is_(None),
             )
-        ).all()
+            .order_by(Role.key)
+        )
+        if organization_id is not None:
+            assignment_stmt = assignment_stmt.where(
+                or_(
+                    RoleAssignment.organization_id.is_(None),
+                    RoleAssignment.organization_id == organization_id,
+                )
+            )
+        assignment_rows = (await self.session.execute(assignment_stmt)).all()
         assignments = [
             {
                 "id": assignment.id,
@@ -741,16 +747,15 @@ class IdentityService:
             }
             for assignment, role_key in assignment_rows
         ]
-        membership_rows = list(
-            (
-                await self.session.execute(
-                    select(OrganizationMembership).where(
-                        OrganizationMembership.user_id == user.id,
-                        OrganizationMembership.deleted_at.is_(None),
-                    )
-                )
-            ).scalars().all()
+        membership_stmt = select(OrganizationMembership).where(
+            OrganizationMembership.user_id == user.id,
+            OrganizationMembership.deleted_at.is_(None),
         )
+        if organization_id is not None:
+            membership_stmt = membership_stmt.where(
+                OrganizationMembership.organization_id == organization_id
+            )
+        membership_rows = list((await self.session.execute(membership_stmt)).scalars().all())
         memberships = [
             {
                 "id": row.id,

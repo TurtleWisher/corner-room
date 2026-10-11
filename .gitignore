@@ -51,3 +51,12 @@ coverage.xml
 # Private internal project documentation
 /docs/
 /.cursor/
+
+# Local-only working notes (repo is public)
+/HANDOFF.md
+/Claude outputs/
+/brand/
+/tooling/
+# Local agent config (copied from tooling/)
+/.claude/
+/.mcp.json
