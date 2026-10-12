@@ -3,14 +3,11 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { ApiError, createEvent, fetchEvents, type EventRecord } from "@/lib/api";
 import { rowsForActiveOrg } from "@/lib/workspace-view";
+import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
+import { StatusChip } from "@/components/ds";
 
 function EventsBody() {
   const { currentOrg } = useWorkspace();
@@ -89,7 +86,7 @@ function EventsBody() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Events</h1>
-        <p className="mt-1 text-sm text-neutral-600">
+        <p className="mt-1 text-sm text-fg-muted">
           Organization-scoped. Switching workspace clears this list before reload.
         </p>
       </div>
@@ -110,7 +107,7 @@ function EventsBody() {
           </Button>
         </form>
         {formError ? (
-          <p className="mt-2 text-sm text-red-700" role="alert">
+          <p className="mt-2 text-sm text-danger" role="alert">
             {formError}
           </p>
         ) : null}
@@ -124,8 +121,8 @@ function EventsBody() {
               <Card className="flex items-center justify-between gap-4">
                 <div>
                   <p className="font-medium">{row.title}</p>
-                  <p className="text-sm text-neutral-600">
-                    {row.status} · {row.timezone}
+                  <p className="text-sm text-fg-muted">
+                    <StatusChip value={row.status} /> · {row.timezone}
                   </p>
                 </div>
                 <Link href={`/events/${row.id}`} className="text-sm underline">

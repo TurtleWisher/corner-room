@@ -3,12 +3,9 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
-import { Protected } from "@/components/protected";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { ApiError, fetchVenue, transitionVenue, updateVenue, type VenueRecord } from "@/lib/api";
+import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
+import { StatusChip } from "@/components/ds";
 
 function VenueDetailBody() {
   const params = useParams<{ id: string }>();
@@ -93,8 +90,8 @@ function VenueDetailBody() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">{venue.name}</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          {venue.status} · capacity {venue.capacity} (not ticket inventory)
+        <p className="mt-1 text-sm text-fg-muted">
+          <StatusChip value={venue.status} /> · capacity {venue.capacity}
         </p>
       </div>
       {actionError ? <ErrorState title="Action failed" message={actionError} /> : null}

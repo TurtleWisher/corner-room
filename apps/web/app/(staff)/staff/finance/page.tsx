@@ -2,12 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   ApiError,
   fetchLedger,
@@ -19,6 +14,8 @@ import {
   type ReconciliationRecord,
 } from "@/lib/api";
 import { formatMinor, journalStatusLabel } from "@/lib/finance-view";
+import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
+import { StatusChip } from "@/components/ds";
 
 function StaffFinanceBody() {
   const { currentOrg } = useWorkspace();
@@ -97,13 +94,12 @@ function StaffFinanceBody() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold">Finance</h1>
-        <p className="text-sm text-neutral-600">
-          Amounts come from the API. This page is not the accounting engine. Chart of accounts seeds are
-          provisional (Q-P1-22).
+        <p className="text-sm text-fg-muted">
+          Ledger journals, payouts and reconciliation for this workspace. Every amount comes from the ledger.
         </p>
       </div>
       <form className="space-y-3" onSubmit={(event) => void onConfig(event)}>
-        <p className="text-sm font-medium">Payout config (fail closed until set)</p>
+        <p className="text-sm font-medium">Payout settings (payouts stay blocked until these are set)</p>
         <Input
           value={minThreshold}
           onChange={(event) => setMinThreshold(event.target.value)}
@@ -117,7 +113,7 @@ function StaffFinanceBody() {
         <Input
           value={schedule}
           onChange={(event) => setSchedule(event.target.value)}
-          placeholder="Schedule key (data, not a coded calendar)"
+          placeholder="Schedule key"
         />
         <Button type="submit">Save config</Button>
       </form>
@@ -129,8 +125,8 @@ function StaffFinanceBody() {
             <p className="font-medium">
               {row.type} · {journalStatusLabel(row.status)}
             </p>
-            <p className="text-sm text-neutral-600">{row.currency_code}</p>
-            <p className="text-xs text-neutral-500">{row.id}</p>
+            <p className="text-sm text-fg-muted">{row.currency_code}</p>
+            <p className="text-xs text-fg-muted">{row.id}</p>
           </Card>
         ))}
       </section>
@@ -140,26 +136,26 @@ function StaffFinanceBody() {
         {payouts.map((row) => (
           <Card key={row.id}>
             <p className="font-medium">
-              {row.status} · {formatMinor(row.amount_minor, row.currency_code)}
+              <StatusChip value={row.status} /> · {formatMinor(row.amount_minor, row.currency_code)}
             </p>
-            <p className="text-sm text-neutral-600">{row.provider}</p>
+            <p className="text-sm text-fg-muted">{row.provider}</p>
           </Card>
         ))}
       </section>
       <section className="space-y-3">
         <h2 className="font-medium">Reconciliation</h2>
-        <p className="text-sm text-neutral-600">Mismatches are visible. They are not auto-fixed.</p>
+        <p className="text-sm text-fg-muted">Mismatches are visible. They are not auto-fixed.</p>
         {mismatches.length === 0 ? <EmptyState message="No reconciliation rows" /> : null}
         {mismatches.map((row) => (
           <Card key={row.id}>
-            <p className="font-medium">{row.status}</p>
-            <p className="text-sm text-neutral-600">
+            <p className="font-medium"><StatusChip value={row.status} /></p>
+            <p className="text-sm text-fg-muted">
               expected {formatMinor(row.expected_amount_minor, row.currency_code)}
               {row.actual_amount_minor !== null
                 ? ` · actual ${formatMinor(row.actual_amount_minor, row.currency_code)}`
                 : ""}
             </p>
-            {row.notes ? <p className="text-xs text-neutral-500">{row.notes}</p> : null}
+            {row.notes ? <p className="text-xs text-fg-muted">{row.notes}</p> : null}
           </Card>
         ))}
       </section>

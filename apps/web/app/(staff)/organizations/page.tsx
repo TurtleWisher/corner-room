@@ -3,13 +3,10 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { ApiError, acceptInvitation } from "@/lib/api";
+import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
+import { StatusChip } from "@/components/ds";
 
 function OrganizationsBody() {
   const { organizations, currentOrg, loading, error, switchTo, reload } = useWorkspace();
@@ -51,7 +48,7 @@ function OrganizationsBody() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Organizations</h1>
-        <p className="mt-1 text-sm text-neutral-600">
+        <p className="mt-1 text-sm text-fg-muted">
           Organization is the workspace. Switching reloads members and invitations so prior org data
           cannot linger on this page.
         </p>
@@ -65,8 +62,8 @@ function OrganizationsBody() {
               <Card className="flex items-center justify-between gap-4">
                 <div>
                   <p className="font-medium">{org.name}</p>
-                  <p className="text-sm text-neutral-600">
-                    {org.type} · {org.status}
+                  <p className="text-sm text-fg-muted">
+                    {org.type} · <StatusChip value={org.status} />
                     {currentOrg?.id === org.id ? " · current workspace" : ""}
                   </p>
                 </div>
@@ -103,11 +100,11 @@ function OrganizationsBody() {
           </Button>
         </form>
         {inviteError ? (
-          <p className="mt-2 text-sm text-red-700" role="alert">
+          <p className="mt-2 text-sm text-danger" role="alert">
             {inviteError}
           </p>
         ) : null}
-        {inviteMessage ? <p className="mt-2 text-sm text-neutral-600">{inviteMessage}</p> : null}
+        {inviteMessage ? <p className="mt-2 text-sm text-fg-muted">{inviteMessage}</p> : null}
       </Card>
     </div>
   );

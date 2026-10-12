@@ -4,7 +4,6 @@ import { FormEvent, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
 import {
   AnalyticsSkeleton,
@@ -13,7 +12,6 @@ import {
   MetricTile,
   PeriodEmptyNote,
 } from "@/components/analytics-panel";
-import { EmptyState, ErrorState } from "@/components/async-state";
 import { ApiError, fetchTrackAnalytics, type TrackAnalyticsRecord } from "@/lib/api";
 import {
   WORKSPACE_REQUIRED_COPY,
@@ -22,6 +20,7 @@ import {
   periodHasCounts,
   uniqueListenersLabel,
 } from "@/lib/analytics-view";
+import { EmptyState, ErrorState, Protected } from "@/components/staff/kit";
 
 function TrackAnalyticsBody() {
   const params = useParams<{ id: string }>();
@@ -90,7 +89,7 @@ function TrackAnalyticsBody() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Track analytics</h1>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-fg-muted">
           All plays from analytics facts. Royalty-eligible plays are not computed here.
         </p>
         <p className="text-sm">

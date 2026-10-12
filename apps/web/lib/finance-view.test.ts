@@ -8,7 +8,8 @@ import {
 
 describe("finance view is display-only", () => {
   it("formats API integers without inventing a rate", () => {
-    expect(formatMinor(2500, "BDT")).toBe("2500 BDT");
+    expect(formatMinor(2500, "BDT")).toBe("৳25.00");
+    expect(formatMinor(2500, "XXXX")).toBe("Not available");
   });
 
   it("labels posted journals from server status", () => {

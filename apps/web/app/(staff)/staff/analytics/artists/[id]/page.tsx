@@ -4,7 +4,6 @@ import { FormEvent, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
 import {
   AnalyticsSkeleton,
@@ -12,8 +11,6 @@ import {
   DateRangeFields,
   MetricTile,
 } from "@/components/analytics-panel";
-import { EmptyState, ErrorState } from "@/components/async-state";
-import { Card } from "@/components/ui/card";
 import { ApiError, fetchArtistModuleAnalytics, type ArtistAnalyticsRecord } from "@/lib/api";
 import {
   WORKSPACE_REQUIRED_COPY,
@@ -21,6 +18,7 @@ import {
   buildAnalyticsHref,
   uniqueListenersLabel,
 } from "@/lib/analytics-view";
+import { Card, EmptyState, ErrorState, Protected } from "@/components/staff/kit";
 
 function ArtistAnalyticsBody() {
   const params = useParams<{ id: string }>();
@@ -89,7 +87,7 @@ function ArtistAnalyticsBody() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Artist analytics</h1>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-fg-muted">
           Artist grain is not projected in daily metrics. Track totals are not summed here.
         </p>
         <p className="text-sm">
@@ -126,7 +124,7 @@ function ArtistAnalyticsBody() {
             />
           </section>
           <Card>
-            <p className="text-sm text-neutral-600">
+            <p className="text-sm text-fg-muted">
               Money is not available in analytics. Unique listeners are not calculated.
             </p>
           </Card>

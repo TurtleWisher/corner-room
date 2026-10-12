@@ -3,14 +3,10 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { ApiError, fetchAdminUsers, type AdminUserRecord } from "@/lib/api";
 import { WORKSPACE_REQUIRED_COPY, adminErrorKind, userStatusLabel } from "@/lib/admin-view";
+import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
 
 function StaffUsersBody() {
   const { currentOrg } = useWorkspace();
@@ -66,7 +62,7 @@ function StaffUsersBody() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Users</h1>
-        <p className="mt-1 text-sm text-neutral-600">
+        <p className="mt-1 text-sm text-fg-muted">
           Inspect only. Passwords and tokens are never shown. Workspace scopes the list when
           selected.
         </p>
@@ -80,7 +76,7 @@ function StaffUsersBody() {
       {items.map((row) => (
         <Card key={row.id}>
           <p className="font-medium">{row.email ?? row.phone ?? row.id}</p>
-          <p className="text-sm text-neutral-600">{userStatusLabel(row.status)}</p>
+          <p className="text-sm text-fg-muted">{userStatusLabel(row.status)}</p>
           <p className="text-sm">
             <Link href={`/staff/users/${row.id}`} className="underline">
               Inspect

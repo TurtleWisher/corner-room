@@ -3,12 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   ApiError,
   createCampaign,
@@ -17,6 +12,7 @@ import {
 } from "@/lib/api";
 import { campaignAttributionLabel, campaignStatusLabel } from "@/lib/campaigns-view";
 import { formatMinor } from "@/lib/finance-view";
+import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
 
 function StaffCampaignsBody() {
   const { currentOrg } = useWorkspace();
@@ -79,7 +75,7 @@ function StaffCampaignsBody() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold">Campaigns</h1>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-fg-muted">
           Marketing ops board. Budget is a planning cap. Spend is a Finance expense request. KPI
           targets are not attributed.
         </p>
@@ -109,14 +105,14 @@ function StaffCampaignsBody() {
                 {row.title}
               </Link>
             </p>
-            <p className="text-sm text-neutral-600">{campaignStatusLabel(row.status)}</p>
-            <p className="text-sm text-neutral-600">
+            <p className="text-sm text-fg-muted">{campaignStatusLabel(row.status)}</p>
+            <p className="text-sm text-fg-muted">
               Budget{" "}
               {row.budget
                 ? formatMinor(row.budget.amount_minor, row.budget.currency_code)
                 : "not set"}
             </p>
-            <p className="text-xs text-neutral-500">
+            <p className="text-xs text-fg-muted">
               {campaignAttributionLabel(row.attribution_status)}
             </p>
           </Card>
