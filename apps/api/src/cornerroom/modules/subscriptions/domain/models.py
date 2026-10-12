@@ -7,7 +7,7 @@ from uuid import UUID
 
 from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 from cornerroom.infra.base import ActorMixin, Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin, VersionMixin
 
@@ -34,7 +34,10 @@ class SubscriptionPlan(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDele
     interval_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     features: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     current_version_id: Mapped[UUID | None] = mapped_column(nullable=True)
-    __mapper_args__ = {"version_id_col": "version"}
+    # The version column comes from VersionMixin, so reference the Column, not its name.
+    @declared_attr.directive
+    def __mapper_args__(cls) -> dict[str, object]:
+        return {"version_id_col": cls.__table__.c.version}
 
 
 class SubscriptionPlanVersion(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
@@ -88,7 +91,10 @@ class Subscription(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMi
     current_period_id: Mapped[UUID | None] = mapped_column(nullable=True)
     cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    __mapper_args__ = {"version_id_col": "version"}
+    # The version column comes from VersionMixin, so reference the Column, not its name.
+    @declared_attr.directive
+    def __mapper_args__(cls) -> dict[str, object]:
+        return {"version_id_col": cls.__table__.c.version}
 
 
 class SubscriptionPeriod(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):

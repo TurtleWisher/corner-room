@@ -68,6 +68,14 @@ describe("faces from real data", () => {
     expect(f.top).toBe("FREQUENCIES");
     expect(f.left).toBe("CHATTOGRAM");
   });
+  it("keeps the front face to the title, even when a short secondary word would fit", () => {
+    expect(cubeFaces("Monsoon Frequencies", "Dhaka")).toEqual({
+      front: ["MONSOON", "MONSOON"],
+      left: "DHAKA",
+      top: "FREQUENCIES",
+    });
+    expect(cubeFaces("Monsoon Frequencies", "Rumi").front).toEqual(["MONSOON", "MONSOON"]);
+  });
   it("normalises accents and curly punctuation", () => {
     expect(normalizeWord("Café’s – mix")).toBe("CAFE'S - MIX");
   });

@@ -50,14 +50,19 @@ Migrations: `apps/api/alembic/versions/0001` to `0015`, a linear chain with head
 
 ### Frontend layout (`apps/web/`)
 
-- Next.js 15.5, React 19, Tailwind 4, TypeScript strict, App Router, flat routes (no route groups yet). About 58 pages, mostly client components.
-- `components/app-shell.tsx` plus `auth-provider`, `workspace-provider` and `notifications-provider`.
-- `lib/api.ts`: a single large hand-written API client around `apiFetch` (splitting it is planned for frontend Stage 5).
+- Next.js 15.5, React 19, Tailwind 4, TypeScript strict, App Router. About 58 pages, mostly client components.
+- **Route groups** (Stage 5; URLs unchanged): `app/(public)` (home), `app/(public)/(legacy)` (public pages not yet rebuilt), `(listen)` (Sky), `(account)`, `(artist)`, `(staff)` (side nav plus workspace chip). Each group's `layout.tsx` draws its shell from `components/shell/`. Pages not yet rebuilt render inside `LegacyMain`, outside `.cr-scope`, so their bodies stay as they were. `/theme-kit` sits outside the groups.
+- `components/app-shell.tsx` only provides `auth-provider`, `workspace-provider` and `notifications-provider`.
+- **API client:** `lib/api/client.ts` (apiFetch, ApiError, token handling) plus `features/<domain>/api.ts` per domain. `lib/api.ts` is a compatibility barrel; new code imports from the domain module.
+- Navigation lives in `lib/nav-view.ts` (tested). Visibility is UX only.
+- Shell details and the URL changes awaiting approval (URL-01 to URL-04): `docs/frontend/APP_SHELL.md`. **Don't change URLs without approval.**
 - `lib/*-view.ts`: pure view-model helpers, each with a `.test.ts`. **Keep this pattern.**
 - Design system (Phase 16): tokens in `app/styles/tokens.css`, fonts in `app/brand-fonts.ts` (the single place to swap the display face), primitives in `components/ds/`, brand pieces in `components/brand/` (including the `cube-logo/` letter cube), formatting in `lib/format/` (money, date, status), contrast-tested palette in `lib/theme/`. Developer pages: `/theme-kit`, `/theme-kit/modules`, `/theme-kit/cube` (enabled with `CR_THEME_KIT=1`).
 - `components/ui/` holds the legacy shadcn primitives. Legacy pages still use them and must stay pixel-identical until their module stage.
 
 ## Commands
+
+Quickest local start (Windows): `.\scripts\dev-stack.ps1` (add `-Seed` once to load demo data). Demo accounts and secrets live in the gitignored `.env.seed.local`; the email validator rejects `.test` domains, so demo users use `example.com`.
 
 Requires Docker Desktop, Python 3.12+ (the local venv is 3.11.9, which pyproject allows) and Node 22+.
 

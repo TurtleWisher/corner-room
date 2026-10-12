@@ -129,6 +129,10 @@ class TicketOut(BaseModel):
     ticket_type_id: UUID
     status: str
     presentation_token: str | None = None
+    # Owner views only (GET /me/tickets): which event and ticket type this is, so a customer's
+    # ticket list can name it. Ticket type reads are otherwise staff-only.
+    event_id: UUID | None = None
+    ticket_type_name: str | None = None
 
 
 class TicketPage(BaseModel):
@@ -459,10 +463,17 @@ async def my_tickets(
     limit: int = Query(default=50, ge=1, le=100),
 ) -> TicketPage:
     rows, next_cursor = await svc.list_my_tickets(ctx, cursor=cursor, limit=limit)
-    return TicketPage(
-        items=[_ticket_out(row, svc.presentation_token(row)) for row in rows],
-        next_cursor=next_cursor,
-    )
+    types: dict[UUID, object] = {}
+    items: list[TicketOut] = []
+    for row in rows:
+        if row.ticket_type_id not in types:
+            types[row.ticket_type_id] = await svc.get_ticket_type_row(row.ticket_type_id)
+        tt = types[row.ticket_type_id]
+        out = _ticket_out(row, svc.presentation_token(row))
+        out.event_id = tt.event_id
+        out.ticket_type_name = tt.name
+        items.append(out)
+    return TicketPage(items=items, next_cursor=next_cursor)
 
 
 @router.get("/tickets/{ticket_id}", response_model=TicketOut)

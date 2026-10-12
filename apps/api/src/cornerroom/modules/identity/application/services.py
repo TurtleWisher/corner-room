@@ -285,6 +285,9 @@ class IdentityService:
             raise UnauthorizedError("Refresh token is invalid or expired")
         if session_row.revoked_at is not None or session_row.status == "REVOKED":
             await self._handle_refresh_replay(session_row, request_id=request_id, ip=ip, user_agent=user_agent)
+            # Persist the family revocation, audit and outbox rows before the 401: the request
+            # session rolls back on any raised error, which used to discard replay detection.
+            await self.session.commit()
             raise UnauthorizedError("Refresh token is invalid or expired")
         if session_row.expires_at <= now:
             raise UnauthorizedError("Refresh token is invalid or expired")

@@ -5,8 +5,8 @@ import localFont from "next/font/local";
  * Sikat is NOT licensed for commercial use (D-P16-04, launch blocker LB-01).
  * Swapping the display face before launch is a change to this one declaration.
  *
- * preload is off while legacy pages (which do not use these faces) are still live, so they pay
- * nothing. Stage 5 turns preload on for Archivo and Sikat when the new shell adopts them.
+ * Stage 5: every route now renders the new shell, so Archivo (UI) and Sikat (display) preload.
+ * The Bengali face and the taka subset stay lazy: unicode-range loads them only when needed.
  */
 
 export const sikat = localFont({
@@ -14,7 +14,7 @@ export const sikat = localFont({
   variable: "--font-sikat",
   weight: "400",
   display: "swap",
-  preload: false,
+  preload: true,
   fallback: ["Arial Narrow", "sans-serif"],
 });
 
@@ -24,7 +24,7 @@ export const archivo = localFont({
   variable: "--font-archivo",
   weight: "100 900",
   display: "swap",
-  preload: false,
+  preload: true,
   declarations: [{ prop: "font-stretch", value: "62% 125%" }],
   fallback: ["system-ui", "sans-serif"],
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { loginFormState, resolveProtectedView, staffNavFlags } from "./auth-view";
+import { loginFormState, resolveProtectedView, safeNextPath, staffNavFlags } from "./auth-view";
 
 describe("login form state", () => {
   it("shows loading while submitting", () => {
@@ -75,5 +75,16 @@ describe("staff nav is UX-only", () => {
       showUsers: true,
       showOrgs: true,
     });
+  });
+});
+
+describe("safeNextPath", () => {
+  it("keeps same-site paths", () => {
+    expect(safeNextPath("/checkout?offer=1")).toBe("/checkout?offer=1");
+  });
+  it("rejects anything that could leave the site", () => {
+    for (const bad of ["//evil.test", "https://evil.test", "/\\evil.test", "javascript:alert(1)", "evil.test", "", null, undefined]) {
+      expect(safeNextPath(bad)).toBe("/account");
+    }
   });
 });

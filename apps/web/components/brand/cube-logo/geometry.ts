@@ -179,10 +179,14 @@ export function cubeFaces(title: string, secondary?: string | null): CubeFacesIn
 
   const W = FRONT.x1 - FRONT.x0;
   const fits = (word: string, h: number) => layoutLine(word, 0, 0, W, h, FRONT).aspect >= MIN_ASPECT_FRONT;
-  const i1 = Math.max(0, pool.findIndex((w) => fits(w, FRONT.line1.h)));
-  const rest = pool.slice(i1 + 1);
+  // The front face is the title: only title words go there (the secondary word belongs on the
+  // side and lid), so "Monsoon Frequencies" + "Dhaka" reads MONSOON / MONSOON, never MONSOON / DHAKA.
+  // Secondary words reach the front only when no title word fits at all.
+  const frontPool = words.some((w) => fits(w, FRONT.line1.h)) ? words : pool;
+  const i1 = Math.max(0, frontPool.findIndex((w) => fits(w, FRONT.line1.h)));
+  const rest = frontPool.slice(i1 + 1);
   const j = rest.findIndex((w) => fits(w, FRONT.line2.h));
-  const line1 = pool[i1];
+  const line1 = frontPool[i1];
   const line2 = j >= 0 ? rest[j] : line1;
   const used = new Set([line1, line2]);
 

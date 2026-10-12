@@ -57,8 +57,8 @@ Props of `CubeLogo`:
 Every word comes from real data. Nothing is invented.
 
 1. Pool: title words in order, then secondary words not already in the title.
-2. Front line 1: the first pool word that stays legible on line 1.
-3. Front line 2: the next pool word that fits line 2; otherwise line 1 repeats.
+2. Front line 1: the first title word that stays legible on line 1 (secondary words reach the front only when no title word fits).
+3. Front line 2: the next title word that fits line 2; otherwise line 1 repeats. The front never mixes in the secondary word, so Monsoon Frequencies + Dhaka reads MONSOON / MONSOON.
 4. Left: the first unused secondary word, else the first secondary word, else the title's first word.
 5. Top: the first unused title word, else the last unused pool word, else the secondary word, else line 2.
 

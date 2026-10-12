@@ -151,3 +151,48 @@ describe("apiFetch", () => {
     expect(getAccessToken()).toBeNull();
   });
 });
+
+describe("refresh coordination", () => {
+  const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+  const unauthorized = () => new Response(JSON.stringify({ status: 401, code: "UNAUTHORIZED" }), { status: 401 });
+
+  it("rotates the session once when several calls hit 401 together", async () => {
+    let refreshes = 0;
+    const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
+      const auth = (init.headers as Record<string, string>).Authorization;
+      if (url.endsWith("/api/v1/auth/refresh")) {
+        refreshes += 1;
+        await new Promise((r) => setTimeout(r, 10));
+        return ok({ access_token: `fresh-${refreshes}` });
+      }
+      return auth === "Bearer fresh-1" ? ok({ fine: true }) : unauthorized();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    setAccessToken("expired");
+    const results = await Promise.all([apiFetch("/api/v1/me"), apiFetch("/api/v1/me/tickets"), apiFetch("/api/v1/me/orders")]);
+    expect(results).toEqual([{ fine: true }, { fine: true }, { fine: true }]);
+    expect(refreshes).toBe(1);
+  });
+
+  it("reuses a token another call already obtained instead of refreshing again", async () => {
+    let refreshes = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        const auth = (init.headers as Record<string, string>).Authorization;
+        if (url.endsWith("/api/v1/auth/refresh")) {
+          refreshes += 1;
+          return ok({ access_token: "never" });
+        }
+        if (auth === "Bearer old") {
+          setAccessToken("newer"); // another call refreshed while this one was in flight
+          return unauthorized();
+        }
+        return auth === "Bearer newer" ? ok({ fine: true }) : unauthorized();
+      }),
+    );
+    setAccessToken("old");
+    await expect(apiFetch("/api/v1/me")).resolves.toEqual({ fine: true });
+    expect(refreshes).toBe(0);
+  });
+});
