@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 
-from cornerroom.infra.security import hash_password, verify_password
+from cornerroom.infra.security import hash_password, password_needs_rehash, verify_password
 
 
 def hash_secret(raw: str) -> str:
@@ -21,6 +21,9 @@ def hash_user_password(password: str) -> str:
 
 
 def password_matches(password_hash: str | None, password: str) -> bool:
-    if not password_hash:
-        return False
+    # Always runs one Argon2 verification, even with no stored hash (no timing hint).
     return verify_password(password_hash, password)
+
+
+def password_hash_outdated(password_hash: str | None) -> bool:
+    return bool(password_hash) and password_needs_rehash(password_hash)  # type: ignore[arg-type]

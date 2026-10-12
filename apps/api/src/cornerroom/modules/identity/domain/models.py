@@ -244,3 +244,40 @@ class OrganizationInvitation(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, So
         ForeignKey("identity.organization_memberships.id"),
         nullable=True,
     )
+
+
+class ExternalIdentity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """A sign-in identity at an outside provider (Google), linked to one Corner Room user.
+
+    The provider's stable subject is the key, never the email. Corner Room's User stays the
+    identity of record; this row only says "this Google account signs in as that user".
+    No provider tokens are stored.
+    """
+
+    __tablename__ = "external_identities"
+    __table_args__ = (
+        CheckConstraint("provider IN ('google')", name="provider"),
+        Index(
+            "uq_external_identities_provider_subject",
+            "provider",
+            "subject",
+            unique=True,
+            postgresql_where=text("unlinked_at IS NULL"),
+        ),
+        Index(
+            "uq_external_identities_user_provider",
+            "user_id",
+            "provider",
+            unique=True,
+            postgresql_where=text("unlinked_at IS NULL"),
+        ),
+        {"schema": "identity"},
+    )
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("identity.users.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    # The provider's email when the link was made; for support only, never used to sign in.
+    email_at_link: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    unlinked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

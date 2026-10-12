@@ -1,6 +1,7 @@
 /* Health, auth, current user and organizations (workspace). Split from lib/api.ts (Phase 16, Stage 5). */
 
-import { apiFetch, clearAccessToken, refreshAccessToken, setAccessToken } from "@/lib/api/client";
+import { apiFetch, clearAccessToken, getApiBaseUrl, refreshAccessToken, setAccessToken } from "@/lib/api/client";
+import { safeNextPath } from "@/lib/auth-view";
 
 export type HealthCheck = {
   status: string;
@@ -136,8 +137,17 @@ export async function login(email: string, password: string): Promise<TokenRespo
   return result;
 }
 
+/** How a verification link reaches the person. "not_configured" until an email provider exists (OD-08). */
+export type VerificationDelivery = "dev_mailbox" | "email" | "not_configured";
+
+export interface VerificationOffer {
+  verification_delivery: VerificationDelivery;
+  /** Local and test servers only: the link that verifies the account. Always null elsewhere. */
+  dev_verification_url?: string | null;
+}
+
 export async function register(email: string, password: string, display_name: string) {
-  return apiFetch<{ user: AuthUser; verification_required: boolean }>("/api/v1/auth/register", {
+  return apiFetch<{ user: AuthUser; verification_required: boolean } & VerificationOffer>("/api/v1/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, display_name }),
@@ -145,6 +155,56 @@ export async function register(email: string, password: string, display_name: st
     skipAuth: true,
     skipRefresh: true,
   });
+}
+
+/** Ask for a new verification link. The answer is the same whether or not the address exists. */
+export async function requestVerification(email: string) {
+  return apiFetch<{ status: string } & VerificationOffer>("/api/v1/auth/verification/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+    retry: false,
+    skipAuth: true,
+    skipRefresh: true,
+  });
+}
+
+export async function completeVerification(token: string): Promise<void> {
+  await apiFetch<void>("/api/v1/auth/verification/complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+    retry: false,
+    skipAuth: true,
+    skipRefresh: true,
+  });
+}
+
+/**
+ * Turn a dev verification link into a same-site path. The token stays in the `#` fragment, so it
+ * is never sent to a server or written to access logs. Anything unexpected gives null.
+ */
+export function verifyPathFromLink(link: string | null | undefined): string | null {
+  if (!link) return null;
+  const hash = link.indexOf("#");
+  if (hash < 0) return null;
+  const token = new URLSearchParams(link.slice(hash + 1)).get("token");
+  return token && /^[A-Za-z0-9_-]+$/.test(token) ? `/verify#token=${token}` : null;
+}
+
+/** Which outside sign-in options the API has switched on. */
+export async function fetchAuthProviders(): Promise<{ google: boolean }> {
+  return apiFetch<{ google: boolean }>("/api/v1/auth/providers", { retry: false, skipAuth: true, skipRefresh: true });
+}
+
+/**
+ * Where "Continue with Google" sends the browser: a top-level navigation to the API, which runs
+ * the whole Google exchange server-side and returns to /auth/continue. No token passes through
+ * the browser or the URL.
+ */
+export function googleSignInUrl(next: string | null | undefined): string {
+  const query = new URLSearchParams({ next: safeNextPath(next) });
+  return `${getApiBaseUrl()}/api/v1/auth/google/start?${query.toString()}`;
 }
 
 export async function logout(): Promise<void> {

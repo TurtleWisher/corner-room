@@ -47,6 +47,28 @@ def redact_processor(
     return redact_value(event_dict)
 
 
+# Paths whose query strings carry one-time secrets (Google's authorization code and state).
+QUERY_REDACTED_PATH_PREFIXES = ("/api/v1/auth/",)
+
+
+class AccessLogQueryRedactor(logging.Filter):
+    """Strip query strings from uvicorn access-log lines for auth paths, so codes never reach logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str):
+            path = args[2]
+            if "?" in path and path.startswith(QUERY_REDACTED_PATH_PREFIXES):
+                record.args = (*args[:2], path.split("?", 1)[0] + "?[redacted]", *args[3:])
+        return True
+
+
+def install_access_log_redaction() -> None:
+    access = logging.getLogger("uvicorn.access")
+    if not any(isinstance(f, AccessLogQueryRedactor) for f in access.filters):
+        access.addFilter(AccessLogQueryRedactor())
+
+
 def configure_logging(level: str = "INFO", *, service: str = "api", environment: str = "local") -> None:
     timestamper = structlog.processors.TimeStamper(fmt="iso", utc=True)
     structlog.configure(
@@ -71,6 +93,7 @@ def configure_logging(level: str = "INFO", *, service: str = "api", environment:
     )
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(service=service, environment=environment)
+    install_access_log_redaction()
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stdout,

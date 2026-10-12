@@ -23,7 +23,20 @@ describe("signInError", () => {
   it("names each sign-in outcome", async () => {
     const { signInError } = await import("@/lib/error-copy");
     expect(signInError(err("UNAUTHENTICATED", 401))).toMatch(/do not match/);
-    expect(signInError(err("ACCOUNT_NOT_ACTIVE", 403))).toBe("Your account is waiting for verification.");
+    expect(signInError(err("ACCOUNT_NOT_ACTIVE", 403))).toBe("Your account is not verified yet.");
     expect(signInError(err("ACCOUNT_LOCKED", 403))).toMatch(/locked/);
+  });
+});
+
+describe("googleSignInError", () => {
+  it("explains each refusal in plain words and never echoes the raw code", async () => {
+    const { googleSignInError } = await import("@/lib/error-copy");
+    expect(googleSignInError(null)).toBeNull();
+    expect(googleSignInError("cancelled")).toMatch(/cancelled/);
+    expect(googleSignInError("link_requires_password")).toMatch(/Verify it first/);
+    expect(googleSignInError("account_not_active")).toMatch(/not active/);
+    const unknown = googleSignInError("<script>alert(1)</script>");
+    expect(unknown).toMatch(/did not work/);
+    expect(unknown).not.toMatch(/script/);
   });
 });

@@ -16,10 +16,11 @@ VERSIONS = API_ROOT / "alembic" / "versions"
 REVISION_0015 = "0015_database_integrity"
 
 
-def test_alembic_sole_head_is_0015() -> None:
+def test_alembic_0015_is_in_the_linear_chain() -> None:
     cfg = Config(str(API_ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(cfg)
-    assert script.get_heads() == [REVISION_0015]
+    # 0015 was the head at Phase 15; later additive revisions (0016+) build on it, one head only.
+    assert len(script.get_heads()) == 1
     rev = script.get_revision(REVISION_0015)
     assert rev is not None
     assert rev.down_revision == "0014_notifications_search_analytics"

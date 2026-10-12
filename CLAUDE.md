@@ -29,7 +29,7 @@ Corner Room is a Bangladesh-first "unified entertainment operating system": live
 - **Modular monolith.** `apps/api` (Python FastAPI) owns all domain, money, permission and royalty logic. `apps/web` (Next.js) is **UI only**: no finance, royalty, inventory, entitlement or permission decisions in the browser or in Server Actions.
 - **Data:** PostgreSQL 16 (one schema per module, e.g. `identity.*`, `finance.*`, `events.*`), Redis (cache, rate limit, arq queue), object storage (local stub `var/storage`, S3 optional).
 - **Async work:** the transactional outbox (`infra/outbox.py`) is written in the same transaction as the domain change. The arq worker (`cornerroom/worker.py`) drains it to consumers (notifications, search indexer, analytics, finance handlers).
-- **Auth:** short-lived JWT access token (kept **in memory only** in the browser, never localStorage) plus an opaque httpOnly refresh cookie, rotated with replay detection. Passwords use argon2.
+- **Auth:** short-lived JWT access token (kept **in memory only** in the browser, never localStorage) plus an opaque httpOnly refresh cookie, rotated with replay detection. Passwords use Argon2id. **Continue with Google** is a server-side OIDC code flow (PKCE) run by the API; Google only proves identity and `identity.external_identities` links a Google `sub` to a User. No Google tokens are stored and the session is the normal Corner Room one (`docs/security/GOOGLE_AUTHENTICATION.md`).
 - **Authorization:** deny by default (`kernel/authorize.py`, `modules/authorization`). Domain services re-check permission and org, owner or resource before any mutation. Cross-org reads return **404, not 403**. Workspace comes from the session (`sessions.active_organization_id`); the client never asserts an org.
 
 ### Backend layout (`apps/api/src/cornerroom/`)
@@ -46,7 +46,7 @@ Corner Room is a Bangladesh-first "unified entertainment operating system": live
 
 Modules: identity, authorization, audit, documents, events (with venues), ticketing, artists (with bands), music, streaming, commerce, entitlements, subscriptions, royalties, finance, campaigns, notifications, search, analytics, administration.
 
-Migrations: `apps/api/alembic/versions/0001` to `0015`, a linear chain with head `0015_database_integrity`. Additive only: **never rewrite an existing revision**, and never use `create_all` on a migrated database.
+Migrations: `apps/api/alembic/versions/0001` to `0016`, a linear chain with head `0016_external_identities`. Additive only: **never rewrite an existing revision**, and never use `create_all` on a migrated database.
 
 ### Frontend layout (`apps/web/`)
 
