@@ -3,12 +3,9 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
-import { Protected } from "@/components/protected";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { ApiError, checkInTicket, fetchAttendance, type CheckInRecord } from "@/lib/api";
+import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
+import { StatusChip } from "@/components/ds";
 
 function AttendanceBody() {
   const params = useParams<{ id: string }>();
@@ -67,7 +64,7 @@ function AttendanceBody() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Attendance</h1>
-      <p className="text-sm text-neutral-600">
+      <p className="text-sm text-fg-muted">
         Server-authoritative check-in. Duplicate scans reuse the same attendance row.
       </p>
       {actionError ? <ErrorState title="Check-in failed" message={actionError} /> : null}
@@ -85,7 +82,7 @@ function AttendanceBody() {
         <ul className="space-y-2 text-sm">
           {rows.map((row) => (
             <li key={row.id}>
-              {row.status} · ticket {row.ticket_id} · {row.scanned_at}
+              <StatusChip value={row.status} /> · ticket {row.ticket_id} · {row.scanned_at}
             </li>
           ))}
         </ul>

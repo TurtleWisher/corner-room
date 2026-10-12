@@ -4,10 +4,6 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { Protected } from "@/components/protected";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import {
   ApiError,
   applyOrganizationLifecycle,
@@ -17,6 +13,8 @@ import {
   type Organization,
 } from "@/lib/api";
 import { adminErrorKind, canSuspend, canUnsuspend } from "@/lib/admin-view";
+import { Button, Card, EmptyState, ErrorState, LoadingState, Protected } from "@/components/staff/kit";
+import { StatusChip } from "@/components/ds";
 
 function StaffOrganizationDetailBody() {
   const params = useParams<{ id: string }>();
@@ -97,8 +95,8 @@ function StaffOrganizationDetailBody() {
       </p>
       <div>
         <h1 className="text-2xl font-semibold">{row.name}</h1>
-        <p className="text-sm text-neutral-600">
-          {row.type} · {row.status}
+        <p className="text-sm text-fg-muted">
+          {row.type} · <StatusChip value={row.status} />
         </p>
       </div>
       {error ? <ErrorState message={error} /> : null}
@@ -124,7 +122,7 @@ function StaffOrganizationDetailBody() {
         {members.length === 0 ? <EmptyState message="No memberships" /> : null}
         {members.map((item) => (
           <p key={item.id} className="mt-2 text-sm">
-            {item.user_id} · {item.status}
+            {item.user_id} · <StatusChip value={item.status} />
           </p>
         ))}
       </Card>

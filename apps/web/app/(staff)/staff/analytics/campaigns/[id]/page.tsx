@@ -4,7 +4,6 @@ import { FormEvent, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
 import {
   AnalyticsSkeleton,
@@ -13,8 +12,6 @@ import {
   MetricTile,
   PeriodEmptyNote,
 } from "@/components/analytics-panel";
-import { EmptyState, ErrorState } from "@/components/async-state";
-import { Card } from "@/components/ui/card";
 import { ApiError, fetchCampaignAnalytics, type CampaignAnalyticsRecord } from "@/lib/api";
 import {
   WORKSPACE_REQUIRED_COPY,
@@ -23,6 +20,7 @@ import {
   buildAnalyticsHref,
   periodHasCounts,
 } from "@/lib/analytics-view";
+import { Card, EmptyState, ErrorState, Protected } from "@/components/staff/kit";
 
 function CampaignAnalyticsBody() {
   const params = useParams<{ id: string }>();
@@ -91,7 +89,7 @@ function CampaignAnalyticsBody() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Campaign analytics</h1>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-fg-muted">
           Ingested campaign facts only. Attribution actuals, CAC, and ROAS are not computed.
         </p>
         <p className="text-sm">
@@ -125,7 +123,7 @@ function CampaignAnalyticsBody() {
             />
           </section>
           <Card>
-            <p className="text-sm text-neutral-600">Attribution</p>
+            <p className="text-sm text-fg-muted">Attribution</p>
             <p className="mt-2 font-medium">{attributionDisplay(data.attribution_status)}</p>
           </Card>
         </>

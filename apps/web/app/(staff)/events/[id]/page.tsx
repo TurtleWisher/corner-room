@@ -4,11 +4,6 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
-import { Protected } from "@/components/protected";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   ApiError,
   assignEventVenue,
@@ -31,6 +26,8 @@ import {
   type TicketTypeRecord,
   type VenueRecord,
 } from "@/lib/api";
+import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected, selectClasses } from "@/components/staff/kit";
+import { Money, StatusChip } from "@/components/ds";
 
 function EventDetailBody() {
   const params = useParams<{ id: string }>();
@@ -146,8 +143,8 @@ function EventDetailBody() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">{event.title}</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          {event.status} · {event.timezone}
+        <p className="mt-1 text-sm text-fg-muted">
+          <StatusChip value={event.status} /> · {event.timezone}
           {event.starts_at ? ` · ${event.starts_at}` : ""}
         </p>
         <p className="mt-2 text-sm">
@@ -214,14 +211,14 @@ function EventDetailBody() {
           }}
         >
           <select
-            className="h-10 w-full rounded-md border border-neutral-300 px-2 text-sm"
+            className={selectClasses}
             value={venueId}
             onChange={(e) => setVenueId(e.target.value)}
           >
             <option value="">Unassigned</option>
             {venues.map((venue) => (
               <option key={venue.id} value={venue.id}>
-                {venue.name} ({venue.status})
+                {venue.name} <StatusChip value={venue.status} />
               </option>
             ))}
           </select>
@@ -229,11 +226,11 @@ function EventDetailBody() {
             Assign
           </Button>
         </form>
-        <p className="mt-2 text-sm text-neutral-600">Current: {event.venue_id ?? "none"}</p>
+        <p className="mt-2 text-sm text-fg-muted">Current: {event.venue_id ?? "none"}</p>
       </Card>
       <Card>
         <h2 className="text-sm font-medium">Lineup</h2>
-        <p className="mt-1 text-xs text-neutral-600">
+        <p className="mt-1 text-xs text-fg-muted">
           Participation only. No fees, tickets, or contract terms. Only ACTIVE artists.
         </p>
         <form
@@ -257,7 +254,7 @@ function EventDetailBody() {
           }}
         >
           <select
-            className="h-10 w-full rounded-md border border-neutral-300 px-2 text-sm"
+            className={selectClasses}
             value={lineupArtistId}
             onChange={(e) => setLineupArtistId(e.target.value)}
           >
@@ -279,7 +276,7 @@ function EventDetailBody() {
             {lineup.map((row) => (
               <li key={row.id} className="flex items-center justify-between gap-2">
                 <span>
-                  {row.artist_id ?? row.band_id} · {row.status} · #{row.billing_order}
+                  {row.artist_id ?? row.band_id} · <StatusChip value={row.status} /> · #{row.billing_order}
                 </span>
                 {row.status === "INVITED" ? (
                   <Button
@@ -355,7 +352,7 @@ function EventDetailBody() {
             {ticketTypes.map((row) => (
               <li key={row.id} className="flex items-center justify-between gap-2">
                 <span>
-                  {row.name} · {row.status} · {row.price_amount_minor} {row.currency_code} · remaining{" "}
+                  {row.name} · <StatusChip value={row.status} /> · <Money value={{ amount_minor: row.price_amount_minor, currency_code: row.currency_code }} minorDigits="always" /> · remaining{" "}
                   {row.remaining}
                 </span>
                 {row.status === "DRAFT" ? (

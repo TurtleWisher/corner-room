@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Protected } from "@/components/protected";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Card } from "@/components/ui/card";
 import { ApiError, fetchOrganizations, type Organization } from "@/lib/api";
 import { adminErrorKind } from "@/lib/admin-view";
+import { Card, EmptyState, ErrorState, LoadingState, Protected } from "@/components/staff/kit";
+import { StatusChip } from "@/components/ds";
 
 function StaffOrganizationsBody() {
   const [items, setItems] = useState<Organization[]>([]);
@@ -62,7 +61,7 @@ function StaffOrganizationsBody() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Organizations</h1>
-        <p className="mt-1 text-sm text-neutral-600">
+        <p className="mt-1 text-sm text-fg-muted">
           Inspect existing organizations. Switch workspace on the Organizations page.
         </p>
       </div>
@@ -70,8 +69,8 @@ function StaffOrganizationsBody() {
       {items.map((row) => (
         <Card key={row.id}>
           <p className="font-medium">{row.name}</p>
-          <p className="text-sm text-neutral-600">
-            {row.type} · {row.status}
+          <p className="text-sm text-fg-muted">
+            {row.type} · <StatusChip value={row.status} />
           </p>
           <p className="text-sm">
             <Link href={`/staff/organizations/${row.id}`} className="underline">

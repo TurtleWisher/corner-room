@@ -2,12 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   ApiError,
   createOffer,
@@ -21,6 +16,8 @@ import {
   type PlanRecord,
   type ProductRecord,
 } from "@/lib/api";
+import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
+import { Money, StatusChip } from "@/components/ds";
 
 function CommerceBody() {
   const { currentOrg } = useWorkspace();
@@ -119,10 +116,9 @@ function CommerceBody() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Staff commerce</h1>
-      <p className="text-sm text-neutral-600">
-        Type integer minor units. The UI does not invent prices, trials, or fees. Requires
-        commerce.write.
+      <h1 className="text-xl font-semibold">Commerce</h1>
+      <p className="text-sm text-fg-muted">
+        Products, offers and subscription plans. Enter prices in the currency&apos;s smallest unit (for BDT, poisha: 150000 is ৳1,500).
       </p>
       {error ? <ErrorState title="Commerce" message={error} /> : null}
       <Card>
@@ -168,9 +164,9 @@ function CommerceBody() {
         {products.map((row) => (
           <Card key={row.id}>
             <p className="font-medium">
-              {row.name} · {row.status}
+              {row.name} · <StatusChip value={row.status} />
             </p>
-            <p className="text-sm text-neutral-600">
+            <p className="text-sm text-fg-muted">
               {row.product_type} · {row.id}
             </p>
             {row.status === "DRAFT" ? (
@@ -188,10 +184,10 @@ function CommerceBody() {
         {plans.map((row) => (
           <Card key={row.id}>
             <p className="font-medium">
-              {row.key} · {row.status}
+              {row.key} · <StatusChip value={row.status} />
             </p>
-            <p className="text-sm text-neutral-600">
-              {row.price_amount_minor} {row.currency_code}
+            <p className="text-sm text-fg-muted">
+              <Money value={{ amount_minor: row.price_amount_minor, currency_code: row.currency_code }} minorDigits="always" />
             </p>
           </Card>
         ))}

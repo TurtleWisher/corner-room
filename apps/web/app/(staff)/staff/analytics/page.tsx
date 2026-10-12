@@ -3,7 +3,6 @@
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
 import {
   AnalyticsSkeleton,
@@ -12,8 +11,6 @@ import {
   MetricTile,
   PeriodEmptyNote,
 } from "@/components/analytics-panel";
-import { EmptyState, ErrorState } from "@/components/async-state";
-import { Card } from "@/components/ui/card";
 import { ApiError, fetchStaffAnalyticsOverview, type StaffAnalyticsOverview } from "@/lib/api";
 import {
   WORKSPACE_REQUIRED_COPY,
@@ -24,6 +21,7 @@ import {
   periodHasCounts,
   uniqueListenersLabel,
 } from "@/lib/analytics-view";
+import { Card, EmptyState, ErrorState, Protected } from "@/components/staff/kit";
 
 function StaffAnalyticsBody() {
   const { currentOrg } = useWorkspace();
@@ -100,7 +98,7 @@ function StaffAnalyticsBody() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Analytics</h1>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-fg-muted">
           Estimates from analytics facts. This is not the ledger and not royalty eligibility.
         </p>
       </div>
@@ -158,11 +156,11 @@ function StaffAnalyticsBody() {
             />
           </section>
           <Card>
-            <p className="text-sm text-neutral-600">Campaign attribution</p>
+            <p className="text-sm text-fg-muted">Campaign attribution</p>
             <p className="mt-2 font-medium">{attributionDisplay(data.campaigns.attribution_status)}</p>
           </Card>
           <Card>
-            <p className="text-sm text-neutral-600">Money</p>
+            <p className="text-sm text-fg-muted">Money</p>
             <p className="mt-2 font-medium">{moneyTileLabel(data.money.status)}</p>
           </Card>
         </>

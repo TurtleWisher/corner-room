@@ -3,12 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Card } from "@/components/ui/card";
 import { ApiError, fetchAudit, type AuditRecord } from "@/lib/api";
 import { opsErrorKind } from "@/lib/ops-view";
+import { Card, EmptyState, ErrorState, LoadingState, Protected } from "@/components/staff/kit";
 
 function StaffAuditBody() {
   const { currentOrg } = useWorkspace();
@@ -68,7 +66,7 @@ function StaffAuditBody() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Audit</h1>
-        <p className="mt-1 text-sm text-neutral-600">
+        <p className="mt-1 text-sm text-fg-muted">
           Append-only inspection. Secrets are scrubbed at write. Hide is not authorization.
         </p>
         <p className="mt-1 text-sm">
@@ -81,7 +79,7 @@ function StaffAuditBody() {
       {items.map((row) => (
         <Card key={row.id}>
           <p className="font-medium">{row.action}</p>
-          <p className="text-sm text-neutral-600">
+          <p className="text-sm text-fg-muted">
             {row.entity_type} · {row.entity_id} · {row.occurred_at}
           </p>
           <p className="text-sm">

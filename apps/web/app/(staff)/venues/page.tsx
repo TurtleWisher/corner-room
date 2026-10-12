@@ -3,14 +3,11 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { ApiError, createVenue, fetchVenues, type VenueRecord } from "@/lib/api";
 import { rowsForActiveOrg } from "@/lib/workspace-view";
+import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
+import { StatusChip } from "@/components/ds";
 
 function VenuesBody() {
   const { currentOrg } = useWorkspace();
@@ -79,8 +76,8 @@ function VenuesBody() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Venues</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Capacity is a place property, not ticket inventory. Switching workspace clears this list.
+        <p className="mt-1 text-sm text-fg-muted">
+          Places this workspace runs events in. Capacity describes the room, not ticket stock.
         </p>
       </div>
       <Card>
@@ -99,7 +96,7 @@ function VenuesBody() {
           </Button>
         </form>
         {formError ? (
-          <p className="mt-2 text-sm text-red-700" role="alert">
+          <p className="mt-2 text-sm text-danger" role="alert">
             {formError}
           </p>
         ) : null}
@@ -113,8 +110,8 @@ function VenuesBody() {
               <Card className="flex items-center justify-between gap-4">
                 <div>
                   <p className="font-medium">{row.name}</p>
-                  <p className="text-sm text-neutral-600">
-                    {row.status} · capacity {row.capacity}
+                  <p className="text-sm text-fg-muted">
+                    <StatusChip value={row.status} /> · capacity {row.capacity}
                   </p>
                 </div>
                 <Link href={`/venues/${row.id}`} className="text-sm underline">

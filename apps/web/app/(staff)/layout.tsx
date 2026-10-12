@@ -1,11 +1,11 @@
-import { LegacyMain } from "@/components/shell/legacy-main";
+import { StaffMain } from "@/components/staff/kit";
 import { StaffShell } from "@/components/shell/staff-shell";
 
-/* Staff shell (Stage 5): side navigation and the always-visible workspace chip. */
+/* Staff console: side navigation, the always-visible "Acting in" workspace chip, graphite pages. */
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   return (
     <StaffShell>
-      <LegacyMain>{children}</LegacyMain>
+      <StaffMain>{children}</StaffMain>
     </StaffShell>
   );
 }

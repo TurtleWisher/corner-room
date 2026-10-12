@@ -4,13 +4,11 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { ApiError, applyUserLifecycle, fetchAdminUser, type AdminUserInspect } from "@/lib/api";
 import { adminErrorKind, canSuspend, canUnsuspend, userStatusLabel } from "@/lib/admin-view";
+import { Button, Card, EmptyState, ErrorState, LoadingState, Protected } from "@/components/staff/kit";
+import { StatusChip } from "@/components/ds";
 
 function StaffUserDetailBody() {
   const params = useParams<{ id: string }>();
@@ -85,8 +83,8 @@ function StaffUserDetailBody() {
       </p>
       <div>
         <h1 className="text-2xl font-semibold">{row.email ?? row.phone ?? row.id}</h1>
-        <p className="text-sm text-neutral-600">{userStatusLabel(row.status)}</p>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-fg-muted">{userStatusLabel(row.status)}</p>
+        <p className="text-sm text-fg-muted">
           Verified {row.email_verified ? "yes" : "no"} · Locked {row.security_locked ? "yes" : "no"}
         </p>
       </div>
@@ -113,7 +111,7 @@ function StaffUserDetailBody() {
         {row.assignments.length === 0 ? <EmptyState message="No role assignments" /> : null}
         {row.assignments.map((item) => (
           <p key={item.id} className="mt-2 text-sm">
-            {item.role_key} · {item.status}
+            {item.role_key} · <StatusChip value={item.status} />
           </p>
         ))}
       </Card>
@@ -122,7 +120,7 @@ function StaffUserDetailBody() {
         {row.memberships.length === 0 ? <EmptyState message="No memberships" /> : null}
         {row.memberships.map((item) => (
           <p key={item.id} className="mt-2 text-sm">
-            {item.organization_id} · {item.status}
+            {item.organization_id} · <StatusChip value={item.status} />
           </p>
         ))}
       </Card>

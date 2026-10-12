@@ -3,12 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   ApiError,
   createInvitation,
@@ -20,6 +15,8 @@ import {
   type Organization,
 } from "@/lib/api";
 import { invitationsForActiveOrg, membersForActiveOrg } from "@/lib/workspace-view";
+import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
+import { StatusChip } from "@/components/ds";
 
 function OrganizationDetailBody() {
   const params = useParams<{ id: string }>();
@@ -111,13 +108,13 @@ function OrganizationDetailBody() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold">{org.name}</h1>
-          <p className="text-sm text-neutral-600">
-            {org.type} · {org.status}
+          <p className="text-sm text-fg-muted">
+            {org.type} · <StatusChip value={org.status} />
             {org.share_bps != null ? ` · share_bps ${org.share_bps} (config only)` : ""}
           </p>
         </div>
         {currentOrg?.id === org.id ? (
-          <p className="text-sm text-neutral-600">Current workspace</p>
+          <p className="text-sm text-fg-muted">Current workspace</p>
         ) : (
           <Button type="button" size="sm" onClick={() => void switchTo(org.id)}>
             Switch here
@@ -134,7 +131,7 @@ function OrganizationDetailBody() {
           <ul className="mt-3 space-y-1 text-sm">
             {visibleMembers.map((row) => (
               <li key={row.id}>
-                {row.user_id} · {row.status}
+                {row.user_id} · <StatusChip value={row.status} />
               </li>
             ))}
           </ul>
@@ -142,7 +139,7 @@ function OrganizationDetailBody() {
       </Card>
       <Card>
         <h2 className="font-medium">Invitations</h2>
-        <p className="mt-1 text-sm text-neutral-600">
+        <p className="mt-1 text-sm text-fg-muted">
           Tokens are shown once. Email delivery is not configured.
         </p>
         <form onSubmit={onInvite} className="mt-3 flex gap-2">
@@ -158,7 +155,7 @@ function OrganizationDetailBody() {
           </Button>
         </form>
         {inviteError ? (
-          <p className="mt-2 text-sm text-red-700" role="alert">
+          <p className="mt-2 text-sm text-danger" role="alert">
             {inviteError}
           </p>
         ) : null}
@@ -173,7 +170,7 @@ function OrganizationDetailBody() {
           <ul className="mt-3 space-y-1 text-sm">
             {visibleInvites.map((row) => (
               <li key={row.id}>
-                {row.email} · {row.status}
+                {row.email} · <StatusChip value={row.status} />
               </li>
             ))}
           </ul>

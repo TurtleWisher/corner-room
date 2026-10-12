@@ -2,12 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   ApiError,
   createRevenuePool,
@@ -22,6 +17,8 @@ import {
   type RevenuePoolRecord,
   type RoyaltyRuleRecord,
 } from "@/lib/api";
+import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
+import { Money, StatusChip } from "@/components/ds";
 
 function StaffRoyaltiesBody() {
   const { currentOrg } = useWorkspace();
@@ -122,7 +119,7 @@ function StaffRoyaltiesBody() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Royalty operations</h1>
-      <p className="text-sm text-neutral-600">
+      <p className="text-sm text-fg-muted">
         Shares, rates, and eligibility are staff-entered data. The UI does not invent splits or stream rates.
       </p>
       {error ? <ErrorState title="Royalty ops error" message={error} /> : null}
@@ -151,9 +148,9 @@ function StaffRoyaltiesBody() {
         {rules.map((row) => (
           <Card key={row.id}>
             <p className="font-medium">
-              {row.key} v{row.version} · {row.status}
+              {row.key} v{row.version} · <StatusChip value={row.status} />
             </p>
-            <p className="text-xs text-neutral-500">{row.id}</p>
+            <p className="text-xs text-fg-muted">{row.id}</p>
             {row.status === "DRAFT" ? (
               <Button className="mt-3" onClick={() => void transitionRoyaltyRule(row.id, "activate").then(() => reload())}>
                 Activate
@@ -164,9 +161,9 @@ function StaffRoyaltiesBody() {
         {pools.map((row) => (
           <Card key={row.id}>
             <p className="font-medium">
-              {row.status} · {row.amount_minor} {row.currency_code}
+              <StatusChip value={row.status} /> · <Money value={{ amount_minor: row.amount_minor, currency_code: row.currency_code }} minorDigits="always" />
             </p>
-            <p className="text-sm text-neutral-600">{row.source_type}</p>
+            <p className="text-sm text-fg-muted">{row.source_type}</p>
             {row.status === "OPEN" ? (
               <Button className="mt-3" onClick={() => void freezeRevenuePool(row.id).then(() => reload())}>
                 Freeze from recognized revenue

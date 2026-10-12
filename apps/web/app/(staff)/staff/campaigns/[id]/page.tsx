@@ -4,12 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
-import { Protected } from "@/components/protected";
 import { useWorkspace } from "@/components/workspace-provider";
-import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   ApiError,
   addCampaignChannel,
@@ -24,6 +19,8 @@ import {
 } from "@/lib/api";
 import { CAMPAIGN_ACTIONS, campaignAttributionLabel, campaignStatusLabel } from "@/lib/campaigns-view";
 import { formatMinor } from "@/lib/finance-view";
+import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
+import { StatusChip } from "@/components/ds";
 
 function StaffCampaignDetailBody() {
   const params = useParams<{ id: string }>();
@@ -193,18 +190,18 @@ function StaffCampaignDetailBody() {
       </p>
       <div>
         <h1 className="text-2xl font-semibold">{row.title}</h1>
-        <p className="text-sm text-neutral-600">{campaignStatusLabel(row.status)}</p>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-fg-muted">{campaignStatusLabel(row.status)}</p>
+        <p className="text-sm text-fg-muted">
           Budget{" "}
           {row.budget ? formatMinor(row.budget.amount_minor, row.budget.currency_code) : "not set"}
         </p>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-fg-muted">
           Committed spend{" "}
           {row.committed_spend
             ? formatMinor(row.committed_spend.amount_minor, row.committed_spend.currency_code)
             : "none"}
         </p>
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-fg-muted">
           {campaignAttributionLabel(row.attribution_status)}. Actuals are not computed here.
         </p>
         <p className="text-sm">
@@ -227,7 +224,7 @@ function StaffCampaignDetailBody() {
         {row.tasks.map((task) => (
           <Card key={task.id}>
             <p className="font-medium">{task.title}</p>
-            <p className="text-sm text-neutral-600">{task.status}</p>
+            <p className="text-sm text-fg-muted"><StatusChip value={task.status} /></p>
             {task.status === "TODO" ? (
               <Button type="button" onClick={() => void onTaskAction(task.id, "start", task.version)}>
                 Start
@@ -254,7 +251,7 @@ function StaffCampaignDetailBody() {
       </section>
       <section className="space-y-3">
         <h2 className="font-medium">Links</h2>
-        <p className="text-sm text-neutral-600">ARTIST, RELEASE (album), or EVENT (concert) only.</p>
+        <p className="text-sm text-fg-muted">ARTIST, RELEASE (album), or EVENT (concert) only.</p>
         {row.links.length === 0 ? <EmptyState message="No linked subjects" /> : null}
         {row.links.map((link) => (
           <Card key={link.id}>
@@ -296,7 +293,7 @@ function StaffCampaignDetailBody() {
       </section>
       <section className="space-y-3">
         <h2 className="font-medium">KPI targets</h2>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-fg-muted">
           Targets only. {campaignAttributionLabel("ATTRIBUTION_UNDEFINED")}.
         </p>
         {row.kpi_targets.length === 0 ? (
@@ -307,7 +304,7 @@ function StaffCampaignDetailBody() {
             <p className="font-medium">
               {target.metric_key}: {target.target_value}
             </p>
-            <p className="text-xs text-neutral-500">
+            <p className="text-xs text-fg-muted">
               {campaignAttributionLabel(target.attribution_status)}
             </p>
           </Card>
@@ -328,16 +325,16 @@ function StaffCampaignDetailBody() {
       </section>
       <section className="space-y-3">
         <h2 className="font-medium">Expense requests</h2>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-fg-muted">
           Creates a Finance DRAFT only. Approve and recognize stay on Finance.
         </p>
         {row.expense_requests.length === 0 ? <EmptyState message="No expense requests" /> : null}
         {row.expense_requests.map((expense) => (
           <Card key={expense.id}>
             <p className="font-medium">
-              {expense.status} · {formatMinor(expense.amount.amount_minor, expense.amount.currency_code)}
+              <StatusChip value={expense.status} /> · {formatMinor(expense.amount.amount_minor, expense.amount.currency_code)}
             </p>
-            <p className="text-sm text-neutral-600">{expense.category}</p>
+            <p className="text-sm text-fg-muted">{expense.category}</p>
           </Card>
         ))}
         <form className="space-y-3" onSubmit={(event) => void onExpense(event)}>
