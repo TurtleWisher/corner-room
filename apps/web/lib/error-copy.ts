@@ -46,9 +46,32 @@ export function friendlyError(err: unknown, fallback = "Something went wrong. Pl
 export function signInError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401) return "That email and password do not match an account.";
-    if (err.code === "ACCOUNT_NOT_ACTIVE") return "Your account is waiting for verification.";
+    if (err.code === "ACCOUNT_NOT_ACTIVE") return "Your account is not verified yet.";
     if (err.code === "ACCOUNT_LOCKED") return "This account is locked. Contact support.";
     if (err.status === 422) return "Enter a valid email address and your password.";
   }
   return friendlyError(err, "Sign in failed. Please try again.");
+}
+
+/** Copy for `?google_error=` after "Continue with Google". Unknown codes get a calm generic line. */
+const GOOGLE_COPY: Record<string, string> = {
+  cancelled: "Google sign-in was cancelled. You can try again or use your email and password.",
+  state_invalid: "That Google sign-in expired or was already used. Please try again.",
+  provider_unavailable: "Google sign-in is not responding right now. Please try again in a moment.",
+  code_rejected: "Google sign-in did not finish. Please try again.",
+  token_invalid: "We could not confirm your Google account. Please try again.",
+  email_unverified: "Your Google account's email is not verified with Google, so we cannot use it to sign you in.",
+  link_requires_password:
+    "An account with this email already exists but is not verified yet. Verify it first (try signing in with your email and password to get a new link), then you can use Google.",
+  link_conflict: "This Google account could not be connected. Please sign in with your email and password.",
+  account_unavailable: "This account is not available. Contact support if you think this is a mistake.",
+  account_locked: "This account is locked. Contact support.",
+  account_not_active: "This account is not active right now. Contact support if you think this is a mistake.",
+  rate_limited: "Too many attempts. Please wait a little and try again.",
+  not_configured: "Google sign-in is not available yet. Please use your email and password.",
+};
+
+export function googleSignInError(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return GOOGLE_COPY[code] ?? "Google sign-in did not work. Please try again or use your email and password.";
 }

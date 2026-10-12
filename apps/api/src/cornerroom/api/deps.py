@@ -32,6 +32,7 @@ from cornerroom.modules.subscriptions.application.service import SubscriptionSer
 from cornerroom.modules.events.application.service import EventService
 from cornerroom.modules.identity.application.organization_service import OrganizationService
 from cornerroom.modules.notifications.application.service import NotificationService
+from cornerroom.modules.identity.infra.google import GoogleOIDC, google_oidc
 from cornerroom.modules.music.application.service import MusicService
 from cornerroom.modules.streaming.application.service import StreamingService
 from cornerroom.modules.royalties.application.service import RoyaltyService
@@ -61,6 +62,11 @@ async def identity_service(
     settings: Settings = Depends(settings_dep),
 ) -> IdentityService:
     return IdentityService(session, settings)
+
+
+def google_oidc_dep(settings: Settings = Depends(settings_dep)) -> GoogleOIDC:
+    """Google sign-in client (shared signing-key cache). Tests override this with a fake Google."""
+    return google_oidc(settings)
 
 
 async def authz_service(session: AsyncSession = Depends(db_session)) -> AuthorizationService:

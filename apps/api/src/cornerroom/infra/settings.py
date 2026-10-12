@@ -72,6 +72,18 @@ class Settings(BaseSettings):
     auth_rate_limit_max_attempts: int = 0
     auth_rate_limit_window_seconds: int = 0
     verification_challenge_ttl_seconds: int = 0
+    # Public web origin used to build links in messages (verification). No trailing slash.
+    web_base_url: str = "http://localhost:3000"
+    # Google sign-in (OpenID Connect, server-side code flow). Empty client id = feature off.
+    # The secret is server-only; never put it in NEXT_PUBLIC_* or the web app.
+    google_client_id: str = ""
+    google_client_secret: str | None = None
+    # Must exactly match an Authorized redirect URI on the Google OAuth client.
+    google_redirect_uri: str = "http://localhost:8000/api/v1/auth/google/callback"
+    # How long a started Google sign-in may take before its state expires (anti-CSRF window).
+    google_state_ttl_seconds: int = 600
+    # Local/dev/test only: where the dev mailbox writes outgoing email (no real provider, OD-08).
+    dev_mailbox_path: str = "./var/dev-mailbox"
     password_recovery_ttl_seconds: int = 0
     # 0 = no expiry. Do not treat a default as product invite policy.
     organization_invitation_ttl_seconds: int = 0
@@ -142,6 +154,11 @@ class Settings(BaseSettings):
             raise ValueError("CORS_ORIGINS must not use a wildcard in production")
         if self.log_level.upper() == "DEBUG":
             raise ValueError("LOG_LEVEL must not be DEBUG in production")
+        if self.google_enabled:
+            if not self.google_redirect_uri.startswith("https://"):
+                raise ValueError("GOOGLE_REDIRECT_URI must use https in production")
+            if not self.web_base_url.startswith("https://"):
+                raise ValueError("WEB_BASE_URL must use https in production when Google sign-in is on")
         return self
 
     @property
@@ -149,8 +166,23 @@ class Settings(BaseSettings):
         return self.app_env in {"prod", "production"}
 
     @property
+    def google_enabled(self) -> bool:
+        return bool(self.google_client_id.strip() and self.google_client_secret)
+
+    @property
     def is_test(self) -> bool:
         return self.app_env == "test"
+
+    @property
+    def uses_dev_mailbox(self) -> bool:
+        """Non-production environments deliver email to a local dev mailbox (OD-08 has no provider yet)."""
+        return self.app_env in {"local", "dev", "test"}
+
+    @property
+    def exposes_dev_verification_link(self) -> bool:
+        """Only on this machine (local) or in tests: hand the verification link back in the API
+        response so sign-up can finish without opening the mailbox. Never on a shared server."""
+        return self.app_env in {"local", "test"}
 
     def redis_key(self, *parts: str) -> str:
         tokens = [self.redis_key_prefix, self.app_env, *[str(part) for part in parts if part]]

@@ -103,6 +103,7 @@ from cornerroom.modules.royalties.domain.models import (
 )
 from cornerroom.modules.identity.domain.models import (
     CustomerProfile,
+    ExternalIdentity,
     IdentityChallenge,
     Organization,
     OrganizationInvitation,
@@ -143,6 +144,7 @@ __all__ = [
     "DailyEventMetrics",
     "DailyTrackMetrics",
     "CustomerProfile",
+    "ExternalIdentity",
     "IdentityChallenge",
     "Document",
     "DocumentAcl",

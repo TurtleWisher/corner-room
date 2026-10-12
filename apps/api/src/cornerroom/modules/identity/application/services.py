@@ -13,6 +13,8 @@ from cornerroom.infra.errors import AppError, ConflictError, NotFoundError, Unau
 from cornerroom.infra.outbox import enqueue_outbox
 from cornerroom.infra.security import create_access_token
 from cornerroom.infra.settings import Settings
+from cornerroom.modules.notifications.application.ports import EmailSender
+from cornerroom.modules.notifications.infra.stubs import DevMailboxEmailSender
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import (
@@ -43,11 +45,14 @@ from cornerroom.modules.identity.application.credentials import (
     hash_secret,
     hash_user_password,
     new_opaque_token,
+    password_hash_outdated,
     password_matches,
 )
 from cornerroom.modules.identity.application.lifecycle import target_for_action, transition_action
 from cornerroom.modules.identity.application.rate_limit import enforce_auth_rate_limit
+from cornerroom.modules.identity.infra.google import GoogleAuthError, GoogleIdentity
 from cornerroom.modules.identity.domain.models import (
+    ExternalIdentity,
     CustomerProfile,
     IdentityChallenge,
     OrganizationMembership,
@@ -67,18 +72,69 @@ def _search_token(query: str | None) -> str:
     return "".join(ch for ch in query.strip().lower() if ch not in "%_")
 
 
+
+def verification_email_sender(settings: Settings) -> EmailSender | None:
+    """The email port for verification. Outside production: the local dev mailbox. In production
+    there is no provider yet (OD-08), so nothing is sent and delivery reports "not_configured"."""
+    if settings.uses_dev_mailbox:
+        return DevMailboxEmailSender(settings.dev_mailbox_path)
+    return None
+
+
 class IdentityService:
     def __init__(
         self,
         session: AsyncSession,
         settings: Settings,
         clock: Clock | None = None,
+        email_sender: EmailSender | None = None,
     ) -> None:
         self.session = session
         self.settings = settings
         self.clock = clock or SystemClock()
         self.audit = AuditService(session)
         self.authz = AuthorizationService(session, clock=self.clock)
+        self.email_sender = email_sender or verification_email_sender(settings)
+
+    def verification_delivery(self) -> str:
+        """How a verification message reaches the person: "dev_mailbox" outside production,
+        "not_configured" when verification is off or no real email provider exists (OD-08)."""
+        if self.settings.verification_challenge_ttl_seconds <= 0 or self.email_sender is None:
+            return "not_configured"
+        return "dev_mailbox" if self.settings.uses_dev_mailbox else "email"
+
+    async def deliver_verification(
+        self,
+        user: User,
+        *,
+        request_id: str,
+        ip: str | None = None,
+        user_agent: str | None = None,
+    ) -> str | None:
+        """Issue an email-verification challenge and send its link through the email port.
+
+        Returns the link only when APP_ENV is local or test (so sign-up can finish on this machine
+        without a mail provider); everywhere else returns None. The token travels in the
+        URL fragment so it never reaches server logs.
+        """
+        ttl = self.settings.verification_challenge_ttl_seconds
+        if ttl <= 0 or self.email_sender is None or user.email is None or user.status != "PENDING_VERIFICATION":
+            return None
+        raw = await self.issue_challenge(
+            user_id=user.id,
+            purpose="EMAIL_VERIFICATION",
+            ttl_seconds=ttl,
+            request_id=request_id,
+            ip=ip,
+            user_agent=user_agent,
+        )
+        link = f"{self.settings.web_base_url.rstrip('/')}/verify#token={raw}"
+        await self.email_sender.send(
+            to=user.email,
+            subject="Verify your Corner Room account",
+            body="Open this link to verify your account and sign in:\n\n" + link + "\n",
+        )
+        return link if self.settings.exposes_dev_verification_link else None
 
     async def get_user_row(self, user_id: UUID) -> User:
         user = await self.session.get(User, user_id)
@@ -101,10 +157,38 @@ class IdentityService:
         existing = await self._get_user_by_email(email_n)
         if existing:
             raise ConflictError("An account with this email already exists")
-        user = User(
+        return await self._create_account(
             email=email_n,
             password_hash=hash_user_password(password),
-            status="PENDING_VERIFICATION",
+            display_name=display_name,
+            email_verified_at=None,
+            request_id=request_id,
+            ip=ip,
+            user_agent=user_agent,
+        )
+
+    async def _create_account(
+        self,
+        *,
+        email: str,
+        password_hash: str | None,
+        display_name: str,
+        email_verified_at: datetime | None,
+        request_id: str,
+        ip: str | None,
+        user_agent: str | None,
+        method: str | None = None,
+    ) -> tuple[User, CustomerProfile]:
+        """The one way a self-service account is made: User + profile + `customer` role only,
+        plus USER_REGISTERED and `user.registered`. A proven email (Google, Q-GAUTH-02) starts
+        ACTIVE; otherwise the account waits for verification."""
+        email_n = email
+        verified = email_verified_at is not None
+        user = User(
+            email=email_n,
+            password_hash=password_hash,
+            status="ACTIVE" if verified else "PENDING_VERIFICATION",
+            email_verified_at=email_verified_at,
         )
         self.session.add(user)
         try:
@@ -143,7 +227,8 @@ class IdentityService:
             payload={
                 "email": email_n,
                 "status": user.status,
-                "verification_required": True,
+                "verification_required": not verified,
+                **({"method": method} if method else {}),
             },
             occurred_at=self.clock.now(),
             actor_id=user.id,
@@ -155,7 +240,11 @@ class IdentityService:
             entity_type="User",
             entity_id=user.id,
             actor_id=str(user.id),
-            new_state={"status": user.status, "email_verified": False},
+            new_state={
+                "status": user.status,
+                "email_verified": verified,
+                **({"method": method} if method else {}),
+            },
             request_id=request_id,
             ip=ip,
             user_agent=user_agent,
@@ -174,11 +263,9 @@ class IdentityService:
         await enforce_auth_rate_limit(settings=self.settings, scope="login", key=ip or "unknown")
         email_n = _normalize_email(email)
         user = await self._get_user_by_email(email_n)
-        invalid = (
-            user is None
-            or user.deleted_at is not None
-            or not password_matches(user.password_hash, password)
-        )
+        # Check the password first, every time: an unknown email costs the same Argon2 work.
+        matched = password_matches(user.password_hash if user is not None else None, password)
+        invalid = user is None or user.deleted_at is not None or not matched
         if invalid:
             await self._audit_login_failed(
                 entity_id=user.id if user is not None else "unknown",
@@ -190,6 +277,27 @@ class IdentityService:
                 user_agent=user_agent,
             )
             raise UnauthorizedError("Invalid email or password")
+        await self._deny_unless_can_sign_in(user, request_id=request_id, ip=ip, user_agent=user_agent)
+        if password_hash_outdated(user.password_hash):
+            # The password was just proven, so upgrade the stored hash to the current parameters.
+            user.password_hash = hash_user_password(password)
+        profile, access, refresh, expires = await self._start_session(
+            user, request_id=request_id, ip=ip, user_agent=user_agent
+        )
+        return user, profile, access, refresh, expires
+
+    async def _deny_unless_can_sign_in(
+        self,
+        user: User,
+        *,
+        request_id: str,
+        ip: str | None,
+        user_agent: str | None,
+        method: str | None = None,
+    ) -> None:
+        """Same account-state gate for every way of signing in: locked or not ACTIVE is refused,
+        and nothing here ever changes the account's state."""
+        extra = {"status": user.status, **({"method": method} if method else {})}
         if user.security_locked_at is not None:
             await self._audit_login_failed(
                 entity_id=user.id,
@@ -198,7 +306,7 @@ class IdentityService:
                 request_id=request_id,
                 ip=ip,
                 user_agent=user_agent,
-                extra={"status": user.status},
+                extra=extra,
             )
             raise AppError("ACCOUNT_LOCKED", "Account is not available", 403)
         if user.status != "ACTIVE":
@@ -209,9 +317,20 @@ class IdentityService:
                 request_id=request_id,
                 ip=ip,
                 user_agent=user_agent,
-                extra={"status": user.status},
+                extra=extra,
             )
             raise AppError("ACCOUNT_NOT_ACTIVE", "Account is not active", 403)
+
+    async def _start_session(
+        self,
+        user: User,
+        *,
+        request_id: str,
+        ip: str | None,
+        user_agent: str | None,
+        method: str | None = None,
+    ) -> tuple[CustomerProfile | None, str, str, datetime]:
+        """The one session start: refresh family, access token, USER_LOGGED_IN, `auth.login`."""
         profile = await self._get_profile(user.id)
         refresh, session_row = await self._issue_refresh(user.id, ip=ip, user_agent=user_agent)
         access, expires = create_access_token(
@@ -219,12 +338,13 @@ class IdentityService:
             settings=self.settings,
             session_id=session_row.id,
         )
+        extra = {"method": method} if method else {}
         event = DomainEvent(
             event_type=USER_LOGGED_IN,
             producer="identity",
             aggregate_type="User",
             aggregate_id=user.id,
-            payload={"session_id": str(session_row.id)},
+            payload={"session_id": str(session_row.id), **extra},
             occurred_at=self.clock.now(),
             actor_id=user.id,
             correlation_id=request_id,
@@ -238,9 +358,137 @@ class IdentityService:
             request_id=request_id,
             ip=ip,
             user_agent=user_agent,
-            new_state={"session_id": str(session_row.id)},
+            new_state={"session_id": str(session_row.id), **extra},
+        )
+        return profile, access, refresh, expires
+
+    async def sign_in_with_google(
+        self,
+        identity: GoogleIdentity,
+        *,
+        request_id: str,
+        ip: str | None = None,
+        user_agent: str | None = None,
+    ) -> tuple[User, CustomerProfile | None, str, str, datetime]:
+        """Sign in with an identity Google has already proven (signature, nonce and state checked).
+
+        1. A linked Google account signs in as its user.
+        2. Otherwise Google must say the email is verified, and:
+           - no account has that email: make one, ACTIVE and verified (Q-GAUTH-02);
+           - an account with a verified email exists: link it (Q-GAUTH-01, option B);
+           - an account exists but its email isn't verified: refuse (pre-hijack defence).
+        Suspended, closed and locked accounts stay refused. Google grants no role beyond the
+        `customer` role every self-service account gets.
+        """
+        user = await self._user_for_external("google", identity.subject)
+        if user is None:
+            user = await self._link_or_create_for_google(
+                identity, request_id=request_id, ip=ip, user_agent=user_agent
+            )
+        await self._deny_unless_can_sign_in(
+            user, request_id=request_id, ip=ip, user_agent=user_agent, method="google"
+        )
+        link = await self._external_link("google", identity.subject)
+        if link is not None:
+            link.last_used_at = self.clock.now()
+        profile, access, refresh, expires = await self._start_session(
+            user, request_id=request_id, ip=ip, user_agent=user_agent, method="google"
         )
         return user, profile, access, refresh, expires
+
+    async def record_google_failure(
+        self, *, reason: str, request_id: str, ip: str | None, user_agent: str | None
+    ) -> None:
+        """Audit a refused Google sign-in. Only the fixed reason code is kept, never tokens."""
+        await self._audit_login_failed(
+            entity_id="unknown",
+            actor_id="anonymous",
+            actor_type="anonymous",
+            reason=f"google:{reason}",
+            request_id=request_id,
+            ip=ip,
+            user_agent=user_agent,
+            extra={"method": "google"},
+        )
+
+    async def _external_link(self, provider: str, subject: str) -> ExternalIdentity | None:
+        stmt = select(ExternalIdentity).where(
+            ExternalIdentity.provider == provider,
+            ExternalIdentity.subject == subject,
+            ExternalIdentity.unlinked_at.is_(None),
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def _user_for_external(self, provider: str, subject: str) -> User | None:
+        link = await self._external_link(provider, subject)
+        if link is None:
+            return None
+        user = await self.session.get(User, link.user_id)
+        if user is None or user.deleted_at is not None:
+            raise GoogleAuthError("account_unavailable")
+        return user
+
+    async def _link_or_create_for_google(
+        self,
+        identity: GoogleIdentity,
+        *,
+        request_id: str,
+        ip: str | None,
+        user_agent: str | None,
+    ) -> User:
+        if not identity.email or not identity.email_verified:
+            raise GoogleAuthError("email_unverified")
+        email_n = _normalize_email(identity.email)
+        existing = await self._get_user_by_email(email_n)
+        if existing is not None:
+            if existing.email_verified_at is None:
+                raise GoogleAuthError("link_requires_password")
+            # Checked before linking: a refused account must not gain a Google link.
+            await self._deny_unless_can_sign_in(
+                existing, request_id=request_id, ip=ip, user_agent=user_agent, method="google"
+            )
+        try:
+            # A savepoint, so a racing duplicate callback rolls back only this part.
+            async with self.session.begin_nested():
+                if existing is not None:
+                    user = existing
+                else:
+                    user, _ = await self._create_account(
+                        email=email_n,
+                        password_hash=None,
+                        display_name=identity.name or "",
+                        email_verified_at=self.clock.now(),
+                        request_id=request_id,
+                        ip=ip,
+                        user_agent=user_agent,
+                        method="google",
+                    )
+                self.session.add(
+                    ExternalIdentity(
+                        user_id=user.id,
+                        provider="google",
+                        subject=identity.subject,
+                        email_at_link=email_n,
+                    )
+                )
+                await self.session.flush()
+                await self.audit.record(
+                    action="identity.external_linked",
+                    entity_type="User",
+                    entity_id=user.id,
+                    actor_id=str(user.id),
+                    new_state={"provider": "google", "new_account": existing is None},
+                    request_id=request_id,
+                    ip=ip,
+                    user_agent=user_agent,
+                )
+            return user
+        except (IntegrityError, ConflictError):
+            # Another request linked this Google account (or took this email) a moment ago.
+            user = await self._user_for_external("google", identity.subject)
+            if user is None:
+                raise GoogleAuthError("link_conflict") from None
+            return user
 
     async def logout(self, refresh_token: str | None, ctx: AuthContext) -> None:
         session_row = None
@@ -504,25 +752,14 @@ class IdentityService:
         request_id: str,
         ip: str | None = None,
         user_agent: str | None = None,
-    ) -> None:
+    ) -> str | None:
         await enforce_auth_rate_limit(settings=self.settings, scope="verification", key=ip or "unknown")
         email_n = _normalize_email(email)
         user = await self._get_user_by_email(email_n)
         ttl = self.settings.verification_challenge_ttl_seconds
-        if (
-            user is not None
-            and user.deleted_at is None
-            and user.status == "PENDING_VERIFICATION"
-            and ttl > 0
-        ):
-            await self.issue_challenge(
-                user_id=user.id,
-                purpose="EMAIL_VERIFICATION",
-                ttl_seconds=ttl,
-                request_id=request_id,
-                ip=ip,
-                user_agent=user_agent,
-            )
+        link: str | None = None
+        if user is not None and user.deleted_at is None and user.status == "PENDING_VERIFICATION" and ttl > 0:
+            link = await self.deliver_verification(user, request_id=request_id, ip=ip, user_agent=user_agent)
         await self.audit.record(
             action="auth.verification_requested",
             entity_type="User",
@@ -534,6 +771,7 @@ class IdentityService:
             user_agent=user_agent,
             new_state={"issued": bool(user is not None and ttl > 0)},
         )
+        return link
 
     async def complete_verification(
         self,

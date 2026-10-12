@@ -701,7 +701,7 @@ function AccountBoard() {
               <Button block size="lg">
                 Sign in
               </Button>
-              <p className="text-xs text-fg-muted">Pending accounts see: &quot;Your account is waiting for verification.&quot; (OD-08)</p>
+              <p className="text-xs text-fg-muted">Pending accounts see: &quot;Your account is not verified yet.&quot; with a resend option (OD-08)</p>
             </Card>
             <p className="mt-6 font-ui text-lg font-bold text-fg">The city&apos;s corner. The music&apos;s room.</p>
             <p lang="bn" className="text-lg text-fg-muted">
