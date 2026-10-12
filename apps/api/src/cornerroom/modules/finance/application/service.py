@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cornerroom.infra.errors import AppError, NotFoundError
+from cornerroom.infra.errors import AppError, ForbiddenError, NotFoundError
 from cornerroom.infra.outbox import enqueue_outbox
 from cornerroom.infra.settings import Settings, get_settings
 from cornerroom.kernel.auth_context import AuthContext
@@ -19,7 +19,10 @@ from cornerroom.kernel.money import Money
 from cornerroom.kernel.payment import PaymentCallback, PaymentProvider
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.commerce.domain.models import Order
-from cornerroom.modules.finance.application.sandbox import SandboxPaymentProvider
+from cornerroom.modules.finance.application.sandbox import (
+    SandboxPaymentProvider,
+    resolve_webhook_secret,
+)
 from cornerroom.modules.finance.domain.models import Payment, PaymentAttempt, Refund
 from cornerroom.modules.ticketing.domain.models import RefundPolicy
 
@@ -42,7 +45,10 @@ class PaymentService:
         self.provider = provider or SandboxPaymentProvider()
 
     def webhook_secret(self) -> str:
-        return self.settings.sandbox_payment_secret or self.settings.jwt_secret
+        return resolve_webhook_secret(
+            payment_secret=self.settings.sandbox_payment_secret,
+            jwt_secret=self.settings.jwt_secret,
+        )
 
     async def _emit(
         self,
@@ -258,7 +264,26 @@ class PaymentService:
             return existing
         payment = await self.get_payment(payment_id)
         if payment.user_id != ctx.user_id:
-            # Staff with finance.post may request for any captured payment.
+            org_id = ctx.organization_id
+            if org_id is None:
+                raise AppError(
+                    "WORKSPACE_REQUIRED",
+                    "Active organization workspace is required",
+                    409,
+                )
+            from cornerroom.modules.authorization.application.service import AuthorizationService
+
+            authz = AuthorizationService(self.session, clock=self.clock)
+            try:
+                await authz.authorize(
+                    ctx.user_id,
+                    "finance.post",
+                    resource_type="organization",
+                    resource_id=org_id,
+                    scope_organization_id=org_id,
+                )
+            except ForbiddenError as exc:
+                raise NotFoundError("Payment not found") from exc
             await self.audit.record_from_auth(
                 ctx,
                 action="refund.authorize_staff",
@@ -266,10 +291,6 @@ class PaymentService:
                 entity_id=payment.id,
                 new_state={"reason_code": reason_code},
             )
-            from cornerroom.modules.authorization.application.service import AuthorizationService
-
-            authz = AuthorizationService(self.session, clock=self.clock)
-            await authz.authorize(ctx.user_id, "finance.post")
         if payment.status != "CAPTURED":
             raise AppError("INVALID_TRANSITION", "Only captured payments can be refunded", 409)
         money = Money(amount_minor=amount_minor, currency_code=payment.currency_code)

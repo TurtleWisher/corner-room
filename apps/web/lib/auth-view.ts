@@ -50,3 +50,14 @@ export function staffNavFlags(permissions: string[] | undefined): {
     showOrgs: perms.includes("org.admin"),
   };
 }
+
+/**
+ * Where to go after signing in. Only same-site paths are accepted ("/checkout?offer=1"), so a
+ * crafted link cannot send someone to another site (no "//host", no scheme, no backslashes).
+ */
+export function safeNextPath(next: string | null | undefined, fallback = "/account"): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.includes("\\") || /^\/[^/]*:/.test(next)) {
+    return fallback;
+  }
+  return next;
+}

@@ -1,5 +1,16 @@
 @import "tailwindcss";
+@import "./styles/tokens.css";
+@import "./styles/cube-logo.css";
+@import "./styles/modules/events.css";
+@import "./styles/modules/ticketing.css";
+@import "./styles/modules/account.css";
 
+/*
+ * Legacy layer (pre-Phase 16 pages). Kept byte-for-byte in effect so existing pages render
+ * exactly as before. It is unlayered, which is why it beats Tailwind utilities on legacy pages;
+ * Phase 16 regions (.cr-scope) are excluded so their tokens and utilities apply.
+ * Retired module by module from Stage 5 onward.
+ */
 :root {
   --background: 0 0% 100%;
   --foreground: 240 10% 4%;
@@ -14,7 +25,7 @@
   --radius: 0.75rem;
 }
 
-* {
+:where(*):not(.cr-scope, .cr-scope *) {
   border-color: hsl(var(--border));
 }
 

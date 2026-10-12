@@ -68,6 +68,7 @@ def settings() -> Settings:
     return Settings(
         app_env="test",
         jwt_secret="test-secret-not-for-production-use-please",
+        sandbox_payment_secret="test-sandbox-payment-secret-distinct-from-jwt",
         cors_origins=["http://localhost:3000"],
         cookie_secure=False,
         database_url=os.environ.get(
@@ -128,6 +129,7 @@ async def client(settings: Settings, postgres_available: str | None) -> AsyncIte
     sync_url = postgres_available.replace("+asyncpg", "+psycopg")
     os.environ["DATABASE_URL_SYNC"] = sync_url
     os.environ["JWT_SECRET"] = settings.jwt_secret
+    os.environ["SANDBOX_PAYMENT_SECRET"] = settings.sandbox_payment_secret or ""
     os.environ["BOOTSTRAP_ADMIN_EMAIL"] = "admin@example.com"
     os.environ["BOOTSTRAP_ADMIN_PASSWORD"] = "adminpass12"
     get_settings.cache_clear()

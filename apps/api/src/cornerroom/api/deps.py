@@ -43,7 +43,12 @@ from cornerroom.modules.identity.domain.models import Session, User
 bearer = HTTPBearer(auto_error=False)
 
 
-async def db_session(session: AsyncSession = Depends(get_session)) -> AsyncSession:
+async def db_session(
+    # scope="function": commit (or roll back) before the response is sent. With FastAPI's default
+    # "request" scope the commit ran after the client already had the response, so a follow-up
+    # request (for example GET /me right after a refresh) could miss the row and fail.
+    session: AsyncSession = Depends(get_session, scope="function"),
+) -> AsyncSession:
     return session
 
 

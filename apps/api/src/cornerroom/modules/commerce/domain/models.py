@@ -5,7 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, Integer, String, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 from cornerroom.infra.base import ActorMixin, Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin, VersionMixin
 
@@ -102,7 +102,10 @@ class Product(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, 
     subject_id: Mapped[UUID] = mapped_column(nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT")
-    __mapper_args__ = {"version_id_col": "version"}
+    # The version column comes from VersionMixin, so reference the Column, not its name.
+    @declared_attr.directive
+    def __mapper_args__(cls) -> dict[str, object]:
+        return {"version_id_col": cls.__table__.c.version}
 
 
 class Offer(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, VersionMixin, Base):
@@ -125,7 +128,10 @@ class Offer(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ve
     amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT")
-    __mapper_args__ = {"version_id_col": "version"}
+    # The version column comes from VersionMixin, so reference the Column, not its name.
+    @declared_attr.directive
+    def __mapper_args__(cls) -> dict[str, object]:
+        return {"version_id_col": cls.__table__.c.version}
 
 
 class RefundEntitlementPolicy(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):

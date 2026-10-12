@@ -21,13 +21,13 @@ from cornerroom.modules.notifications.domain.models import (
 from cornerroom.modules.search.domain.models import SearchDocument
 
 
-def test_alembic_sole_head_is_0014() -> None:
+def test_alembic_0014_revises_0013() -> None:
     cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
     script = ScriptDirectory.from_config(cfg)
-    assert script.get_heads() == ["0014_notifications_search_analytics"]
     rev = script.get_revision("0014_notifications_search_analytics")
     assert rev is not None
     assert rev.down_revision == "0013_marketing_campaigns"
+    # Head moved in Phase 15 Gate 2 (`0015_database_integrity`). 0014 stays in the chain.
 
 
 def test_notification_additive_columns_exist() -> None:

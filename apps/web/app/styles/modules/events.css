@@ -1,0 +1,33 @@
+/*
+ * Events module art direction: "Poster Night" (docs/frontend/modules/events.md).
+ * Scoped to [data-module="events"] so nothing here can reach another module.
+ */
+/* Overrides apply to the Ember world inside this module only (a nested Sky or Staff region keeps its own light). */
+[data-module="events"][data-theme="ember"],
+[data-module="events"] [data-theme="ember"] {
+  --cr-light-size: 78% 68%;
+  --cr-light-pool: rgb(178 31 36 / 0.95);
+}
+
+/* REF-003 borrow, in Ember: dotted grid with "+" registration marks. Decorative only. */
+[data-module="events"] .ev-dotgrid {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgb(246 236 230 / 0.16) 1px, transparent 1.5px),
+    linear-gradient(rgb(246 236 230 / 0.22), rgb(246 236 230 / 0.22)),
+    linear-gradient(rgb(246 236 230 / 0.22), rgb(246 236 230 / 0.22));
+  background-size: 24px 24px, 9px 1px, 1px 9px;
+  background-position: 0 0, 4px 8px, 8px 4px;
+  background-repeat: repeat, no-repeat, no-repeat;
+}
+
+/* Focus and blur list: the active row stays sharp; siblings soften. Text keeps full contrast
+   on the active row and never relies on blur alone. */
+[data-module="events"] .ev-whatson:has(.ev-row:hover, .ev-row:focus-within) .ev-row:not(:hover, :focus-within) {
+  opacity: 0.55;
+}
+[data-module="events"] .ev-whatson:has(.ev-row:hover, .ev-row:focus-within) .ev-row:not(:hover, :focus-within) .ev-cube {
+  filter: blur(2px);
+}
+[data-module="events"] .ev-row {
+  transition: opacity var(--cr-dur-interaction) var(--ease-corner);
+}

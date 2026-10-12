@@ -1,0 +1,9 @@
+/* Account module art direction: "Front Door" (docs/frontend/modules/account.md). Quiet light. */
+/* Overrides apply to the Ember world inside this module only (a nested Sky or Staff region keeps its own light). */
+[data-module="account"][data-theme="ember"],
+[data-module="account"] [data-theme="ember"] {
+  --cr-light-size: 60% 55%;
+  --cr-light-pool: rgb(178 31 36 / 0.7);
+  --cr-light-counter: transparent;
+  --cr-light-sweep: transparent;
+}

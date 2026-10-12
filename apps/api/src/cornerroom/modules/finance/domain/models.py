@@ -18,7 +18,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 from cornerroom.infra.base import ActorMixin, Base, TimestampMixin, UUIDPrimaryKeyMixin, VersionMixin
 from cornerroom.modules.finance.domain.models_payments import Payment, PaymentAttempt, Refund
@@ -121,6 +121,7 @@ class LedgerEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_ledger_entries_account_created", "account_id", "created_at"),
         Index("ix_ledger_entries_event_id", "event_id"),
         Index("ix_ledger_entries_payee", "payee_type", "payee_id"),
+        Index("ix_ledger_entries_organization_id", "organization_id"),
         {"schema": "finance"},
     )
 
@@ -139,7 +140,10 @@ class LedgerEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     artist_id: Mapped[UUID | None] = mapped_column(nullable=True)
     track_id: Mapped[UUID | None] = mapped_column(nullable=True)
     campaign_id: Mapped[UUID | None] = mapped_column(nullable=True)
-    organization_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    organization_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("identity.organizations.id"),
+        nullable=True,
+    )
     payee_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     payee_id: Mapped[UUID | None] = mapped_column(nullable=True)
 
@@ -222,7 +226,10 @@ class Expense(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, VersionMixin, Bas
     event_id: Mapped[UUID | None] = mapped_column(nullable=True)
     campaign_id: Mapped[UUID | None] = mapped_column(nullable=True)
     approved_by: Mapped[UUID | None] = mapped_column(nullable=True)
-    __mapper_args__ = {"version_id_col": "version"}
+    # The version column comes from VersionMixin, so reference the Column, not its name.
+    @declared_attr.directive
+    def __mapper_args__(cls) -> dict[str, object]:
+        return {"version_id_col": cls.__table__.c.version}
 
 
 class Adjustment(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
@@ -279,7 +286,10 @@ class Invoice(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, VersionMixin, Bas
         ForeignKey("finance.transactions.id"),
         nullable=True,
     )
-    __mapper_args__ = {"version_id_col": "version"}
+    # The version column comes from VersionMixin, so reference the Column, not its name.
+    @declared_attr.directive
+    def __mapper_args__(cls) -> dict[str, object]:
+        return {"version_id_col": cls.__table__.c.version}
 
 
 class InvoiceLine(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -340,6 +350,7 @@ class Payout(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, VersionMixin, Base
         CheckConstraint("amount_minor >= 0", name="amount_non_negative"),
         UniqueConstraint("idempotency_key", name="uq_payouts_idempotency_key"),
         Index("ix_payouts_settlement_id", "settlement_id"),
+        Index("ix_payouts_organization_created", "organization_id", "created_at"),
         {"schema": "finance"},
     )
 
@@ -368,7 +379,10 @@ class Payout(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, VersionMixin, Base
         nullable=True,
     )
     idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
-    __mapper_args__ = {"version_id_col": "version"}
+    # The version column comes from VersionMixin, so reference the Column, not its name.
+    @declared_attr.directive
+    def __mapper_args__(cls) -> dict[str, object]:
+        return {"version_id_col": cls.__table__.c.version}
 
 
 class FinanceConfig(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):

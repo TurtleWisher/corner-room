@@ -61,3 +61,11 @@ describe("search results", () => {
     expect(SEARCH_NO_RESULTS).not.toMatch(/nothing exists/i);
   });
 });
+
+describe("searchResultHref for events", () => {
+  it("sends event hits to the public event page, not staff management", async () => {
+    const { searchResultHref } = await import("@/lib/search-view");
+    expect(searchResultHref("/events/e1", { entity_type: "EVENT", entity_id: "e1" })).toBe("/discover/e1");
+    expect(searchResultHref("/releases/r1", { entity_type: "RELEASE", entity_id: "r1" })).toBe("/releases/r1");
+  });
+});

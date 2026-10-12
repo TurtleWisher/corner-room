@@ -81,6 +81,8 @@ class DocumentService:
         asset = await self.session.get(MediaAsset, asset_id)
         if asset is None or asset.deleted_at is not None:
             raise AppError("NOT_FOUND", "Upload session not found", 404)
+        if asset.created_by != ctx.user_id:
+            raise AppError("NOT_FOUND", "Upload session not found", 404)
         stored = await self.storage.put(
             object_key=asset.object_key,
             data=data,

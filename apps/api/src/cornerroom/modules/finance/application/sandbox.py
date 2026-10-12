@@ -11,6 +11,26 @@ from cornerroom.infra.errors import AppError
 from cornerroom.kernel.payment import PaymentCallback, PaymentIntentResult
 
 
+def resolve_webhook_secret(*, payment_secret: str | None, jwt_secret: str) -> str:
+    """Dedicated HMAC key. Never fall back to JWT_SECRET (Gate 1 H3). No timestamp window (Q-P15-02)."""
+    secret = (payment_secret or "").strip()
+    if not secret:
+        raise AppError(
+            "PAYMENT_WEBHOOK_SECRET_REQUIRED",
+            "Payment webhook secret is not configured",
+            503,
+            "sandbox_payment_secret must be set and must not equal JWT_SECRET",
+        )
+    if secret == jwt_secret:
+        raise AppError(
+            "PAYMENT_WEBHOOK_SECRET_REUSED",
+            "Payment webhook secret must not equal JWT_SECRET",
+            503,
+            "Compromise of the JWT key must not forge payment callbacks",
+        )
+    return secret
+
+
 class SandboxPaymentProvider:
     name = "sandbox"
 

@@ -66,6 +66,8 @@ class OfferOut(BaseModel):
     product_id: UUID
     product_type: str | None = None
     name: str | None = None
+    # What the offer sells (track id for TRACK products), so a track page can show its own price.
+    subject_id: UUID | None = None
     amount_minor: int
     currency_code: str
     status: str
@@ -133,6 +135,7 @@ def _offer_out(row: Offer, product: Product | None = None, *, staff: bool) -> Of
         product_id=row.product_id,
         product_type=product.product_type if product else None,
         name=product.name if product else None,
+        subject_id=product.subject_id if product else None,
         amount_minor=row.amount_minor,
         currency_code=row.currency_code,
         status=row.status,

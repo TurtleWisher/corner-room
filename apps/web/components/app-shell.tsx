@@ -1,84 +1,19 @@
 "use client";
 
-import Link from "next/link";
-
-import { AuthProvider, useAuth } from "@/components/auth-provider";
-import { NotificationBell } from "@/components/notification-bell";
+import { AuthProvider } from "@/components/auth-provider";
 import { NotificationsProvider } from "@/components/notifications-provider";
 import { WorkspaceProvider } from "@/components/workspace-provider";
-import { staffNavFlags } from "@/lib/auth-view";
 
-function NavAuth() {
-  const { status, user, logout } = useAuth();
-  const flags = staffNavFlags(user?.permissions);
-  if (status === "authenticated" && user) {
-    return (
-      <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-neutral-600">
-        <Link href="/search">Search</Link>
-        <Link href="/organizations">Organizations</Link>
-        <Link href="/events">Events</Link>
-        <Link href="/venues">Venues</Link>
-        <Link href="/artists">Artists</Link>
-        <Link href="/bands">Bands</Link>
-        <Link href="/releases">Releases</Link>
-        <Link href="/tracks">Tracks</Link>
-        <Link href="/listen">Listen</Link>
-        <Link href="/store">Store</Link>
-        <Link href="/purchases">Purchases</Link>
-        <Link href="/subscriptions">Subscriptions</Link>
-        <Link href="/library">Library</Link>
-        <Link href="/playlists">Playlists</Link>
-        <Link href="/history">History</Link>
-        <Link href="/tickets">Tickets</Link>
-        <Link href="/orders">Orders</Link>
-        <Link href="/staff/commerce">Commerce</Link>
-        <Link href="/royalties">Royalties</Link>
-        <Link href="/staff/royalties">Royalty ops</Link>
-        {flags.showFinance ? <Link href="/staff/finance">Finance</Link> : null}
-        <Link href="/staff/campaigns">Campaigns</Link>
-        {flags.showAnalytics ? <Link href="/staff/analytics">Analytics</Link> : null}
-        {flags.showOps ? <Link href="/staff/ops">Ops</Link> : null}
-        {flags.showOps ? <Link href="/staff/audit">Audit</Link> : null}
-        {flags.showUsers ? <Link href="/staff/users">Users</Link> : null}
-        {flags.showOrgs ? <Link href="/staff/organizations">Org inspect</Link> : null}
-        <NotificationBell />
-        <Link href="/account">Account</Link>
-        <button type="button" className="underline" onClick={() => void logout()}>
-          Sign out
-        </button>
-      </nav>
-    );
-  }
-  return (
-    <nav className="flex flex-wrap gap-4 text-sm text-neutral-600">
-      <Link href="/search">Search</Link>
-      <Link href="/discover">Events</Link>
-      <Link href="/artists">Artists</Link>
-      <Link href="/releases">Releases</Link>
-      <Link href="/tracks">Tracks</Link>
-      <Link href="/listen">Listen</Link>
-      <Link href="/store">Store</Link>
-      <Link href="/login">Sign in</Link>
-      <Link href="/register">Register</Link>
-    </nav>
-  );
-}
-
+/**
+ * Client providers shared by every route. Since Stage 5 the visible chrome lives in the route-group
+ * layouts (app/(public), (listen), (account), (artist), (staff)); /theme-kit sits outside the groups
+ * and draws its own full-bleed layout.
+ */
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
       <WorkspaceProvider>
-        <NotificationsProvider>
-          <header className="border-b border-neutral-200">
-            <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-6 py-4">
-              <Link href="/" className="font-semibold">
-                Corner Room
-              </Link>
-              <NavAuth />
-            </div>
-          </header>
-          <main className="mx-auto max-w-3xl px-6 py-10">{children}</main>
-        </NotificationsProvider>
+        <NotificationsProvider>{children}</NotificationsProvider>
       </WorkspaceProvider>
     </AuthProvider>
   );

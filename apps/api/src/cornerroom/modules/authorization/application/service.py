@@ -9,7 +9,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cornerroom.infra.errors import ConflictError, ForbiddenError, NotFoundError
+from cornerroom.infra.errors import AppError, ConflictError, ForbiddenError, NotFoundError
 from cornerroom.infra.outbox import enqueue_outbox
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.authorize import (
@@ -28,6 +28,8 @@ from cornerroom.kernel.events import (
 )
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.domain.models import (
+    GRANT_PRINCIPAL_TYPES,
+    RESOURCE_TYPES,
     Permission,
     ResourceGrant,
     Role,
@@ -355,6 +357,25 @@ class AuthorizationService:
         ctx: AuthContext,
         expires_at: datetime | None = None,
     ) -> ResourceGrant:
+        if principal_type not in GRANT_PRINCIPAL_TYPES:
+            raise AppError(
+                "VALIDATION_ERROR",
+                "Invalid grant principal type",
+                422,
+                f"Allowed: {', '.join(GRANT_PRINCIPAL_TYPES)}",
+            )
+        if resource_type not in RESOURCE_TYPES:
+            raise AppError(
+                "VALIDATION_ERROR",
+                "Invalid grant resource type",
+                422,
+                "Resource types are the architecture set in 05_ §6",
+            )
+        perm_row = (
+            await self.session.execute(select(Permission).where(Permission.key == permission_key))
+        ).scalar_one_or_none()
+        if perm_row is None:
+            raise NotFoundError("Permission not found")
         existing_stmt = select(ResourceGrant).where(
             ResourceGrant.principal_type == principal_type,
             ResourceGrant.principal_id == principal_id,
