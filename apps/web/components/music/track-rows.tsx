@@ -51,7 +51,7 @@ export function TrackRows({
           <li
             key={item.key}
             className={cn(
-              "grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-4 border-b border-line py-3",
+              "cr-row grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-4 border-b border-line py-3",
               current && "bg-surface-overlay",
             )}
           >

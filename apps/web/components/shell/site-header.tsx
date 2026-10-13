@@ -84,7 +84,7 @@ export function SiteHeader({
   const showSubnav = !!subnav?.length && (!subnavAuthOnly || signedIn);
 
   return (
-    <header data-theme={world} className="cr-scope sticky top-0 z-30 border-b border-line">
+    <header data-theme={world} className="cr-scope cr-bar sticky top-0 z-30 border-b border-line">
       <div className="mx-auto flex h-16 max-w-[90rem] items-center gap-6 px-4 md:px-6">
         <Link href="/" className="cr-focus shrink-0" aria-label="Corner Room home">
           <Logo variant={world === "sky" ? "indigo" : "ember"} height={40} alt="" />

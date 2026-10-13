@@ -125,7 +125,7 @@ function YouPanel() {
           <li key={href}>
             <Link
               href={href}
-              className="cr-cut cr-focus flex h-14 items-center gap-3 px-4 text-sm font-semibold text-fg [--cut-border:var(--cr-line)] [--cut-fill:var(--cr-surface-raised)] hover:[--cut-border:var(--cr-line-strong)]"
+              className="cr-cut cr-focus flex h-14 items-center gap-3 px-4 text-sm font-semibold text-fg cr-glass-card cr-hover"
             >
               <Icon aria-hidden="true" className="size-5 text-highlight" />
               <span className="flex-1">{label}</span>
@@ -140,10 +140,14 @@ function YouPanel() {
 
 /* ---------- Upcoming ---------- */
 
-function SectionHead({ id, title, href, link }: { id: string; title: string; href: string; link: string }) {
+function SectionHead({ id, index, title, href, link }: { id: string; index: string; title: string; href: string; link: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4 border-b border-line pb-4">
-      <h2 id={id} className="text-xl font-bold text-fg md:text-2xl">
+      <h2 id={id} className="flex items-baseline gap-3 text-xl font-bold text-fg md:text-2xl">
+        {/* REF-003 index: a small numbered tag before each home section. */}
+        <span aria-hidden="true" className="cr-num text-sm text-highlight">
+          {index}
+        </span>
         {title}
       </h2>
       <Link href={href} className="cr-focus text-sm font-semibold text-highlight hover:underline">
@@ -157,7 +161,7 @@ function Upcoming({ state }: { state: ReturnType<typeof useAsync<EventRecord[]>>
   const rows = state.status === "ok" ? upcomingEvents(state.data) : [];
   return (
     <section aria-labelledby="home-upcoming">
-      <SectionHead id="home-upcoming" title="Upcoming" href="/discover" link="All events" />
+      <SectionHead id="home-upcoming" index="01" title="Upcoming" href="/discover" link="All events" />
       {state.status === "loading" ? (
         <div className="space-y-3 pt-4">
           <Skeleton className="h-20 w-full" />
@@ -187,7 +191,7 @@ function NewReleases() {
   return (
     <LitSurface as="section" theme="sky" aria-labelledby="home-releases" className="border-y border-cr-sky/60">
       <div className="mx-auto max-w-[90rem] px-4 py-14 md:px-6">
-        <SectionHead id="home-releases" title="New releases" href="/releases" link="All releases" />
+        <SectionHead id="home-releases" index="02" title="New releases" href="/releases" link="All releases" />
         {state.status === "loading" ? (
           <div className="grid grid-cols-2 gap-6 pt-6 md:grid-cols-4">
             {[0, 1, 2, 3].map((i) => (

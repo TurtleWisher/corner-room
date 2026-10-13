@@ -11,4 +11,5 @@
   --cr-light-falloff: rgb(131 21 21 / 0.25);
   --cr-light-counter: transparent;
   --cr-light-sweep: transparent;
+  --cr-light-side: rgb(131 21 21 / 0.18);
 }

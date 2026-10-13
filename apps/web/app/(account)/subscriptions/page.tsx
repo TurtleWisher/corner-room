@@ -18,7 +18,7 @@ const ENDED = new Set(["CANCELLED", "EXPIRED"]);
 
 function SubscriptionRow({ row, plan, onCancel }: { row: SubscriptionRecord; plan: PlanRecord | undefined; onCancel: () => void }) {
   return (
-    <li className="cr-cut flex flex-col gap-4 p-5 [--cut-border:var(--cr-line)] [--cut-fill:var(--cr-surface-raised)] sm:flex-row sm:items-center sm:justify-between">
+    <li className="cr-cut flex flex-col gap-4 p-5 cr-glass-card sm:flex-row sm:items-center sm:justify-between">
       <div>
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-lg font-bold text-fg">{plan ? planName(plan.key) : "Plan"}</p>

@@ -26,20 +26,29 @@ function deviceName(ua: string | null): string {
   return browser && os ? `${browser} on ${os}` : ua.slice(0, 60);
 }
 
+const SESSIONS_FOLDED = 5;
+
 function Sessions() {
   const { logout } = useAuth();
   const sessions = useAsync(() => fetchMySessions().then((list) => list.filter((s) => s.status === "ACTIVE")), []);
   const [confirmAll, setConfirmAll] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   if (sessions.status === "loading") return <Skeleton className="h-32 w-full" />;
   if (sessions.status === "error") {
     return <ErrorState title="Devices unavailable" message={loadErrorMessage(sessions.error, "your devices")} action={<RetryButton onClick={sessions.reload} />} />;
   }
+  // This device first, then the most recent; long lists fold so the page stays calm.
+  const ordered = [...sessions.data].sort(
+    (a, b) => Number(b.current) - Number(a.current) || String(b.last_used_at ?? b.created_at).localeCompare(String(a.last_used_at ?? a.created_at)),
+  );
+  const shown = showAll ? ordered : ordered.slice(0, SESSIONS_FOLDED);
+  const hidden = ordered.length - shown.length;
   return (
     <>
-      <ul className="divide-y divide-line border-y border-line">
-        {sessions.data.map((s) => (
+      <ul className="divide-y divide-line">
+        {shown.map((s) => (
           <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
             <div className="flex items-center gap-3">
               <MonitorSmartphone aria-hidden="true" className="size-5 text-highlight" />
@@ -74,9 +83,16 @@ function Sessions() {
           </li>
         ))}
       </ul>
-      <Button variant="secondary" size="sm" className="mt-4" onClick={() => setConfirmAll(true)}>
-        <LogOut aria-hidden="true" /> Sign out everywhere
-      </Button>
+      <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4">
+        {hidden > 0 || showAll ? (
+          <Button variant="ghost" size="sm" aria-expanded={showAll} onClick={() => setShowAll((v) => !v)}>
+            {showAll ? "Show fewer" : `Show all ${ordered.length} devices`}
+          </Button>
+        ) : null}
+        <Button variant="secondary" size="sm" className="ml-auto" onClick={() => setConfirmAll(true)}>
+          <LogOut aria-hidden="true" /> Sign out everywhere
+        </Button>
+      </div>
       <Dialog
         open={confirmAll}
         onClose={() => setConfirmAll(false)}
@@ -112,8 +128,8 @@ function Profile() {
   if (!user) return null;
   const name = user.display_name || user.email || "Your account";
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-      <Card className="p-6">
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:gap-8">
+      <Card className="p-6 lg:sticky lg:top-28">
         <div className="flex items-center gap-4">
           <Avatar name={name} size={64} />
           <div className="min-w-0">
@@ -133,12 +149,12 @@ function Profile() {
           <LogOut aria-hidden="true" /> Sign out
         </Button>
       </Card>
-      <section aria-labelledby="devices">
-        <h2 id="devices" className="mb-4 text-xl font-bold text-fg">
+      <Card as="section" aria-labelledby="devices" className="p-6">
+        <h2 id="devices" className="mb-2 text-xl font-bold text-fg">
           Signed-in devices
         </h2>
         <Sessions />
-      </section>
+      </Card>
     </div>
   );
 }

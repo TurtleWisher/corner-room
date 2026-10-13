@@ -102,7 +102,7 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <div className="min-w-0">
-        <header data-theme="staff" className="cr-scope sticky top-0 z-30 border-b border-line">
+        <header data-theme="staff" className="cr-scope cr-bar sticky top-0 z-30 border-b border-line">
           <div className="flex h-14 items-center gap-3 px-3 md:px-6">
             <button
               type="button"

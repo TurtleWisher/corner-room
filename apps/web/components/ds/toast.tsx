@@ -51,7 +51,7 @@ export function ToastProvider({ children, duration = 6000 }: { children: React.R
               key={t.id}
               className={cn(
                 "cr-cut pointer-events-auto w-full p-4 text-fg shadow-[0_12px_40px_rgb(0_0_0/0.45)]",
-                "[--cut-fill:var(--cr-surface-raised)] [--cut-border:var(--cr-line-strong)]",
+                "cr-glass-card [--cut-border:var(--cr-line-strong)]",
               )}
             >
               <div className="flex items-start justify-between gap-3">

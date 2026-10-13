@@ -92,12 +92,24 @@
   --cr-light-pool: rgb(178 31 36 / 0.92);
   --cr-light-falloff: rgb(131 21 21 / 0.5);
   --cr-light-counter: rgb(131 21 21 / 0.5);
-  --cr-light-sweep: rgb(178 31 36 / 0.08);
+  --cr-light-sweep: rgb(178 31 36 / 0.1);
+  /* Side spill (v1.2): the corner light carried down the page along the depth axis. */
+  --cr-light-side: rgb(131 21 21 / 0.42);
 
   /* Room Cube tones */
   --cr-cube-field: #b21f24;
   --cr-cube-face: #fcf475;
   --cr-cube-shadow: #831515;
+
+  /* Glass (v1.2): translucent raised fill with a faint cream sheen from the lit corner, an edge
+     that is brightest at the cut corner, and a frosted blur of the page light behind it. */
+  --cr-glass-fill: linear-gradient(135deg, rgb(246 236 230 / 0.075), rgb(246 236 230 / 0.018) 55%), rgb(31 15 14 / 0.52);
+  --cr-glass-edge: linear-gradient(135deg, rgb(246 236 230 / 0.32), rgb(246 236 230 / 0.12) 40%, rgb(246 236 230 / 0.07));
+  --cr-glass-edge-hover: linear-gradient(135deg, rgb(252 244 117 / 0.5), rgb(246 236 230 / 0.18) 40%, rgb(246 236 230 / 0.1));
+  --cr-glass-blur: blur(18px) saturate(1.35);
+  --cr-bar: rgb(20 7 7 / 0.66);
+  /* REF-003 "+" registration marks on lit hero regions. */
+  --cr-marks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M32 28v8M28 32h8' stroke='%23f6ece6' stroke-opacity='0.16' stroke-width='1'/%3E%3C/svg%3E");
 }
 
 [data-theme="sky"] {
@@ -120,14 +132,22 @@
 
   --cr-light-size: 70% 62%;
   --cr-light-bulb: rgb(187 237 254 / 0.16);
-  --cr-light-pool: rgb(83 200 234 / 0.52);
+  --cr-light-pool: rgb(83 200 234 / 0.44);
   --cr-light-falloff: rgb(79 71 137 / 0.52);
   --cr-light-counter: rgb(79 71 137 / 0.52);
-  --cr-light-sweep: transparent;
+  --cr-light-sweep: rgb(83 200 234 / 0.05);
+  --cr-light-side: rgb(79 71 137 / 0.4);
 
   --cr-cube-field: #53c8ea;
   --cr-cube-face: #bbedfe;
   --cr-cube-shadow: #4f4789;
+
+  --cr-glass-fill: linear-gradient(135deg, rgb(187 237 254 / 0.085), rgb(187 237 254 / 0.02) 55%), rgb(27 24 56 / 0.5);
+  --cr-glass-edge: linear-gradient(135deg, rgb(187 237 254 / 0.36), rgb(187 237 254 / 0.13) 40%, rgb(187 237 254 / 0.07));
+  --cr-glass-edge-hover: linear-gradient(135deg, rgb(187 237 254 / 0.62), rgb(187 237 254 / 0.2) 40%, rgb(187 237 254 / 0.1));
+  --cr-glass-blur: blur(18px) saturate(1.35);
+  --cr-bar: rgb(18 15 38 / 0.66);
+  --cr-marks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M32 28v8M28 32h8' stroke='%23bbedfe' stroke-opacity='0.18' stroke-width='1'/%3E%3C/svg%3E");
 }
 
 [data-theme="staff"] {
@@ -154,10 +174,19 @@
   --cr-light-falloff: transparent;
   --cr-light-counter: transparent;
   --cr-light-sweep: transparent;
+  --cr-light-side: rgb(59 59 59 / 0.16);
 
   --cr-cube-field: #fbf5e6;
   --cr-cube-face: #1c0607;
   --cr-cube-shadow: #3b3b3b;
+
+  /* Staff: the same glass, quieter, so dense tables stay calm. */
+  --cr-glass-fill: linear-gradient(135deg, rgb(246 236 230 / 0.05), rgb(246 236 230 / 0.012) 55%), rgb(26 22 23 / 0.62);
+  --cr-glass-edge: linear-gradient(135deg, rgb(246 236 230 / 0.22), rgb(246 236 230 / 0.1) 40%, rgb(246 236 230 / 0.07));
+  --cr-glass-edge-hover: linear-gradient(135deg, rgb(246 236 230 / 0.36), rgb(246 236 230 / 0.14) 40%, rgb(246 236 230 / 0.09));
+  --cr-glass-blur: blur(14px) saturate(1.2);
+  --cr-bar: rgb(17 14 15 / 0.72);
+  --cr-marks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M32 28v8M28 32h8' stroke='%23f6ece6' stroke-opacity='0.08' stroke-width='1'/%3E%3C/svg%3E");
 }
 
 /* Status colours, identical in every world, reset on every scope so nesting never leaks.
@@ -205,10 +234,28 @@
   --cr-light-falloff: transparent;
   --cr-light-counter: transparent;
   --cr-light-sweep: transparent;
+  --cr-light-side: transparent;
 
   --cr-cube-field: #b21f24;
   --cr-cube-face: #fcf475;
   --cr-cube-shadow: #831515;
+
+  --cr-glass-fill: linear-gradient(135deg, rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.2) 55%), rgb(243 234 214 / 0.62);
+  --cr-glass-edge: linear-gradient(135deg, rgb(28 6 7 / 0.22), rgb(28 6 7 / 0.1) 40%, rgb(28 6 7 / 0.08));
+  --cr-glass-edge-hover: linear-gradient(135deg, rgb(178 31 36 / 0.5), rgb(28 6 7 / 0.16) 40%, rgb(28 6 7 / 0.1));
+  --cr-glass-blur: blur(14px) saturate(1.1);
+  --cr-bar: rgb(251 245 230 / 0.78);
+  --cr-marks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M32 28v8M28 32h8' stroke='%231c0607' stroke-opacity='0.12' stroke-width='1'/%3E%3C/svg%3E");
+}
+
+/* People who ask the system for less transparency get solid panels and bars. */
+@media (prefers-reduced-transparency: reduce) {
+  :root,
+  [data-theme] {
+    --cr-glass-fill: var(--cr-surface-raised);
+    --cr-glass-blur: none;
+    --cr-bar: var(--cr-surface);
+  }
 }
 
 /* Motion durations (BRAND_GUIDELINE section 10) */
@@ -241,20 +288,76 @@
   }
 
   /* Corner Light: gradient pools from the top-left corner, grain inside the gradient only (5.7).
-     Never give this layer a z-index; place content in a positioned sibling above it. */
+     Never give this layer a z-index; place content in a positioned sibling above it.
+     v1.2 (2026-10-13): finer grain (512 px tile drawn at 256 px, so each grain is half the size)
+     and long, eased falloffs (many stops) so the pools melt into the base without banding. */
   .cr-light {
     position: absolute;
     inset: 0;
     pointer-events: none;
     background:
-      url("/brand/grain-soft.webp"),
-      radial-gradient(38% 30% at 6% 4%, var(--cr-light-bulb), transparent 70%),
-      radial-gradient(var(--cr-light-size) at 0% 0%, var(--cr-light-pool), var(--cr-light-falloff) 42%, transparent 72%),
-      radial-gradient(60% 55% at 100% 100%, var(--cr-light-counter), transparent 70%),
-      linear-gradient(117deg, transparent 38%, var(--cr-light-sweep) 52%, transparent 66%),
+      url("/brand/grain-soft-2x.webp"),
+      radial-gradient(40% 34% at 7% 5%, var(--cr-light-bulb), color-mix(in srgb, var(--cr-light-bulb) 38%, transparent) 42%, transparent 74%),
+      radial-gradient(
+        var(--cr-light-size) at 0% 0%,
+        var(--cr-light-pool),
+        color-mix(in srgb, var(--cr-light-pool) 72%, var(--cr-light-falloff)) 16%,
+        var(--cr-light-falloff) 38%,
+        color-mix(in srgb, var(--cr-light-falloff) 52%, transparent) 56%,
+        color-mix(in srgb, var(--cr-light-falloff) 18%, transparent) 74%,
+        transparent 92%
+      ),
+      radial-gradient(64% 60% at 100% 100%, var(--cr-light-counter), color-mix(in srgb, var(--cr-light-counter) 38%, transparent) 42%, transparent 80%),
+      linear-gradient(117deg, transparent 32%, var(--cr-light-sweep) 52%, transparent 72%),
       var(--cr-surface);
     background-size: 256px 256px, auto, auto, auto, auto, auto;
     background-blend-mode: soft-light, normal, normal, normal, normal, normal;
+  }
+
+  /* Page light (v1.2): every page's <main> carries one continuous Corner Light, sized in
+     viewport units so it reads the same on a short page and a long one. Same recipe and the same
+     single grain tile as .cr-light; glass cards anywhere on the page frost it. */
+  #main.cr-scope {
+    position: relative;
+    background:
+      url("/brand/grain-soft-2x.webp"),
+      radial-gradient(max(46vw, 420px) max(40vh, 340px) at 6% 0%, var(--cr-light-bulb), color-mix(in srgb, var(--cr-light-bulb) 34%, transparent) 44%, transparent 78%),
+      radial-gradient(
+        max(92vw, 760px) max(92vh, 720px) at 0% 0%,
+        var(--cr-light-pool),
+        color-mix(in srgb, var(--cr-light-pool) 70%, var(--cr-light-falloff)) 14%,
+        var(--cr-light-falloff) 34%,
+        color-mix(in srgb, var(--cr-light-falloff) 55%, transparent) 52%,
+        color-mix(in srgb, var(--cr-light-falloff) 22%, transparent) 70%,
+        color-mix(in srgb, var(--cr-light-falloff) 6%, transparent) 86%,
+        transparent 100%
+      ),
+      radial-gradient(max(70vw, 620px) max(80vh, 620px) at 100% 100%, var(--cr-light-counter), color-mix(in srgb, var(--cr-light-counter) 40%, transparent) 40%, color-mix(in srgb, var(--cr-light-counter) 10%, transparent) 70%, transparent 100%),
+      radial-gradient(max(52vw, 460px) max(85vh, 620px) at 100% 34%, var(--cr-light-side), color-mix(in srgb, var(--cr-light-side) 35%, transparent) 45%, transparent 80%),
+      radial-gradient(max(46vw, 420px) max(80vh, 600px) at 0% 68%, color-mix(in srgb, var(--cr-light-side) 70%, transparent), color-mix(in srgb, var(--cr-light-side) 22%, transparent) 45%, transparent 80%),
+      linear-gradient(117deg, transparent 18%, var(--cr-light-sweep) 44%, transparent 76%),
+      var(--cr-surface);
+    background-size: 256px 256px, auto, auto, auto, auto, auto, auto, auto;
+    background-blend-mode: soft-light, normal, normal, normal, normal, normal, normal, normal;
+  }
+
+  /* A lit region of the same world inside a lit page does not repaint: the page light shows
+     through, so there is no seam at the bottom of a hero. Its own layer becomes the REF-003 "+"
+     registration grid, fading out from the corner. A region of another world (a Sky band on an
+     Ember page) keeps its own base and light and meets the page at a hard edge, as before. */
+  [data-theme="ember"] .cr-scope[data-theme="ember"],
+  [data-theme="sky"] .cr-scope[data-theme="sky"],
+  [data-theme="staff"] .cr-scope[data-theme="staff"],
+  [data-theme="paper"] .cr-scope[data-theme="paper"] {
+    background-color: transparent;
+  }
+  [data-theme="ember"] .cr-scope[data-theme="ember"] > .cr-light,
+  [data-theme="sky"] .cr-scope[data-theme="sky"] > .cr-light,
+  [data-theme="staff"] .cr-scope[data-theme="staff"] > .cr-light,
+  [data-theme="paper"] .cr-scope[data-theme="paper"] > .cr-light {
+    background: var(--cr-marks) 0 0 / 64px 64px repeat;
+    -webkit-mask-image: radial-gradient(110% 120% at 0% 0%, #000 0%, rgb(0 0 0 / 0.5) 45%, transparent 82%);
+    mask-image: radial-gradient(110% 120% at 0% 0%, #000 0%, rgb(0 0 0 / 0.5) 45%, transparent 82%);
   }
 
   /* Cut corner (5.8). The fill and the border are drawn by clipped pseudo-elements, so the
@@ -296,7 +399,52 @@
   .cr-cut::after {
     inset: var(--cut-bw);
     background: var(--cut-fill);
+    /* Frosting sits on the clipped fill, so the blur follows the cut corner exactly. */
+    -webkit-backdrop-filter: var(--cut-blur, none);
+    backdrop-filter: var(--cut-blur, none);
     clip-path: polygon(calc(var(--cut) - var(--cut-bw) * 0.41) 0, 100% 0, 100% 100%, 0 100%, 0 calc(var(--cut) - var(--cut-bw) * 0.41));
+  }
+
+  /* Glass card (v1.2, owner direction 2026-10-13): the default look for cards, panels and boxes.
+     Use with .cr-cut. Hover brightens the corner edge; it never moves text. */
+  .cr-glass-card {
+    --cut-fill: var(--cr-glass-fill);
+    --cut-border: var(--cr-glass-edge);
+    --cut-blur: var(--cr-glass-blur);
+    /* Lift: offset down with negative spread, so nothing shows at the cut corner. */
+    box-shadow: 0 26px 50px -30px rgb(0 0 0 / 0.75);
+  }
+  .cr-glass-card.cr-hover:hover,
+  .cr-glass-card.cr-hover:focus-within {
+    --cut-border: var(--cr-glass-edge-hover);
+  }
+
+  /* List rows (events, tracks): a soft glass wash from the lit side on hover and keyboard focus.
+     Drawn by an isolated pseudo-element just outside the row, so hairlines stay aligned. */
+  .cr-row {
+    position: relative;
+    isolation: isolate;
+  }
+  .cr-row::before {
+    content: "";
+    position: absolute;
+    inset: 0 -0.75rem;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(90deg, var(--cr-surface-overlay), color-mix(in srgb, var(--cr-surface-overlay) 40%, transparent) 70%, transparent);
+    transition: opacity var(--cr-dur-interaction) var(--ease-corner);
+  }
+  .cr-row:hover::before,
+  .cr-row:focus-within::before {
+    opacity: 1;
+  }
+
+  /* Sticky bars (site header, staff header): the page light passes under them, frosted. */
+  .cr-bar {
+    background-color: var(--cr-bar);
+    -webkit-backdrop-filter: var(--cr-glass-blur);
+    backdrop-filter: var(--cr-glass-blur);
   }
 
   /* Cut corner by clipping the region itself. Only for bands and documents whose edges hold no
@@ -344,12 +492,12 @@
     margin-inline-end: 0.06em;
   }
 
-  /* Glass, sparingly: only where content floats over the corner light. */
+  /* Glass on a plain rectangle (no cut corner): the player bar, flat panels. */
   .cr-glass {
-    background: var(--cr-surface-overlay);
+    background: var(--cr-glass-fill);
     border: 1px solid var(--cr-line);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: var(--cr-glass-blur);
+    backdrop-filter: var(--cr-glass-blur);
   }
 
   .cr-focus:focus-visible {
@@ -361,4 +509,23 @@
     font-family: var(--font-anek), sans-serif;
     line-height: 1.6;
   }
+}
+
+/* Under the frosted header (v1.2): on redesigned pages the body takes the page's world base, so
+   the translucent bar never shows the legacy white body. Legacy pages (no .cr-scope main) keep
+   their white body. Unlayered on purpose: it must beat the unlayered legacy body rule. */
+body:has(#main.cr-scope) {
+  background: #140707;
+}
+body:has(#main.cr-scope[data-theme="sky"]) {
+  background: #120f26;
+}
+body:has(#main.cr-scope[data-theme="staff"]) {
+  background: #110e0f;
+}
+
+/* Sky eyebrows sit in the lit corner, where small Ice text drops below AA (BRAND_GUIDELINE 5.7):
+   they use Cream. Unlayered so it beats the text-highlight utility. */
+[data-theme="sky"] .cr-eyebrow {
+  color: #f6ece6;
 }
