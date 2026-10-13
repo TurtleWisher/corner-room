@@ -10,7 +10,7 @@ import { LitSurface } from "@/components/brand/corner-light";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ButtonLink, Card, ErrorState, Field, Input, Money, Skeleton, StatusChip } from "@/components/ds";
-import { TrackBuyControl, useCustomerCommerce } from "@/components/music/commerce";
+import { TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
 import { useCredits } from "@/components/music/credits";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
@@ -26,8 +26,8 @@ import {
   type TrackRecord,
 } from "@/lib/api";
 import { humanizeStatus } from "@/lib/format/status";
-import { creditHref, creditName, formatDuration, playState } from "@/lib/music-view";
-import { catalogOffer, hasCatalogAccess, trackBuyState } from "@/lib/ownership";
+import { creditHref, creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
+import { catalogOffer, hasCatalogAccess, ownsTrack, trackBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 
 const ACTIONS = ["submit", "start_review", "approve", "reject", "schedule", "release", "takedown", "archive"];
@@ -112,6 +112,16 @@ export default function TrackPage() {
   const signedIn = status === "authenticated";
   const people = useCredits();
   const commerce = useCustomerCommerce();
+  const catalog = usePlayableCatalog();
+  // Up next from a single track page: the customer's playable music, as in the listening room.
+  const yourMusic = {
+    queue: playQueue(
+      catalog.list.map((t) => ({ trackId: t.id, title: t.title, artist: creditName(t, people.artists, people.bands) })),
+      catalog.map,
+      (trackId) => ownsTrack(commerce.entitlements, trackId),
+    ),
+    source: "Your music",
+  };
   const [override, setOverride] = useState<TrackRecord | null>(null);
   const data = useAsync(async () => {
     if (status === "loading") return null;
@@ -176,7 +186,7 @@ export default function TrackPage() {
             </p>
             {play.kind === "unavailable" ? <p className="mt-2 text-sm text-fg-muted">{play.reason}</p> : null}
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              {play.kind === "unavailable" ? null : <TrackBuyControl track={{ id: track.id, title: track.title, artist }} commerce={commerce} size="lg" showPlan={false} />}
+              {play.kind === "unavailable" ? null : <TrackBuyControl track={{ id: track.id, title: track.title, artist }} commerce={commerce} size="lg" showPlan={false} playFrom={yourMusic} />}
               {signedIn && buy.kind !== "owned" && pass ? (
                 <ButtonLink href={`/checkout?offer=${pass.id}`} variant="secondary" size="lg">
                   <ShoppingBag aria-hidden="true" /> Full catalog <Money value={{ amount_minor: pass.amount_minor, currency_code: pass.currency_code }} />

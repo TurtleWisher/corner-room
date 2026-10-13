@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from cornerroom.api.deps import get_auth_context, get_optional_auth_context, streaming_service
+from cornerroom.infra.http_range import RangeNotSatisfiable, parse_byte_range
 from cornerroom.infra.idempotency import (
     IdempotencyReplay,
     begin_idempotent,
@@ -424,9 +425,28 @@ async def track_audio(
 async def playback_media(
     token: str,
     svc: Annotated[StreamingService, Depends(streaming_service)],
+    range_header: Annotated[str | None, Header(alias="Range")] = None,
 ) -> Response:
     data, mime = await svc.load_media_bytes(token)
-    return Response(content=data, media_type=mime or "application/octet-stream")
+    media_type = mime or "application/octet-stream"
+    size = len(data)
+    # Access is checked above for every request, ranged or not; ranges only let players seek.
+    try:
+        span = parse_byte_range(range_header, size)
+    except RangeNotSatisfiable:
+        return Response(
+            status_code=416,
+            headers={"Content-Range": f"bytes */{size}", "Accept-Ranges": "bytes"},
+        )
+    if span is None:
+        return Response(content=data, media_type=media_type, headers={"Accept-Ranges": "bytes"})
+    start, end = span
+    return Response(
+        content=data[start : end + 1],
+        status_code=206,
+        media_type=media_type,
+        headers={"Content-Range": f"bytes {start}-{end}/{size}", "Accept-Ranges": "bytes"},
+    )
 
 
 @router.get("/playback/catalog")

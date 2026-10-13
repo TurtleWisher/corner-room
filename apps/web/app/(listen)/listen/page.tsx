@@ -9,7 +9,7 @@ import { useCredits } from "@/components/music/credits";
 import { ListenPage } from "@/components/music/listen-page";
 import { usePlayer } from "@/components/music/player";
 import { TrackRows } from "@/components/music/track-rows";
-import { creditName } from "@/lib/music-view";
+import { creditName, playQueue } from "@/lib/music-view";
 import { catalogOffer, hasCatalogAccess, ownsTrack } from "@/lib/ownership";
 
 /** Listening room home: what you can play now, and how to unlock the rest. */
@@ -22,6 +22,11 @@ export default function ListenHome() {
   const access = hasCatalogAccess(commerce.entitlements);
   const pass = access ? null : catalogOffer(commerce.offers);
   const playable = catalog.list.filter((t) => t.catalog_playable && t.audio_deliverable);
+  const queue = playQueue(
+    catalog.list.map((t) => ({ trackId: t.id, title: t.title, artist: creditName(t, people.artists, people.bands) })),
+    catalog.map,
+    (id) => ownsTrack(commerce.entitlements, id),
+  );
   const firstOwned = playable.find((t) => ownsTrack(commerce.entitlements, t.id));
 
   return (
@@ -30,7 +35,7 @@ export default function ListenHome() {
       lede="Play what you own. Buy a track to keep it, or unlock everything with a plan."
       actions={
         firstOwned ? (
-          <Button size="lg" onClick={() => void player.play({ id: firstOwned.id, title: firstOwned.title, artist: creditName(firstOwned, people.artists, people.bands) })}>
+          <Button size="lg" onClick={() => void player.play({ id: firstOwned.id, title: firstOwned.title, artist: creditName(firstOwned, people.artists, people.bands) }, { queue, source: "Your music" })}>
             <Headphones aria-hidden="true" /> Play your music
           </Button>
         ) : null
