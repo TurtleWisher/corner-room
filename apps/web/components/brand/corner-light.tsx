@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { PointerLightLayer } from "@/components/brand/pointer-light";
 import { cn } from "@/lib/utils";
 import type { ThemeName } from "@/lib/theme/palette";
 
@@ -36,6 +37,8 @@ export function LitSurface<T extends React.ElementType = "section">({
   return (
     <Tag data-theme={theme} className={cn("cr-scope relative overflow-hidden", className)} {...rest}>
       {light ? <CornerLight /> : null}
+      {/* The pointer light and the grain above it (v1.4); hidden when nested in the same world. */}
+      {light ? <PointerLightLayer /> : null}
       <div className={cn("relative", contentClassName)}>{children}</div>
     </Tag>
   );

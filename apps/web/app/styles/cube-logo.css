@@ -18,7 +18,7 @@
   --cr-cube-face: #fcf475;
 }
 
-/* Optional assembly on mount: left slides in from x-40, top from y-40, front fades. */
+/* Optional assembly on mount: left slides in from x-40, top from y-40, front brightens from 40%. */
 .cr-cube-animate .cr-cube-left {
   animation: cr-cube-left 600ms var(--ease-corner, ease-out) both;
 }
@@ -41,9 +41,11 @@
     opacity: 0;
   }
 }
+/* The front starts partly lit, not invisible: the cube is often the largest thing on screen, and
+   an invisible start held back the page's first meaningful paint by about 1.7 s (2026-10-13). */
 @keyframes cr-cube-front {
   from {
-    opacity: 0;
+    opacity: 0.4;
   }
 }
 

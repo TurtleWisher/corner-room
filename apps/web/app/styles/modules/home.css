@@ -1,0 +1,331 @@
+/*
+ * Home (landing) motion, brand v1.3 (owner decisions 2026-10-13, D1 to D3).
+ * Scoped to [data-module="home"]. Transform and opacity only. Every effect switches off under
+ * prefers-reduced-motion, and every element's resting state is its visible state.
+ *
+ *   M1 hero entrance   once on load: small labels and actions fade up; the title only rises
+ *                      (no fade), so the first paint already shows the headline.
+ *   M2 poster tilt     fine pointers only (components/home/poster-tilt.tsx); light on the
+ *                      poster's edge and behind it, never across the cube letters (BRAND 9).
+ *   M3 hand-over       Ember fades to Night, then Sky rises, tied to scroll. Never purple: the
+ *                      two lights never overlap. Static gradient where unsupported.
+ *   M4 reveals         sections fade up 24 px once as they enter (components/ds/reveal.tsx;
+ *                      its CSS lives in tokens.css because the footer uses it too).
+ */
+
+/* ---------- M1 hero entrance ----------
+   It waits until the page is ready to be seen: html.cr-ready, set by the early script in
+   app/layout.tsx once the fonts load (0.7 s at most), so it is never spent while the page is
+   still settling. Until then the pieces wait in their start pose, only when scripts run (html.js),
+   and a failsafe shows them after 1.2 s regardless. */
+@media (prefers-reduced-motion: no-preference) {
+  .js:not(.cr-ready) [data-module="home"] .home-in {
+    opacity: 0;
+    transform: translateY(22px);
+    animation: home-failsafe 1ms 1.2s forwards;
+  }
+  .js:not(.cr-ready) [data-module="home"] .home-rise {
+    clip-path: inset(0 -6% 100% -6%);
+    transform: translateY(28px);
+    animation: home-failsafe 1ms 1.2s forwards;
+  }
+  .js:not(.cr-ready) [data-module="home"] .home-poster-in {
+    opacity: 0;
+    transform: translateY(18px) scale(0.965);
+    animation: home-failsafe 1ms 1.2s forwards;
+  }
+  .cr-ready [data-module="home"] .home-in {
+    animation: home-in 640ms var(--ease-corner) both;
+    animation-delay: calc(var(--i, 0) * 110ms + 80ms);
+  }
+  /* Each headline line is unveiled upward, like a poster being printed line by line. */
+  .cr-ready [data-module="home"] .home-rise {
+    animation: home-rise 820ms var(--ease-corner) both;
+    animation-delay: calc(var(--i, 0) * 130ms + 80ms);
+  }
+  .cr-ready [data-module="home"] .home-poster-in {
+    animation: home-poster-in 900ms var(--ease-corner) 220ms both;
+  }
+}
+@keyframes home-in {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+}
+@keyframes home-rise {
+  from {
+    clip-path: inset(0 -6% 100% -6%);
+    transform: translateY(28px);
+  }
+  to {
+    clip-path: inset(-12% -6% -18% -6%);
+    transform: none;
+  }
+}
+@keyframes home-poster-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.965);
+  }
+}
+@keyframes home-failsafe {
+  to {
+    opacity: 1;
+    transform: none;
+    clip-path: none;
+  }
+}
+
+/* ---------- Hero depth on scroll: the text and the poster drift apart a little ---------- */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* The page's own scroll drives it (the hero clips its overflow, which would otherwise
+       become the timeline's scroller and never move). */
+    [data-module="home"] .home-depth-near {
+      animation: home-drift-near linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0px 720px;
+    }
+    [data-module="home"] .home-depth-far {
+      animation: home-drift-far linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0px 720px;
+    }
+  }
+}
+@keyframes home-drift-near {
+  to {
+    transform: translateY(-36px);
+    opacity: 0.55;
+  }
+}
+@keyframes home-drift-far {
+  to {
+    transform: translateY(-96px);
+  }
+}
+
+/* ---------- M2 poster tilt (variables written by poster-tilt.tsx) ---------- */
+[data-module="home"] .home-poster {
+  --tilt-x: 0deg;
+  --tilt-y: 0deg;
+  --glare-x: 18%;
+  --glare-y: 12%;
+  --glare: 0;
+  position: relative;
+  isolation: isolate;
+  perspective: 900px;
+}
+[data-module="home"] .home-poster-card {
+  transform: rotateX(var(--tilt-y)) rotateY(var(--tilt-x));
+  transform-style: preserve-3d;
+  transition: transform var(--cr-dur-component) var(--ease-corner);
+  will-change: transform;
+}
+[data-module="home"] .home-poster[data-tilting="true"] .home-poster-card {
+  transition-duration: 90ms;
+}
+/* Light spills behind the poster from where the pointer is: a halo outside the art. */
+[data-module="home"] .home-poster-halo {
+  position: absolute;
+  inset: -14%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(45% 45% at var(--glare-x) var(--glare-y), color-mix(in srgb, var(--cr-accent) 34%, transparent), transparent 70%);
+  /* Feather the box so the halo never shows a hard edge when the pointer is near a corner. */
+  -webkit-mask: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent),
+    linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+  -webkit-mask-composite: source-in;
+  mask: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent),
+    linear-gradient(to bottom, transparent, #000 14%, #000 86%, transparent);
+  mask-composite: intersect;
+  opacity: var(--glare);
+  transition: opacity var(--cr-dur-component) var(--ease-corner);
+}
+/* And catches the poster's edge: a ring outside the cube field, never over its letters. */
+[data-module="home"] .home-poster-edge {
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  padding: 1px;
+  background: radial-gradient(60% 60% at var(--glare-x) var(--glare-y), color-mix(in srgb, var(--cr-accent) 70%, transparent), transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: var(--glare);
+  transition: opacity var(--cr-dur-component) var(--ease-corner);
+}
+/* Keyboard focus gets the same light, fixed at the lit corner. */
+[data-module="home"] .home-poster:focus-within {
+  --glare: 0.8;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-module="home"] .home-poster-card {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ---------- M3 Ember to Sky hand-over ---------- */
+[data-module="home"] .home-handover {
+  position: relative;
+  height: clamp(9rem, 26vh, 18rem);
+  overflow: hidden;
+  /* Static base, the same in every browser: the Ember page darkens to Night, then to Sky's base.
+     Both ends are near-black, so the middle is a dark neutral, never purple. */
+  background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, #140707 85%, transparent) 45%, #120f26 100%);
+}
+[data-module="home"] .home-handover-ember,
+[data-module="home"] .home-handover-sky {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+[data-module="home"] .home-handover-ember {
+  background: radial-gradient(70% 120% at 0% 0%, rgb(131 21 21 / 0.45), transparent 70%);
+  opacity: 0.5;
+}
+[data-module="home"] .home-handover-sky {
+  background:
+    radial-gradient(70% 130% at 0% 70%, rgb(83 200 234 / 0.3), transparent 72%),
+    radial-gradient(60% 120% at 100% 70%, rgb(79 71 137 / 0.35), transparent 70%);
+  /* Fades out before the band below, where the Sky band's own light takes over: no cut edge. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 35%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 35%, transparent 100%);
+  opacity: 0.5;
+}
+/* Scroll-linked where the browser supports it. Ember is gone before Sky starts: no overlap. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-module="home"] .home-handover-ember {
+      animation: home-ember-out linear both;
+      animation-timeline: --home-handover;
+      animation-range: entry 20% cover 50%;
+    }
+    [data-module="home"] .home-handover-sky {
+      animation: home-sky-in linear both;
+      animation-timeline: --home-handover;
+      animation-range: cover 50% exit 60%;
+    }
+    [data-module="home"] .home-handover {
+      view-timeline-name: --home-handover;
+    }
+  }
+}
+/* A band of light travels across the hand-over as you scroll, along the 117 degree depth axis: the
+   light carried from the events room into the listening room. Near-neutral cream, never a red-blue mix. */
+[data-module="home"] .home-handover-beam {
+  position: absolute;
+  inset: -40% -60%;
+  pointer-events: none;
+  background: linear-gradient(117deg, transparent 38%, rgb(246 236 230 / 0.07) 47%, rgb(246 236 230 / 0.16) 50%, rgb(246 236 230 / 0.07) 53%, transparent 62%);
+  opacity: 0;
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-module="home"] .home-handover-beam {
+      animation: home-beam linear both;
+      animation-timeline: --home-handover;
+      animation-range: entry 0% exit 100%;
+    }
+  }
+}
+@keyframes home-beam {
+  0% {
+    opacity: 0;
+    transform: translateX(-38%);
+  }
+  25% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(38%);
+  }
+}
+@keyframes home-ember-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes home-sky-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------- Release tiles: hover and focus feedback ---------- */
+[data-module="home"] .home-tile {
+  transition: transform var(--cr-dur-component) var(--ease-corner);
+}
+[data-module="home"] .home-tile:hover,
+[data-module="home"] .home-tile:focus-within {
+  transform: translateY(-8px);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-module="home"] .home-tile,
+  [data-module="home"] .home-tile:hover,
+  [data-module="home"] .home-tile:focus-within {
+    transform: none;
+    transition: none;
+  }
+}
+
+
+/* The Sky band's own corner light rises out of the hand-over instead of switching on at a line.
+   Its base colour already equals the hand-over's last colour, so the join is invisible. */
+[data-module="home"] .home-sky > .cr-light {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 min(22rem, 40vh));
+  mask-image: linear-gradient(to bottom, transparent 0, #000 min(22rem, 40vh));
+}
+
+/* ---------- Upcoming rows: a small depth response on hover and keyboard focus ---------- */
+[data-module="home"] .cr-row > a:first-of-type {
+  transition: transform var(--cr-dur-interaction) var(--ease-corner);
+}
+[data-module="home"] .cr-row:hover > a:first-of-type,
+[data-module="home"] .cr-row:focus-within > a:first-of-type {
+  transform: translateY(-2px);
+}
+
+/* ---------- Release tiles: Sky light gathers behind the tile (never on the cube letters) ---------- */
+[data-module="home"] .home-tile {
+  position: relative;
+  isolation: isolate;
+}
+[data-module="home"] .home-tile::before {
+  content: "";
+  position: absolute;
+  inset: -6% -6% 30% -6%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(60% 60% at 50% 45%, color-mix(in srgb, var(--cr-accent) 45%, transparent), transparent 72%);
+  opacity: 0;
+  transition: opacity var(--cr-dur-component) var(--ease-corner);
+}
+[data-module="home"] .home-tile:hover::before,
+[data-module="home"] .home-tile:focus-within::before {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-module="home"] .cr-row > a:first-of-type,
+  [data-module="home"] .cr-row:hover > a:first-of-type,
+  [data-module="home"] .cr-row:focus-within > a:first-of-type {
+    transform: none;
+    transition: none;
+  }
+  [data-module="home"] .home-tile::before {
+    transition: none;
+  }
+}

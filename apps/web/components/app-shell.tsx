@@ -1,6 +1,7 @@
 "use client";
 
 import { AuthProvider } from "@/components/auth-provider";
+import { PagePointerLight } from "@/components/brand/pointer-light";
 import { NotificationsProvider } from "@/components/notifications-provider";
 import { WorkspaceProvider } from "@/components/workspace-provider";
 
@@ -13,7 +14,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
       <WorkspaceProvider>
-        <NotificationsProvider>{children}</NotificationsProvider>
+        <NotificationsProvider>
+          {children}
+          <PagePointerLight />
+        </NotificationsProvider>
       </WorkspaceProvider>
     </AuthProvider>
   );

@@ -9,17 +9,6 @@
   --cr-light-pool: rgb(178 31 36 / 0.95);
 }
 
-/* REF-003 borrow, in Ember: dotted grid with "+" registration marks. Decorative only. */
-[data-module="events"] .ev-dotgrid {
-  background-image:
-    radial-gradient(circle at 1px 1px, rgb(246 236 230 / 0.16) 1px, transparent 1.5px),
-    linear-gradient(rgb(246 236 230 / 0.22), rgb(246 236 230 / 0.22)),
-    linear-gradient(rgb(246 236 230 / 0.22), rgb(246 236 230 / 0.22));
-  background-size: 24px 24px, 9px 1px, 1px 9px;
-  background-position: 0 0, 4px 8px, 8px 4px;
-  background-repeat: repeat, no-repeat, no-repeat;
-}
-
 /* Focus and blur list: the active row stays sharp; siblings soften. Text keeps full contrast
    on the active row and never relies on blur alone. */
 [data-module="events"] .ev-whatson:has(.ev-row:hover, .ev-row:focus-within) .ev-row:not(:hover, :focus-within) {
