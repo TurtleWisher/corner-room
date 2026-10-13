@@ -6,7 +6,8 @@ import { RoomCube } from "@/components/brand/room-cube";
 import { TrackBuyControl, type CustomerCommerce } from "@/components/music/commerce";
 import { usePlayer } from "@/components/music/player";
 import type { ArtistRecord, BandRecord, PlayableTrackRecord } from "@/lib/api";
-import { creditName, formatDuration, playState } from "@/lib/music-view";
+import { creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
+import { ownsTrack } from "@/lib/ownership";
 import { cn } from "@/lib/utils";
 
 export type TrackRowItem = {
@@ -38,6 +39,14 @@ export function TrackRows({
   label: string;
 }) {
   const player = usePlayer();
+  const queue = playQueue(
+    items.map((item) => {
+      const rec = playable.get(item.trackId);
+      return { trackId: item.trackId, title: item.title || rec?.title, artist: rec ? creditName(rec, people.artists, people.bands) : null };
+    }),
+    playable,
+    (id) => ownsTrack(commerce.entitlements, id),
+  );
   return (
     <ul aria-label={label} className="border-t border-line">
       {items.map((item) => {
@@ -71,7 +80,7 @@ export function TrackRows({
             </div>
             <div className="flex items-center gap-2">
               {item.extra}
-              {state.kind !== "unavailable" ? <TrackBuyControl track={{ id: item.trackId, title, artist }} commerce={commerce} showPlan={false} /> : null}
+              {state.kind !== "unavailable" ? <TrackBuyControl track={{ id: item.trackId, title, artist }} commerce={commerce} showPlan={false} playFrom={{ queue, source: label }} /> : null}
             </div>
           </li>
         );

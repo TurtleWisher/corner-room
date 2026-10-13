@@ -1,0 +1,680 @@
+/*
+ * The listening room (components/music/listening-room.tsx), owner direction 2026-10-14: a
+ * dedicated full-screen room with a centred 3D carousel, the playing cover blurred across the
+ * whole screen, and a focus view for one song whose neighbours slide in from the edges. The
+ * owner lifted the brand's still-background rule for this room only (OD-32): the backdrop
+ * drifts, the light behind the playing cover breathes while music plays, covers float. All of
+ * it is transform and opacity (compositor work), and all of it stops under reduced motion.
+ */
+
+/* The room draws its own light and grain; the page's would only sit unseen beneath it. */
+[data-module="music"] main:has(> .lr) > .cr-pl-page {
+  display: none;
+}
+
+[data-module="music"] .lr {
+  --card: min(64vw, 17rem, 40vh);
+  --lr-move: 640ms;
+  --lr-ease: cubic-bezier(0.22, 0.8, 0.16, 1);
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--cr-surface-sunken);
+  /* The backdrop is already a blur, and it moves: glass here is a translucent fill, not a live
+     frosting, or every card would re-blur the moving backdrop each frame. */
+  --cr-glass-blur: none;
+  --cr-glass-fill: linear-gradient(135deg, rgb(187 237 254 / 0.11), rgb(187 237 254 / 0.03) 55%), rgb(18 15 38 / 0.62);
+}
+@media (min-width: 768px) {
+  [data-module="music"] .lr {
+    --card: min(19rem, 30vw, 40vh);
+  }
+}
+@media (min-width: 1280px) {
+  [data-module="music"] .lr {
+    --card: min(21rem, 24vw, 40vh);
+  }
+}
+
+/* Backdrop: the cover, stretched from a 40 px canvas (the stretch is the blur), drifting. */
+[data-module="music"] .lr-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+[data-module="music"] .lr-backdrop-source {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  width: 240px;
+  height: 240px;
+  visibility: hidden;
+}
+[data-module="music"] .lr-drift {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150vmax;
+  height: 150vmax;
+  transform: translate(-50%, -50%);
+  animation: lr-drift 36s ease-in-out infinite alternate;
+  will-change: transform;
+}
+[data-module="music"] .lr-drift canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 1400ms var(--lr-ease);
+}
+[data-module="music"] .lr-drift canvas[data-ready]:not([data-leaving]) {
+  opacity: 0.92;
+}
+[data-module="music"] .lr-drift canvas[data-leaving] {
+  opacity: 0;
+}
+@keyframes lr-drift {
+  0% {
+    transform: translate(-50%, -50%) rotate(-5deg) scale(1.04);
+  }
+  50% {
+    transform: translate(-46.5%, -52.5%) rotate(3deg) scale(1.14);
+  }
+  100% {
+    transform: translate(-53%, -47.5%) rotate(-1deg) scale(1.08);
+  }
+}
+/* Deep indigo over the colour field, darkest at the edges, so cream text keeps its contrast. */
+[data-module="music"] .lr-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(110% 85% at 50% 40%, rgb(18 15 38 / 0.42), rgb(11 9 25 / 0.74) 68%, rgb(11 9 25 / 0.92)),
+    linear-gradient(to bottom, rgb(11 9 25 / 0.4), transparent 28%, transparent 62%, rgb(11 9 25 / 0.6));
+}
+[data-module="music"] .lr > .cr-pl {
+  z-index: 1;
+}
+
+/* Top bar: the mark, where you are, and the ways out. */
+[data-module="music"] .lr-top {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1rem 0.5rem;
+}
+@media (min-width: 768px) {
+  [data-module="music"] .lr-top {
+    padding: 1.25rem 2rem 0.5rem;
+  }
+}
+[data-module="music"] .lr-chip {
+  --cut-fill: rgb(187 237 254 / 0.08);
+  --cut-border: var(--cr-glass-edge);
+  --cut-blur: var(--cr-glass-blur);
+  display: inline-flex;
+  height: 2.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.95rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cr-fg);
+}
+[data-module="music"] .lr-chip:hover {
+  --cut-border: var(--cr-glass-edge-hover);
+}
+[data-module="music"] .lr-chip-icon {
+  width: 2.5rem;
+  justify-content: center;
+  padding: 0;
+}
+
+/* Carousel view. */
+[data-module="music"] .lr-carousel-view {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem 2rem;
+}
+[data-module="music"] .lr-stage {
+  position: relative;
+  width: 100%;
+  height: calc(var(--card) * 1.3);
+  perspective: 1500px;
+  perspective-origin: 50% 40%;
+  touch-action: pan-y;
+}
+/* The light behind the front card: it breathes while music plays. */
+[data-module="music"] .lr-stage::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: calc(var(--card) * 1.9);
+  height: calc(var(--card) * 1.5);
+  translate: -50% -50%;
+  background: radial-gradient(closest-side, rgb(187 237 254 / 0.3), rgb(83 200 234 / 0.13) 55%, transparent);
+  pointer-events: none;
+  animation: lr-breathe 5.5s ease-in-out infinite alternate;
+  animation-play-state: paused;
+}
+[data-module="music"] .lr[data-playing] .lr-stage::before {
+  animation-play-state: running;
+}
+@keyframes lr-breathe {
+  from {
+    opacity: 0.55;
+    scale: 0.92;
+  }
+  to {
+    opacity: 1;
+    scale: 1.06;
+  }
+}
+
+/* Each card's place, by its distance from the front. Earlier tracks on the left. */
+[data-module="music"] .lr-slot {
+  --tx: 0;
+  --tz: 0px;
+  --ry: 0deg;
+  --s: 1;
+  --o: 1;
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: var(--card);
+  margin-left: calc(var(--card) / -2);
+  transform: translate3d(calc(var(--card) * var(--tx)), 0, var(--tz)) rotateY(var(--ry)) scale(var(--s));
+  opacity: var(--o);
+  transition:
+    transform var(--lr-move) var(--lr-ease),
+    opacity var(--lr-move) var(--lr-ease),
+    visibility 0s linear var(--lr-move);
+  will-change: transform, opacity;
+}
+@starting-style {
+  [data-module="music"] .lr-slot {
+    opacity: 0;
+  }
+}
+[data-module="music"] .lr-slot[data-offset="0"] {
+  z-index: 10;
+  transition-delay: 0s;
+}
+[data-module="music"] .lr-slot[data-offset="-1"],
+[data-module="music"] .lr-slot[data-offset="1"] {
+  --tz: -120px;
+  --s: 0.84;
+  --dim: 0.3;
+  z-index: 9;
+  transition-delay: 0s;
+}
+[data-module="music"] .lr-slot[data-offset="-1"] {
+  --tx: -0.6;
+  --ry: 16deg;
+}
+[data-module="music"] .lr-slot[data-offset="1"] {
+  --tx: 0.6;
+  --ry: -16deg;
+}
+[data-module="music"] .lr-slot[data-offset="-2"],
+[data-module="music"] .lr-slot[data-offset="2"] {
+  --tz: -240px;
+  --s: 0.7;
+  --o: 0;
+  z-index: 8;
+  visibility: hidden;
+  pointer-events: none;
+}
+[data-module="music"] .lr-slot[data-offset="-2"] {
+  --tx: -1.05;
+  --ry: 24deg;
+}
+[data-module="music"] .lr-slot[data-offset="2"] {
+  --tx: 1.05;
+  --ry: -24deg;
+}
+[data-module="music"] .lr-slot[data-offset="-3"],
+[data-module="music"] .lr-slot[data-offset="3"] {
+  --tz: -340px;
+  --s: 0.58;
+  --o: 0;
+  z-index: 7;
+  visibility: hidden;
+  pointer-events: none;
+}
+[data-module="music"] .lr-slot[data-offset="-3"] {
+  --tx: -1.4;
+  --ry: 28deg;
+}
+[data-module="music"] .lr-slot[data-offset="3"] {
+  --tx: 1.4;
+  --ry: -28deg;
+}
+/* Wider rooms show two cards each side. */
+@media (min-width: 768px) {
+  [data-module="music"] .lr-slot[data-offset="-2"],
+  [data-module="music"] .lr-slot[data-offset="2"] {
+    --o: 1;
+    --dim: 0.55;
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
+  }
+}
+
+/* Side cards are dimmed by a dark veil, not by opacity: a see-through card would show the one
+   behind it. Hovering or focusing one lifts the veil. */
+[data-module="music"] .lr-dim {
+  position: absolute;
+  inset: 0;
+  background: rgb(11 9 25);
+  /* Follows the card's cut corner. */
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cut));
+  opacity: var(--dim, 0);
+  pointer-events: none;
+  transition: opacity var(--lr-move) var(--lr-ease);
+}
+[data-module="music"] .lr-slot:not([data-offset="0"]) .lr-card:hover .lr-dim,
+[data-module="music"] .lr-slot:not([data-offset="0"]) .lr-card:focus-visible .lr-dim {
+  opacity: calc(var(--dim, 0) * 0.35);
+}
+[data-module="music"] .lr-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.6rem 0.8rem;
+  text-align: center;
+  cursor: pointer;
+  transition: translate 260ms var(--lr-ease);
+}
+[data-module="music"] .lr-slot:not([data-offset="0"]) .lr-card:hover {
+  translate: 0 -8px;
+}
+[data-module="music"] .lr-slot:not([data-offset="0"]) .lr-card:hover,
+[data-module="music"] .lr-slot:not([data-offset="0"]) .lr-card:focus-visible {
+  --cut-border: var(--cr-glass-edge-hover);
+}
+[data-module="music"] .lr[data-playing] .lr-slot[data-offset="0"] .lr-card {
+  animation: lr-float 7s ease-in-out infinite;
+}
+@keyframes lr-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -9px;
+  }
+}
+[data-module="music"] .lr-cover {
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--cr-accent);
+  box-shadow: 0 30px 60px -36px rgb(0 0 0 / 0.9);
+  transition: opacity 260ms var(--lr-ease);
+}
+[data-module="music"] .lr-card-loading .lr-cover {
+  opacity: 0.55;
+}
+[data-module="music"] .lr-caption {
+  display: block;
+  padding: 0.7rem 0.25rem 0;
+}
+
+/* The playing title, in Sikat, rising in on every change of track. */
+[data-module="music"] .lr-heading {
+  max-width: 48rem;
+  margin-top: 1.25rem;
+  text-align: center;
+}
+[data-module="music"] .lr-title {
+  animation: lr-rise 720ms var(--lr-ease) both;
+}
+@keyframes lr-rise {
+  from {
+    opacity: 0;
+    translate: 0 16px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+/* The bar: transport, what is playing with its scrubber, then volume and focus. */
+[data-module="music"] .lr-bar {
+  display: grid;
+  width: min(100%, 54rem);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  justify-items: center;
+  gap: 0.6rem 1rem;
+  margin-top: 1.5rem;
+  padding: 0.75rem;
+}
+@media (min-width: 768px) {
+  [data-module="music"] .lr-bar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    justify-items: stretch;
+    padding: 0.65rem 0.9rem;
+  }
+}
+[data-module="music"] .lr-now {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.75rem 0.3rem;
+  background: rgb(11 9 25 / 0.5);
+}
+[data-module="music"] .lr-now-cube {
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: none;
+  background: var(--cr-accent);
+}
+[data-module="music"] .lr-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+[data-module="music"] .lr-bar-actions {
+  grid-column: 1 / -1;
+}
+
+[data-module="music"] .lr-key {
+  --cut-fill: var(--cr-accent);
+  display: inline-flex;
+  width: 3rem;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  color: var(--cr-on-accent);
+  transition: transform 120ms var(--lr-ease);
+}
+[data-module="music"] .lr-key-large {
+  width: 4rem;
+  height: 4rem;
+}
+[data-module="music"] .lr-key:active {
+  transform: scale(0.95);
+}
+[data-module="music"] .lr-key:disabled {
+  opacity: 0.55;
+}
+
+[data-module="music"] .lr-status {
+  display: flex;
+  min-width: 0;
+  flex: none;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--cr-fg-muted);
+}
+[data-module="music"] .lr-status[data-state="playing"] {
+  color: var(--cr-highlight);
+}
+[data-module="music"] .lr-status[data-state="problem"],
+[data-module="music"] .lr-status[data-state="gesture"] {
+  color: var(--cr-fg);
+}
+[data-module="music"] .lr-eq {
+  display: inline-flex;
+  height: 0.7rem;
+  align-items: flex-end;
+  gap: 2px;
+}
+[data-module="music"] .lr-eq i {
+  width: 3px;
+  height: 100%;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: lr-eq 900ms var(--lr-ease) infinite alternate;
+}
+[data-module="music"] .lr-eq i:nth-child(2) {
+  animation-delay: -300ms;
+}
+[data-module="music"] .lr-eq i:nth-child(3) {
+  animation-delay: -600ms;
+}
+@keyframes lr-eq {
+  from {
+    transform: scaleY(0.3);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* Scrubbers and volume: native range inputs drawn as an Ice hairline with a square thumb. */
+[data-module="music"] .lr-scrub {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+[data-module="music"] .lr-scrub-wide {
+  grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
+  margin-top: 1rem;
+}
+[data-module="music"] .lr-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 1.5rem;
+  background: transparent;
+  cursor: pointer;
+}
+[data-module="music"] .lr-range:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+[data-module="music"] .lr-range::-webkit-slider-runnable-track {
+  height: 3px;
+  background: linear-gradient(to right, var(--cr-highlight) var(--pct, 0%), rgb(187 237 254 / 0.22) var(--pct, 0%));
+}
+[data-module="music"] .lr-range::-moz-range-track {
+  height: 3px;
+  background: linear-gradient(to right, var(--cr-highlight) var(--pct, 0%), rgb(187 237 254 / 0.22) var(--pct, 0%));
+}
+[data-module="music"] .lr-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border: 0;
+  border-radius: 0;
+  background: var(--cr-highlight);
+  transition: transform 120ms var(--lr-ease);
+}
+[data-module="music"] .lr-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 0;
+  background: var(--cr-highlight);
+}
+[data-module="music"] .lr-range:hover::-webkit-slider-thumb,
+[data-module="music"] .lr-range:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.3);
+}
+[data-module="music"] .lr-volume {
+  width: 5rem;
+}
+
+/* Focus view: one song, large. */
+[data-module="music"] .lr-focus {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  justify-items: center;
+  gap: 2rem;
+  padding: 1rem 1.25rem 2.5rem;
+  animation: lr-enter 620ms var(--lr-ease) both;
+}
+@media (min-width: 1024px) {
+  [data-module="music"] .lr-focus {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    align-items: center;
+    justify-items: stretch;
+    gap: clamp(2.5rem, 5vw, 5rem);
+    padding: 0 clamp(2rem, 8vw, 9rem) 3rem;
+  }
+}
+@keyframes lr-enter {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+[data-module="music"] .lr-focus-cover {
+  position: relative;
+  width: min(78vw, 44vh, 36rem);
+}
+@media (min-width: 1024px) {
+  [data-module="music"] .lr-focus-cover {
+    width: min(36rem, 40vw, 66vh);
+    justify-self: end;
+  }
+}
+[data-module="music"] .lr[data-playing] .lr-focus-cover {
+  animation: lr-float 8s ease-in-out infinite;
+}
+[data-module="music"] .lr-halo {
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(closest-side, rgb(187 237 254 / 0.34), rgb(83 200 234 / 0.14) 55%, transparent 76%);
+  pointer-events: none;
+  animation: lr-breathe 5.5s ease-in-out infinite alternate;
+  animation-play-state: paused;
+}
+[data-module="music"] .lr[data-playing] .lr-halo {
+  animation-play-state: running;
+}
+[data-module="music"] .lr-focus-art {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--cr-accent);
+  box-shadow: 0 70px 130px -60px rgb(0 0 0 / 0.95);
+  animation: lr-art-in 760ms var(--lr-ease) both;
+}
+@keyframes lr-art-in {
+  from {
+    opacity: 0;
+    scale: 0.93;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+[data-module="music"] .lr-focus-info {
+  width: 100%;
+  max-width: 34rem;
+}
+[data-module="music"] .lr-focus-console {
+  margin-top: 1.75rem;
+  padding: 1.1rem 1.2rem 1rem;
+}
+
+/* The neighbours in focus view: hidden at the edges, they turn in when a mouse comes near. */
+[data-module="music"] .lr-peek {
+  position: absolute;
+  top: 50%;
+  z-index: 5;
+  width: min(15rem, 17vw);
+  padding: 0.5rem 0.5rem 0.7rem;
+  text-align: left;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 560ms var(--lr-ease),
+    opacity 420ms var(--lr-ease),
+    visibility 0s linear 560ms;
+}
+[data-module="music"] .lr-peek[data-side="left"] {
+  left: 1.5rem;
+  transform: translate3d(-135%, -50%, 0) perspective(900px) rotateY(40deg);
+}
+[data-module="music"] .lr-peek[data-side="right"] {
+  right: 1.5rem;
+  transform: translate3d(135%, -50%, 0) perspective(900px) rotateY(-40deg);
+}
+[data-module="music"] .lr-peek[data-shown] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+[data-module="music"] .lr-peek[data-side="left"][data-shown] {
+  transform: translate3d(0, -50%, 0) perspective(900px) rotateY(14deg);
+}
+[data-module="music"] .lr-peek[data-side="right"][data-shown] {
+  transform: translate3d(0, -50%, 0) perspective(900px) rotateY(-14deg);
+}
+[data-module="music"] .lr-peek:hover {
+  --cut-border: var(--cr-glass-edge-hover);
+}
+
+[data-module="music"] .lr-fallback {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 1.5rem 3rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-module="music"] .lr {
+    --lr-move: 0ms;
+  }
+  [data-module="music"] .lr-drift,
+  [data-module="music"] .lr-stage::before,
+  [data-module="music"] .lr-card,
+  [data-module="music"] .lr-title,
+  [data-module="music"] .lr-focus,
+  [data-module="music"] .lr-focus-cover,
+  [data-module="music"] .lr-focus-art,
+  [data-module="music"] .lr-halo,
+  [data-module="music"] .lr-eq i {
+    animation: none !important;
+  }
+  [data-module="music"] .lr-drift canvas,
+  [data-module="music"] .lr-peek {
+    transition: none;
+  }
+  [data-module="music"] .lr-slot {
+    will-change: auto;
+  }
+}

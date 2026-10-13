@@ -5,7 +5,7 @@ import { Check, LogIn, Play, ShoppingBag } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { Button, ButtonLink, Money } from "@/components/ds";
-import { useOptionalPlayer, type PlayerTrack } from "@/components/music/player";
+import { useOptionalPlayer, type PlayOptions, type PlayerTrack } from "@/components/music/player";
 import { useAsync } from "@/components/use-async";
 import { fetchMyEntitlements, fetchOffers, fetchPlayableCatalog, type EntitlementRecord, type OfferRecord, type PlayableTrackRecord } from "@/lib/api";
 import { trackBuyState } from "@/lib/ownership";
@@ -41,11 +41,14 @@ export function TrackBuyControl({
   commerce,
   size = "sm",
   showPlan = true,
+  playFrom,
 }: {
   track: PlayerTrack;
   commerce: CustomerCommerce;
   size?: "sm" | "md" | "lg";
   showPlan?: boolean;
+  /** The list this track is shown in: playing it queues the list as Up next. */
+  playFrom?: PlayOptions;
 }) {
   const { status } = useAuth();
   const player = useOptionalPlayer();
@@ -61,7 +64,7 @@ export function TrackBuyControl({
   if (state.kind === "owned") {
     const current = player?.isCurrent(track.id) && player.status === "playing";
     return player ? (
-      <Button size={size} onClick={() => (current ? player.toggle() : void player.play(track))} aria-label={`${current ? "Pause" : "Play"} ${track.title}`}>
+      <Button size={size} onClick={() => (current ? player.toggle() : void player.play(track, playFrom))} aria-label={`${current ? "Pause" : "Play"} ${track.title}`}>
         <Play aria-hidden="true" /> {current ? "Playing" : "Play"}
       </Button>
     ) : (

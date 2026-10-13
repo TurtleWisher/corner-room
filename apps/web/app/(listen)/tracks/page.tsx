@@ -13,7 +13,8 @@ import { PageIntro, RetryButton, StaffPanel } from "@/components/shell/staff-pan
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import { useWorkspace } from "@/components/workspace-provider";
 import { ApiError, createTrack, fetchPlayableCatalog, fetchTracks, type PlayableTrackRecord } from "@/lib/api";
-import { creditName, formatDuration } from "@/lib/music-view";
+import { creditName, formatDuration, playQueue } from "@/lib/music-view";
+import { ownsTrack } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 import { rowsForActiveOrg } from "@/lib/workspace-view";
 
@@ -102,6 +103,19 @@ export default function TracksPage() {
     return { tracks, playable: new Map(playable.map((t) => [t.id, t])) };
   }, [status]);
 
+  // Up next: this list, in its order, the tracks the customer can play.
+  const tracksQueue = {
+    queue:
+      data.status === "ok" && data.data
+        ? playQueue(
+            data.data.tracks.map((t) => ({ trackId: t.id, title: t.title, artist: creditName(t, people.artists, people.bands) })),
+            data.data.playable,
+            (id) => ownsTrack(commerce.entitlements, id),
+          )
+        : [],
+    source: "Tracks",
+  };
+
   return (
     <main id="main" data-theme="sky" className="cr-scope">
       <LitSurface as="section" theme="sky" aria-labelledby="tracks-title">
@@ -141,7 +155,7 @@ export default function TracksPage() {
                       {duration ? ` · ${duration}` : ""}
                     </p>
                   </div>
-                  <TrackBuyControl track={{ id: t.id, title: t.title, artist }} commerce={commerce} showPlan={false} />
+                  <TrackBuyControl track={{ id: t.id, title: t.title, artist }} commerce={commerce} showPlan={false} playFrom={tracksQueue} />
                 </li>
               );
             })}

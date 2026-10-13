@@ -99,3 +99,25 @@ export function sortReleases<T extends Pick<ReleaseRecord, "release_at" | "title
     return a.title.localeCompare(b.title);
   });
 }
+
+/** A row a play can start from: its track, and the title and artist to show while it loads. */
+export type QueueRow = { trackId: string; title?: string | null; artist?: string | null };
+
+/**
+ * Up next for a list (owner decision 2026-10-13): the rows the customer can play right now, in the
+ * list's order. Rows that are unavailable or not owned are left out, so Next never lands on a
+ * track that is known to fail. The API still decides access when each one plays.
+ */
+export function playQueue(
+  rows: readonly QueueRow[],
+  playable: ReadonlyMap<string, PlayableTrackRecord>,
+  owns: (trackId: string) => boolean,
+): { id: string; title: string; artist: string | null }[] {
+  const out: { id: string; title: string; artist: string | null }[] = [];
+  for (const row of rows) {
+    const rec = playable.get(row.trackId);
+    if (playState(rec).kind !== "playable" || !owns(row.trackId)) continue;
+    out.push({ id: row.trackId, title: row.title || rec?.title || "", artist: row.artist ?? null });
+  }
+  return out;
+}

@@ -12,7 +12,7 @@ import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ButtonLink, DateTime, EmptyState, ErrorState, Field, Input, Money, Skeleton, StatusChip } from "@/components/ds";
 import { TrackBuyControl, useCustomerCommerce, type CustomerCommerce } from "@/components/music/commerce";
 import { useCredits } from "@/components/music/credits";
-import { usePlayer } from "@/components/music/player";
+import { usePlayer, type PlayOptions } from "@/components/music/player";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import {
@@ -28,7 +28,7 @@ import {
   type ReleaseRecord,
   type TrackRecord,
 } from "@/lib/api";
-import { creditHref, creditName, formatDuration, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
+import { creditHref, creditName, formatDuration, playQueue, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
 import { catalogOffer, hasCatalogAccess, ownsTrack } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 import { cn } from "@/lib/utils";
@@ -143,12 +143,14 @@ function TrackList({
   signedIn,
   artist,
   commerce,
+  playFrom,
 }: {
   rows: Row[];
   playable: Map<string, PlayableTrackRecord>;
   signedIn: boolean;
   artist: string | null;
   commerce: CustomerCommerce;
+  playFrom: PlayOptions;
 }) {
   return (
     <ol aria-label="Track list" className="border-t border-line">
@@ -172,7 +174,7 @@ function TrackList({
               {duration ? <span className="cr-num text-sm text-fg-muted">{duration}</span> : null}
               {signedIn ? <SaveButton trackId={trackId} title={title} /> : null}
               {signedIn && state.kind !== "unavailable" ? (
-                <TrackBuyControl track={{ id: trackId, title, artist }} commerce={commerce} showPlan={false} />
+                <TrackBuyControl track={{ id: trackId, title, artist }} commerce={commerce} showPlan={false} playFrom={playFrom} />
               ) : null}
             </div>
           </li>
@@ -241,6 +243,15 @@ export default function ReleasePage() {
     (r) => playState(playable.get(r.trackId)).kind === "playable" && ownsTrack(commerce.entitlements, r.trackId),
   );
   const pass = catalogAccess ? null : catalogOffer(commerce.offers);
+  // Up next: this release's tracks in order, the ones the customer can play.
+  const playFrom: PlayOptions = {
+    queue: playQueue(
+      rows.map((r) => ({ trackId: r.trackId, title: r.track?.title, artist })),
+      playable,
+      (trackId) => ownsTrack(commerce.entitlements, trackId),
+    ),
+    source: release.title,
+  };
 
   return (
     <main id="main" data-theme="sky" className="cr-scope">
@@ -281,7 +292,7 @@ export default function ReleasePage() {
                   <LogIn aria-hidden="true" /> Sign in to listen
                 </ButtonLink>
               ) : firstOwned ? (
-                <Button size="lg" onClick={() => void player.play({ id: firstOwned.trackId, title: firstOwned.track?.title ?? "", artist })}>
+                <Button size="lg" onClick={() => void player.play({ id: firstOwned.trackId, title: firstOwned.track?.title ?? "", artist }, playFrom)}>
                   <Play aria-hidden="true" /> Play
                 </Button>
               ) : pass ? (
@@ -308,7 +319,7 @@ export default function ReleasePage() {
           {rows.length === 0 ? (
             <EmptyState title="No tracks on this release yet" />
           ) : (
-            <TrackList rows={rows} playable={playable} signedIn={signedIn} artist={artist} commerce={commerce} />
+            <TrackList rows={rows} playable={playable} signedIn={signedIn} artist={artist} commerce={commerce} playFrom={playFrom} />
           )}
         </section>
         {canStaff ? (
