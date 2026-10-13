@@ -9,6 +9,9 @@ import { Display, Eyebrow } from "@/components/brand/display";
 import { ButtonLink, Card, DateTime, Skeleton } from "@/components/ds";
 import { EventMedia } from "@/components/events/event-media";
 import { EventRow } from "@/components/events/event-row";
+import { MissionBand } from "@/components/home/mission-band";
+import { PosterTilt } from "@/components/home/poster-tilt";
+import { Reveal } from "@/components/ds/reveal";
 import { useCredits } from "@/components/music/credits";
 import { ReleaseCard } from "@/components/music/release-card";
 import { TAGLINE_BN } from "@/components/shell/site-footer";
@@ -46,14 +49,16 @@ function FeaturedEvent({ state }: { state: ReturnType<typeof useAsync<EventRecor
           : "No events announced yet";
 
   return (
-    <figure className="w-full max-w-[28rem]" aria-busy={state.status === "loading" || undefined}>
-      <Link href={href} className="cr-focus block" aria-label={event ? `${label}: ${event.title}` : "See all events"}>
-        {state.status === "loading" ? (
-          <div className="aspect-square w-full animate-pulse bg-cr-signal/40 motion-reduce:animate-none" />
-        ) : (
-          <EventMedia title={event?.title ?? "Corner Room"} side={event ? cityOrTitle(event) : "Corner Room"} animate className="w-full" />
-        )}
-      </Link>
+    <figure className="home-poster-in w-full max-w-[28rem]" aria-busy={state.status === "loading" || undefined}>
+      <PosterTilt>
+        <Link href={href} className="cr-focus block" aria-label={event ? `${label}: ${event.title}` : "See all events"}>
+          {state.status === "loading" ? (
+            <div className="aspect-square w-full animate-pulse bg-cr-signal/40 motion-reduce:animate-none" />
+          ) : (
+            <EventMedia title={event?.title ?? "Corner Room"} side={event ? cityOrTitle(event) : "Corner Room"} animate className="w-full" />
+          )}
+        </Link>
+      </PosterTilt>
       <figcaption className="mt-4 flex items-baseline justify-between gap-4">
         <span className="cr-eyebrow flex items-center gap-2 text-[0.6875rem] text-fg-muted">
           {label === "Live now" ? <span aria-hidden="true" className="size-2 bg-cr-red-glow" /> : null}
@@ -94,7 +99,9 @@ function YouPanel() {
     return (
       <Card className="flex flex-col gap-5 p-6 md:flex-row md:items-center md:justify-between md:p-8">
         <div>
-          <h2 className="text-xl font-bold text-fg md:text-2xl">Your tickets, library and playlists in one place</h2>
+          <Display as="h2" size="sm" className="md:text-[2.25rem]">
+            Your tickets, library and playlists in one place
+          </Display>
           <p className="mt-1 text-sm text-fg-muted">Sign in to pick up where you left off.</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -111,8 +118,10 @@ function YouPanel() {
   return (
     <section aria-labelledby="home-you">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <h2 id="home-you" className="text-xl font-bold text-fg md:text-2xl">
-          {name ? `Welcome back, ${name}` : "Welcome back"}
+        {/* Sikat for the words, the greeting face for the person (brand v1.4). */}
+        <h2 id="home-you" className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <span className="cr-display text-[2rem] text-fg md:text-[2.5rem]">Welcome back{name ? "," : ""}</span>
+          {name ? <span className="cr-greeting text-[2.25rem] leading-none text-highlight md:text-[2.875rem]">{name}</span> : null}
         </h2>
         {showStaffEntry(user.permissions, organizations.length) ? (
           <ButtonLink href={staffHomeHref(user.permissions)} variant="secondary" size="sm">
@@ -143,12 +152,12 @@ function YouPanel() {
 function SectionHead({ id, index, title, href, link }: { id: string; index: string; title: string; href: string; link: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4 border-b border-line pb-4">
-      <h2 id={id} className="flex items-baseline gap-3 text-xl font-bold text-fg md:text-2xl">
-        {/* REF-003 index: a small numbered tag before each home section. */}
+      <h2 id={id} className="flex items-baseline gap-3">
+        {/* REF-003 index: a small numbered tag before each home section (Archivo: never Sikat numerals). */}
         <span aria-hidden="true" className="cr-num text-sm text-highlight">
           {index}
         </span>
-        {title}
+        <span className="cr-display text-[2rem] text-fg md:text-[2.5rem]">{title}</span>
       </h2>
       <Link href={href} className="cr-focus text-sm font-semibold text-highlight hover:underline">
         {link}
@@ -160,7 +169,7 @@ function SectionHead({ id, index, title, href, link }: { id: string; index: stri
 function Upcoming({ state }: { state: ReturnType<typeof useAsync<EventRecord[]>> }) {
   const rows = state.status === "ok" ? upcomingEvents(state.data) : [];
   return (
-    <section aria-labelledby="home-upcoming">
+    <Reveal as="section" aria-labelledby="home-upcoming">
       <SectionHead id="home-upcoming" index="01" title="Upcoming" href="/discover" link="All events" />
       {state.status === "loading" ? (
         <div className="space-y-3 pt-4">
@@ -178,38 +187,58 @@ function Upcoming({ state }: { state: ReturnType<typeof useAsync<EventRecord[]>>
           ))}
         </ul>
       )}
-    </section>
+    </Reveal>
   );
 }
 
-/* ---------- New releases (Sky) ---------- */
+/* ---------- The Sky world: new releases, then the mission and the Store ---------- */
 
 function NewReleases() {
   const credits = useCredits();
   const state = useAsync(() => fetchReleases({ skipAuth: true }).then((p) => sortReleases(p.items).slice(0, 4)), []);
   if (state.status === "ok" && state.data.length === 0) return null;
   return (
-    <LitSurface as="section" theme="sky" aria-labelledby="home-releases" className="border-y border-cr-sky/60">
-      <div className="mx-auto max-w-[90rem] px-4 py-14 md:px-6">
+    <section aria-labelledby="home-releases" className="mx-auto max-w-[90rem] px-4 pb-10 pt-14 md:px-6">
+      <Reveal>
         <SectionHead id="home-releases" index="02" title="New releases" href="/releases" link="All releases" />
-        {state.status === "loading" ? (
-          <div className="grid grid-cols-2 gap-6 pt-6 md:grid-cols-4">
-            {[0, 1, 2, 3].map((i) => (
-              <Skeleton key={i} className="aspect-square w-full" />
-            ))}
-          </div>
-        ) : state.status === "error" ? (
-          <p className="py-8 text-sm text-fg">Releases could not be loaded. Please try again later.</p>
-        ) : (
-          <ul className="grid grid-cols-2 gap-6 pt-6 md:grid-cols-4">
-            {state.data.map((release) => (
-              <li key={release.id}>
-                <ReleaseCard release={release} artist={creditName(release, credits.artists, credits.bands)} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      </Reveal>
+      {state.status === "loading" ? (
+        <div className="grid grid-cols-2 gap-6 pt-6 md:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="aspect-square w-full" />
+          ))}
+        </div>
+      ) : state.status === "error" ? (
+        <p className="py-8 text-sm text-fg">Releases could not be loaded. Please try again later.</p>
+      ) : (
+        <ul className="grid grid-cols-2 gap-6 pt-6 md:grid-cols-4">
+          {state.data.map((release, i) => (
+            <Reveal as="li" key={release.id} index={i} className="home-tile">
+              <ReleaseCard release={release} artist={creditName(release, credits.artists, credits.bands)} />
+            </Reveal>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** Ember hands over to Sky as you scroll (owner decision D1, brand v1.3): Night in between, never purple. */
+function WorldHandover() {
+  return (
+    <div aria-hidden="true" className="home-handover">
+      <div className="home-handover-ember" />
+      <div className="home-handover-sky" />
+      <div className="home-handover-beam" />
+    </div>
+  );
+}
+
+function SkyWorld() {
+  return (
+    <LitSurface as="div" theme="sky" className="home-sky border-b border-cr-sky/60">
+      <NewReleases />
+      <MissionBand />
     </LitSurface>
   );
 }
@@ -250,19 +279,25 @@ function ServiceStatus() {
 export function HomeView() {
   const events = useAsync(() => fetchPublicEvents().then((p) => p.items), []);
   return (
-    <main id="main" data-theme="ember" className="cr-scope">
+    <main id="main" data-theme="ember" data-module="home" className="cr-scope">
       <LitSurface as="section" theme="ember" aria-labelledby="home-title">
         <div className="mx-auto grid max-w-[90rem] items-center gap-12 px-4 pb-16 pt-12 md:px-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:pb-24 lg:pt-24">
-          <div>
-            <Eyebrow>Events · Music · Store</Eyebrow>
+          <div className="home-depth-near">
+            <Eyebrow className="home-in" style={{ ["--i" as string]: 0 }}>
+              Events · Music · Store
+            </Eyebrow>
             <Display as="h1" id="home-title" size="xl" className="mt-4">
-              <span className="block">The city&apos;s corner.</span>
-              <span className="block">The music&apos;s room.</span>
+              <span className="home-rise block" style={{ ["--i" as string]: 1 }}>
+                The city&apos;s corner.
+              </span>
+              <span className="home-rise block" style={{ ["--i" as string]: 2 }}>
+                The music&apos;s room.
+              </span>
             </Display>
-            <p lang="bn" className="mt-6 font-bangla text-xl leading-[1.6] text-fg md:text-2xl">
+            <p lang="bn" className="home-in mt-6 font-bangla text-xl leading-[1.6] text-fg md:text-2xl" style={{ ["--i" as string]: 3 }}>
               {TAGLINE_BN}
             </p>
-            <div className="mt-10 flex flex-wrap gap-3">
+            <div className="home-in mt-10 flex flex-wrap gap-3" style={{ ["--i" as string]: 4 }}>
               <ButtonLink href="/discover" size="lg">
                 See what&apos;s on
               </ButtonLink>
@@ -271,7 +306,7 @@ export function HomeView() {
               </ButtonLink>
             </div>
           </div>
-          <div className="flex justify-center lg:justify-end">
+          <div className="home-depth-far flex justify-center lg:justify-end">
             <FeaturedEvent state={events} />
           </div>
         </div>
@@ -282,7 +317,8 @@ export function HomeView() {
         <Upcoming state={events} />
       </div>
 
-      <NewReleases />
+      <WorldHandover />
+      <SkyWorld />
 
       <ServiceStatus />
     </main>

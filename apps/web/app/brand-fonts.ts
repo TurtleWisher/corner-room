@@ -55,4 +55,17 @@ export const taka = localFont({
   declarations: [{ prop: "unicode-range", value: "U+09F3" }],
 });
 
-export const fontVariables = [sikat.variable, archivo.variable, anekBangla.variable, taka.variable].join(" ");
+/* Instrument Serif Italic, Latin subset, from Google Fonts (SIL OFL, app/fonts/OFL-InstrumentSerif.txt).
+   Greeting face only (brand v1.4, owner decision 2026-10-13): a person's name in "Welcome back".
+   Not preloaded: it is fetched only on pages that show a greeting. */
+export const greeting = localFont({
+  src: "./fonts/instrument-serif-italic-latin.woff2",
+  variable: "--font-greeting",
+  weight: "400",
+  style: "italic",
+  display: "swap",
+  preload: false,
+  fallback: ["Georgia", "serif"],
+});
+
+export const fontVariables = [sikat.variable, archivo.variable, anekBangla.variable, taka.variable, greeting.variable].join(" ");

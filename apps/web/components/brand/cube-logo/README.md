@@ -50,7 +50,7 @@ Props of `CubeLogo`:
 | `framed` | `true` | `true` master square, `"tile"` square with the cube at 80%, `false` transparent crop. |
 | `variant` | `"full"` | `"front"` drops the sides for small sizes. |
 | `title` | `"Corner Room"` | Accessible name; `""` makes the mark decorative (`aria-hidden`). |
-| `animate` | `false` | Left slides from x-40, top from y-40, front fades; 600 ms; off under reduced motion. |
+| `animate` | `false` | Left slides from x-40, top from y-40, front brightens from 40% (never invisible, so the first paint is not held back); 600 ms; off under reduced motion. |
 
 ## Word placement (`cubeFaces(title, secondary)`)
 

@@ -71,10 +71,6 @@ function ModuleHeader({ index, name, mood, world, doc }: { index: string; name: 
   );
 }
 
-function Plus({ className }: { className?: string }) {
-  return <span aria-hidden="true" className={cn("cr-num text-xs text-fg-muted", className)}>+</span>;
-}
-
 /* ---------------- 01 Events ---------------- */
 function EventsBoard() {
   const lineup = [
@@ -91,9 +87,7 @@ function EventsBoard() {
     <div data-module="events">
       <LitSurface theme="ember" contentClassName="px-6 py-14 md:px-12">
         <ModuleHeader index="01" name="Events" mood="Poster Night" world="Ember · full light" doc="modules/events.md" />
-        <div className="ev-dotgrid relative grid items-center gap-10 border border-line p-8 lg:grid-cols-[1.4fr_1fr]">
-          <Plus className="absolute left-2 top-1" />
-          <Plus className="absolute bottom-1 right-2" />
+        <div className="relative grid items-center gap-10 border border-line p-8 lg:grid-cols-[1.4fr_1fr]">
           <div>
             <Eyebrow className="mb-4">Concert · Dhaka time</Eyebrow>
             <Display as="h3" size="xl">

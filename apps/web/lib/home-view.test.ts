@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { EventRecord } from "@/lib/api";
-import { cityFromTimeZone, pickFeaturedEvent, pickNextEvent, upcomingEvents } from "@/lib/home-view";
+import { cityFromTimeZone, pickFeaturedEvent, pickNextEvent, storeHighlights, upcomingEvents } from "@/lib/home-view";
 
 const ev = (id: string, starts_at: string | null): EventRecord => ({
   id,
@@ -62,5 +62,23 @@ describe("pickFeaturedEvent", () => {
   it("falls back to the next upcoming event, then null", () => {
     expect(pickFeaturedEvent([ev("soon", "2026-10-12T00:00:00Z")], now)?.label).toBe("Next up");
     expect(pickFeaturedEvent([], now)).toBeNull();
+  });
+});
+
+describe("storeHighlights", () => {
+  const offer = (id: string, product_type: string, amount_minor: number, status = "ACTIVE", currency_code = "BDT") => ({ id, product_type, status, amount_minor, currency_code });
+  const plan = (id: string, price_amount_minor: number, status = "ACTIVE", currency_code = "BDT") => ({ id, status, price_amount_minor, currency_code });
+
+  it("shows the active catalog pass and the cheapest plan in the same currency", () => {
+    const out = storeHighlights([offer("t", "TRACK", 50), offer("pass", "CATALOG_ACCESS", 900)], [plan("big", 499), plan("small", 299), plan("usd", 1, "ACTIVE", "USD")]);
+    expect(out.pass?.id).toBe("pass");
+    expect(out.plan?.id).toBe("small");
+  });
+  it("never shows retired items, and shows nothing when the store is empty", () => {
+    expect(storeHighlights([offer("pass", "CATALOG_ACCESS", 900, "RETIRED")], [plan("p", 299, "RETIRED")])).toEqual({ pass: null, plan: null });
+    expect(storeHighlights([], [])).toEqual({ pass: null, plan: null });
+  });
+  it("still shows a plan when there is no pass", () => {
+    expect(storeHighlights([], [plan("p", 299)]).plan?.id).toBe("p");
   });
 });

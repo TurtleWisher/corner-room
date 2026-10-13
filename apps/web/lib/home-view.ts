@@ -48,3 +48,20 @@ export function pickFeaturedEvent(events: EventRecord[], now: Date = new Date())
   const next = pickNextEvent(events, now);
   return next ? { event: next, label: "Next up" } : null;
 }
+
+/**
+ * What the home store band may show, all from the live store: the full-catalog pass if one is on
+ * sale, and one plan (the lowest-priced in the pass's currency, or the first plan). Selection only;
+ * prices are shown exactly as the API gives them. Null fields mean "do not show".
+ */
+export function storeHighlights<
+  O extends { product_type: string | null; status: string; amount_minor: number; currency_code: string },
+  P extends { status: string; price_amount_minor: number; currency_code: string },
+>(offers: O[], plans: P[]): { pass: O | null; plan: P | null } {
+  const pass = offers.find((o) => o.product_type === "CATALOG_ACCESS" && o.status === "ACTIVE") ?? null;
+  const active = plans.filter((p) => p.status === "ACTIVE");
+  const currency = pass?.currency_code ?? active[0]?.currency_code;
+  const sameCurrency = active.filter((p) => p.currency_code === currency);
+  const plan = sameCurrency.length ? sameCurrency.reduce((a, b) => (b.price_amount_minor < a.price_amount_minor ? b : a)) : (active[0] ?? null);
+  return { pass, plan };
+}

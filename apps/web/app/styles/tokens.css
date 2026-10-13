@@ -108,8 +108,10 @@
   --cr-glass-edge-hover: linear-gradient(135deg, rgb(252 244 117 / 0.5), rgb(246 236 230 / 0.18) 40%, rgb(246 236 230 / 0.1));
   --cr-glass-blur: blur(18px) saturate(1.35);
   --cr-bar: rgb(20 7 7 / 0.66);
-  /* REF-003 "+" registration marks on lit hero regions. */
-  --cr-marks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M32 28v8M28 32h8' stroke='%23f6ece6' stroke-opacity='0.16' stroke-width='1'/%3E%3C/svg%3E");
+  /* Pointer light: Lamp at the core, Red Glow, falling to Oxblood. */
+  --cr-pl-size: max(62vmax, 760px);
+  --cr-pl-core: rgb(252 244 117 / 0.1);
+  --cr-pl-mid: rgb(255 90 78 / 0.15);
 }
 
 [data-theme="sky"] {
@@ -147,7 +149,10 @@
   --cr-glass-edge-hover: linear-gradient(135deg, rgb(187 237 254 / 0.62), rgb(187 237 254 / 0.2) 40%, rgb(187 237 254 / 0.1));
   --cr-glass-blur: blur(18px) saturate(1.35);
   --cr-bar: rgb(18 15 38 / 0.66);
-  --cr-marks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M32 28v8M28 32h8' stroke='%23bbedfe' stroke-opacity='0.18' stroke-width='1'/%3E%3C/svg%3E");
+  /* Pointer light: Ice at the core, Sky, falling to Indigo. */
+  --cr-pl-size: max(62vmax, 760px);
+  --cr-pl-core: rgb(187 237 254 / 0.12);
+  --cr-pl-mid: rgb(83 200 234 / 0.13);
 }
 
 [data-theme="staff"] {
@@ -186,7 +191,9 @@
   --cr-glass-edge-hover: linear-gradient(135deg, rgb(246 236 230 / 0.36), rgb(246 236 230 / 0.14) 40%, rgb(246 236 230 / 0.09));
   --cr-glass-blur: blur(14px) saturate(1.2);
   --cr-bar: rgb(17 14 15 / 0.72);
-  --cr-marks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M32 28v8M28 32h8' stroke='%23f6ece6' stroke-opacity='0.08' stroke-width='1'/%3E%3C/svg%3E");
+  --cr-pl-size: 0px;
+  --cr-pl-core: transparent;
+  --cr-pl-mid: transparent;
 }
 
 /* Status colours, identical in every world, reset on every scope so nesting never leaks.
@@ -245,7 +252,9 @@
   --cr-glass-edge-hover: linear-gradient(135deg, rgb(178 31 36 / 0.5), rgb(28 6 7 / 0.16) 40%, rgb(28 6 7 / 0.1));
   --cr-glass-blur: blur(14px) saturate(1.1);
   --cr-bar: rgb(251 245 230 / 0.78);
-  --cr-marks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cpath d='M32 28v8M28 32h8' stroke='%231c0607' stroke-opacity='0.12' stroke-width='1'/%3E%3C/svg%3E");
+  --cr-pl-size: 0px;
+  --cr-pl-core: transparent;
+  --cr-pl-mid: transparent;
 }
 
 /* People who ask the system for less transparency get solid panels and bars. */
@@ -296,7 +305,6 @@
     inset: 0;
     pointer-events: none;
     background:
-      url("/brand/grain-soft-2x.webp"),
       radial-gradient(40% 34% at 7% 5%, var(--cr-light-bulb), color-mix(in srgb, var(--cr-light-bulb) 38%, transparent) 42%, transparent 74%),
       radial-gradient(
         var(--cr-light-size) at 0% 0%,
@@ -310,8 +318,6 @@
       radial-gradient(64% 60% at 100% 100%, var(--cr-light-counter), color-mix(in srgb, var(--cr-light-counter) 38%, transparent) 42%, transparent 80%),
       linear-gradient(117deg, transparent 32%, var(--cr-light-sweep) 52%, transparent 72%),
       var(--cr-surface);
-    background-size: 256px 256px, auto, auto, auto, auto, auto;
-    background-blend-mode: soft-light, normal, normal, normal, normal, normal;
   }
 
   /* Page light (v1.2): every page's <main> carries one continuous Corner Light, sized in
@@ -319,8 +325,10 @@
      single grain tile as .cr-light; glass cards anywhere on the page frost it. */
   #main.cr-scope {
     position: relative;
+    /* Its own stacking context: the pointer light and grain (z-index -1) paint above this
+       background and beneath every piece of content. */
+    isolation: isolate;
     background:
-      url("/brand/grain-soft-2x.webp"),
       radial-gradient(max(46vw, 420px) max(40vh, 340px) at 6% 0%, var(--cr-light-bulb), color-mix(in srgb, var(--cr-light-bulb) 34%, transparent) 44%, transparent 78%),
       radial-gradient(
         max(92vw, 760px) max(92vh, 720px) at 0% 0%,
@@ -337,14 +345,55 @@
       radial-gradient(max(46vw, 420px) max(80vh, 600px) at 0% 68%, color-mix(in srgb, var(--cr-light-side) 70%, transparent), color-mix(in srgb, var(--cr-light-side) 22%, transparent) 45%, transparent 80%),
       linear-gradient(117deg, transparent 18%, var(--cr-light-sweep) 44%, transparent 76%),
       var(--cr-surface);
-    background-size: 256px 256px, auto, auto, auto, auto, auto, auto, auto;
-    background-blend-mode: soft-light, normal, normal, normal, normal, normal, normal, normal;
+  }
+
+  /* Pointer light (v1.4, components/brand/pointer-light.tsx). The light's focus follows a mouse,
+     beneath the grain, beneath content. The spot only ever moves by transform (compositor), so it
+     stays smooth; the grain is the same single soft-light tile, now above the light. */
+  .cr-pl {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .cr-pl-clip {
+    overflow: hidden;
+  }
+  /* Page layers: fixed to the viewport (cheap to blend, no scroll maths) and beneath the page's
+     content inside the isolated <main>. Opaque bands, the header and the footer sit above them. */
+  .cr-pl-page {
+    position: fixed;
+    z-index: -1;
+  }
+  .cr-pl-spot {
+    position: absolute;
+    left: calc(var(--cr-pl-size) / -2);
+    top: calc(var(--cr-pl-size) / -2);
+    width: var(--cr-pl-size);
+    height: var(--cr-pl-size);
+    background: radial-gradient(
+      circle closest-side,
+      var(--cr-pl-core),
+      color-mix(in srgb, var(--cr-pl-core) 35%, var(--cr-pl-mid)) 16%,
+      var(--cr-pl-mid) 36%,
+      color-mix(in srgb, var(--cr-pl-mid) 45%, transparent) 60%,
+      color-mix(in srgb, var(--cr-pl-mid) 14%, transparent) 80%,
+      transparent 100%
+    );
+    will-change: transform;
+    transform: translate3d(16vw, 14vh, 0);
+  }
+  .cr-pl-grain {
+    background: url("/brand/grain-soft-2x.webp") 0 0 / 256px 256px repeat;
+    mix-blend-mode: soft-light;
+  }
+  [data-theme="staff"] .cr-pl-spot,
+  [data-theme="paper"] .cr-pl-spot {
+    display: none;
   }
 
   /* A lit region of the same world inside a lit page does not repaint: the page light shows
-     through, so there is no seam at the bottom of a hero. Its own layer becomes the REF-003 "+"
-     registration grid, fading out from the corner. A region of another world (a Sky band on an
-     Ember page) keeps its own base and light and meets the page at a hard edge, as before. */
+     through, so there is no seam at the bottom of a hero, and its own light layer is switched off.
+     A region of another world (a Sky band on an Ember page) keeps its own base and light. */
   [data-theme="ember"] .cr-scope[data-theme="ember"],
   [data-theme="sky"] .cr-scope[data-theme="sky"],
   [data-theme="staff"] .cr-scope[data-theme="staff"],
@@ -354,10 +403,12 @@
   [data-theme="ember"] .cr-scope[data-theme="ember"] > .cr-light,
   [data-theme="sky"] .cr-scope[data-theme="sky"] > .cr-light,
   [data-theme="staff"] .cr-scope[data-theme="staff"] > .cr-light,
-  [data-theme="paper"] .cr-scope[data-theme="paper"] > .cr-light {
-    background: var(--cr-marks) 0 0 / 64px 64px repeat;
-    -webkit-mask-image: radial-gradient(110% 120% at 0% 0%, #000 0%, rgb(0 0 0 / 0.5) 45%, transparent 82%);
-    mask-image: radial-gradient(110% 120% at 0% 0%, #000 0%, rgb(0 0 0 / 0.5) 45%, transparent 82%);
+  [data-theme="paper"] .cr-scope[data-theme="paper"] > .cr-light,
+  [data-theme="ember"] .cr-scope[data-theme="ember"] > .cr-pl,
+  [data-theme="sky"] .cr-scope[data-theme="sky"] > .cr-pl,
+  [data-theme="staff"] .cr-scope[data-theme="staff"] > .cr-pl,
+  [data-theme="paper"] .cr-scope[data-theme="paper"] > .cr-pl {
+    display: none;
   }
 
   /* Cut corner (5.8). The fill and the border are drawn by clipped pseudo-elements, so the
@@ -440,6 +491,14 @@
     opacity: 1;
   }
 
+  /* Footer closing light (every shell's footer): a low pool from the bottom-left corner, behind
+     the logo. Static; site-footer fades it in once, not under reduced motion. */
+  .cr-footer-light {
+    background:
+      radial-gradient(42% 120% at 0% 100%, color-mix(in srgb, var(--cr-light-pool) 45%, transparent), transparent 70%),
+      radial-gradient(18% 60% at 4% 100%, var(--cr-light-bulb), transparent 75%);
+  }
+
   /* Sticky bars (site header, staff header): the page light passes under them, frosted. */
   .cr-bar {
     background-color: var(--cr-bar);
@@ -464,6 +523,26 @@
   /* Two-colour print slightly out of register: display sizes (48 px and up) only. */
   .cr-misregister {
     text-shadow: 3px 3px 0 var(--cr-display-shadow);
+  }
+
+  /* Greeting face (v1.4): Instrument Serif Italic, only for a person's name in a welcome.
+     Never for headings, prices, body copy or Bangla. */
+  .cr-greeting {
+    font-family: var(--font-greeting), Georgia, serif;
+    font-style: italic;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  /* Display-adjacent line (v1.4): condensed Archivo, uppercase and tracked, so a sentence can sit
+     beside Sikat without being set in it (Sikat stays off body copy, BRAND 6). */
+  .cr-display-line {
+    font-family: var(--font-archivo), sans-serif;
+    font-stretch: 75%;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
 
   /* Numerals: condensed Archivo, never Sikat. */
@@ -528,4 +607,21 @@ body:has(#main.cr-scope[data-theme="staff"]) {
    they use Cream. Unlayered so it beats the text-highlight utility. */
 [data-theme="sky"] .cr-eyebrow {
   color: #f6ece6;
+}
+
+/* Reveal (components/ds/reveal.tsx, brand v1.3): a block fades up 24 px once as it first enters.
+   Only blocks that start below the fold are held back, and never under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-reveal="pending"] {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  [data-reveal="shown"] {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 650ms var(--ease-corner),
+      transform 650ms var(--ease-corner);
+    transition-delay: calc(var(--i, 0) * 90ms);
+  }
 }
