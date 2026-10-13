@@ -68,7 +68,7 @@ function Purchases() {
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {owned.map(({ ent, title, href, action }) => (
-              <li key={ent.id} className="cr-cut flex flex-col gap-2 p-5 [--cut-border:var(--cr-line)] [--cut-fill:var(--cr-surface-raised)]">
+              <li key={ent.id} className="cr-cut flex flex-col gap-2 p-5 cr-glass-card">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-lg font-bold text-fg">{title}</p>

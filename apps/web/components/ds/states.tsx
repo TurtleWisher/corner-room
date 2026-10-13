@@ -48,7 +48,7 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("cr-cut flex flex-col items-start gap-3 p-6 [--cut-border:var(--cr-line)] [--cut-fill:var(--cr-surface)]", className)}>
+    <div className={cn("cr-cut cr-glass-card flex flex-col items-start gap-3 p-6", className)}>
       <p className="font-ui text-base font-bold text-fg">{title}</p>
       {body ? <div className="max-w-prose text-sm text-fg-muted">{body}</div> : null}
       {action}
@@ -71,7 +71,7 @@ export function ErrorState({
     <div
       role="alert"
       className={cn(
-        "cr-cut flex flex-col items-start gap-2 p-5 [--cut-border:color-mix(in_srgb,var(--cr-danger)_50%,transparent)] [--cut-fill:color-mix(in_srgb,var(--cr-danger-fill)_14%,var(--cr-surface))]",
+        "cr-cut flex flex-col items-start gap-2 p-5 [--cut-border:color-mix(in_srgb,var(--cr-danger)_50%,transparent)] [--cut-fill:color-mix(in_srgb,var(--cr-danger-fill)_16%,rgb(13_4_4/0.55))] [--cut-blur:var(--cr-glass-blur)]",
         className,
       )}
     >
