@@ -1,14 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { CircleCheck, LogIn } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { RoomCube } from "@/components/brand/room-cube";
-import { Button, ButtonLink, Card, ErrorState, Field, Input, Money, Skeleton, StatusChip } from "@/components/ds";
+import { PaymentPanel } from "@/components/checkout/payment-panel";
+import { PowerTransition } from "@/components/checkout/power-transition";
+import { GenericSummary, MusicReceipt, TicketConfirmation, TicketSummary, TrackSummary } from "@/components/checkout/summaries";
+import { useOrderStatus } from "@/components/checkout/use-order-status";
+import { Button, ButtonLink, Card, ErrorState, Field, Input, Money, Skeleton } from "@/components/ds";
+import { useCredits } from "@/components/music/credits";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { friendlyError } from "@/lib/error-copy";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
@@ -22,14 +27,17 @@ import {
   fetchMyEntitlements,
   fetchMySubscriptions,
   fetchOffers,
+  fetchOrder,
   fetchSubscriptionPlans,
-  sandboxConfirmPayment,
+  fetchTrack,
   type EntitlementRecord,
+  type EventRecord,
   type OrderRecord,
+  type TrackRecord,
 } from "@/lib/api";
 import { cityFromTimeZone } from "@/lib/home-view";
+import { creditName } from "@/lib/music-view";
 import { hasCatalogAccess, ownsTrack } from "@/lib/ownership";
-import { ORDER_STATUS, PAYMENT_STATUS } from "@/lib/status-maps";
 import {
   afterPurchaseHref,
   checkoutItemFromParams,
@@ -96,7 +104,7 @@ async function loadSummary(item: CheckoutItem): Promise<Summary | null> {
       title: event.title,
       kind: type.name,
       price: { amount_minor: type.price_amount_minor, currency_code: type.currency_code },
-      note: "Price per ticket",
+      note: "Price per ticket. We hold your seats while you pay.",
       tone: "ember",
       side: cityFromTimeZone(event.timezone) ?? event.title,
     };
@@ -104,82 +112,145 @@ async function loadSummary(item: CheckoutItem): Promise<Summary | null> {
   return { title: "Tickets", kind: "Event tickets", price: null, note: null, tone: "ember" };
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+/** The page heading; each step names itself, so a finished order no longer says "Review and pay". */
+function Heading({ children }: { children: React.ReactNode }) {
   return (
-    <main id="main" data-theme="ember" className="cr-scope">
-      <LitSurface as="section" theme="ember" aria-labelledby="checkout-title" className="min-h-[70dvh]">
-        <div className="mx-auto max-w-3xl px-4 py-12 md:py-16">
+    <h1 id="checkout-title" className="mb-8 mt-3 text-3xl font-bold text-fg md:text-4xl">
+      {children}
+    </h1>
+  );
+}
+
+function Shell({ children, theme = "ember" }: { children: React.ReactNode; theme?: "ember" | "sky" }) {
+  return (
+    <main id="main" data-theme={theme} data-module="ticketing" className="cr-scope">
+      <LitSurface as="section" theme={theme} aria-labelledby="checkout-title" className="min-h-[70dvh]">
+        <div className="mx-auto max-w-6xl px-4 py-12 md:px-6 md:py-16">
           <p className="cr-eyebrow text-highlight">Checkout</p>
-          <h1 id="checkout-title" className="mt-3 text-3xl font-bold text-fg md:text-4xl">
-            Review and pay
-          </h1>
-          <div className="mt-8">{children}</div>
+          {children}
         </div>
       </LitSurface>
     </main>
   );
 }
 
-function OrderPanel({ order, item, offer, onConfirm, busy }: { order: OrderRecord; item: CheckoutItem; offer?: Summary["offer"]; onConfirm: () => void; busy: boolean }) {
-  const total = { amount_minor: order.total_amount_minor, currency_code: order.currency_code };
-  const next = afterPurchaseHref(item, offer);
-  if (order.status === "FULFILLED") {
+/* ---------- A placed order: the server's order drives everything ---------- */
+
+type OrderContext = { kind: "tickets"; event: EventRecord | null } | { kind: "track"; track: TrackRecord | null } | { kind: "other"; title: string };
+
+async function loadOrderContext(order: OrderRecord): Promise<OrderContext> {
+  const first = order.items?.[0];
+  if (first?.item_type === "TICKET") {
+    const event = first.event_id ? await fetchEvent(first.event_id, { skipAuth: true }).catch(() => null) : null;
+    return { kind: "tickets", event };
+  }
+  if (first?.item_type === "TRACK") {
+    const track = await fetchTrack(first.ref_id).catch(() => null);
+    return track ? { kind: "track", track } : { kind: "other", title: "Music" };
+  }
+  return { kind: "other", title: order.purpose === "SUBSCRIPTION" ? "Subscription" : "Your order" };
+}
+
+function restartHref(order: OrderRecord, context: OrderContext | null): string {
+  const first = order.items?.[0];
+  if (first?.item_type === "TICKET" && first.event_id) return `/discover/${first.event_id}`;
+  if (context?.kind === "track" && context.track) return `/tracks/${context.track.id}`;
+  return "/store";
+}
+
+function OrderCheckout({ initial }: { initial: OrderRecord }) {
+  const status = useOrderStatus(initial);
+  const { order, stage } = status;
+  const context = useAsync(() => loadOrderContext(initial), [initial.id]);
+  const credits = useCredits();
+  const [moment, setMoment] = useState<"none" | "playing" | "done">("none");
+  const ctx = context.status === "ok" ? context.data : null;
+  const artist = ctx?.kind === "track" && ctx.track ? creditName(ctx.track, credits.artists, credits.bands) : null;
+
+  // The success moment plays once, and only because this page saw the server complete the order.
+  if (status.celebrate && moment === "none") setMoment("playing");
+
+  if (stage === "complete" && moment !== "playing") {
     return (
-      <Card className="p-6" role="status">
-        <p className="flex items-center gap-2 text-xl font-bold text-fg">
-          <CircleCheck aria-hidden="true" className="size-6 text-success" /> You&apos;re all set
-        </p>
-        <p className="mt-2 text-sm text-fg">
-          Paid <Money value={total} minorDigits="always" />. Your order is complete.
-        </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <ButtonLink href={next.href}>{next.label}</ButtonLink>
-          <ButtonLink href={item.kind === "tickets" ? "/discover" : "/purchases"} variant="secondary">
-            {item.kind === "tickets" ? "More events" : "Your purchases"}
-          </ButtonLink>
-        </div>
-      </Card>
+      <div className="mx-auto max-w-3xl">
+        <Heading>{ctx?.kind === "tickets" ? "You're going" : "Thank you"}</Heading>
+        {ctx?.kind === "tickets" ? (
+          <TicketConfirmation order={order} event={ctx.event} />
+        ) : ctx?.kind === "track" ? (
+          <MusicReceipt order={order} track={ctx.track} artist={artist} />
+        ) : (
+          <Card className="p-6" role="status">
+            <p className="flex items-center gap-2 text-xl font-bold text-fg">
+              <CircleCheck aria-hidden="true" className="size-6 text-success" /> You&apos;re all set
+            </p>
+            <p className="mt-2 text-sm text-fg">
+              Paid <Money value={{ amount_minor: order.total_amount_minor, currency_code: order.currency_code }} minorDigits="always" />. Your order is complete.
+            </p>
+            <ButtonLink href="/purchases" className="mt-6">
+              Your purchases
+            </ButtonLink>
+          </Card>
+        )}
+      </div>
     );
   }
+
   return (
-    <Card className="p-6">
-      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
-        <dt className="text-fg-muted">Order</dt>
-        <dd>
-          <StatusChip value={order.status} map={ORDER_STATUS} />
-        </dd>
-        <dt className="text-fg-muted">Payment</dt>
-        <dd>
-          <StatusChip value={order.payment?.status} map={PAYMENT_STATUS} />
-        </dd>
-        <dt className="text-fg-muted">Total</dt>
-        <dd className="font-semibold text-fg">
-          <Money value={total} minorDigits="always" />
-        </dd>
-      </dl>
-      {order.payment?.status === "REQUIRES_ACTION" ? (
-        <div className="mt-6 border-t border-line pt-5">
-          <p className="text-sm text-fg">
-            Payments run on a test provider for now. Confirming completes the order; no card is charged.
-          </p>
-          <Button className="mt-4" busy={busy} onClick={onConfirm}>
-            Confirm payment
-          </Button>
-        </div>
-      ) : (
-        <p className="mt-5 text-sm text-fg-muted">We will update this order when the payment is confirmed.</p>
-      )}
-    </Card>
+    <>
+      <Heading>{stage === "paid_processing" ? "Finishing your order" : stage === "awaiting_payment" ? "Review and pay" : "Your order"}</Heading>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-8">
+        {ctx?.kind === "tickets" ? (
+          <TicketSummary order={order} event={ctx.event} />
+        ) : ctx?.kind === "track" ? (
+          <TrackSummary order={order} track={ctx.track} artist={artist} />
+        ) : ctx ? (
+          <GenericSummary order={order} title={ctx.title} />
+        ) : (
+          <Skeleton className="h-64 w-full" />
+        )}
+        <PaymentPanel order={order} stage={stage} now={status.now} onOrder={status.setOrder} onRefresh={status.refresh} restartHref={restartHref(order, ctx)} />
+      </div>
+      <PowerTransition
+        confirmed={moment === "playing"}
+        title="Payment received"
+        detail={
+          ctx?.kind === "tickets" ? "Your tickets are ready." : ctx?.kind === "track" && ctx.track ? `${ctx.track.title} is in your library.` : "Your order is complete."
+        }
+        onDone={() => {
+          setMoment("done");
+          status.clearCelebrate();
+        }}
+      />
+    </>
   );
 }
 
-function CheckoutBody() {
+function ResumeOrder({ orderId }: { orderId: string }) {
+  const order = useAsync(() => fetchOrder(orderId), [orderId]);
+  if (order.status === "loading") return <Skeleton className="mt-8 h-64 w-full" />;
+  if (order.status === "error") {
+    return (
+      <Card className="mt-8 p-6">
+        <h1 id="checkout-title" className="font-semibold text-fg">We could not find this order.</h1>
+        <p className="mt-1 text-sm text-fg-muted">It may belong to another account, or the link is incomplete.</p>
+        <ButtonLink href="/orders" variant="secondary" className="mt-4">
+          Your orders
+        </ButtonLink>
+      </Card>
+    );
+  }
+  return <OrderCheckout initial={order.data} />;
+}
+
+/* ---------- Before an order exists: choose, then reserve or continue ---------- */
+
+function NewCheckout() {
   const params = useSearchParams();
+  const router = useRouter();
   const item = useMemo(() => checkoutItemFromParams(params), [params]);
   const { status } = useAuth();
   const key = useMemo(newKey, []);
   const [quantity, setQuantity] = useState("1");
-  const [order, setOrder] = useState<OrderRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const summary = useAsync(() => (item ? loadSummary(item) : Promise.resolve(null)), [item?.kind, item?.id]);
@@ -198,25 +269,31 @@ function CheckoutBody() {
 
   if (!item) {
     return (
-      <Card className="p-6">
+      <>
+        <Heading>Nothing to pay for</Heading>
+        <Card className="p-6">
         <p className="text-fg">There is nothing to check out.</p>
         <ButtonLink href="/store" className="mt-4">
           Go to the Store
         </ButtonLink>
-      </Card>
+        </Card>
+      </>
     );
   }
 
-  if (status === "loading") return <Skeleton className="h-48 w-full" />;
+  if (status === "loading") return <Skeleton className="mt-8 h-48 w-full" />;
   if (status !== "authenticated") {
     const here = `/checkout?${params.toString()}`;
     return (
-      <Card className="p-6">
+      <>
+        <Heading>Review and pay</Heading>
+        <Card className="p-6">
         <p className="text-fg">Sign in to finish your order.</p>
         <ButtonLink href={`/login?next=${encodeURIComponent(here)}`} className="mt-4">
           <LogIn aria-hidden="true" /> Sign in
         </ButtonLink>
-      </Card>
+        </Card>
+      </>
     );
   }
 
@@ -225,34 +302,25 @@ function CheckoutBody() {
     setError(null);
     setBusy(true);
     try {
-      if (item.kind === "offer") setOrder(await createCatalogOrder(item.id, key));
-      else if (item.kind === "plan") setOrder(await createSubscriptionOrder(item.id, key));
+      let order: OrderRecord;
+      if (item.kind === "offer") order = await createCatalogOrder(item.id, key);
+      else if (item.kind === "plan") order = await createSubscriptionOrder(item.id, key);
       else {
         const hold = await createHold(item.id, Number.parseInt(quantity, 10));
-        setOrder(await createOrder(hold.id, key));
+        order = await createOrder(hold.id, key);
       }
+      // The order now lives at its own address, so a reload or a later visit resumes it.
+      const world = item.kind === "tickets" ? "" : "&world=sky";
+      router.replace(`/checkout?order=${order.id}${world}`);
     } catch (err) {
       setError(friendlyError(err, "Your order could not be placed. Please try again."));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function confirm() {
-    if (!order?.payment?.id) return;
-    setError(null);
-    setBusy(true);
-    try {
-      setOrder(await sandboxConfirmPayment(order.payment.id));
-    } catch (err) {
-      setError(friendlyError(err, "The payment could not be confirmed. Please try again."));
-    } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-3xl space-y-6">
+      <Heading>Review and pay</Heading>
       {summary.status === "loading" ? (
         <Skeleton className="h-40 w-full" />
       ) : summary.status === "error" ? (
@@ -276,7 +344,7 @@ function CheckoutBody() {
               </p>
             ) : null}
             {summary.data.note ? <p className="mt-1 text-sm text-fg">{summary.data.note}</p> : null}
-            {item.kind === "tickets" && !order ? (
+            {item.kind === "tickets" ? (
               <div className="mt-4 max-w-[8rem]">
                 <Field label="Quantity">
                   {(c) => <Input {...c} inputMode="numeric" value={quantity} onChange={(e) => setQuantity(e.target.value)} />}
@@ -289,9 +357,7 @@ function CheckoutBody() {
 
       {error ? <ErrorState title="Something went wrong" message={error} /> : null}
 
-      {order ? (
-        <OrderPanel order={order} item={item} offer={summary.status === "ok" ? summary.data?.offer : undefined} onConfirm={() => void confirm()} busy={busy} />
-      ) : summary.status === "ok" && summary.data?.offer && owned.status === "ok" && alreadyOwns(owned.data, summary.data.offer) ? (
+      {summary.status === "ok" && summary.data?.offer && owned.status === "ok" && alreadyOwns(owned.data, summary.data.offer) ? (
         <Card className="p-6">
           <p className="font-semibold text-fg">
             {summary.data.offer.product_type === "TRACK" ? "You already own this track." : "You already have the full catalog."}
@@ -311,7 +377,7 @@ function CheckoutBody() {
       ) : summary.status === "ok" && summary.data ? (
         <div className="flex flex-wrap items-center gap-4">
           <Button size="lg" busy={busy} onClick={() => void place()}>
-            Place order
+            {item.kind === "tickets" ? "Reserve and pay" : "Continue to payment"}
           </Button>
           <Link href="/store" className="cr-focus text-sm font-semibold text-fg-muted hover:text-fg">
             Cancel
@@ -322,12 +388,49 @@ function CheckoutBody() {
   );
 }
 
+function CheckoutBody() {
+  const params = useSearchParams();
+  const orderId = params.get("order");
+  const { status } = useAuth();
+  if (!orderId) return <NewCheckout />;
+  if (status === "loading") return <Skeleton className="mt-8 h-64 w-full" />;
+  if (status !== "authenticated") {
+    return (
+      <>
+        <Heading>Your order</Heading>
+        <Card className="p-6">
+        <p className="text-fg">Sign in to see this order.</p>
+        <ButtonLink href={`/login?next=${encodeURIComponent(`/checkout?order=${orderId}`)}`} className="mt-4">
+          <LogIn aria-hidden="true" /> Sign in
+        </ButtonLink>
+        </Card>
+      </>
+    );
+  }
+  return <ResumeOrder orderId={orderId} />;
+}
+
+function CheckoutFrame() {
+  const params = useSearchParams();
+  // Music offers, plans and music orders sit in the Sky world; tickets in Ember.
+  const sky = Boolean(params.get("offer") || params.get("plan") || params.get("world") === "sky");
+  return (
+    <Shell theme={sky ? "sky" : "ember"}>
+      <CheckoutBody />
+    </Shell>
+  );
+}
+
 export default function CheckoutPage() {
   return (
-    <Shell>
-      <Suspense fallback={<Skeleton className="h-48 w-full" />}>
-        <CheckoutBody />
-      </Suspense>
-    </Shell>
+    <Suspense
+      fallback={
+        <Shell>
+          <Skeleton className="h-48 w-full" />
+        </Shell>
+      }
+    >
+      <CheckoutFrame />
+    </Suspense>
   );
 }

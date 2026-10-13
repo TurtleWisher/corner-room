@@ -28,7 +28,7 @@ from cornerroom.infra.idempotency import (
     fail_idempotent,
     fingerprint_payload,
 )
-from cornerroom.infra.settings import Settings
+from cornerroom.infra.settings import Settings, get_settings
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.commerce.application.service import CheckoutService
 from cornerroom.modules.commerce.domain.models import Order
@@ -108,6 +108,25 @@ class PaymentOut(BaseModel):
     amount_minor: int
     currency_code: str
     provider: str
+    # "test": the sandbox provider, no real money moves. "live": a real provider.
+    mode: str = "test"
+    # Only on local, dev and test servers, and only while the payment can still be captured.
+    self_confirm_available: bool = False
+    # Bangla QR image to show (owner supplies it). Showing it proves nothing; only the provider
+    # confirms payment. None = no image configured yet.
+    qr_image_url: str | None = None
+
+
+class OrderItemOut(BaseModel):
+    id: UUID
+    item_type: str
+    ref_id: UUID
+    quantity: int
+    unit_amount_minor: int
+    amount_minor: int
+    currency_code: str
+    ticket_type_name: str | None = None
+    event_id: UUID | None = None
 
 
 class OrderOut(BaseModel):
@@ -117,6 +136,11 @@ class OrderOut(BaseModel):
     total_amount_minor: int
     currency_code: str
     payment: PaymentOut | None = None
+    # Present on single-order reads (create, get, confirm); omitted in lists.
+    items: list[OrderItemOut] | None = None
+    created_at: datetime | None = None
+    hold_expires_at: datetime | None = None
+    hold_status: str | None = None
 
 
 class OrderPage(BaseModel):
@@ -191,7 +215,12 @@ def _hold_out(row: TicketHold) -> HoldOut:
     )
 
 
+SELF_CONFIRMABLE = frozenset({"CREATED", "REQUIRES_ACTION", "AUTHORIZED"})
+
+
 def _payment_out(row: Payment) -> PaymentOut:
+    settings = get_settings()
+    sandbox = row.provider == "sandbox"
     return PaymentOut(
         id=row.id,
         order_id=row.order_id,
@@ -199,11 +228,14 @@ def _payment_out(row: Payment) -> PaymentOut:
         amount_minor=row.amount_minor,
         currency_code=row.currency_code,
         provider=row.provider,
+        mode="test" if sandbox else "live",
+        self_confirm_available=sandbox and settings.allows_sandbox_payment_confirm and row.status in SELF_CONFIRMABLE,
+        qr_image_url=settings.bangla_qr_image_url.strip() or None,
     )
 
 
-def _order_out(row: Order, payment: Payment | None) -> OrderOut:
-    return OrderOut(
+def _order_out(row: Order, payment: Payment | None, details: dict[str, Any] | None = None) -> OrderOut:
+    out = OrderOut(
         id=row.id,
         status=row.status,
         purpose=row.purpose,
@@ -211,6 +243,16 @@ def _order_out(row: Order, payment: Payment | None) -> OrderOut:
         currency_code=row.currency_code,
         payment=_payment_out(payment) if payment else None,
     )
+    if details is not None:
+        out.items = [OrderItemOut(**item) for item in details["items"]]
+        out.created_at = details["created_at"]
+        out.hold_expires_at = details["hold_expires_at"]
+        out.hold_status = details["hold_status"]
+    return out
+
+
+async def _order_full(svc: CheckoutService, row: Order, payment: Payment | None) -> OrderOut:
+    return _order_out(row, payment, await svc.order_details(row))
 
 
 def _ticket_out(row: Ticket, token: str | None) -> TicketOut:
@@ -398,7 +440,7 @@ async def create_order(
             order, payment = await svc.checkout_from_offer(
                 ctx, offer_id=body.offer_id, idempotency_key=f"{ctx.user_id}:{idempotency_key}"
             )
-        out = _order_out(order, payment).model_dump(mode="json")
+        out = (await _order_full(svc, order, payment)).model_dump(mode="json")
         await complete_idempotent(session, started, status_code=201, body=json.dumps(out, default=str))
         return OrderOut.model_validate(out)
     except Exception:
@@ -429,7 +471,7 @@ async def get_order(
 ) -> OrderOut:
     row = await svc.get_order(ctx, order_id)
     payment = await svc.payment_for_order(row.id)
-    return _order_out(row, payment)
+    return await _order_full(svc, row, payment)
 
 
 @router.post("/payments/callbacks", response_model=OrderOut)
@@ -452,7 +494,7 @@ async def sandbox_confirm(
     svc: Annotated[CheckoutService, Depends(checkout_service)],
 ) -> OrderOut:
     order, payment = await svc.sandbox_confirm(ctx, payment_id)
-    return _order_out(order, payment)
+    return await _order_full(svc, order, payment)
 
 
 @router.get("/me/tickets", response_model=TicketPage)

@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/api/v1/auth/google/callback"
     # How long a started Google sign-in may take before its state expires (anti-CSRF window).
     google_state_ttl_seconds: int = 600
+    # Bangla QR payment image (owner supplies it later). A web path or URL to the image only; it
+    # proves nothing about payment. Empty = no image yet: test servers show a marked placeholder.
+    bangla_qr_image_url: str = ""
     # Local/dev/test only: where the dev mailbox writes outgoing email (no real provider, OD-08).
     dev_mailbox_path: str = "./var/dev-mailbox"
     password_recovery_ttl_seconds: int = 0
@@ -176,6 +179,13 @@ class Settings(BaseSettings):
     @property
     def uses_dev_mailbox(self) -> bool:
         """Non-production environments deliver email to a local dev mailbox (OD-08 has no provider yet)."""
+        return self.app_env in {"local", "dev", "test"}
+
+    @property
+    def allows_sandbox_payment_confirm(self) -> bool:
+        """Owner decision 2026-10-13 (Q-P5-06 partial): a customer may complete a sandbox payment
+        themselves only on this machine, dev and test. Everywhere else a payment is confirmed only
+        by a signed provider callback."""
         return self.app_env in {"local", "dev", "test"}
 
     @property

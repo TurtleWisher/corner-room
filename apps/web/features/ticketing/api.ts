@@ -32,6 +32,25 @@ export type PaymentRecord = {
   amount_minor: number;
   currency_code: string;
   provider: string;
+  /** "test": the sandbox provider, no real money moves. "live": a real provider. */
+  mode?: "test" | "live";
+  /** Only on local, dev and test servers, while the payment can still be captured. */
+  self_confirm_available?: boolean;
+  /** Bangla QR image to show. Showing it proves nothing; only the server confirms payment. */
+  qr_image_url?: string | null;
+};
+
+/** One priced line, exactly as the server priced it. Never recomputed in the browser. */
+export type OrderItemRecord = {
+  id: string;
+  item_type: "TICKET" | "TRACK" | "SUBSCRIPTION" | "OTHER" | string;
+  ref_id: string;
+  quantity: number;
+  unit_amount_minor: number;
+  amount_minor: number;
+  currency_code: string;
+  ticket_type_name?: string | null;
+  event_id?: string | null;
 };
 
 export type OrderRecord = {
@@ -41,6 +60,11 @@ export type OrderRecord = {
   total_amount_minor: number;
   currency_code: string;
   payment: PaymentRecord | null;
+  /** Single-order reads only (create, get, confirm); lists omit them. */
+  items?: OrderItemRecord[] | null;
+  created_at?: string | null;
+  hold_expires_at?: string | null;
+  hold_status?: string | null;
 };
 
 export type TicketRecord = {
@@ -129,6 +153,11 @@ export async function sandboxConfirmPayment(paymentId: string): Promise<OrderRec
     method: "POST",
     retry: false,
   });
+}
+
+/** The authoritative order, for resuming checkout and checking payment status. Owner only (404 otherwise). */
+export async function fetchOrder(orderId: string): Promise<OrderRecord> {
+  return apiFetch<OrderRecord>(`/api/v1/orders/${orderId}`, { retry: false });
 }
 
 export async function fetchMyTickets(): Promise<Page<TicketRecord>> {

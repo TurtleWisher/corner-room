@@ -1,0 +1,166 @@
+/*
+ * Purchase experience (2026-10-13): the power-input success moment and the payment QR frame.
+ * Shared by ticket and music checkout; colours come from the world (data-theme), so Ember gets
+ * Lamp and Sky gets Sky. Timings sit inside POWER_TRANSITION_MS (2600 ms) in power-transition.tsx.
+ */
+
+.cr-power {
+  background:
+    radial-gradient(60% 60% at 50% 50%, color-mix(in srgb, var(--cr-surface) 70%, transparent), color-mix(in srgb, var(--cr-surface) 94%, transparent));
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  animation: cr-power-veil 260ms var(--ease-corner) both;
+}
+.cr-power-art {
+  pointer-events: none;
+}
+.cr-power-trail,
+.cr-power-head,
+.cr-power-ring-base,
+.cr-power-ring,
+.cr-power-pulse,
+.cr-power-check {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cr-power-trail {
+  stroke: color-mix(in srgb, var(--cr-accent) 30%, transparent);
+  stroke-width: 1.5;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation:
+    cr-power-draw 760ms 120ms cubic-bezier(0.55, 0, 0.25, 1) forwards,
+    cr-power-settle 500ms 1500ms ease-out forwards;
+}
+.cr-power-head {
+  stroke: var(--cr-accent);
+  stroke-width: 3;
+  stroke-dasharray: 0.07 1;
+  stroke-dashoffset: 0.07;
+  opacity: 0;
+  filter: drop-shadow(0 0 6px var(--cr-accent));
+  animation: cr-power-travel 760ms 120ms cubic-bezier(0.55, 0, 0.25, 1) forwards;
+}
+.cr-power-ring-base {
+  stroke: color-mix(in srgb, var(--cr-accent) 16%, transparent);
+  stroke-width: 2;
+  opacity: 0;
+  animation: cr-power-fade 200ms 700ms ease-out forwards;
+}
+.cr-power-ring {
+  stroke: var(--cr-accent);
+  stroke-width: 3;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--cr-accent) 60%, transparent));
+  animation: cr-power-draw 620ms 860ms cubic-bezier(0.3, 0.6, 0.2, 1) forwards;
+}
+.cr-power-halo {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0.6);
+  animation: cr-power-halo 900ms 1380ms var(--ease-corner) forwards;
+}
+.cr-power-pulse {
+  stroke: color-mix(in srgb, var(--cr-accent) 55%, transparent);
+  stroke-width: 2;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cr-power-pulse 700ms 1440ms ease-out forwards;
+}
+.cr-power-check {
+  stroke: var(--cr-accent);
+  stroke-width: 4;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: cr-power-draw 300ms 1500ms ease-out forwards;
+}
+.cr-power-copy {
+  opacity: 0;
+  transform: translateY(8px);
+  animation: cr-power-rise 360ms 1620ms var(--ease-corner) forwards;
+}
+
+@keyframes cr-power-veil {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes cr-power-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes cr-power-travel {
+  0% { opacity: 0; stroke-dashoffset: 0.07; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { opacity: 0; stroke-dashoffset: -0.93; }
+}
+@keyframes cr-power-settle {
+  to { opacity: 0.25; }
+}
+@keyframes cr-power-fade {
+  to { opacity: 1; }
+}
+@keyframes cr-power-halo {
+  0% { opacity: 0; transform: scale(0.6); }
+  40% { opacity: 1; }
+  100% { opacity: 0.55; transform: scale(1); }
+}
+@keyframes cr-power-pulse {
+  0% { opacity: 0.8; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.1); }
+}
+@keyframes cr-power-rise {
+  to { opacity: 1; transform: none; }
+}
+
+/* Reduced motion: the finished picture, still. Same meaning, no movement. */
+@media (prefers-reduced-motion: reduce) {
+  .cr-power,
+  .cr-power-trail,
+  .cr-power-head,
+  .cr-power-ring-base,
+  .cr-power-ring,
+  .cr-power-halo,
+  .cr-power-pulse,
+  .cr-power-check,
+  .cr-power-copy {
+    animation: none;
+  }
+  .cr-power-trail,
+  .cr-power-head,
+  .cr-power-pulse {
+    display: none;
+  }
+  .cr-power-ring,
+  .cr-power-check {
+    stroke-dashoffset: 0;
+  }
+  .cr-power-ring-base,
+  .cr-power-copy {
+    opacity: 1;
+    transform: none;
+  }
+  .cr-power-halo {
+    opacity: 0.55;
+    transform: none;
+  }
+}
+
+/* The payment QR sits on a plain white tile with a quiet zone, drawn at its own size with no
+   filter, blend, blur or smoothing, so the real code stays exactly as scannable as supplied. */
+.cr-qr-tile {
+  background: #ffffff;
+  padding: 16px;
+  isolation: isolate;
+}
+.cr-qr-tile img {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  filter: none;
+  mix-blend-mode: normal;
+}
