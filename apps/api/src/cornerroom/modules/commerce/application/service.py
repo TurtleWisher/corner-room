@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,6 +40,8 @@ from cornerroom.modules.ticketing.domain.models import TicketHold, TicketType
 ORDER_PLACED_EVENT = ORDER_PLACED
 ORDER_PAID_EVENT = ORDER_PAID
 
+
+log = structlog.get_logger("commerce")
 
 class CheckoutService:
     def __init__(
@@ -365,7 +368,17 @@ class CheckoutService:
             order_transition_action(order.status, "PAID")
             order.status = "PAID"
             await self.session.flush()
-        organization_id = await self._fulfill_items(ctx, order)
+        # Payment confirmed is not fulfilment confirmed. Fulfil inside a savepoint: if tickets or
+        # access cannot be granted (for example the hold expired before a late payment), only the
+        # fulfilment rolls back. The capture, the PAID order and the ledger facts stay, the order
+        # waits for staff (owner decision 2026-10-13: keep the payment, flag for staff), and a
+        # repeated callback retries the fulfilment safely.
+        try:
+            async with self.session.begin_nested():
+                organization_id = await self._fulfill_items(ctx, order)
+        except Exception as exc:  # noqa: BLE001 - money must never be lost to a fulfilment error
+            await self._record_fulfillment_failure(order, payment, exc)
+            return order
         if order.status != "FULFILLED":
             order_transition_action(order.status, "FULFILLED")
             order.status = "FULFILLED"
@@ -517,6 +530,20 @@ class CheckoutService:
         await self.session.flush()
         return organization_id
 
+    async def _record_fulfillment_failure(self, order: Order, payment: Payment, exc: Exception) -> None:
+        """Audit a paid order that could not be fulfilled. Only a fixed reason code is stored."""
+        code = exc.code if isinstance(exc, AppError) else "FULFILLMENT_ERROR"
+        if not isinstance(exc, AppError):
+            log.exception("order_fulfillment_failed", order_id=str(order.id))
+        await self.audit.record(
+            action="order.fulfillment_failed",
+            entity_type="Order",
+            entity_id=order.id,
+            actor_id="system:commerce",
+            actor_type="system",
+            new_state={"status": order.status, "payment_id": str(payment.id), "reason": code},
+        )
+
     async def sandbox_confirm(self, ctx: AuthContext, payment_id: UUID) -> tuple[Order, Payment]:
         payment = await self.payments.sandbox_confirm(ctx, payment_id)
         order = await self.fulfill_captured_payment(ctx, payment)
@@ -581,6 +608,41 @@ class CheckoutService:
             next_cursor = encode_cursor(last.created_at.isoformat(), last.id)
             rows = rows[:limit]
         return rows, next_cursor
+
+    async def order_details(self, order: Order) -> dict[str, Any]:
+        """Read-only facts the checkout page shows: line items as priced by the server, and the
+        reservation expiry for ticket orders. Nothing here is computed for display."""
+        rows = (
+            await self.session.execute(select(OrderItem).where(OrderItem.order_id == order.id).order_by(OrderItem.created_at))
+        ).scalars()
+        items: list[dict[str, Any]] = []
+        for item in rows:
+            entry: dict[str, Any] = {
+                "id": item.id,
+                "item_type": item.item_type,
+                "ref_id": item.ref_id,
+                "quantity": item.quantity,
+                "unit_amount_minor": item.unit_amount_minor,
+                "amount_minor": item.amount_minor,
+                "currency_code": item.currency_code,
+                "ticket_type_name": None,
+                "event_id": None,
+            }
+            if item.item_type == "TICKET":
+                ticket_type = await self.session.get(TicketType, item.ref_id)
+                if ticket_type is not None:
+                    entry["ticket_type_name"] = ticket_type.name
+                    entry["event_id"] = ticket_type.event_id
+            items.append(entry)
+        hold = (
+            await self.session.execute(select(TicketHold).where(TicketHold.order_id == order.id))
+        ).scalar_one_or_none()
+        return {
+            "items": items,
+            "created_at": order.created_at,
+            "hold_expires_at": hold.expires_at if hold is not None else None,
+            "hold_status": hold.status if hold is not None else None,
+        }
 
     async def payment_for_order(self, order_id: UUID) -> Payment | None:
         return (

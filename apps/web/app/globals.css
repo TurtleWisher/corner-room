@@ -4,6 +4,7 @@
 @import "./styles/modules/events.css";
 @import "./styles/modules/ticketing.css";
 @import "./styles/modules/account.css";
+@import "./styles/purchase.css";
 
 /*
  * Legacy layer (pre-Phase 16 pages). Kept byte-for-byte in effect so existing pages render

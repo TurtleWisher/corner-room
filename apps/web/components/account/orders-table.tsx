@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Money, StatusChip, Table, TBody, TD, TH, THead, TR } from "@/components/ds";
 import type { OrderRecord } from "@/lib/api";
 import { humanizeStatus } from "@/lib/format/status";
@@ -16,6 +18,9 @@ export function OrdersTable({ orders }: { orders: OrderRecord[] }) {
           <TH>Order</TH>
           <TH>Payment</TH>
           <TH numeric>Total</TH>
+          <TH>
+            <span className="sr-only">Open</span>
+          </TH>
         </TR>
       </THead>
       <TBody>
@@ -28,6 +33,15 @@ export function OrdersTable({ orders }: { orders: OrderRecord[] }) {
             <TD>{row.payment ? <StatusChip value={row.payment.status} map={PAYMENT_STATUS} /> : <span className="text-fg-muted">No payment</span>}</TD>
             <TD numeric>
               <Money value={{ amount_minor: row.total_amount_minor, currency_code: row.currency_code }} minorDigits="always" />
+            </TD>
+            <TD>
+              {/* Every order reopens at its checkout address, which reads its status from the server. */}
+              <Link
+                href={`/checkout?order=${row.id}${row.purpose === "TICKET" ? "" : "&world=sky"}`}
+                className="cr-focus text-sm font-semibold text-highlight hover:underline"
+              >
+                {row.status === "PENDING_PAYMENT" ? "Continue" : "View"}
+              </Link>
             </TD>
           </TR>
         ))}

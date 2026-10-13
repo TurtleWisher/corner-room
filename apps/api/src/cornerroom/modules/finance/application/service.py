@@ -161,11 +161,16 @@ class PaymentService:
             provider_event_id=callback.provider_event_id,
             raw_status="CAPTURED" if callback.captured else "FAILED",
         )
-        self.session.add(attempt)
         try:
-            await self.session.flush()
+            # Savepoint: when a simultaneous duplicate callback wins the unique provider_event_id,
+            # only this insert rolls back and the session stays usable, so the duplicate gets the
+            # same answer instead of a 500 (the database still guarantees one attempt per event).
+            async with self.session.begin_nested():
+                self.session.add(attempt)
+                await self.session.flush()
         except IntegrityError:
             current = await self.get_payment(payment.id)
+            await self.session.refresh(current)
             return current
         if not callback.captured:
             payment.status = "FAILED"
@@ -206,6 +211,13 @@ class PaymentService:
         payment = await self.get_payment(payment_id)
         if payment.user_id != ctx.user_id:
             raise NotFoundError("Payment not found")
+        if not self.settings.allows_sandbox_payment_confirm:
+            raise AppError(
+                "PAYMENT_CONFIRMATION_UNAVAILABLE",
+                "This payment can only be confirmed by the payment provider",
+                409,
+                "Sandbox self-confirm is limited to local, dev and test (owner decision 2026-10-13, Q-P5-06)",
+            )
         if payment.provider != "sandbox":
             raise AppError("PAYMENT_PROVIDER_UNSUPPORTED", "Sandbox confirm is only for the sandbox adapter", 409)
         if payment.status == "CAPTURED":
