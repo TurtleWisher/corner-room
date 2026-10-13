@@ -28,7 +28,8 @@ test("phones get the bottom tab bar, desktops the header nav", async ({ page, is
   await expect(tabs).toBeVisible();
   await expect(tabs.getByRole("link", { name: "Events" })).toHaveAttribute("aria-current", "page");
   if (isMobile) {
-    await expect(page.getByRole("link", { name: "Home" })).toBeVisible();
+    // exact: the logo's "Corner Room home" would also match a loose "Home".
+    await expect(tabs.getByRole("link", { name: "Home", exact: true })).toBeVisible();
   } else {
     await expect(page.getByRole("link", { name: "Join" })).toBeVisible();
   }
@@ -36,7 +37,9 @@ test("phones get the bottom tab bar, desktops the header nav", async ({ page, is
 
 test("staff pages use the staff shell with the workspace chip", async ({ page }) => {
   await page.goto("/staff/ops");
-  await expect(page.getByRole("button", { name: /Acting in/ }).first()).toBeAttached();
+  // The workspace chip lives in the desktop sidebar, which phones hide (display: none removes it
+  // from the accessibility tree), so look it up including hidden elements.
+  await expect(page.getByRole("button", { name: /Acting in/, includeHidden: true }).first()).toBeAttached();
   await expect(page.getByRole("link", { name: "Corner Room home" }).first()).toBeAttached();
 });
 
