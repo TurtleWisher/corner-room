@@ -137,7 +137,7 @@ export function TicketConfirmation({ order, event }: { order: OrderRecord; event
             <ButtonLink href="/tickets">
               <Ticket aria-hidden="true" /> Your tickets
             </ButtonLink>
-            <ButtonLink href="/discover" variant="secondary">
+            <ButtonLink href="/events" variant="secondary">
               More events
             </ButtonLink>
           </div>

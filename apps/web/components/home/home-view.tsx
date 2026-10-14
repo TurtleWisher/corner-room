@@ -37,7 +37,7 @@ function cityOrTitle(event: EventRecord): string {
 function FeaturedEvent({ state }: { state: ReturnType<typeof useAsync<EventRecord[]>> }) {
   const featured = state.status === "ok" ? pickFeaturedEvent(state.data) : null;
   const event = featured?.event ?? null;
-  const href = event ? `/discover/${event.id}` : "/discover";
+  const href = event ? `/events/${event.id}` : "/events";
   const label = featured?.label ?? "Next up";
   const caption =
     state.status === "loading"
@@ -170,7 +170,7 @@ function Upcoming({ state }: { state: ReturnType<typeof useAsync<EventRecord[]>>
   const rows = state.status === "ok" ? upcomingEvents(state.data) : [];
   return (
     <Reveal as="section" aria-labelledby="home-upcoming">
-      <SectionHead id="home-upcoming" index="01" title="Upcoming" href="/discover" link="All events" />
+      <SectionHead id="home-upcoming" index="01" title="Upcoming" href="/events" link="All events" />
       {state.status === "loading" ? (
         <div className="space-y-3 pt-4">
           <Skeleton className="h-20 w-full" />
@@ -298,7 +298,7 @@ export function HomeView() {
               {TAGLINE_BN}
             </p>
             <div className="home-in mt-10 flex flex-wrap gap-3" style={{ ["--i" as string]: 4 }}>
-              <ButtonLink href="/discover" size="lg">
+              <ButtonLink href="/events" size="lg">
                 See what&apos;s on
               </ButtonLink>
               <ButtonLink href="/listen" variant="secondary" size="lg">

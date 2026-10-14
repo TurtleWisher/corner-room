@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { CalendarDays, Ticket, TriangleAlert } from "lucide-react";
+import { MapPin, Ticket, TriangleAlert } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
@@ -13,8 +13,7 @@ import { useCredits } from "@/components/music/credits";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import { fetchEvent, fetchEventLineup, fetchEventTicketTypes, type EventRecord, type TicketTypeRecord } from "@/lib/api";
-import { ticketState } from "@/lib/events-view";
-import { cityFromTimeZone } from "@/lib/home-view";
+import { actsLabel, eventCity, eventEyebrow, fromPrice, ticketState } from "@/lib/events-view";
 import { EVENT_STATUS } from "@/lib/status-maps";
 
 function StatusBanner({ event }: { event: EventRecord }) {
@@ -46,6 +45,45 @@ function StatusBanner({ event }: { event: EventRecord }) {
     );
   }
   return null;
+}
+
+/** The poster's date row (events.md composition 1): date, time and acts, in condensed numerals. */
+function PosterFacts({ event, acts }: { event: EventRecord; acts: number }) {
+  const facts: { label: string; value: React.ReactNode }[] = [
+    { label: "Date", value: <DateTime value={event.starts_at} format="date" timeZone={event.timezone} /> },
+    { label: "Time", value: <DateTime value={event.starts_at} format="time" timeZone={event.timezone} showZone /> },
+  ];
+  const count = actsLabel(acts);
+  if (count) facts.push({ label: "Line-up", value: count });
+  return (
+    <dl className="ev-facts mt-7 grid max-w-2xl grid-cols-2 gap-x-8 gap-y-5 sm:flex sm:flex-wrap">
+      {facts.map((f) => (
+        <div key={f.label} className="min-w-0">
+          <dt className="cr-eyebrow text-[0.625rem] text-fg-muted">{f.label}</dt>
+          <dd className="cr-num mt-1.5 text-[1.375rem] leading-tight text-fg">{f.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** Phones: the lowest price and one action stay at the bottom of the screen (events.md section 8). */
+function TicketBar({ price }: { price: { amount_minor: number; currency_code: string } }) {
+  return (
+    <>
+      <div className="h-20 lg:hidden" aria-hidden="true" />
+      <div className="cr-bar fixed inset-x-0 bottom-16 z-30 border-t border-line lg:hidden">
+        <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between gap-4 px-4">
+          <p className="text-sm text-fg-muted">
+            From <Money value={price} variant="display" className="ml-1 text-xl text-highlight" />
+          </p>
+          <ButtonLink href="#tickets" size="sm">
+            <Ticket aria-hidden="true" /> Tickets
+          </ButtonLink>
+        </div>
+      </div>
+    </>
+  );
 }
 
 function TicketCard({ event, type }: { event: EventRecord; type: TicketTypeRecord }) {
@@ -117,7 +155,8 @@ export default function EventPage() {
   }
 
   const { event, types, lineup } = data.data;
-  const city = cityFromTimeZone(event.timezone);
+  const city = eventCity(event);
+  const price = fromPrice(event, types);
   const billed = [...lineup].sort((a, b) => a.billing_order - b.billing_order);
   const nameOf = (row: (typeof lineup)[number]) =>
     (row.artist_id && credits.artists.find((a) => a.id === row.artist_id)?.stage_name) ||
@@ -129,25 +168,34 @@ export default function EventPage() {
       <LitSurface as="section" theme="ember" aria-labelledby="event-title">
         <div className="mx-auto grid max-w-[90rem] items-center gap-10 px-4 py-12 md:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,28rem)] lg:py-20">
           <div className="order-2 lg:order-1">
-            <Eyebrow>{["Live", city].filter(Boolean).join(" · ")}</Eyebrow>
-            <Display as="h1" id="event-title" size="xl" className="mt-4">
-              {event.title}
-            </Display>
-            <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-fg">
-              <span className="inline-flex items-center gap-2">
-                <CalendarDays aria-hidden="true" className="size-5 text-highlight" />
-                <DateTime value={event.starts_at} timeZone={event.timezone} showZone className="cr-num text-xl" />
-              </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <Eyebrow>{eventEyebrow(event)}</Eyebrow>
               <StatusChip value={event.status} map={EVENT_STATUS} />
             </div>
+            <Display as="h1" id="event-title" size="xl" className="ev-rise mt-4">
+              {event.title}
+            </Display>
+            {event.venue ? (
+              <p className="mt-4 inline-flex items-center gap-2 text-base text-fg">
+                <MapPin aria-hidden="true" className="size-4 text-highlight" />
+                {[event.venue.name, event.venue.city].filter(Boolean).join(", ")}
+              </p>
+            ) : null}
+            <PosterFacts event={event} acts={billed.length} />
             <StatusBanner event={event} />
             <div className="mt-8 flex flex-wrap gap-3">
               {types.length ? (
                 <ButtonLink href="#tickets" size="lg">
                   <Ticket aria-hidden="true" /> Tickets
+                  {price ? (
+                    <span className="font-normal">
+                      {" "}
+                      from <Money value={price} />
+                    </span>
+                  ) : null}
                 </ButtonLink>
               ) : null}
-              <ButtonLink href="/discover" variant="secondary" size="lg">
+              <ButtonLink href="/events" variant="secondary" size="lg">
                 All events
               </ButtonLink>
             </div>
@@ -211,6 +259,7 @@ export default function EventPage() {
           )}
         </aside>
       </div>
+      {price ? <TicketBar price={price} /> : null}
     </main>
   );
 }

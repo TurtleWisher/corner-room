@@ -153,7 +153,7 @@ async function loadOrderContext(order: OrderRecord): Promise<OrderContext> {
 
 function restartHref(order: OrderRecord, context: OrderContext | null): string {
   const first = order.items?.[0];
-  if (first?.item_type === "TICKET" && first.event_id) return `/discover/${first.event_id}`;
+  if (first?.item_type === "TICKET" && first.event_id) return `/events/${first.event_id}`;
   if (context?.kind === "track" && context.track) return `/tracks/${context.track.id}`;
   return "/store";
 }

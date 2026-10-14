@@ -125,7 +125,7 @@ function EventsBody() {
                     <StatusChip value={row.status} /> · {row.timezone}
                   </p>
                 </div>
-                <Link href={`/events/${row.id}`} className="text-sm underline">
+                <Link href={`/staff/events/${row.id}`} className="text-sm underline">
                   Open
                 </Link>
               </Card>

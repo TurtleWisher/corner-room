@@ -285,6 +285,29 @@ class EventService:
             raise NotFoundError("Event not found")
         return event
 
+    async def public_venue_places(self, venue_ids: set[UUID]) -> dict[UUID, tuple[str, str | None]]:
+        """Name and city of ACTIVE venues, for public event pages (owner decision D-EV-03).
+
+        Only what a poster would print: no address lines, capacity, owner or status. Draft or
+        inactive venues stay private.
+        """
+        if not venue_ids:
+            return {}
+        rows = (
+            await self.session.execute(
+                select(Venue).where(
+                    Venue.id.in_(venue_ids),
+                    Venue.status == "ACTIVE",
+                    Venue.deleted_at.is_(None),
+                )
+            )
+        ).scalars()
+        places: dict[UUID, tuple[str, str | None]] = {}
+        for venue in rows:
+            city = (venue.address or {}).get("city")
+            places[venue.id] = (venue.name, city if isinstance(city, str) and city.strip() else None)
+        return places
+
     async def get_venue_row(self, venue_id: UUID) -> Venue:
         venue = await self.session.get(Venue, venue_id)
         if venue is None or venue.deleted_at is not None:

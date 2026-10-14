@@ -37,6 +37,13 @@ class EventOut(BaseModel):
     version: int
 
 
+class PublicVenueOut(BaseModel):
+    """What a poster prints about the place (D-EV-03): its name and city."""
+
+    name: str
+    city: str | None
+
+
 class PublicEventOut(BaseModel):
     id: UUID
     title: str
@@ -46,6 +53,12 @@ class PublicEventOut(BaseModel):
     starts_at: datetime | None
     ends_at: datetime | None
     venue_id: UUID | None
+    venue: PublicVenueOut | None = None
+    # Postponed and cancelled context, shown verbatim on the public page (events.md section 3).
+    previous_starts_at: datetime | None = None
+    previous_ends_at: datetime | None = None
+    postponement_reason: str | None = None
+    cancellation_reason: str | None = None
 
 
 class EventPage(BaseModel):
@@ -155,8 +168,14 @@ def _event_out(row: Event) -> EventOut:
     )
 
 
-def _public_out(row: Event) -> PublicEventOut:
+def _public_out(row: Event, places: dict[UUID, tuple[str, str | None]] | None = None) -> PublicEventOut:
+    place = (places or {}).get(row.venue_id) if row.venue_id else None
     return PublicEventOut(
+        venue=PublicVenueOut(name=place[0], city=place[1]) if place else None,
+        previous_starts_at=row.previous_starts_at,
+        previous_ends_at=row.previous_ends_at,
+        postponement_reason=row.postponement_reason,
+        cancellation_reason=row.cancellation_reason,
         id=row.id,
         title=row.title,
         description=row.description,
@@ -177,7 +196,8 @@ async def list_events(
 ) -> EventPage | PublicEventPage:
     rows, next_cursor, public_only = await svc.list_events(ctx, cursor=cursor, limit=limit)
     if public_only:
-        return PublicEventPage(items=[_public_out(r) for r in rows], next_cursor=next_cursor)
+        places = await svc.public_venue_places({r.venue_id for r in rows if r.venue_id})
+        return PublicEventPage(items=[_public_out(r, places) for r in rows], next_cursor=next_cursor)
     return EventPage(items=[_event_out(r) for r in rows], next_cursor=next_cursor)
 
 
@@ -207,7 +227,8 @@ async def get_event(
 ) -> EventOut | PublicEventOut:
     row, public_view = await svc.get_event(event_id, ctx)
     if public_view:
-        return _public_out(row)
+        places = await svc.public_venue_places({row.venue_id} if row.venue_id else set())
+        return _public_out(row, places)
     return _event_out(row)
 
 

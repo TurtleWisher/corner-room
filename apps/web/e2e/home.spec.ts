@@ -79,7 +79,7 @@ test("the poster effect never blocks the click", async ({ page, isMobile }) => {
   }
   // Without the API there is no event, so the poster leads to all events.
   await poster.getByRole("link", { name: "See all events" }).click();
-  await expect(page).toHaveURL(/\/discover$/);
+  await expect(page).toHaveURL(/\/events$/);
 });
 
 test("the Store button goes to the Store", async ({ page }) => {

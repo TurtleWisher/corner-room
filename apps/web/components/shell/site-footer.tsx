@@ -25,7 +25,7 @@ export function SiteFooter({ world = "ember" }: { world?: "ember" | "sky" }) {
     {
       title: "Explore",
       links: [
-        { href: "/discover", label: "Events" },
+        { href: "/events", label: "Events" },
         { href: "/artists", label: "Artists" },
         { href: "/search", label: "Search" },
       ],

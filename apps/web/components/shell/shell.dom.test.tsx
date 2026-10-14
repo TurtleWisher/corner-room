@@ -98,7 +98,7 @@ describe("MobileTabBar", () => {
   it("offers sign-in to guests and account to signed-in users", () => {
     auth.status = "anonymous";
     auth.user = null;
-    pathname = "/discover";
+    pathname = "/events";
     const { rerender } = render(<MobileTabBar />);
     expect(screen.getByRole("link", { name: "Sign in" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Events" }).getAttribute("aria-current")).toBe("page");
