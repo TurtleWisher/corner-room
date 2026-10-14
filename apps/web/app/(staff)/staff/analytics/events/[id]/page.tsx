@@ -93,7 +93,7 @@ function EventAnalyticsBody() {
           Ticket counts from analytics facts. Remaining inventory is not shown here.
         </p>
         <p className="text-sm">
-          <Link href={`/events/${params.id}`} className="underline">
+          <Link href={`/staff/events/${params.id}`} className="underline">
             Open event
           </Link>
         </p>

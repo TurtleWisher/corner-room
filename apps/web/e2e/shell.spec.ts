@@ -15,15 +15,24 @@ test("home shows the brand hero and no sideways scroll", async ({ page }) => {
 });
 
 test("public URLs keep working inside the new shell", async ({ page }) => {
-  for (const path of ["/discover", "/artists", "/releases", "/store", "/search", "/login"]) {
+  for (const path of ["/events", "/artists", "/releases", "/store", "/search", "/login"]) {
     const response = await page.goto(path);
     expect(response?.status(), path).toBe(200);
     await expect(page.getByRole("link", { name: "Corner Room home" })).toBeVisible();
   }
 });
 
-test("phones get the bottom tab bar, desktops the header nav", async ({ page, isMobile }) => {
+test("old event and venue addresses redirect to their new homes (D-EV-01)", async ({ page }) => {
   await page.goto("/discover");
+  await expect(page).toHaveURL(/\/events$/);
+  await page.goto("/discover/some-event");
+  await expect(page).toHaveURL(/\/events\/some-event$/);
+  await page.goto("/venues");
+  await expect(page).toHaveURL(/\/staff\/venues$/);
+});
+
+test("phones get the bottom tab bar, desktops the header nav", async ({ page, isMobile }) => {
+  await page.goto("/events");
   const tabs = page.getByRole("navigation", { name: "Main" });
   await expect(tabs).toBeVisible();
   await expect(tabs.getByRole("link", { name: "Events" })).toHaveAttribute("aria-current", "page");
@@ -51,7 +60,7 @@ test("the listening room is in the Sky world", async ({ page }) => {
 
 test("skip link reaches the main content", async ({ page, isMobile }) => {
   test.skip(isMobile, "keyboard check runs on desktop");
-  await page.goto("/discover");
+  await page.goto("/events");
   await page.keyboard.press("Tab");
   const skip = page.getByRole("link", { name: "Skip to content" });
   await expect(skip).toBeFocused();

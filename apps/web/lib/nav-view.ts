@@ -10,7 +10,7 @@ export type NavSection = { label: string; items: NavItem[] };
 
 /** Public header (1024 px and up). "Events" is the public What's on list. */
 export const PUBLIC_NAV: NavItem[] = [
-  { href: "/discover", label: "Events" },
+  { href: "/events", label: "Events" },
   { href: "/listen", label: "Listen" },
   { href: "/artists", label: "Artists" },
   { href: "/releases", label: "Releases" },
@@ -53,7 +53,7 @@ export function menuSections(signedIn: boolean): NavSection[] {
     {
       label: "Discover",
       items: [
-        { href: "/discover", label: "Events" },
+        { href: "/events", label: "Events" },
         { href: "/artists", label: "Artists" },
         { href: "/bands", label: "Bands" },
         { href: "/releases", label: "Releases" },
@@ -90,8 +90,8 @@ export function staffNavSections(permissions: string[] | undefined): NavSection[
     {
       label: "Live",
       items: [
-        { href: "/events", label: "Events" },
-        { href: "/venues", label: "Venues" },
+        { href: "/staff/events", label: "Events" },
+        { href: "/staff/venues", label: "Venues" },
       ],
     },
     { label: "Money", items: money },
@@ -109,7 +109,7 @@ export function staffNavSections(permissions: string[] | undefined): NavSection[
 
 /** Where "Staff console" opens: the first destination the user's console shows. */
 export function staffHomeHref(permissions: string[] | undefined): string {
-  return staffNavSections(permissions)[0]?.items[0]?.href ?? "/events";
+  return staffNavSections(permissions)[0]?.items[0]?.href ?? "/staff/events";
 }
 
 /** "Money / Finance" for the staff top bar, from the most specific matching item. */

@@ -33,9 +33,9 @@ import {
 /** One icon per destination. Icons are decorative: every link also has a visible label. */
 const ICONS: Record<string, LucideIcon> = {
   "/": House,
-  "/discover": CalendarDays,
   "/events": CalendarDays,
-  "/venues": MapPin,
+  "/staff/events": CalendarDays,
+  "/staff/venues": MapPin,
   "/artists": MicVocal,
   "/artists/apply": BadgeCheck,
   "/bands": Users,

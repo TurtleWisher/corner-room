@@ -19,7 +19,7 @@ const hrefs = (sections: { items: { href: string }[] }[]) => sections.flatMap((s
 
 describe("staffNavSections", () => {
   it("keeps the always-visible staff destinations without permissions", () => {
-    expect(hrefs(staffNavSections([]))).toEqual(["/events", "/venues", "/staff/commerce", "/staff/royalties", "/staff/campaigns"]);
+    expect(hrefs(staffNavSections([]))).toEqual(["/staff/events", "/staff/venues", "/staff/commerce", "/staff/royalties", "/staff/campaigns"]);
     expect(staffNavSections(undefined).map((s) => s.label)).toEqual(["Live", "Money", "Marketing"]);
   });
 
@@ -80,10 +80,10 @@ describe("every pre-Stage 5 destination is still linked", () => {
       ),
     );
     const old = [
-      "/search", "/organizations", "/events", "/venues", "/artists", "/bands", "/releases", "/tracks", "/listen",
+      "/search", "/organizations", "/events", "/staff/events", "/staff/venues", "/artists", "/bands", "/releases", "/tracks", "/listen",
       "/store", "/purchases", "/subscriptions", "/library", "/playlists", "/history", "/tickets", "/orders",
       "/staff/commerce", "/royalties", "/staff/royalties", "/staff/finance", "/staff/campaigns", "/staff/analytics",
-      "/staff/ops", "/staff/audit", "/staff/users", "/staff/organizations", "/account", "/discover",
+      "/staff/ops", "/staff/audit", "/staff/users", "/staff/organizations", "/account",
     ];
     for (const href of old) expect(linked).toContain(href);
   });

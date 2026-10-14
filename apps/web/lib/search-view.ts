@@ -69,12 +69,12 @@ export function buildSearchHref(q: string, entityType: string | null, cursor: st
 }
 
 /**
- * Where a hit links. The indexer's event route is the staff management page (/events/{id}), so
- * event hits go to the public event page instead (until URL-02 settles the event URLs).
+ * Where a hit links. Event hits always go to the public event page (/events/{id}, D-EV-01),
+ * whatever route the indexer stored.
  */
 export function searchResultHref(route: string | null | undefined, hit?: { entity_type: string; entity_id: string }): string | null {
   if (hit?.entity_type === "EVENT") {
-    return `/discover/${hit.entity_id}`;
+    return `/events/${hit.entity_id}`;
   }
   if (!route) {
     return null;

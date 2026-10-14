@@ -21,6 +21,8 @@ export type EventRecord = {
   previous_starts_at?: string | null;
   previous_ends_at?: string | null;
   version?: number;
+  /** Public responses only: the venue's name and city when the event has an active venue (D-EV-03). */
+  venue?: { name: string; city: string | null } | null;
 };
 
 export type VenueRecord = {
@@ -47,8 +49,9 @@ export async function fetchEvents(): Promise<Page<EventRecord>> {
   return apiFetch<Page<EventRecord>>("/api/v1/events", { retry: false });
 }
 
-export async function fetchPublicEvents(): Promise<Page<EventRecord>> {
-  return apiFetch<Page<EventRecord>>("/api/v1/events", { retry: false, skipAuth: true, skipRefresh: true });
+export async function fetchPublicEvents(cursor?: string | null): Promise<Page<EventRecord>> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  return apiFetch<Page<EventRecord>>(`/api/v1/events${query}`, { retry: false, skipAuth: true, skipRefresh: true });
 }
 
 export async function fetchEvent(id: string, opts?: { skipAuth?: boolean }): Promise<EventRecord> {

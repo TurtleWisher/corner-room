@@ -20,3 +20,27 @@
 [data-module="events"] .ev-row {
   transition: opacity var(--cr-dur-interaction) var(--ease-corner);
 }
+
+/* Poster title rises 12 px as the page opens (events.md section 7); the cube assembles beside it. */
+@keyframes ev-rise {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+[data-module="events"] .ev-rise {
+  animation: ev-rise calc(var(--cr-dur-hero) * 1.5) var(--ease-corner) both;
+}
+[data-module="events"] .ev-facts dd {
+  font-stretch: 62%;
+  font-weight: 800;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-module="events"] .ev-rise {
+    animation: none;
+  }
+}

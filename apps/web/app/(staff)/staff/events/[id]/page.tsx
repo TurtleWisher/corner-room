@@ -311,7 +311,7 @@ function EventDetailBody() {
       <Card>
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium">Ticket types</h2>
-          <Link href={`/events/${event.id}/attendance`} className="text-sm underline">
+          <Link href={`/staff/events/${event.id}/attendance`} className="text-sm underline">
             Attendance
           </Link>
         </div>

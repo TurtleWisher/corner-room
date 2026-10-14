@@ -88,7 +88,7 @@ describe("PaymentPanel", () => {
   const noop = async () => {};
 
   it("shows a marked sample (not a QR) on a test server without an image, and the test button", () => {
-    render(<PaymentPanel order={order()} stage="awaiting_payment" now={NOW} onOrder={() => {}} onRefresh={noop} restartHref="/discover/e" />);
+    render(<PaymentPanel order={order()} stage="awaiting_payment" now={NOW} onOrder={() => {}} onRefresh={noop} restartHref="/events/e" />);
     expect(screen.getByText("The Bangla QR code goes here")).toBeTruthy();
     expect(screen.getByText(/Not a payment code/)).toBeTruthy();
     expect(screen.queryByRole("img", { name: /payment code/ })).toBeNull();
@@ -108,9 +108,9 @@ describe("PaymentPanel", () => {
   });
 
   it("hides the code once the reservation has run out and offers a fresh start", () => {
-    render(<PaymentPanel order={order({ hold_status: "EXPIRED" })} stage="expired" now={NOW} onOrder={() => {}} onRefresh={noop} restartHref="/discover/e" />);
+    render(<PaymentPanel order={order({ hold_status: "EXPIRED" })} stage="expired" now={NOW} onOrder={() => {}} onRefresh={noop} restartHref="/events/e" />);
     expect(screen.queryByText("The Bangla QR code goes here")).toBeNull();
-    expect(screen.getByRole("link", { name: "Start again" }).getAttribute("href")).toBe("/discover/e");
+    expect(screen.getByRole("link", { name: "Start again" }).getAttribute("href")).toBe("/events/e");
     expect(screen.getByRole("status").textContent).toMatch(/reservation has run out/);
   });
 

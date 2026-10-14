@@ -40,7 +40,7 @@ export function MobileTabBar({ world = "ember" }: { world?: "ember" | "sky" }) {
         className="cr-scope cr-bar fixed inset-x-0 bottom-0 z-40 flex h-16 border-t border-line pb-[env(safe-area-inset-bottom)] lg:hidden"
       >
         <Tab href="/" label="Home" icon={House} exact />
-        <Tab href="/discover" label="Events" icon={CalendarDays} />
+        <Tab href="/events" label="Events" icon={CalendarDays} />
         <Tab href="/listen" label="Listen" icon={Headphones} />
         <Tab href="/search" label="Search" icon={Search} />
         {signedIn ? (

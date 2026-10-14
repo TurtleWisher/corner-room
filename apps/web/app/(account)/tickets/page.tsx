@@ -55,7 +55,7 @@ function Tickets() {
     return <ErrorState title="Tickets unavailable" message={loadErrorMessage(data.error, "your tickets")} action={<RetryButton onClick={data.reload} />} />;
   }
   if (data.data.length === 0) {
-    return <EmptyState title="No tickets yet" body="Tickets you buy for events appear here." action={<ButtonLink href="/discover" size="sm">See what&apos;s on</ButtonLink>} />;
+    return <EmptyState title="No tickets yet" body="Tickets you buy for events appear here." action={<ButtonLink href="/events" size="sm">See what&apos;s on</ButtonLink>} />;
   }
   return (
     <ul className="space-y-6">
@@ -66,7 +66,7 @@ function Tickets() {
             <div className="min-w-0">
               <h2 className="text-xl font-bold text-fg">
                 {event ? (
-                  <Link href={`/discover/${event.id}`} className="cr-focus hover:text-highlight">
+                  <Link href={`/events/${event.id}`} className="cr-focus hover:text-highlight">
                     {event.title}
                   </Link>
                 ) : (
@@ -104,7 +104,7 @@ function Tickets() {
 
 export default function TicketsPage() {
   return (
-    <AccountPage eyebrow="Your account" title="Tickets" what="your tickets" actions={<ButtonLink href="/discover" variant="secondary" size="sm">What&apos;s on</ButtonLink>}>
+    <AccountPage eyebrow="Your account" title="Tickets" what="your tickets" actions={<ButtonLink href="/events" variant="secondary" size="sm">What&apos;s on</ButtonLink>}>
       <Tickets />
     </AccountPage>
   );

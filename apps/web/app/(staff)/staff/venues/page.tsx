@@ -114,7 +114,7 @@ function VenuesBody() {
                     <StatusChip value={row.status} /> · capacity {row.capacity}
                   </p>
                 </div>
-                <Link href={`/venues/${row.id}`} className="text-sm underline">
+                <Link href={`/staff/venues/${row.id}`} className="text-sm underline">
                   Open
                 </Link>
               </Card>
