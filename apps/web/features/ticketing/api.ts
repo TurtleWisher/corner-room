@@ -51,6 +51,9 @@ export type OrderItemRecord = {
   currency_code: string;
   ticket_type_name?: string | null;
   event_id?: string | null;
+  /** For RELEASE items: what was bought, named by the API. */
+  release_title?: string | null;
+  release_type?: string | null;
 };
 
 export type OrderRecord = {

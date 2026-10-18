@@ -5,15 +5,23 @@ from cornerroom.infra.outbox import OutboxEvent
 from cornerroom.modules.artists.domain.models import (
     Artist,
     ArtistApplication,
+    ArtistJoinLink,
     Band,
     BandMember,
     Follow,
 )
 from cornerroom.modules.music.domain.models import (
     Credit,
+    CreditRole,
+    Genre,
+    IntakeRecord,
+    ReleaseContributor,
+    ReleaseReview,
     Release,
     ReleaseTrack,
+    RenditionProfile,
     Track,
+    TrackRendition,
     TrackVersion,
 )
 from cornerroom.modules.streaming.domain.models import (
@@ -44,6 +52,11 @@ from cornerroom.modules.documents.domain.models import (
     DocumentAcl,
     DocumentVersion,
     MediaAsset,
+    MediaFinding,
+    MediaInspection,
+    MediaJob,
+    UploadIntent,
+    UploadPart,
 )
 from cornerroom.modules.events.domain.models import Event, EventLineup, EventMilestone, Venue, VenueBooking
 from cornerroom.modules.ticketing.domain.models import (
@@ -56,6 +69,7 @@ from cornerroom.modules.ticketing.domain.models import (
 )
 from cornerroom.modules.commerce.domain.models import (
     Offer,
+    OfferProposal,
     Order,
     OrderItem,
     Product,
@@ -129,6 +143,7 @@ __all__ = [
     "AnalyticsEvent",
     "Artist",
     "ArtistApplication",
+    "ArtistJoinLink",
     "AuditLog",
     "Band",
     "BandMember",
@@ -160,6 +175,19 @@ __all__ = [
     "Playlist",
     "PlaylistItem",
     "MediaAsset",
+    "MediaFinding",
+    "MediaInspection",
+    "MediaJob",
+    "RenditionProfile",
+    "TrackRendition",
+    "CreditRole",
+    "Genre",
+    "IntakeRecord",
+    "ReleaseContributor",
+    "ReleaseReview",
+    "OfferProposal",
+    "UploadIntent",
+    "UploadPart",
     "Release",
     "ReleaseTrack",
     "Track",

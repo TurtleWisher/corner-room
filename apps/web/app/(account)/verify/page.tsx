@@ -6,6 +6,7 @@ import { CircleCheck } from "lucide-react";
 import { AuthCard } from "@/components/account/auth-card";
 import { ButtonLink, ErrorState, Skeleton } from "@/components/ds";
 import { ApiError, completeVerification } from "@/lib/api";
+import { signInPageFrom, withNext } from "@/lib/auth-view";
 import { friendlyError } from "@/lib/error-copy";
 
 type View = { kind: "working" } | { kind: "done" } | { kind: "error"; message: string };
@@ -20,12 +21,18 @@ function takeTokenFromHash(): string | null {
 
 export default function VerifyPage() {
   const [view, setView] = useState<View>({ kind: "working" });
+  const [next, setNext] = useState<string | null>(null);
+  const [signIn, setSignIn] = useState("/login");
   const started = useRef(false);
 
   useEffect(() => {
     // Strict Mode runs effects twice in development; a token can be used only once.
     if (started.current) return;
     started.current = true;
+    // Read where to go next before the address is cleaned (the token must not stay in history).
+    const query = new URLSearchParams(window.location.search);
+    setNext(query.get("next"));
+    setSignIn(signInPageFrom(query.get("signin")));
     const token = takeTokenFromHash();
     if (!token) {
       setView({ kind: "error", message: "This verification link is incomplete. Ask for a new one from the sign-in page." });
@@ -63,7 +70,7 @@ export default function VerifyPage() {
           <CircleCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-success" />
           Your account is active. You can sign in now.
         </p>
-        <ButtonLink href="/login" className="mt-6" block>
+        <ButtonLink href={withNext(signIn, next)} className="mt-6" block>
           Sign in
         </ButtonLink>
       </AuthCard>

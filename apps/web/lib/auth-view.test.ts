@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { loginFormState, resolveProtectedView, safeNextPath, staffNavFlags } from "./auth-view";
+import { loginFormState, resolveProtectedView, safeNextPath, signInPageFrom, staffNavFlags, verifyLinkFor, withNext } from "./auth-view";
 
 describe("login form state", () => {
   it("shows loading while submitting", () => {
@@ -88,3 +88,25 @@ describe("safeNextPath", () => {
     }
   });
 });
+
+describe("withNext", () => {
+  it("carries a safe destination and keeps a fragment last", () => {
+    expect(withNext("/login", "/artists/apply")).toBe("/login?next=%2Fartists%2Fapply");
+    expect(withNext("/verify#token=abc", "/studio")).toBe("/verify?next=%2Fstudio#token=abc");
+    expect(withNext("/login", "https://evil.example")).toBe("/login");
+    expect(withNext("/login", "//evil.example")).toBe("/login");
+    expect(withNext("/login", null)).toBe("/login");
+  });
+});
+
+describe("verifyLinkFor", () => {
+  it("keeps the sign-in page and the destination apart", () => {
+    expect(verifyLinkFor("/verify#token=t", "/artists/apply", "/login")).toBe("/verify?next=%2Fartists%2Fapply#token=t");
+    expect(verifyLinkFor("/verify#token=t", "/studio/join?code=c", "/studio/sign-in")).toBe(
+      "/verify?next=%2Fstudio%2Fjoin%3Fcode%3Dc&signin=%2Fstudio%2Fsign-in#token=t",
+    );
+    expect(signInPageFrom("/staff/sign-in")).toBe("/staff/sign-in");
+    expect(signInPageFrom("https://evil.example")).toBe("/login");
+  });
+});
+

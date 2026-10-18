@@ -1,0 +1,79 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  currentAudio,
+  displayStateLabel,
+  displayStateTone,
+  missingCount,
+  moveItem,
+  parsePriceToMinor,
+  profileReasonText,
+  readinessRows,
+  proposalWords,
+  reviewEventText,
+} from "./studio-view";
+
+describe("studio view", () => {
+  it("words display states from the API", () => {
+    expect(displayStateLabel("CHECKING_AUDIO")).toBe("Checking your audio");
+    expect(displayStateTone("NEEDS_ATTENTION")).toBe("attention");
+    expect(displayStateTone("RELEASED")).toBe("good");
+    expect(displayStateLabel("SOMETHING_NEW")).toBe("SOMETHING_NEW");
+  });
+
+  it("explains why a profile can't publish", () => {
+    expect(profileReasonText("PROFILE_NOT_ACTIVE")).toMatch(/activated/);
+    expect(profileReasonText(null)).toBeNull();
+  });
+
+  it("names the track on per-track readiness items", () => {
+    const rows = readinessRows(
+      [
+        { code: "COVER", ok: false },
+        { code: "TRACK_AUDIO", ok: true, track_id: "t1" },
+      ],
+      [{ id: "t1", title: "Kaal Bela", position: 1 }],
+    );
+    expect(rows[0].text).toMatch(/Cover art/);
+    expect(rows[1].text).toBe("1. Kaal Bela: master audio that passed its checks");
+    expect(missingCount([{ code: "A", ok: false }, { code: "B", ok: true }])).toBe(1);
+  });
+
+  it("reorders only within bounds", () => {
+    expect(moveItem(["a", "b", "c"], 2, -1)).toEqual(["a", "c", "b"]);
+    expect(moveItem(["a", "b"], 0, -1)).toEqual(["a", "b"]);
+  });
+
+  it("reads typed prices into minor units without guessing", () => {
+    expect(parsePriceToMinor("120")).toBe(12000);
+    expect(parsePriceToMinor("1,200.5")).toBe(120050);
+    expect(parsePriceToMinor("৳ 50")).toBe(5000);
+    expect(parsePriceToMinor("12.345")).toBeNull();
+    expect(parsePriceToMinor("abc")).toBeNull();
+  });
+
+  it("picks the audio version to show", () => {
+    const audio = [
+      { version_id: "old", status: "READY", is_current: true, has_audio: true },
+      { version_id: "new", status: "PROCESSING", is_current: false, has_audio: true },
+    ];
+    expect(currentAudio({ audio })?.version_id).toBe("new");
+    expect(currentAudio({ audio: [] })).toBeNull();
+  });
+});
+
+describe("review history", () => {
+  it("words reviewer actions", () => {
+    expect(reviewEventText("request_changes")).toBe("Changes requested");
+    expect(reviewEventText("release")).toBe("Released");
+    expect(reviewEventText("other")).toBe("other");
+  });
+});
+
+describe("price proposals", () => {
+  it("says what is priced and for whom", () => {
+    expect(proposalWords({ subject_type: "RELEASE", subject_title: "Monsoon", audience: "EVERYONE" })).toEqual({ subject: "Whole release", audience: "Everyone" });
+    expect(proposalWords({ subject_type: "TRACK", subject_title: " Tin Roof ", audience: "EVERYONE" }).subject).toBe("Track: Tin Roof");
+    expect(proposalWords({ subject_type: "RELEASE", audience: "OWNS_PART_OF_RELEASE" }).audience).toBe("Fans who already own some of its songs");
+  });
+});

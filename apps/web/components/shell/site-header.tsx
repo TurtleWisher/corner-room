@@ -12,7 +12,7 @@ import { AccountMenu, AvatarButton } from "@/components/shell/account-menu";
 import { NavLinks } from "@/components/shell/nav-link";
 import { NavIcon } from "@/components/shell/nav-icons";
 import { ShellBell } from "@/components/shell/shell-bell";
-import { PUBLIC_NAV, SEARCH_HREF, activeHref, type NavItem } from "@/lib/nav-view";
+import { PUBLIC_NAV, SEARCH_HREF, activeHref, filterNavForUser, navFlagsFor, type NavItem } from "@/lib/nav-view";
 import { cn } from "@/lib/utils";
 
 export type ShellWorld = "ember" | "sky";
@@ -78,10 +78,12 @@ export function SiteHeader({
   /** Show the second row only to signed-in users (account pages also host sign-in and registration). */
   subnavAuthOnly?: boolean;
 }) {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const signedIn = status === "authenticated";
-  const showSubnav = !!subnav?.length && (!subnavAuthOnly || signedIn);
+  // Fans do not see artist-only or staff-only places (owner, 2026-10-17).
+  const items = subnav ? filterNavForUser(subnav, navFlagsFor(signedIn ? user : null)) : [];
+  const showSubnav = items.length > 0 && (!subnavAuthOnly || signedIn);
 
   return (
     <header data-theme={world} className="cr-scope cr-bar sticky top-0 z-30 border-b border-line">
@@ -116,7 +118,7 @@ export function SiteHeader({
           )}
         </div>
       </div>
-      {showSubnav && subnav ? <SectionNav items={subnav} label={subnavLabel ?? "Section"} /> : null}
+      {showSubnav ? <SectionNav items={items} label={subnavLabel ?? "Section"} /> : null}
       <AccountMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
     </header>
   );

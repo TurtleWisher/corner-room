@@ -28,16 +28,18 @@ import {
   fetchMySubscriptions,
   fetchOffers,
   fetchOrder,
+  fetchRelease,
   fetchSubscriptionPlans,
   fetchTrack,
   type EntitlementRecord,
   type EventRecord,
   type OrderRecord,
+  type ReleaseRecord,
   type TrackRecord,
 } from "@/lib/api";
 import { cityFromTimeZone } from "@/lib/home-view";
 import { creditName } from "@/lib/music-view";
-import { hasCatalogAccess, ownsTrack } from "@/lib/ownership";
+import { hasCatalogAccess, ownsRelease, ownsTrack } from "@/lib/ownership";
 import {
   afterPurchaseHref,
   checkoutItemFromParams,
@@ -63,6 +65,7 @@ type Summary = {
 
 function alreadyOwns(entitlements: EntitlementRecord[], offer: NonNullable<Summary["offer"]>): boolean {
   if (offer.product_type === "TRACK" && offer.subject_id) return ownsTrack(entitlements, offer.subject_id);
+  if (offer.product_type === "RELEASE" && offer.subject_id) return ownsRelease(entitlements, offer.subject_id);
   if (offer.product_type === "CATALOG_ACCESS") return hasCatalogAccess(entitlements);
   return false;
 }
@@ -136,7 +139,11 @@ function Shell({ children, theme = "ember" }: { children: React.ReactNode; theme
 
 /* ---------- A placed order: the server's order drives everything ---------- */
 
-type OrderContext = { kind: "tickets"; event: EventRecord | null } | { kind: "track"; track: TrackRecord | null } | { kind: "other"; title: string };
+type OrderContext =
+  | { kind: "tickets"; event: EventRecord | null }
+  | { kind: "track"; track: TrackRecord | null }
+  | { kind: "release"; id: string; title: string; release: ReleaseRecord | null }
+  | { kind: "other"; title: string };
 
 async function loadOrderContext(order: OrderRecord): Promise<OrderContext> {
   const first = order.items?.[0];
@@ -148,6 +155,10 @@ async function loadOrderContext(order: OrderRecord): Promise<OrderContext> {
     const track = await fetchTrack(first.ref_id).catch(() => null);
     return track ? { kind: "track", track } : { kind: "other", title: "Music" };
   }
+  if (first?.item_type === "RELEASE") {
+    const release = await fetchRelease(first.ref_id).catch(() => null);
+    return { kind: "release", id: first.ref_id, title: release?.title ?? first.release_title ?? "Your release", release };
+  }
   return { kind: "other", title: order.purpose === "SUBSCRIPTION" ? "Subscription" : "Your order" };
 }
 
@@ -155,6 +166,7 @@ function restartHref(order: OrderRecord, context: OrderContext | null): string {
   const first = order.items?.[0];
   if (first?.item_type === "TICKET" && first.event_id) return `/events/${first.event_id}`;
   if (context?.kind === "track" && context.track) return `/tracks/${context.track.id}`;
+  if (context?.kind === "release") return `/releases/${context.id}`;
   return "/store";
 }
 
@@ -165,7 +177,13 @@ function OrderCheckout({ initial }: { initial: OrderRecord }) {
   const credits = useCredits();
   const [moment, setMoment] = useState<"none" | "playing" | "done">("none");
   const ctx = context.status === "ok" ? context.data : null;
-  const artist = ctx?.kind === "track" && ctx.track ? creditName(ctx.track, credits.artists, credits.bands) : null;
+  const artist =
+    ctx?.kind === "track" && ctx.track
+      ? creditName(ctx.track, credits.artists, credits.bands)
+      : ctx?.kind === "release" && ctx.release
+        ? creditName(ctx.release, credits.artists, credits.bands)
+        : null;
+  const bought = ctx?.kind === "release" ? { id: ctx.id, title: ctx.title } : null;
 
   // The success moment plays once, and only because this page saw the server complete the order.
   if (status.celebrate && moment === "none") setMoment("playing");
@@ -178,6 +196,8 @@ function OrderCheckout({ initial }: { initial: OrderRecord }) {
           <TicketConfirmation order={order} event={ctx.event} />
         ) : ctx?.kind === "track" ? (
           <MusicReceipt order={order} track={ctx.track} artist={artist} />
+        ) : ctx?.kind === "release" ? (
+          <MusicReceipt order={order} track={null} release={bought} artist={artist} />
         ) : (
           <Card className="p-6" role="status">
             <p className="flex items-center gap-2 text-xl font-bold text-fg">
@@ -203,6 +223,8 @@ function OrderCheckout({ initial }: { initial: OrderRecord }) {
           <TicketSummary order={order} event={ctx.event} />
         ) : ctx?.kind === "track" ? (
           <TrackSummary order={order} track={ctx.track} artist={artist} />
+        ) : ctx?.kind === "release" ? (
+          <TrackSummary order={order} track={null} release={bought} artist={artist} />
         ) : ctx ? (
           <GenericSummary order={order} title={ctx.title} />
         ) : (
@@ -214,7 +236,13 @@ function OrderCheckout({ initial }: { initial: OrderRecord }) {
         confirmed={moment === "playing"}
         title="Payment received"
         detail={
-          ctx?.kind === "tickets" ? "Your tickets are ready." : ctx?.kind === "track" && ctx.track ? `${ctx.track.title} is in your library.` : "Your order is complete."
+          ctx?.kind === "tickets"
+            ? "Your tickets are ready."
+            : ctx?.kind === "track" && ctx.track
+              ? `${ctx.track.title} is in your library.`
+              : ctx?.kind === "release"
+                ? `${ctx.title} is in your library.`
+                : "Your order is complete."
         }
         onDone={() => {
           setMoment("done");
@@ -360,7 +388,11 @@ function NewCheckout() {
       {summary.status === "ok" && summary.data?.offer && owned.status === "ok" && alreadyOwns(owned.data, summary.data.offer) ? (
         <Card className="p-6">
           <p className="font-semibold text-fg">
-            {summary.data.offer.product_type === "TRACK" ? "You already own this track." : "You already have the full catalog."}
+            {summary.data.offer.product_type === "TRACK"
+              ? "You already own this track."
+              : summary.data.offer.product_type === "RELEASE"
+                ? "You already own this release."
+                : "You already have the full catalog."}
           </p>
           <ButtonLink href={afterPurchaseHref(item, summary.data.offer).href} className="mt-4">
             Listen now

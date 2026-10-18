@@ -25,7 +25,7 @@ from cornerroom.kernel.events import (
 )
 from cornerroom.kernel.ids import new_uuid
 from cornerroom.kernel.money import Money
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.kernel.ports import NotificationPort, NullNotificationPort
 from cornerroom.modules.artists.domain.models import Artist
 from cornerroom.modules.audit.application.service import AuditService
@@ -315,8 +315,7 @@ class CampaignService:
             .order_by(Campaign.created_at.desc(), Campaign.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Campaign.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Campaign.created_at, Campaign.id, cursor))
         size = clamp_limit(limit)
         rows = list((await self.session.execute(stmt.limit(size + 1))).scalars().all())
         next_cursor = None

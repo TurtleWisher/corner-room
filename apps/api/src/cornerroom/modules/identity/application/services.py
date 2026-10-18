@@ -37,7 +37,7 @@ from cornerroom.kernel.events import (
 )
 from cornerroom.kernel.ids import new_uuid
 from cornerroom.kernel.outbox import event_bus
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.authorization.domain.models import Role, RoleAssignment
@@ -927,11 +927,7 @@ class IdentityService:
             )
         stmt = stmt.order_by(User.created_at.desc(), User.id.desc())
         if cursor:
-            try:
-                data = decode_cursor(cursor)
-            except Exception as exc:
-                raise AppError("VALIDATION_ERROR", "Invalid cursor", 422) from exc
-            stmt = stmt.where(User.created_at < data["t"])
+            stmt = stmt.where(keyset_before(User.created_at, User.id, cursor))
         stmt = stmt.limit(page + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None

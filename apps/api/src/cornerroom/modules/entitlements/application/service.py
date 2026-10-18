@@ -15,7 +15,7 @@ from cornerroom.infra.outbox import enqueue_outbox
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import ENTITLEMENT_GRANTED, ENTITLEMENT_REVOKED, DomainEvent
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.kernel.ports import NotificationPort, NullNotificationPort
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.entitlements.domain.lifecycle import (
@@ -224,6 +224,14 @@ class EntitlementService:
             Entitlement.deleted_at.is_(None),
         )
         rows = list((await self.session.execute(stmt)).scalars())
+        release_ids: set | None = None
+        if any(row.scope == "RELEASE" for row in rows):
+            # The releases this track is on right now: a bonus track added later is covered.
+            from cornerroom.modules.music.domain.models import ReleaseTrack
+
+            release_ids = set(
+                (await self.session.execute(select(ReleaseTrack.release_id).where(ReleaseTrack.track_id == track_id))).scalars()
+            )
         for row in rows:
             expires = row.expires_at
             if is_covering(
@@ -233,9 +241,58 @@ class EntitlementService:
                 track_id=track_id,
                 expires_at=expires,
                 now=now,
+                release_ids=release_ids,
             ):
                 return True
         return False
+
+    async def owns_by_purchase(self, user_id: UUID, track_id: UUID) -> bool:
+        """Bought this track, or a release it is on now (D-AUDIO-12). Catalog access from a pass or
+        a subscription is listening, not ownership: it never grants downloads (D-AUDIO-06) or access
+        after a takedown (D-AUDIO-14). A refund revokes the entitlement, so it no longer counts."""
+        from cornerroom.modules.music.domain.models import ReleaseTrack
+
+        now = self.clock.now()
+        rows = (
+            await self.session.execute(
+                select(Entitlement).where(
+                    Entitlement.user_id == user_id,
+                    Entitlement.status == "ACTIVE",
+                    Entitlement.deleted_at.is_(None),
+                    Entitlement.scope.in_(("TRACK", "RELEASE")),
+                )
+            )
+        ).scalars().all()
+        release_ids = None
+        if any(row.scope == "RELEASE" for row in rows):
+            release_ids = set(
+                (await self.session.execute(select(ReleaseTrack.release_id).where(ReleaseTrack.track_id == track_id))).scalars()
+            )
+        return any(
+            is_covering(
+                status=row.status, scope=row.scope, ref_id=row.ref_id, track_id=track_id,
+                expires_at=row.expires_at, now=now, release_ids=release_ids,
+            )
+            for row in rows
+        )
+
+    async def find_active_release(self, user_id: UUID, release_id: UUID) -> Entitlement | None:
+        now = self.clock.now()
+        rows = (
+            await self.session.execute(
+                select(Entitlement).where(
+                    Entitlement.user_id == user_id,
+                    Entitlement.scope == "RELEASE",
+                    Entitlement.ref_id == release_id,
+                    Entitlement.status == "ACTIVE",
+                    Entitlement.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        for row in rows:
+            if row.expires_at is None or row.expires_at > now:
+                return row
+        return None
 
     async def require_catalog_access(self, user_id: UUID, track_id: UUID) -> None:
         if not await self.has_catalog_access(user_id, track_id):
@@ -261,8 +318,7 @@ class EntitlementService:
             .order_by(Entitlement.created_at.desc(), Entitlement.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Entitlement.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Entitlement.created_at, Entitlement.id, cursor))
         rows = list((await self.session.execute(stmt.limit(limit + 1))).scalars())
         next_cursor = None
         if len(rows) > limit:

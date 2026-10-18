@@ -27,6 +27,12 @@ class SignedAudioUrl:
     track_version_id: UUID
     media_asset_id: UUID
     object_key: str | None = None
+    codec: str | None = None
+    container: str | None = None
+    bitrate_kbps: int | None = None
+    gain_db: float | None = None
+    legacy_delivery: bool = False
+    alternates: tuple[tuple[str, str], ...] = ()  # (codec, url) to try when this one won't decode
 
 
 class AudioDeliveryPort(Protocol):

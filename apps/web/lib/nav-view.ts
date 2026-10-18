@@ -43,12 +43,34 @@ export const ACCOUNT_NAV: NavItem[] = [
 
 /** Second row for artist pages. */
 export const ARTIST_NAV: NavItem[] = [
+  { href: "/studio", label: "Studio" },
   { href: "/royalties", label: "Royalties" },
   { href: "/artists/apply", label: "Apply as an artist" },
 ];
 
+export type NavFlags = { isArtist?: boolean; hasWorkspace?: boolean };
+
+/** The user's own flags from /me (missing means no). */
+export function navFlagsFor(user: { is_artist?: boolean; has_workspace?: boolean } | null | undefined): NavFlags {
+  return { isArtist: user?.is_artist === true, hasWorkspace: user?.has_workspace === true };
+}
+
+/**
+ * Owner, 2026-10-17: fan accounts do not see artist-only or staff-only places. Studio and royalties
+ * are for artists, Workspaces for people who belong to one, and "Apply as an artist" only for
+ * people who are not artists yet. Menus only: every page still asks the API.
+ */
+export function filterNavForUser(items: NavItem[], flags: NavFlags): NavItem[] {
+  return items.filter((item) => {
+    if (item.href === "/organizations") return flags.hasWorkspace === true;
+    if (item.href === "/studio" || item.href === "/royalties") return flags.isArtist === true;
+    if (item.href === "/artists/apply") return flags.isArtist !== true;
+    return true;
+  });
+}
+
 /** The full menu (account drawer and phone menu). Guests see Discover and Listen only. */
-export function menuSections(signedIn: boolean): NavSection[] {
+export function menuSections(signedIn: boolean, flags: NavFlags = {}): NavSection[] {
   const sections: NavSection[] = [
     {
       label: "Discover",
@@ -72,7 +94,11 @@ export function menuSections(signedIn: boolean): NavSection[] {
       ],
     },
   ];
-  if (signedIn) sections.push({ label: "You", items: ACCOUNT_NAV });
+  if (signedIn) {
+    sections.push({ label: "You", items: filterNavForUser(ACCOUNT_NAV, flags) });
+    // Artists publish from Studio; anyone else can apply to become one (owner, 2026-10-17).
+    sections.push({ label: "Artist", items: filterNavForUser(ARTIST_NAV, flags) });
+  }
   return sections;
 }
 
@@ -92,6 +118,15 @@ export function staffNavSections(permissions: string[] | undefined): NavSection[
       items: [
         { href: "/staff/events", label: "Events" },
         { href: "/staff/venues", label: "Venues" },
+      ],
+    },
+    // Catalog intake and media (URL-06). The API decides who may use each page.
+    {
+      label: "Catalog",
+      items: [
+        { href: "/staff/catalog", label: "Releases" },
+        { href: "/staff/catalog/artists", label: "Artist applications" },
+        { href: "/staff/catalog/processing", label: "Audio processing" },
       ],
     },
     { label: "Money", items: money },

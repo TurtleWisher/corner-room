@@ -75,7 +75,7 @@ export function Protected({ children, permission }: { children: React.ReactNode;
     return (
       <DsCard className="max-w-xl p-6">
         <p className="text-lg font-bold text-fg">{view.reason === "expired" ? "Your session has ended" : "Sign in to continue"}</p>
-        <ButtonLink href={`/login?next=${encodeURIComponent(pathname ?? "/")}`} className="mt-4">
+        <ButtonLink href={`/staff/sign-in?next=${encodeURIComponent(pathname ?? "/staff")}`} className="mt-4">
           <LogIn aria-hidden="true" /> Sign in
         </ButtonLink>
       </DsCard>

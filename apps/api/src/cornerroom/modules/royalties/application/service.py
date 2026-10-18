@@ -33,7 +33,7 @@ from cornerroom.kernel.events import (
     DomainEvent,
 )
 from cornerroom.kernel.money import Money
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.kernel.ports import NotificationPort, NullNotificationPort
 from cornerroom.modules.artists.domain.models import Artist
 from cornerroom.modules.audit.application.service import AuditService
@@ -1227,8 +1227,7 @@ class RoyaltyService:
             RoyaltyStatement.created_at.desc(), RoyaltyStatement.id.desc()
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(RoyaltyStatement.created_at < data["t"])
+            stmt = stmt.where(keyset_before(RoyaltyStatement.created_at, RoyaltyStatement.id, cursor))
         size = clamp_limit(limit)
         rows = list((await self.session.execute(stmt.limit(size + 1))).scalars().all())
         next_cursor = None

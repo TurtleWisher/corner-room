@@ -30,10 +30,12 @@ async def _platform_admin(client: AsyncClient) -> tuple[str, str, dict]:
 async def _assign_marketing(client: AsyncClient, staff_token: str, user_id: str, org_id: str) -> str:
     roles = (await client.get("/api/v1/roles", headers=bearer(staff_token))).json()
     role = next(row for row in roles if row["key"] == "marketing_manager")
+    # Joining with the role: a workspace needs an ACTIVE membership (Phase 03 "switch denied without
+    # membership"); a bare role assignment cannot open it.
     assigned = await client.post(
-        f"/api/v1/users/{user_id}/assignments",
+        f"/api/v1/organizations/{org_id}/memberships",
         headers=bearer(staff_token),
-        json={"role_id": role["id"], "organization_id": org_id},
+        json={"user_id": user_id, "status": "ACTIVE", "role_id": role["id"]},
     )
     assert assigned.status_code == 201, assigned.text
     return role["id"]

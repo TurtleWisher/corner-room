@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  AudioLines,
   LogIn,
   Maximize2,
   Pause,
@@ -23,7 +24,8 @@ import { PointerLightLayer } from "@/components/brand/pointer-light";
 import { RoomCube } from "@/components/brand/room-cube";
 import { ButtonLink } from "@/components/ds";
 import { roomCameFrom } from "@/components/music/outside-room";
-import { playerStatusText, usePlayer, usePlayerProgress, type PlayerTrack } from "@/components/music/player";
+import { playerStatusText, RepeatButton, ShuffleButton, usePlayer, usePlayerProgress, type PlayerTrack } from "@/components/music/player";
+import { TrackActions } from "@/components/music/track-actions";
 import {
   carouselWindow,
   edgeZone,
@@ -202,8 +204,37 @@ function Volume() {
           className="lr-range lr-volume cr-focus"
         />
       ) : null}
+      <Normalise />
     </div>
   );
+}
+
+/**
+ * "Normalise volume" (D-AUDIO-08): songs play at a similar loudness, on by default. Hidden where
+ * the device ignores page volume (iOS), since it could not work there.
+ */
+function Normalise() {
+  const p = usePlayer();
+  if (!p.levellingAvailable) return null;
+  return (
+    <button
+      type="button"
+      onClick={p.toggleNormalise}
+      aria-pressed={p.normalise}
+      aria-label={p.normalise ? "Normalise volume: on" : "Normalise volume: off"}
+      title={p.normalise ? "Normalise volume on: songs play at a similar loudness" : "Normalise volume off"}
+      className={cn("cr-focus inline-flex size-10 items-center justify-center hover:text-fg", p.normalise ? "text-highlight" : "text-fg-muted")}
+    >
+      <AudioLines aria-hidden="true" className="size-4" />
+    </button>
+  );
+}
+
+/** What is streaming, from the API ("Opus · 160 kbps"). Nothing when it is not known. */
+function Format() {
+  const p = usePlayer();
+  if (!p.format) return null;
+  return <span className="cr-num text-[0.6875rem] text-fg-muted">{p.format}</span>;
 }
 
 function Transport({ label, large = false, keyRef }: { label: string; large?: boolean; keyRef?: React.Ref<HTMLButtonElement> }) {
@@ -213,6 +244,7 @@ function Transport({ label, large = false, keyRef }: { label: string; large?: bo
   const icon = large ? "size-6" : "size-5";
   return (
     <div className="flex items-center gap-1">
+      <ShuffleButton />
       <button
         type="button"
         onClick={p.previous}
@@ -246,8 +278,16 @@ function Transport({ label, large = false, keyRef }: { label: string; large?: bo
       >
         <SkipForward aria-hidden="true" className={icon} />
       </button>
+      <RepeatButton />
     </div>
   );
+}
+
+/** Library actions only make sense once the API has let this listener play the track. */
+function Actions({ track }: { track: PlayerTrack }) {
+  const p = usePlayer();
+  if (p.status === "problem" && (p.problem?.kind === "signed_out" || p.problem?.kind === "needs_access")) return null;
+  return <TrackActions trackId={track.id} title={titleOf(track)} />;
 }
 
 function Status() {
@@ -361,12 +401,16 @@ function ControlBar({ track, onFocus }: { track: PlayerTrack; onFocus: () => voi
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-3">
             <p className="truncate text-sm font-bold text-fg">{label}</p>
-            <Status />
+            <span className="flex items-baseline gap-3">
+              <Format />
+              <Status />
+            </span>
           </div>
           <Scrubber label={label} />
         </div>
       </div>
       <div className="lr-tools">
+        <Actions track={track} />
         <Volume />
         <button
           type="button"
@@ -447,10 +491,16 @@ function FocusView({ track, edge, keyRef }: { track: PlayerTrack; edge: "left" |
         </h1>
         <p className="mt-3 text-lg text-fg-muted">{track.artist || "Artist not available"}</p>
         <div className="lr-focus-console cr-cut cr-glass-card">
-          <Status />
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <Status />
+            <Format />
+          </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <Transport label={label} large keyRef={keyRef} />
-            <Volume />
+            <div className="flex items-center">
+              <Actions track={track} />
+              <Volume />
+            </div>
           </div>
           <Scrubber label={label} wide />
           <div className="mt-3 flex flex-wrap gap-2 empty:hidden">

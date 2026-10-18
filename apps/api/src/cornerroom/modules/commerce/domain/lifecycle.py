@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from cornerroom.infra.errors import AppError
 
-PRODUCT_TYPES = frozenset({"TRACK", "CATALOG_ACCESS", "SUBSCRIPTION_PLAN"})
+PRODUCT_TYPES = frozenset({"TRACK", "CATALOG_ACCESS", "SUBSCRIPTION_PLAN", "RELEASE"})
+OFFER_AUDIENCES = frozenset({"EVERYONE", "OWNS_PART_OF_RELEASE"})
 CATALOG_STATUSES = frozenset({"DRAFT", "ACTIVE", "RETIRED"})
 
 PRODUCT_TRANSITIONS: dict[tuple[str, str], str] = {

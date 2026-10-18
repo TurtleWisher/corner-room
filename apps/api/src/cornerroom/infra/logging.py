@@ -50,16 +50,46 @@ def redact_processor(
 # Paths whose query strings carry one-time secrets (Google's authorization code and state).
 QUERY_REDACTED_PATH_PREFIXES = ("/api/v1/auth/",)
 
+# Paths whose last part IS a bearer secret: signed playback and download links. Anyone holding one
+# can fetch the audio until it expires, so it must never reach a log line or an error body.
+TOKEN_PATH_PREFIXES = ("/api/v1/playback/media/", "/api/v1/downloads/")
+
+
+def mask_email(address: str | None) -> str:
+    """"p***@example.com": enough to tell recipients apart while debugging, never the address."""
+    if not address or "@" not in address:
+        return "***"
+    local, domain = address.rsplit("@", 1)
+    return f"{local[:1]}***@{domain}"
+
+
+def mask_phone(number: str | None) -> str:
+    """"***1234": the last four digits only."""
+    digits = "".join(ch for ch in (number or "") if ch.isdigit())
+    return f"***{digits[-4:]}" if len(digits) >= 4 else "***"
+
+
+def redact_path(path: str) -> str:
+    """The path with any signed token replaced by [token]; other paths unchanged."""
+    for prefix in TOKEN_PATH_PREFIXES:
+        if path.startswith(prefix) and len(path) > len(prefix):
+            return prefix + "[token]"
+    return path
+
 
 class AccessLogQueryRedactor(logging.Filter):
-    """Strip query strings from uvicorn access-log lines for auth paths, so codes never reach logs."""
+    """Strip query strings from uvicorn access-log lines for auth paths, so codes never reach logs,
+    and signed media/download tokens from their paths."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         args = record.args
         if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str):
             path = args[2]
             if "?" in path and path.startswith(QUERY_REDACTED_PATH_PREFIXES):
-                record.args = (*args[:2], path.split("?", 1)[0] + "?[redacted]", *args[3:])
+                path = path.split("?", 1)[0] + "?[redacted]"
+            path = redact_path(path)
+            if path != args[2]:
+                record.args = (*args[:2], path, *args[3:])
         return True
 
 

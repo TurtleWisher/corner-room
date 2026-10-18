@@ -33,12 +33,13 @@ export function trialLabel(plan: Pick<PlanRecord, "trial_days">): string | null 
 
 export const PRODUCT_TYPE_LABEL: Record<string, string> = {
   TRACK: "Tracks",
+  RELEASE: "Albums and EPs",
   CATALOG_ACCESS: "Full catalog",
   SUBSCRIPTION_PLAN: "Plans",
 };
 
 /** What one item is: "Track", "Full catalog". */
-const PRODUCT_KIND: Record<string, string> = { TRACK: "Track", CATALOG_ACCESS: "Full catalog", SUBSCRIPTION_PLAN: "Plan" };
+const PRODUCT_KIND: Record<string, string> = { TRACK: "Track", RELEASE: "Release", CATALOG_ACCESS: "Full catalog", SUBSCRIPTION_PLAN: "Plan" };
 
 export function productKind(type: string | null | undefined): string {
   if (!type) return "Item";
@@ -50,11 +51,15 @@ export function productTypeLabel(type: string | null | undefined): string {
   return PRODUCT_TYPE_LABEL[type] ?? planName(type);
 }
 
-/** Offers grouped by product type, in a stable order (tracks first). Empty groups are dropped. */
+/**
+ * Offers grouped by product type, in a stable order (tracks first). Empty groups are dropped.
+ * Owners' prices (OWNS_PART_OF_RELEASE) are only offered on their release's page, never here.
+ */
 export function groupOffers(offers: OfferRecord[]): { type: string; label: string; offers: OfferRecord[] }[] {
-  const order = ["TRACK", "CATALOG_ACCESS", "SUBSCRIPTION_PLAN"];
+  const order = ["TRACK", "RELEASE", "CATALOG_ACCESS", "SUBSCRIPTION_PLAN"];
   const groups = new Map<string, OfferRecord[]>();
   for (const offer of offers) {
+    if ((offer.audience ?? "EVERYONE") !== "EVERYONE") continue;
     const key = offer.product_type ?? "OTHER";
     groups.set(key, [...(groups.get(key) ?? []), offer]);
   }
@@ -99,6 +104,7 @@ export function afterPurchaseHref(
   if (item.kind === "tickets") return { href: "/tickets", label: "View your tickets" };
   if (item.kind === "plan") return { href: "/releases", label: "Start listening" };
   if (offer?.product_type === "TRACK" && offer.subject_id) return { href: `/tracks/${offer.subject_id}`, label: "Listen now" };
+  if (offer?.product_type === "RELEASE" && offer.subject_id) return { href: `/releases/${offer.subject_id}`, label: "Listen now" };
   if (offer?.product_type === "CATALOG_ACCESS") return { href: "/releases", label: "Start listening" };
   return { href: "/purchases", label: "View your purchases" };
 }

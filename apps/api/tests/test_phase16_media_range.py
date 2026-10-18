@@ -42,18 +42,38 @@ def test_phase16_unsatisfiable_ranges(header: str) -> None:
         parse_byte_range(header, len(DATA))
 
 
+class _Asset:
+    object_key = "k"
+    mime = "audio/wav"
+
+
+class _Storage:
+    async def stat(self, key: str) -> int:
+        return len(DATA)
+
+    async def read_range(self, key: str, start: int, end: int):
+        for i in range(start, end + 1, 64):
+            yield DATA[i : min(end + 1, i + 64)]
+
+
+class _Delivery:
+    storage = _Storage()
+
+
 class _FakeStreaming:
-    """Stands in for StreamingService: the endpoint's access check lives in load_media_bytes."""
+    """Stands in for StreamingService: the endpoint's access check lives in open_media."""
+
+    delivery = _Delivery()
 
     def __init__(self, allow: bool) -> None:
         self.allow = allow
         self.calls = 0
 
-    async def load_media_bytes(self, token: str) -> tuple[bytes, str]:
+    async def open_media(self, token: str) -> _Asset:
         self.calls += 1
         if not self.allow:
             raise AppError("ENTITLEMENT_REQUIRED", "Entitlement required", 403)
-        return DATA, "audio/wav"
+        return _Asset()
 
 
 async def _get(fake: _FakeStreaming, headers: dict[str, str] | None = None):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -76,6 +77,8 @@ class ArtistLifecycleIn(BaseModel):
 class ApplicationCreate(BaseModel):
     stage_name: str = Field(min_length=1, max_length=200)
     legal_name: str | None = Field(default=None, max_length=200)
+    # From a label's join link (/studio/join?code=...): the application goes to that label.
+    join_code: str | None = Field(default=None, max_length=64)
     bio: str | None = Field(default=None, max_length=8000)
     metadata: dict[str, Any] | None = None
     payload: dict[str, Any] | None = None
@@ -88,6 +91,12 @@ class ApplicationOut(BaseModel):
     status: str
     payload: dict[str, Any] | None
     version: int
+    # What the reviewer needs from the artist profile it created; never the legal name.
+    stage_name: str | None = None
+    bio: str | None = None
+    artist_status: str | None = None
+    created_at: datetime | None = None
+    organization_id: UUID | None = None
 
 
 class ApplicationPage(BaseModel):
@@ -137,7 +146,7 @@ def _public_artist(row: Artist) -> PublicArtistOut:
     )
 
 
-def _application_out(row: ArtistApplication) -> ApplicationOut:
+def _application_out(row: ArtistApplication, artist: Artist | None = None) -> ApplicationOut:
     return ApplicationOut(
         id=row.id,
         user_id=row.user_id,
@@ -145,7 +154,17 @@ def _application_out(row: ArtistApplication) -> ApplicationOut:
         status=row.status,
         payload=row.payload,
         version=row.version,
+        stage_name=artist.stage_name if artist else None,
+        bio=artist.bio if artist else None,
+        artist_status=artist.status if artist else None,
+        created_at=row.created_at,
+        organization_id=row.organization_id,
     )
+
+
+async def _application_with_artist(svc: ArtistService, row: ArtistApplication) -> ApplicationOut:
+    artist = await svc.session.get(Artist, row.artist_id) if row.artist_id else None
+    return _application_out(row, artist)
 
 
 def _follow_out(row: Follow) -> FollowOut:
@@ -274,15 +293,16 @@ async def submit_application(
     ctx: Annotated[AuthContext, Depends(get_auth_context)],
     svc: Annotated[ArtistService, Depends(artist_service)],
 ) -> ApplicationOut:
-    row, _artist = await svc.submit_application(
+    row, artist = await svc.submit_application(
         ctx,
         stage_name=body.stage_name,
         legal_name=body.legal_name,
         bio=body.bio,
         extra_metadata=body.metadata,
         payload=body.payload,
+        join_code=body.join_code,
     )
-    return _application_out(row)
+    return _application_out(row, artist)
 
 
 @router.get("/artist-applications", response_model=ApplicationPage)
@@ -294,7 +314,7 @@ async def list_applications(
     mine: bool = False,
 ) -> ApplicationPage:
     rows, next_cursor = await svc.list_applications(ctx, cursor=cursor, limit=limit, mine=mine)
-    return ApplicationPage(items=[_application_out(r) for r in rows], next_cursor=next_cursor)
+    return ApplicationPage(items=[await _application_with_artist(svc, r) for r in rows], next_cursor=next_cursor)
 
 
 @router.get("/artist-applications/{application_id}", response_model=ApplicationOut)
@@ -303,7 +323,7 @@ async def get_application(
     ctx: Annotated[AuthContext, Depends(get_auth_context)],
     svc: Annotated[ArtistService, Depends(artist_service)],
 ) -> ApplicationOut:
-    return _application_out(await svc.get_application(ctx, application_id))
+    return await _application_with_artist(svc, await svc.get_application(ctx, application_id))
 
 
 @router.post("/artist-applications/{application_id}/lifecycle", response_model=ApplicationOut)
@@ -316,4 +336,81 @@ async def application_lifecycle(
     row = await svc.transition_application(
         ctx, application_id, action=body.action, expected_version=body.version
     )
-    return _application_out(row)
+    return await _application_with_artist(svc, row)
+
+
+# --- artist join links (owner, 2026-10-17: one shared link per label, staff still review) -------
+
+
+class JoinLinkCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=120)
+    expires_at: datetime | None = None
+    max_uses: int | None = Field(default=None, ge=1, le=100_000)
+
+
+class JoinLinkOut(BaseModel):
+    id: UUID
+    code: str
+    label: str
+    status: str
+    expires_at: datetime | None
+    max_uses: int | None
+    uses: int
+    usable: bool
+    created_at: datetime
+    disabled_at: datetime | None
+
+
+class JoinCodeIn(BaseModel):
+    code: str = Field(min_length=1, max_length=64)
+
+
+class JoinCodeOut(BaseModel):
+    organization_name: str
+
+
+def _join_link_out(svc: ArtistService, row) -> JoinLinkOut:  # type: ignore[no-untyped-def]
+    return JoinLinkOut(
+        id=row.id, code=row.code, label=row.label, status=row.status, expires_at=row.expires_at,
+        max_uses=row.max_uses, uses=row.uses, usable=svc.join_link_usable(row),
+        created_at=row.created_at, disabled_at=row.disabled_at,
+    )
+
+
+@router.post("/artist-join-links", response_model=JoinLinkOut, status_code=201)
+async def create_join_link(
+    body: JoinLinkCreate,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[ArtistService, Depends(artist_service)],
+) -> JoinLinkOut:
+    row = await svc.create_join_link(ctx, label=body.label, expires_at=body.expires_at, max_uses=body.max_uses)
+    return _join_link_out(svc, row)
+
+
+@router.get("/artist-join-links", response_model=list[JoinLinkOut])
+async def list_join_links(
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[ArtistService, Depends(artist_service)],
+) -> list[JoinLinkOut]:
+    return [_join_link_out(svc, r) for r in await svc.list_join_links(ctx)]
+
+
+@router.post("/artist-join-links/{link_id}/disable", response_model=JoinLinkOut)
+async def disable_join_link(
+    link_id: UUID,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[ArtistService, Depends(artist_service)],
+) -> JoinLinkOut:
+    return _join_link_out(svc, await svc.disable_join_link(ctx, link_id))
+
+
+@router.post("/artist-join-links/check", response_model=JoinCodeOut)
+async def check_join_code(
+    body: JoinCodeIn,
+    svc: Annotated[ArtistService, Depends(artist_service)],
+) -> JoinCodeOut:
+    """Public, for the artist join page: which label the link joins. The code travels in the body,
+    never in a URL that logs could keep."""
+    _row, org = await svc.check_join_code(body.code)
+    return JoinCodeOut(organization_name=org.name)
+

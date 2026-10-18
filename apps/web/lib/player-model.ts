@@ -89,6 +89,102 @@ export function previousAction(index: number): "restart" | "previous" {
   return index > 0 ? "previous" : "restart";
 }
 
+/* Repeat and shuffle (AUDIO Phase 8; owner spec: visible state, predictable queue handling). */
+export type RepeatMode = "off" | "all" | "one";
+
+/** The button cycles off -> all -> one -> off. */
+export function nextRepeat(mode: RepeatMode): RepeatMode {
+  return mode === "off" ? "all" : mode === "all" ? "one" : "off";
+}
+
+/** Accessible name for the repeat button, saying the current state. */
+export function repeatLabel(mode: RepeatMode): string {
+  return mode === "all" ? "Repeat: all tracks" : mode === "one" ? "Repeat: this track" : "Repeat: off";
+}
+
+/** The queue position `step` away; with repeat all, the ends wrap round. */
+export function stepWithRepeat(index: number, length: number, step: 1 | -1, repeat: RepeatMode): number | null {
+  const to = stepIndex(index, length, step);
+  if (to !== null || repeat !== "all" || length < 2) return to;
+  return step === 1 ? 0 : length - 1;
+}
+
+/** What happens when a track plays to its end. */
+export function afterEnd(index: number, length: number, repeat: RepeatMode): { kind: "replay" } | { kind: "go"; index: number } | { kind: "stop" } {
+  if (repeat === "one") return { kind: "replay" };
+  const to = stepWithRepeat(index, length, 1, repeat);
+  if (to === null) return { kind: "stop" };
+  return to === index ? { kind: "replay" } : { kind: "go", index: to };
+}
+
+/**
+ * Shuffle reorders the queue itself, so Up next and the room always show what will really play:
+ * the current track first, then the others in random order. Turning shuffle off restores the
+ * list's own order (the player keeps it). `random` is injectable for tests.
+ */
+export function shuffled<T>(tracks: readonly T[], current: number, random: () => number = Math.random): T[] {
+  const first = tracks[current];
+  const rest = tracks.filter((_, i) => i !== current);
+  for (let i = rest.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [rest[i], rest[j]] = [rest[j], rest[i]];
+  }
+  return first === undefined ? rest : [first, ...rest];
+}
+
+/*
+ * Codec choice (design 8): the browser says what it can decode; the API sends the best match
+ * first plus alternates to fall back to on a decode error, without another permission round-trip.
+ */
+const CODEC_TESTS: [codec: string, mime: string][] = [
+  ["opus", 'audio/ogg; codecs="opus"'],
+  ["mp3", "audio/mpeg"],
+];
+
+/** Codecs this browser reports it can play, best first. MP3 is always last-resort included. */
+export function acceptCodecs(canPlayType: (mime: string) => string): string[] {
+  const out = CODEC_TESTS.filter(([, mime]) => {
+    try {
+      return canPlayType(mime) !== "";
+    } catch {
+      return false;
+    }
+  }).map(([codec]) => codec);
+  return out.includes("mp3") ? out : [...out, "mp3"];
+}
+
+/** "Opus · 160 kbps" for the format line; null when the API did not say (older demo audio). */
+export function formatLabel(codec: string | null | undefined, kbps: number | null | undefined): string | null {
+  if (!codec) return null;
+  const name = codec === "opus" ? "Opus" : codec === "mp3" ? "MP3" : codec.toUpperCase();
+  return kbps ? `${name} · ${kbps} kbps` : name;
+}
+
+/*
+ * Volume levelling (D-AUDIO-08: analyse only, level at play time to about -14 LUFS). The API sends
+ * gain_db per track. Turning a loud track down only needs the media element's own volume; turning
+ * a quiet track up needs a Web Audio gain stage, used only where the player has one.
+ */
+
+/** Linear multiplier for a gain in decibels; 1 when the gain is unknown or levelling is off. */
+export function levelMultiplier(gainDb: number | null | undefined, normalise: boolean): number {
+  if (!normalise || typeof gainDb !== "number" || !Number.isFinite(gainDb)) return 1;
+  return Math.pow(10, gainDb / 20);
+}
+
+/**
+ * How to apply the listener's volume and the levelling. Without a gain stage everything goes on
+ * the audio element (0..1), so quiet songs play at their own level, never louder than the
+ * listener's volume. Once the element is routed through a Web Audio gain node, the element stays
+ * at 1 and the node carries volume, mute and levelling together (browsers differ on whether the
+ * element's own volume still applies after routing, so it is kept neutral).
+ */
+export function outputLevels(volume: number, muted: boolean, multiplier: number, routed: boolean): { element: number; gain: number } {
+  const v = Math.min(1, Math.max(0, volume));
+  if (routed) return { element: 1, gain: muted ? 0 : v * multiplier };
+  return { element: muted ? 0 : v * Math.min(1, multiplier), gain: 1 };
+}
+
 /** The browser refused to start audio without a click or key press (autoplay policy). */
 export function isAutoplayBlocked(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { name?: string }).name === "NotAllowedError";

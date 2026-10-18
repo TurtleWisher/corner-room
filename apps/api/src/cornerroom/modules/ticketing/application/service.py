@@ -18,7 +18,7 @@ from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import DomainEvent
 from cornerroom.kernel.money import Money
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.events.domain.models import Event
@@ -45,6 +45,9 @@ TICKET_HOLD_EXPIRED = "TicketHoldExpired"
 TICKET_PAID = "TicketPaid"
 TICKET_ISSUED = "TicketIssued"
 TICKET_CHECKED_IN = "TicketCheckedIn"
+TICKET_REFUNDED = "TicketRefunded"
+# STATE_MACHINES Ticket: PAID / ISSUED / CHECKED_IN -> REFUNDED (Finance approve).
+REFUNDABLE_TICKET_STATUSES = ("PAID", "ISSUED", "CHECKED_IN")
 
 
 class TicketingService:
@@ -156,15 +159,30 @@ class TicketingService:
             raise NotFoundError("Ticket type inventory not found")
         return row
 
-    async def expire_due_holds(self, ticket_type_id: UUID | None = None) -> int:
+    async def expire_due_holds(
+        self, ticket_type_id: UUID | None = None, *, batch: int | None = None
+    ) -> int:
+        """Expire ACTIVE holds past their TTL and return their inventory.
+
+        Holds are locked (rows another transaction is already expiring are skipped) and taken in
+        ticket-type order, so concurrent callers lock inventory rows in the same order.
+        """
         now = self.clock.now()
-        stmt = select(TicketHold).where(
-            TicketHold.status == "ACTIVE",
-            TicketHold.expires_at <= now,
-            TicketHold.deleted_at.is_(None),
+        stmt = (
+            select(TicketHold)
+            .where(
+                TicketHold.status == "ACTIVE",
+                TicketHold.expires_at <= now,
+                TicketHold.deleted_at.is_(None),
+            )
+            .order_by(TicketHold.ticket_type_id, TicketHold.id)
+            .with_for_update(skip_locked=True)
+            .execution_options(populate_existing=True)
         )
         if ticket_type_id is not None:
             stmt = stmt.where(TicketHold.ticket_type_id == ticket_type_id)
+        if batch is not None:
+            stmt = stmt.limit(batch)
         holds = list((await self.session.execute(stmt)).scalars().all())
         expired = 0
         for hold in holds:
@@ -349,8 +367,7 @@ class TicketingService:
             stmt = stmt.where(TicketType.status == "ON_SALE")
         stmt = stmt.order_by(TicketType.created_at.desc(), TicketType.id.desc())
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(TicketType.created_at < data["t"])
+            stmt = stmt.where(keyset_before(TicketType.created_at, TicketType.id, cursor))
         stmt = stmt.limit(limit + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None
@@ -363,6 +380,18 @@ class TicketingService:
     async def remaining_for(self, ticket_type_id: UUID) -> int:
         inv = await self.session.get(TicketTypeInventory, ticket_type_id)
         return inv.remaining if inv is not None else 0
+
+    async def remaining_for_many(self, ticket_type_ids: list[UUID]) -> dict[UUID, int]:
+        """Remaining inventory for a page of ticket types in one query."""
+        if not ticket_type_ids:
+            return {}
+        rows = await self.session.execute(
+            select(TicketTypeInventory.ticket_type_id, TicketTypeInventory.remaining).where(
+                TicketTypeInventory.ticket_type_id.in_(ticket_type_ids)
+            )
+        )
+        found = {ticket_type_id: remaining for ticket_type_id, remaining in rows.all()}
+        return {ticket_type_id: found.get(ticket_type_id, 0) for ticket_type_id in ticket_type_ids}
 
     async def update_ticket_type(
         self,
@@ -559,10 +588,11 @@ class TicketingService:
         return hold
 
     async def get_active_hold_for_user(self, hold_id: UUID, user_id: UUID) -> TicketHold:
-        await self.expire_due_holds()
         hold = await self.session.get(TicketHold, hold_id)
         if hold is None or hold.deleted_at is not None or hold.user_id != user_id:
             raise NotFoundError("Hold not found")
+        # Only this hold's ticket type: checkout must not lock other events' inventory.
+        await self.expire_due_holds(hold.ticket_type_id)
         if hold.status != "ACTIVE" or hold.expires_at <= self.clock.now():
             if hold.status == "ACTIVE":
                 await self._release_hold(hold, status="EXPIRED", ctx=None)
@@ -646,6 +676,75 @@ class TicketingService:
         await self.session.flush()
         return issued
 
+    async def refund_order_tickets(
+        self,
+        ctx: AuthContext | None,
+        *,
+        order_id: UUID,
+        refund_id: UUID,
+    ) -> list[Ticket]:
+        """A fully refunded ticket order: its tickets become REFUNDED and their QR stops working
+        (06_FINANCIAL_ARCHITECTURE §5, 08_EVENT_ARCHITECTURE: "reverse revenue; void QR").
+
+        Seats are not put back on sale: no documented rule says a refunded seat is resold.
+        Tickets that were never issued (for example after a late payment, Q-PAY-02) are left as
+        they are. Idempotent: a repeated call finds nothing left to refund.
+        """
+        hold = (
+            await self.session.execute(select(TicketHold).where(TicketHold.order_id == order_id))
+        ).scalar_one_or_none()
+        if hold is None:
+            return []
+        tickets = list(
+            (
+                await self.session.execute(
+                    select(Ticket)
+                    .where(
+                        Ticket.hold_id == hold.id,
+                        Ticket.status.in_(REFUNDABLE_TICKET_STATUSES),
+                        Ticket.deleted_at.is_(None),
+                    )
+                    .with_for_update()
+                )
+            ).scalars().all()
+        )
+        if not tickets:
+            return []
+        ticket_type = await self.get_ticket_type_row(hold.ticket_type_id)
+        event = await self.session.get(Event, ticket_type.event_id)
+        organization_id = event.organization_id if event is not None else None
+        for ticket in tickets:
+            previous = ticket.status
+            ticket.status = "REFUNDED"
+            ticket.qr_secret_hash = None
+            await self._emit(
+                ctx,
+                event_type=TICKET_REFUNDED,
+                aggregate_type="Ticket",
+                aggregate_id=ticket.id,
+                organization_id=organization_id,
+                payload={
+                    "ticket_id": str(ticket.id),
+                    "event_id": str(ticket_type.event_id),
+                    "refund_id": str(refund_id),
+                    "previous_status": previous,
+                },
+            )
+            audit = dict(
+                action="ticket.refunded",
+                entity_type="Ticket",
+                entity_id=ticket.id,
+                previous_state={"status": previous},
+                new_state={"status": "REFUNDED", "refund_id": str(refund_id)},
+                organization_id=organization_id,
+            )
+            if ctx is not None:
+                await self.audit.record_from_auth(ctx, **audit)
+            else:
+                await self.audit.record(actor_id="system:ticketing", actor_type="system", **audit)
+        await self.session.flush()
+        return tickets
+
     def presentation_token(self, ticket: Ticket) -> str | None:
         if ticket.status not in {"ISSUED", "CHECKED_IN"}:
             return None
@@ -665,8 +764,7 @@ class TicketingService:
             .order_by(Ticket.created_at.desc(), Ticket.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Ticket.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Ticket.created_at, Ticket.id, cursor))
         stmt = stmt.limit(limit + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None
@@ -777,8 +875,7 @@ class TicketingService:
             .order_by(CheckIn.scanned_at.desc(), CheckIn.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(CheckIn.scanned_at < data["t"])
+            stmt = stmt.where(keyset_before(CheckIn.scanned_at, CheckIn.id, cursor))
         stmt = stmt.limit(limit + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None

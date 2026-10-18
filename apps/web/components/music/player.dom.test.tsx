@@ -341,3 +341,117 @@ describe("ListeningRoom", () => {
     expect(router.push).toHaveBeenCalledWith("/listen");
   });
 });
+
+describe("Phase 8 controls", () => {
+  beforeEach(() => window.localStorage.clear());
+
+  it("asks the API for the codecs the browser reports, MP3 always included", async () => {
+    render(
+      <PlayerProvider>
+        <Start />
+      </PlayerProvider>,
+    );
+    await act(async () => screen.getByText("start t1").click());
+    const accept = api.fetchTrackAudio.mock.calls.at(-1)?.[1] as string[];
+    expect(accept.at(-1)).toBe("mp3");
+  });
+
+  it("repeat one plays the same track again at its end, as a new listen", async () => {
+    render(
+      <PlayerProvider>
+        <Start queue={QUEUE} />
+        <PlayerBar />
+      </PlayerProvider>,
+    );
+    await act(async () => screen.getByText("start t1").click());
+    const repeat = screen.getByRole("button", { name: "Repeat: off" });
+    await act(async () => repeat.click());
+    await act(async () => screen.getByRole("button", { name: "Repeat: all tracks" }).click());
+    expect(screen.getByRole("button", { name: "Repeat: this track" })).toBeTruthy();
+    const opened = api.openListeningSession.mock.calls.length;
+    await act(async () => fireEvent.ended(audioEl()));
+    expect(api.openListeningSession.mock.calls.length).toBe(opened + 1);
+    expect(api.openListeningSession.mock.calls.at(-1)?.[0]).toBe("t1");
+  });
+
+  it("repeat all goes from the last track back to the first", async () => {
+    render(
+      <PlayerProvider>
+        <Start track={QUEUE[2]} queue={QUEUE} />
+        <PlayerBar />
+      </PlayerProvider>,
+    );
+    await act(async () => screen.getByText("start t3").click());
+    expect(screen.queryByRole("button", { name: "Next track" })).toBeNull();
+    await act(async () => screen.getByRole("button", { name: "Repeat: off" }).click());
+    await act(async () => screen.getByRole("button", { name: "Next track" }).click());
+    expect(api.openListeningSession.mock.calls.at(-1)?.[0]).toBe("t1");
+  });
+
+  it("shuffle keeps the playing track and restores the list order when turned off", async () => {
+    let seen: string[] = [];
+    function Queue() {
+      const p = usePlayer();
+      seen = p.queue.map((t) => t.id);
+      return <p data-testid="index">{p.index}</p>;
+    }
+    render(
+      <PlayerProvider>
+        <Start track={QUEUE[1]} queue={QUEUE} />
+        <PlayerBar />
+        <Queue />
+      </PlayerProvider>,
+    );
+    await act(async () => screen.getByText("start t2").click());
+    await act(async () => screen.getByRole("button", { name: "Shuffle: off" }).click());
+    expect(screen.getByRole("button", { name: "Shuffle: on" }).getAttribute("aria-pressed")).toBe("true");
+    expect(seen[0]).toBe("t2");
+    expect([...seen].sort()).toEqual(["t1", "t2", "t3"]);
+    await act(async () => screen.getByRole("button", { name: "Shuffle: on" }).click());
+    expect(seen).toEqual(["t1", "t2", "t3"]);
+    expect(screen.getByTestId("index").textContent).toBe("1");
+  });
+
+  it("falls back to the other verified copy when the first will not decode", async () => {
+    api.fetchTrackAudio.mockImplementationOnce(async (track_id: string) => ({
+      url: `/api/v1/playback/media/opus-${track_id}`,
+      expires_at: "",
+      track_id,
+      track_version_id: "v",
+      media_asset_id: "m",
+      codec: "opus",
+      bitrate_kbps: 160,
+      alternates: [{ codec: "mp3", url: `/api/v1/playback/media/mp3-${track_id}` }],
+    }));
+    render(
+      <PlayerProvider>
+        <Start />
+      </PlayerProvider>,
+    );
+    await act(async () => screen.getByText("start t1").click());
+    const a = audioEl();
+    expect(a.src).toContain("opus-t1");
+    a.removeAttribute("crossorigin");
+    Object.defineProperty(a, "error", { value: { code: 4 }, configurable: true });
+    const fetched = api.fetchTrackAudio.mock.calls.length;
+    await act(async () => fireEvent.error(a));
+    expect(a.src).toContain("mp3-t1");
+    // The fallback needed no new permission round-trip.
+    expect(api.fetchTrackAudio.mock.calls.length).toBe(fetched);
+  });
+
+  it("offers normalise volume, on by default, and remembers the choice on this device", async () => {
+    render(
+      <PlayerProvider>
+        <Start />
+        <ListeningRoom />
+      </PlayerProvider>,
+    );
+    await act(async () => screen.getByText("start t1").click());
+    const toggle = screen.getByRole("button", { name: "Normalise volume: on" });
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    await act(async () => toggle.click());
+    expect(screen.getByRole("button", { name: "Normalise volume: off" })).toBeTruthy();
+    expect(JSON.parse(window.localStorage.getItem("cr.player.prefs") ?? "{}").normalise).toBe(false);
+  });
+});

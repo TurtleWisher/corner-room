@@ -1,40 +1,31 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { useWorkspace } from "@/components/workspace-provider";
-import { ApiError, acceptInvitation } from "@/lib/api";
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
 import { StatusChip } from "@/components/ds";
 
-function OrganizationsBody() {
-  const { organizations, currentOrg, loading, error, switchTo, reload } = useWorkspace();
-  const [inviteToken, setInviteToken] = useState("");
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
-
-  async function onSwitch(orgId: string) {
-    try {
-      await switchTo(orgId);
-    } catch (err) {
-      // surfaced via workspace error on reload; keep local message
-      throw err;
-    }
+/** An invitation link (or just its token) pasted by the invitee: the token either way. */
+function tokenFrom(text: string): string {
+  const trimmed = text.trim();
+  try {
+    return new URL(trimmed).searchParams.get("invite") ?? trimmed;
+  } catch {
+    return trimmed;
   }
+}
 
-  async function onAccept(event: FormEvent) {
+function OrganizationsBody() {
+  const { organizations, currentOrg, loading, error, switchTo } = useWorkspace();
+  const router = useRouter();
+  const [pasted, setPasted] = useState("");
+
+  function onPaste(event: FormEvent) {
     event.preventDefault();
-    setInviteError(null);
-    setInviteMessage(null);
-    try {
-      await acceptInvitation(inviteToken.trim());
-      setInviteToken("");
-      setInviteMessage("Invitation accepted.");
-      await reload();
-    } catch (err) {
-      setInviteError(err instanceof ApiError ? err.message : "Unable to accept invitation");
-    }
+    router.push(`/staff/join?invite=${encodeURIComponent(tokenFrom(pasted))}`);
   }
 
   if (loading) {
@@ -47,10 +38,9 @@ function OrganizationsBody() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold">Organizations</h1>
+        <h1 className="text-xl font-semibold">Workspaces</h1>
         <p className="mt-1 text-sm text-fg-muted">
-          Organization is the workspace. Switching reloads members and invitations so prior org data
-          cannot linger on this page.
+          A workspace is an organization you work in. Staff pages show and change data for the workspace you are in.
         </p>
       </div>
       {organizations.length === 0 ? (
@@ -68,16 +58,10 @@ function OrganizationsBody() {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={currentOrg?.id === org.id}
-                    onClick={() => void onSwitch(org.id)}
-                  >
+                  <Button type="button" variant="outline" size="sm" disabled={currentOrg?.id === org.id} onClick={() => void switchTo(org.id)}>
                     Switch
                   </Button>
-                  <Link href={`/organizations/${org.id}`} className="text-sm underline self-center">
+                  <Link href={`/organizations/${org.id}`} className="self-center text-sm underline">
                     Open
                   </Link>
                 </div>
@@ -87,33 +71,38 @@ function OrganizationsBody() {
         </ul>
       )}
       <Card>
-        <h2 className="text-sm font-medium">Accept invitation</h2>
-        <form onSubmit={onAccept} className="mt-3 flex gap-2">
-          <Input
-            value={inviteToken}
-            onChange={(e) => setInviteToken(e.target.value)}
-            placeholder="Invitation token"
-            required
-          />
+        <h2 className="text-sm font-medium">Have an invitation link?</h2>
+        <p className="mt-1 text-sm text-fg-muted">Open it, or paste it here.</p>
+        <form onSubmit={onPaste} className="mt-3 flex gap-2">
+          <Input value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="Invitation link" aria-label="Invitation link" required />
           <Button type="submit" size="sm">
-            Accept
+            Open
           </Button>
         </form>
-        {inviteError ? (
-          <p className="mt-2 text-sm text-danger" role="alert">
-            {inviteError}
-          </p>
-        ) : null}
-        {inviteMessage ? <p className="mt-2 text-sm text-fg-muted">{inviteMessage}</p> : null}
       </Card>
     </div>
   );
 }
 
-export default function OrganizationsPage() {
+function OrganizationsPageInner() {
+  const invite = useSearchParams().get("invite");
+  const router = useRouter();
+  // Invitations have their own page now (/staff/join); older links still land there.
+  useEffect(() => {
+    if (invite) router.replace(`/staff/join?invite=${encodeURIComponent(invite)}`);
+  }, [invite, router]);
+  if (invite) return <LoadingState label="Opening your invitation" />;
   return (
     <Protected>
       <OrganizationsBody />
     </Protected>
+  );
+}
+
+export default function OrganizationsPage() {
+  return (
+    <Suspense fallback={<LoadingState label="Loading" />}>
+      <OrganizationsPageInner />
+    </Suspense>
   );
 }

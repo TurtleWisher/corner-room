@@ -3,6 +3,7 @@
 import { CalendarDays, CircleCheck, Library, Music, Ticket } from "lucide-react";
 
 import { RoomCube } from "@/components/brand/room-cube";
+import { DownloadButton } from "@/components/music/download-button";
 import { ButtonLink, Card, DateTime, Money } from "@/components/ds";
 import { EventMedia } from "@/components/events/event-media";
 import type { EventRecord, OrderItemRecord, OrderRecord, TrackRecord } from "@/lib/api";
@@ -22,7 +23,7 @@ function Lines({ order }: { order: OrderRecord }) {
       {items.map((item: OrderItemRecord) => (
         <div key={item.id} className="flex items-baseline justify-between gap-4">
           <dt className="text-fg">
-            {item.ticket_type_name ?? (item.item_type === "TRACK" ? "Track" : "Item")}
+            {item.ticket_type_name ?? item.release_title ?? (item.item_type === "TRACK" ? "Track" : item.item_type === "RELEASE" ? "Release" : "Item")}
             {item.quantity > 1 ? (
               <span className="text-fg-muted">
                 {" "}
@@ -65,14 +66,27 @@ export function TicketSummary({ order, event }: { order: OrderRecord; event: Eve
   );
 }
 
-export function TrackSummary({ order, track, artist }: { order: OrderRecord; track: TrackRecord | null; artist: string | null }) {
-  const title = track?.title ?? "Track";
+/** A whole release bought in one order (D-AUDIO-10). */
+type BoughtRelease = { id: string; title: string } | null;
+
+export function TrackSummary({
+  order,
+  track,
+  artist,
+  release = null,
+}: {
+  order: OrderRecord;
+  track: TrackRecord | null;
+  artist: string | null;
+  release?: BoughtRelease;
+}) {
+  const title = release?.title ?? track?.title ?? "Track";
   return (
     <Card as="section" aria-labelledby="summary-title" className="p-6">
       <div className="max-w-[16rem] bg-cr-sky">
         <RoomCube front={title} side={artist ?? title} tone="sky" label="" />
       </div>
-      <p className="cr-eyebrow mt-5">Track</p>
+      <p className="cr-eyebrow mt-5">{release ? "Release" : "Track"}</p>
       <h2 id="summary-title" className="mt-2 text-2xl font-bold text-fg">
         {title}
       </h2>
@@ -148,8 +162,19 @@ export function TicketConfirmation({ order, event }: { order: OrderRecord; event
 }
 
 /** After the server reports the order FULFILLED, so the purchase entitlement exists. */
-export function MusicReceipt({ order, track, artist }: { order: OrderRecord; track: TrackRecord | null; artist: string | null }) {
-  const title = track?.title ?? "Your track";
+export function MusicReceipt({
+  order,
+  track,
+  artist,
+  release = null,
+}: {
+  order: OrderRecord;
+  track: TrackRecord | null;
+  artist: string | null;
+  release?: BoughtRelease;
+}) {
+  const title = release?.title ?? track?.title ?? "Your track";
+  const playHref = release ? `/releases/${release.id}` : track ? `/tracks/${track.id}` : null;
   return (
     <Card as="section" aria-labelledby="done-title" className="overflow-hidden p-0">
       <div className="grid gap-0 sm:grid-cols-[14rem_1fr]">
@@ -181,15 +206,17 @@ export function MusicReceipt({ order, track, artist }: { order: OrderRecord; tra
             <dd className="cr-num text-fg">{orderReference(order.id)}</dd>
           </dl>
           <div className="mt-5 flex flex-wrap gap-3">
-            {track ? (
-              <ButtonLink href={`/tracks/${track.id}`}>
+            {playHref ? (
+              <ButtonLink href={playHref}>
                 <Music aria-hidden="true" /> Play now
               </ButtonLink>
             ) : null}
             <ButtonLink href="/library" variant="secondary">
               <Library aria-hidden="true" /> Your library
             </ButtonLink>
+            {track && !release ? <DownloadButton trackId={track.id} title={title} size="md" /> : null}
           </div>
+          {release ? <p className="mt-3 text-sm text-fg-muted">Download each song from the release page, as often as you like.</p> : null}
         </div>
       </div>
     </Card>

@@ -1,0 +1,677 @@
+/*
+ * Corner Room intro film (components/promo/intro-video). A fixed 1920 x 1080 stage; sizes are in
+ * px on purpose, the renderer captures it 1:1 and the preview scales the whole stage.
+ * Colours, light, glass and type come from tokens.css; only the film's layout lives here.
+ */
+
+.iv-stage {
+  position: relative;
+  overflow: hidden;
+  background: #140707;
+  color: #f6ece6;
+  font-family: var(--font-archivo), var(--font-anek), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A world: its base, the corner light (the page-light recipe at film size) and the one grain tile. */
+.iv-world {
+  position: absolute;
+  inset: 0;
+  background: var(--cr-surface);
+  color: var(--cr-fg);
+}
+.iv-light {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(880px 430px at 6% 0%, var(--cr-light-bulb), color-mix(in srgb, var(--cr-light-bulb) 34%, transparent) 44%, transparent 78%),
+    radial-gradient(
+      1766px 994px at 0% 0%,
+      var(--cr-light-pool),
+      color-mix(in srgb, var(--cr-light-pool) 70%, var(--cr-light-falloff)) 14%,
+      var(--cr-light-falloff) 34%,
+      color-mix(in srgb, var(--cr-light-falloff) 55%, transparent) 52%,
+      color-mix(in srgb, var(--cr-light-falloff) 22%, transparent) 70%,
+      color-mix(in srgb, var(--cr-light-falloff) 6%, transparent) 86%,
+      transparent 100%
+    ),
+    radial-gradient(1344px 864px at 100% 100%, var(--cr-light-counter), color-mix(in srgb, var(--cr-light-counter) 40%, transparent) 40%, color-mix(in srgb, var(--cr-light-counter) 10%, transparent) 70%, transparent 100%),
+    radial-gradient(998px 918px at 100% 34%, var(--cr-light-side), color-mix(in srgb, var(--cr-light-side) 35%, transparent) 45%, transparent 80%),
+    linear-gradient(117deg, transparent 18%, var(--cr-light-sweep) 44%, transparent 76%);
+}
+/* The grain never animates and never sits on content (BRAND 5.7). */
+.iv-grain {
+  position: absolute;
+  inset: 0;
+  background: url("/brand/grain-soft-2x.webp") 0 0 / 256px 256px repeat;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+.iv-scene {
+  position: absolute;
+  inset: 0;
+}
+.iv-icon {
+  display: block;
+}
+.iv-cube svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.iv-cube .cr-cube-left {
+  transform: translateX(var(--iv-left-x, 0));
+  opacity: var(--iv-side-o, 1);
+}
+.iv-cube .cr-cube-top {
+  transform: translateY(var(--iv-top-y, 0));
+  opacity: var(--iv-side-o, 1);
+}
+.iv-cube .cr-cube-front {
+  opacity: var(--iv-front-o, 1);
+}
+
+/* Type at film size. Sikat: words only, uppercase (BRAND 6). */
+.iv-eyebrow-lg {
+  font-size: 18px;
+  letter-spacing: 0.24em;
+}
+.text-lamp {
+  color: #fcf475;
+}
+[data-theme="ember"] .cr-misregister {
+  text-shadow: 5px 5px 0 var(--cr-display-shadow);
+}
+[data-theme="sky"] .cr-misregister {
+  text-shadow: 5px 5px 0 var(--cr-display-shadow);
+}
+.iv-kicker {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.iv-kicker-num {
+  font-size: 22px;
+  color: var(--cr-highlight);
+}
+.iv-lede {
+  margin-top: 28px;
+  font-size: 30px;
+  line-height: 1.35;
+  color: var(--cr-fg);
+  max-width: 760px;
+}
+
+/* Scene 1: hero */
+.iv-hero-poster {
+  position: absolute;
+  left: 1130px;
+  top: 190px;
+  width: 640px;
+  box-shadow: 0 60px 110px -50px rgb(0 0 0 / 0.9);
+}
+.iv-hero-copy {
+  position: absolute;
+  left: 140px;
+  top: 300px;
+  width: 960px;
+}
+.iv-hero-title {
+  margin-top: 34px;
+  font-size: 138px;
+  color: var(--cr-fg);
+}
+.iv-hero-title span {
+  display: block;
+}
+.iv-hero-title span + span {
+  margin-top: 10px;
+}
+.iv-bangla {
+  margin-top: 40px;
+  font-family: var(--font-anek), sans-serif;
+  font-size: 44px;
+  line-height: 1.5;
+  font-weight: 500;
+  color: var(--cr-fg);
+}
+
+/* Scene 2: events */
+.iv-events-head {
+  position: absolute;
+  left: 140px;
+  top: 250px;
+}
+.iv-section-title {
+  margin-top: 28px;
+  font-size: 156px;
+}
+.iv-events-cards {
+  position: absolute;
+  left: 1010px;
+  top: 200px;
+  display: flex;
+  gap: 40px;
+}
+.iv-event {
+  width: 360px;
+  padding: 14px 14px 22px;
+}
+.iv-event-cap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 6px 0;
+}
+.iv-event-cap .cr-eyebrow {
+  font-size: 13px;
+  color: var(--cr-highlight);
+}
+.iv-event-title {
+  font-size: 30px;
+  font-weight: 800;
+}
+.iv-event-sub {
+  font-size: 20px;
+  color: var(--cr-fg-muted);
+}
+
+/* Scene 3: the hand-over band travels the 117 degree axis through a dark neutral middle. */
+.iv-band {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(117deg, transparent 35%, rgb(246 236 230 / 0.07) 47%, rgb(246 236 230 / 0.1) 50%, rgb(246 236 230 / 0.07) 53%, transparent 65%) 0 50% / 300% 100% no-repeat;
+  pointer-events: none;
+}
+
+/* Scene 4: the listening room (mirrors listen.css at a 1920 x 1080 room). */
+.iv-lr {
+  background: #0b0919;
+}
+.iv-lr-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.iv-lr-drift {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2880px;
+  height: 2880px;
+}
+.iv-lr-stretch {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+/* The covers the backdrop canvases copy: drawn once, never shown. */
+.iv-lr-sources {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  width: 240px;
+  visibility: hidden;
+}
+.iv-lr-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(110% 85% at 50% 40%, rgb(18 15 38 / 0.42), rgb(11 9 25 / 0.74) 68%, rgb(11 9 25 / 0.92)),
+    linear-gradient(to bottom, rgb(11 9 25 / 0.4), transparent 28%, transparent 62%, rgb(11 9 25 / 0.6));
+}
+.iv-lr-top {
+  position: absolute;
+  left: 48px;
+  right: 48px;
+  top: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.iv-lr-brand {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.iv-lr-brand .cr-eyebrow {
+  font-size: 15px;
+  color: var(--cr-fg-muted);
+}
+.iv-lr-chip {
+  --cut-fill: rgb(187 237 254 / 0.08);
+  --cut-border: var(--cr-glass-edge);
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  color: var(--cr-fg);
+}
+.iv-lr-side {
+  position: absolute;
+  left: 96px;
+  top: 600px;
+  width: 400px;
+}
+.iv-lr-side-title {
+  margin-top: 22px;
+  font-size: 116px;
+}
+.iv-lr-side-lede {
+  margin-top: 22px;
+  font-size: 25px;
+  line-height: 1.4;
+}
+.iv-lr-view {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: 50% 40%;
+}
+.iv-lr-stage {
+  position: relative;
+  width: 100%;
+  perspective: 1500px;
+  perspective-origin: 50% 40%;
+}
+.iv-lr-breathe {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  background: radial-gradient(closest-side, rgb(187 237 254 / 0.3), rgb(83 200 234 / 0.13) 55%, transparent);
+}
+.iv-lr-slot {
+  position: absolute;
+  left: 50%;
+  top: 0;
+}
+.iv-lr-card {
+  position: relative;
+  display: block;
+  padding: 10px 10px 13px;
+  text-align: center;
+}
+.iv-lr-cover {
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--cr-accent);
+  box-shadow: 0 30px 60px -36px rgb(0 0 0 / 0.9);
+}
+.iv-lr-caption {
+  display: block;
+  padding: 11px 4px 0;
+}
+.iv-lr-caption-left {
+  text-align: left;
+}
+.iv-lr-cap-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.iv-lr-cap-artist {
+  display: block;
+  font-size: 13px;
+  color: var(--cr-fg-muted);
+}
+.iv-lr-dim {
+  position: absolute;
+  inset: 0;
+  background: rgb(11 9 25);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cut));
+}
+.iv-lr-heading {
+  margin-top: 22px;
+  text-align: center;
+}
+.iv-lr-eyebrow {
+  font-size: 12px;
+  color: #f6ece6;
+}
+.iv-lr-title {
+  margin-top: 12px;
+  font-size: 54px;
+  line-height: 0.95;
+}
+.iv-lr-title-lg {
+  margin-top: 18px;
+  font-size: 104px;
+  line-height: 0.92;
+}
+.iv-lr-artist {
+  margin-top: 8px;
+  font-size: 19px;
+  color: var(--cr-fg-muted);
+}
+.iv-lr-artist-lg {
+  margin-top: 14px;
+  font-size: 26px;
+}
+.iv-lr-bar {
+  display: grid;
+  width: 864px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin-top: 22px;
+  padding: 10px 14px;
+}
+.iv-transport {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--cr-fg-muted);
+}
+.iv-tool {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  color: var(--cr-fg-muted);
+}
+.iv-key {
+  --cut-fill: var(--cr-accent);
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  color: var(--cr-on-accent);
+}
+.iv-key-lg {
+  width: 64px;
+  height: 64px;
+}
+.iv-lr-now {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px 5px;
+  background: rgb(11 9 25 / 0.5);
+}
+.iv-lr-now-cube {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  background: var(--cr-accent);
+}
+.iv-lr-now-cube svg {
+  width: 100%;
+  height: 100%;
+}
+.iv-lr-now-main {
+  min-width: 0;
+  flex: 1;
+}
+.iv-lr-now-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.iv-lr-now-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+.iv-lr-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cr-highlight);
+}
+.iv-eq {
+  display: inline-flex;
+  height: 11px;
+  align-items: flex-end;
+  gap: 2px;
+}
+.iv-eq i {
+  width: 3px;
+  height: 100%;
+  background: currentColor;
+  transform-origin: bottom;
+}
+.iv-scrub {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--cr-fg-muted);
+}
+.iv-scrub span:last-child {
+  text-align: right;
+}
+.iv-scrub-wide {
+  grid-template-columns: 52px minmax(0, 1fr) 52px;
+  margin-top: 18px;
+  font-size: 15px;
+}
+.iv-range {
+  position: relative;
+  height: 3px;
+  background: rgb(187 237 254 / 0.22);
+}
+.iv-range-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--cr-highlight);
+}
+.iv-range-thumb {
+  position: absolute;
+  top: -4.5px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: var(--cr-highlight);
+}
+.iv-lr-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.iv-vol {
+  position: relative;
+  width: 80px;
+  height: 3px;
+  background: rgb(187 237 254 / 0.22);
+}
+.iv-vol span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--cr-highlight);
+}
+
+.iv-lr-focus {
+  position: absolute;
+  inset: 120px 0 0;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  align-items: center;
+  gap: 80px;
+  padding: 0 170px 100px;
+}
+.iv-lr-focus-cover {
+  position: relative;
+  width: 600px;
+  justify-self: end;
+}
+.iv-lr-halo {
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(closest-side, rgb(187 237 254 / 0.34), rgb(83 200 234 / 0.14) 55%, transparent 76%);
+}
+.iv-lr-focus-art {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--cr-accent);
+  box-shadow: 0 70px 130px -60px rgb(0 0 0 / 0.95);
+}
+.iv-lr-focus-info {
+  max-width: 600px;
+}
+.iv-lr-console {
+  margin-top: 34px;
+  padding: 20px 22px 18px;
+}
+.iv-lr-console-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+.iv-lr-peek {
+  position: absolute;
+  right: 28px;
+  top: 46%;
+  width: 260px;
+  padding: 8px 8px 12px;
+}
+.iv-lr-peek-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cr-highlight);
+}
+
+/* Scene 5: yours */
+.iv-yours-head {
+  position: absolute;
+  left: 140px;
+  top: 200px;
+  width: 1500px;
+  font-size: 58px;
+  line-height: 1.05;
+}
+.iv-yours-cards {
+  position: absolute;
+  left: 140px;
+  top: 470px;
+  display: grid;
+  grid-template-columns: repeat(3, 520px);
+  gap: 40px;
+}
+.iv-yours-card {
+  padding: 36px 36px 40px;
+}
+.iv-yours-title {
+  margin-top: 22px;
+  font-size: 84px;
+}
+.iv-yours-lede {
+  margin-top: 20px;
+  font-size: 26px;
+  line-height: 1.35;
+}
+
+/* Scene 6: store and end card */
+.iv-store {
+  position: absolute;
+  left: 140px;
+  top: 220px;
+  width: 1640px;
+  padding: 70px 80px 86px;
+}
+.iv-seam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #53c8ea;
+}
+.iv-end-cube {
+  position: absolute;
+  left: 120px;
+  top: 170px;
+  width: 760px;
+}
+.iv-end-copy {
+  position: absolute;
+  left: 930px;
+  top: 250px;
+  width: 880px;
+}
+.iv-end-title {
+  font-size: 104px;
+}
+.iv-end-title span {
+  display: block;
+}
+.iv-end-title span + span {
+  margin-top: 8px;
+}
+.iv-end-mission {
+  margin-top: 40px;
+  font-size: 30px;
+  line-height: 1.25;
+}
+.iv-end-ctas {
+  display: flex;
+  gap: 18px;
+  margin-top: 48px;
+}
+.iv-btn {
+  display: inline-flex;
+  height: 68px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 30px;
+  font-size: 22px;
+  font-weight: 700;
+}
+.iv-btn-primary {
+  --cut-fill: var(--cr-accent);
+  color: var(--cr-on-accent);
+}
+.iv-btn-secondary {
+  color: var(--cr-fg);
+}
+.iv-end-artists {
+  margin-top: 28px;
+  font-size: 19px;
+  color: var(--cr-fg-muted);
+}
+
+/* Preview controls (the page, not the film). */
+.iv-preview {
+  max-width: 1920px;
+  margin: 0 auto;
+  padding: 24px;
+}
+.iv-preview-frame {
+  position: relative;
+  overflow: hidden;
+}
+.iv-preview-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+.iv-preview-controls input {
+  flex: 1;
+}
+.iv-preview-controls button {
+  padding: 8px 18px;
+  background: #fcf475;
+  color: #1c0607;
+  font-weight: 700;
+}

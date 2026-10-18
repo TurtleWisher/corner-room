@@ -22,6 +22,8 @@ type AuthContextValue = {
   error: string | null;
   login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
+  /** Re-read /me after something changed who the user is (joined a workspace, became an artist). */
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -86,6 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await apiLogout();
         setUser(null);
         setStatus("anonymous");
+      },
+      async refreshUser() {
+        try {
+          setUser(await fetchMe());
+        } catch {
+          /* keep what we have; the next page load reads /me again */
+        }
       },
     }),
     [error, status, user],

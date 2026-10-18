@@ -34,6 +34,15 @@ export type AudioDeliveryRecord = {
   track_id: string;
   track_version_id: string;
   media_asset_id: string;
+  /** The playback copy sent first; null for older demo audio served as stored. */
+  codec?: string | null;
+  container?: string | null;
+  bitrate_kbps?: number | null;
+  /** Levels the song to about -14 LUFS (D-AUDIO-08); null when it was never measured. */
+  gain_db?: number | null;
+  legacy_delivery?: boolean;
+  /** Other verified copies of the same version, to try if the first will not decode. */
+  alternates?: { codec: string; url: string }[];
 };
 
 export type LibraryRecord = {
@@ -99,8 +108,10 @@ export async function closeListeningSession(id: string, version?: number): Promi
   });
 }
 
-export async function fetchTrackAudio(trackId: string): Promise<AudioDeliveryRecord> {
-  return apiFetch<AudioDeliveryRecord>(`/api/v1/playback/tracks/${trackId}/audio`, { retry: false });
+/** `accept`: codecs this browser can decode, best first (lib/player-model acceptCodecs). */
+export async function fetchTrackAudio(trackId: string, accept?: readonly string[]): Promise<AudioDeliveryRecord> {
+  const query = accept && accept.length > 0 ? `?accept=${encodeURIComponent(accept.join(","))}` : "";
+  return apiFetch<AudioDeliveryRecord>(`/api/v1/playback/tracks/${trackId}/audio${query}`, { retry: false });
 }
 
 export async function ingestPlaybackEvent(body: {

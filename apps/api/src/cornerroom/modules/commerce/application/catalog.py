@@ -15,10 +15,11 @@ from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import DomainEvent, OFFER_ACTIVATED, PRODUCT_ACTIVATED
 from cornerroom.kernel.money import Money
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.commerce.domain.lifecycle import (
+    OFFER_AUDIENCES,
     PRODUCT_TYPES,
     offer_transition_action,
     product_transition_action,
@@ -118,6 +119,13 @@ class CatalogCommerceService:
             track = await self.session.get(Track, subject_id)
             if track is None or track.deleted_at is not None:
                 raise NotFoundError("Track not found")
+            await self.assert_track_sold_separately(subject_id)
+        if product_type == "RELEASE":
+            from cornerroom.modules.music.domain.models import Release
+
+            release = await self.session.get(Release, subject_id)
+            if release is None or release.deleted_at is not None:
+                raise NotFoundError("Release not found")
         row = Product(
             organization_id=org_id,
             product_type=product_type,
@@ -190,10 +198,13 @@ class CatalogCommerceService:
         product_id: UUID,
         amount_minor: int,
         currency_code: str,
+        audience: str = "EVERYONE",
     ) -> Offer:
         product = await self.session.get(Product, product_id)
         if product is None or product.deleted_at is not None:
             raise NotFoundError("Product not found")
+        if audience not in OFFER_AUDIENCES or (audience != "EVERYONE" and product.product_type != "RELEASE"):
+            raise AppError("VALIDATION_ERROR", "This price audience only applies to releases", 422)
         await self._assert_write(
             ctx,
             resource_type="product",
@@ -207,6 +218,7 @@ class CatalogCommerceService:
             amount_minor=money.amount_minor,
             currency_code=money.currency_code,
             status="DRAFT",
+            audience=audience,
             created_by=ctx.user_id,
             updated_by=ctx.user_id,
         )
@@ -262,6 +274,7 @@ class CatalogCommerceService:
                 await self.session.execute(
                     select(Offer).where(
                         Offer.product_id == row.product_id,
+                        Offer.audience == row.audience,
                         Offer.status == "ACTIVE",
                         Offer.deleted_at.is_(None),
                         Offer.id != row.id,
@@ -271,7 +284,7 @@ class CatalogCommerceService:
             if other is not None:
                 raise AppError(
                     "OFFER_ACTIVE_EXISTS",
-                    "A product may have at most one ACTIVE offer",
+                    "A product may have at most one ACTIVE offer per audience",
                     409,
                     "Do not invent sale stacking (Q-P9-12)",
                 )
@@ -302,6 +315,150 @@ class CatalogCommerceService:
         )
         return row
 
+    async def assert_track_sold_separately(self, track_id: UUID) -> None:
+        """D-AUDIO-10: a song is sold on its own only from a single, or from a release whose artist
+        allows songs to be bought individually. Tracks on no release (older catalog) are unaffected."""
+        from cornerroom.modules.music.domain.models import Release, ReleaseTrack
+
+        releases = (
+            await self.session.execute(
+                select(Release)
+                .join(ReleaseTrack, ReleaseTrack.release_id == Release.id)
+                .where(ReleaseTrack.track_id == track_id, Release.deleted_at.is_(None))
+            )
+        ).scalars().all()
+        if releases and not any(r.release_type == "SINGLE" or r.track_sales == "TRACKS_ALLOWED" for r in releases):
+            raise AppError(
+                "TRACK_NOT_SOLD_SEPARATELY",
+                "This song is sold only as part of its release",
+                409,
+                "The artist chose to sell the whole release only",
+            )
+
+    async def list_proposals(
+        self, ctx: AuthContext, *, status: str | None = "PROPOSED", proposal_id: UUID | None = None
+    ) -> list[dict[str, Any]]:
+        """Price proposals for releases in the staff member's workspace (commerce.write)."""
+        from cornerroom.modules.commerce.domain.models import OfferProposal
+        from cornerroom.modules.music.domain.models import Release, Track
+
+        org_id = ctx.organization_id
+        if org_id is None:
+            raise AppError("WORKSPACE_REQUIRED", "An active organization is required", 409)
+        await self.authz.authorize(
+            ctx.user_id, "commerce.write", resource_type="organization", resource_id=org_id, scope_organization_id=org_id
+        )
+        stmt = (
+            select(OfferProposal, Release)
+            .join(Release, Release.id == OfferProposal.release_id)
+            .where(Release.primary_org_id == org_id)
+            .order_by(OfferProposal.created_at.desc())
+            .limit(200)
+        )
+        if status:
+            stmt = stmt.where(OfferProposal.status == status)
+        if proposal_id is not None:
+            stmt = stmt.where(OfferProposal.id == proposal_id)
+        out = []
+        for proposal, release in (await self.session.execute(stmt)).all():
+            subject_title = release.title
+            if proposal.subject_type == "TRACK":
+                track = await self.session.get(Track, proposal.subject_id)
+                subject_title = track.title if track else "Unknown track"
+            out.append(
+                {
+                    "id": proposal.id, "release_id": release.id, "release_title": release.title,
+                    "release_status": release.status, "subject_type": proposal.subject_type,
+                    "subject_id": proposal.subject_id, "subject_title": subject_title, "audience": proposal.audience,
+                    "amount_minor": proposal.amount_minor, "currency_code": proposal.currency_code, "note": proposal.note,
+                    "status": proposal.status, "decision_note": proposal.decision_note, "created_at": proposal.created_at,
+                }
+            )
+        return out
+
+    async def decide_proposal(
+        self, ctx: AuthContext, proposal_id: UUID, *, decision: str, note: str | None = None
+    ) -> Any:
+        """Ops accept a proposed price (product and offer are created and switched on at exactly that
+        amount) or counter it with a note so the artist proposes again (D-AUDIO-15). The system
+        never computes a price."""
+        from cornerroom.kernel.events import OFFER_PROPOSAL_DECIDED
+        from cornerroom.modules.commerce.domain.models import OfferProposal
+        from cornerroom.modules.music.domain.models import Release, Track
+
+        proposal = await self.session.get(OfferProposal, proposal_id)
+        if proposal is None:
+            raise NotFoundError("Proposal not found")
+        release = await self.session.get(Release, proposal.release_id)
+        if release is None or release.primary_org_id is None:
+            raise NotFoundError("Proposal not found")
+        org_id = release.primary_org_id
+        await self.authz.authorize(
+            ctx.user_id, "commerce.write", resource_type="organization", resource_id=org_id, scope_organization_id=org_id
+        )
+        if proposal.status != "PROPOSED":
+            raise AppError("INVALID_TRANSITION", "This proposal was already decided", 409)
+        text = " ".join((note or "").split())[:500] or None
+        if decision == "counter":
+            if not text:
+                raise AppError("VALIDATION_ERROR", "Tell the artist what price you suggest and why", 422)
+            proposal.status = "COUNTERED"
+        elif decision == "accept":
+            product_type = proposal.subject_type
+            if product_type == "TRACK":
+                await self.assert_track_sold_separately(proposal.subject_id)
+                track = await self.session.get(Track, proposal.subject_id)
+                name = track.title if track else release.title
+            else:
+                name = release.title
+            product = (
+                await self.session.execute(
+                    select(Product).where(
+                        Product.product_type == product_type,
+                        Product.subject_id == proposal.subject_id,
+                        Product.organization_id == org_id,
+                        Product.deleted_at.is_(None),
+                        Product.status != "RETIRED",
+                    )
+                )
+            ).scalars().first()
+            if product is None:
+                product = await self.create_product(ctx, product_type=product_type, subject_id=proposal.subject_id, name=name, organization_id=org_id)
+            if product.status == "DRAFT":
+                product = await self.transition_product(ctx, product.id, action="activate")
+            for old in (
+                await self.session.execute(
+                    select(Offer).where(
+                        Offer.product_id == product.id, Offer.audience == proposal.audience,
+                        Offer.status == "ACTIVE", Offer.deleted_at.is_(None),
+                    )
+                )
+            ).scalars().all():
+                await self.transition_offer(ctx, old.id, action="retire")
+            offer = await self.create_offer(
+                ctx, product_id=product.id, amount_minor=proposal.amount_minor,
+                currency_code=proposal.currency_code, audience=proposal.audience,
+            )
+            offer = await self.transition_offer(ctx, offer.id, action="activate")
+            proposal.status = "ACCEPTED"
+            proposal.resulting_offer_id = offer.id
+        else:
+            raise AppError("VALIDATION_ERROR", "Decision must be accept or counter", 422)
+        proposal.decided_by = ctx.user_id
+        proposal.decided_at = self.clock.now()
+        proposal.decision_note = text
+        await self.session.flush()
+        await self._emit(
+            ctx, event_type=OFFER_PROPOSAL_DECIDED, aggregate_type="Release", aggregate_id=release.id,
+            organization_id=org_id, payload={"proposal_id": str(proposal.id), "decision": decision},
+        )
+        await self.audit.record_from_auth(
+            ctx, action=f"price.proposal_{decision}", entity_type="OfferProposal", entity_id=proposal.id,
+            new_state={"status": proposal.status, "amount_minor": proposal.amount_minor, "currency_code": proposal.currency_code},
+            organization_id=org_id,
+        )
+        return proposal
+
     async def get_active_offer(self, offer_id: UUID) -> tuple[Offer, Product]:
         offer = await self.session.get(Offer, offer_id)
         if offer is None or offer.deleted_at is not None or offer.status != "ACTIVE":
@@ -326,13 +483,12 @@ class CatalogCommerceService:
                 Offer.deleted_at.is_(None),
                 Product.status == "ACTIVE",
                 Product.deleted_at.is_(None),
-                Product.product_type.in_(("TRACK", "CATALOG_ACCESS")),
+                Product.product_type.in_(("TRACK", "RELEASE", "CATALOG_ACCESS")),
             )
             .order_by(Offer.created_at.desc(), Offer.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Offer.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Offer.created_at, Offer.id, cursor))
         rows = list((await self.session.execute(stmt.limit(limit + 1))).all())
         next_cursor = None
         if len(rows) > limit:
@@ -365,8 +521,7 @@ class CatalogCommerceService:
             .order_by(Product.created_at.desc(), Product.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Product.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Product.created_at, Product.id, cursor))
         rows = list((await self.session.execute(stmt.limit(limit + 1))).scalars())
         next_cursor = None
         if len(rows) > limit:
@@ -402,8 +557,7 @@ class CatalogCommerceService:
         if product_id is not None:
             stmt = stmt.where(Offer.product_id == product_id)
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Offer.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Offer.created_at, Offer.id, cursor))
         rows = list((await self.session.execute(stmt.limit(limit + 1))).scalars())
         next_cursor = None
         if len(rows) > limit:

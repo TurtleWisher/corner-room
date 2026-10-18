@@ -330,12 +330,30 @@ async def test_cross_org_ticket_type_is_hidden(client: AsyncClient) -> None:
     admin = await admin_token(client)
     orgs = (await client.get("/api/v1/organizations", headers=bearer(admin))).json()["items"]
     label = next(row for row in orgs if row["type"] == "LABEL")
-    label_token = await _workspace(client, admin, label["id"])
+    # The bootstrap admin is an unscoped super_admin, a deliberate platform break-glass
+    # (PHASE_15_SECURITY_AUDIT), so "another org" has to be an org-scoped event manager.
+    staff = await register_and_login(client, "label-ticket-staff@example.com")
+    roles = await client.get("/api/v1/roles", headers=bearer(admin))
+    event_role = next(row for row in roles.json() if row["key"] == "event_manager")
+    joined = await client.post(
+        f"/api/v1/organizations/{label['id']}/memberships",
+        headers=bearer(admin),
+        json={"user_id": staff["user"]["id"], "status": "ACTIVE", "role_id": event_role["id"]},
+    )
+    assert joined.status_code == 201, joined.text
+    label_token = await _workspace(client, staff["access_token"], label["id"])
     hidden = await client.get(
         f"/api/v1/ticket-types/{ticket_type['id']}",
         headers=bearer(label_token),
     )
     assert hidden.status_code == 404
+
+    # The break-glass admin still reads it, from any workspace.
+    break_glass = await client.get(
+        f"/api/v1/ticket-types/{ticket_type['id']}",
+        headers=bearer(await _workspace(client, admin, label["id"])),
+    )
+    assert break_glass.status_code == 200
 
 
 @pytest.mark.postgres

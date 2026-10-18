@@ -7,17 +7,29 @@ import { LogIn } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { ButtonLink, Card, Skeleton } from "@/components/ds";
+import { withNext } from "@/lib/auth-view";
 
-function SignInGate({ what }: { what: string }) {
+/** Who a page is for: fans sign in or join on the main pages, artists on the artist page. */
+export type PageAudience = "fan" | "artist";
+
+function SignInGate({ what, audience }: { what: string; audience: PageAudience }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const here = params.toString() ? `${pathname}?${params.toString()}` : pathname;
   return (
     <Card className="max-w-xl p-6">
       <p className="text-lg font-bold text-fg">Sign in to see {what}</p>
-      <ButtonLink href={`/login?next=${encodeURIComponent(here)}`} className="mt-4">
-        <LogIn aria-hidden="true" /> Sign in
-      </ButtonLink>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <ButtonLink href={withNext(audience === "artist" ? "/studio/sign-in" : "/login", here)}>
+          <LogIn aria-hidden="true" /> Sign in
+        </ButtonLink>
+        {audience === "fan" ? (
+          // New here: the account is made, verified, then signed in, and they come back to this page.
+          <ButtonLink href={withNext("/register", here)} variant="secondary">
+            Create an account
+          </ButtonLink>
+        ) : null}
+      </div>
     </Card>
   );
 }
@@ -31,6 +43,7 @@ export function AccountPage({
   title,
   what,
   actions,
+  audience = "fan",
   children,
 }: {
   eyebrow?: string;
@@ -38,6 +51,8 @@ export function AccountPage({
   /** "your purchases": used in the sign-in prompt. */
   what: string;
   actions?: React.ReactNode;
+  /** Artist pages send signed-out visitors to artist sign-in (artists join by their label's link). */
+  audience?: PageAudience;
   children: React.ReactNode;
 }) {
   const { status } = useAuth();
@@ -61,7 +76,7 @@ export function AccountPage({
               children
             ) : (
               <Suspense fallback={null}>
-                <SignInGate what={what} />
+                <SignInGate what={what} audience={audience} />
               </Suspense>
             )}
           </div>

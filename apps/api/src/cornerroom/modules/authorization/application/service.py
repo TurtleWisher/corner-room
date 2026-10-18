@@ -165,6 +165,42 @@ class AuthorizationService:
         stmt = select(Role).where(Role.deleted_at.is_(None)).order_by(Role.key)
         return list((await self.session.execute(stmt)).scalars().all())
 
+    async def role_permission_keys(self, role_id: UUID) -> frozenset[str]:
+        rows = await self.session.execute(
+            select(Permission.key)
+            .join(RolePermission, RolePermission.permission_id == Permission.id)
+            .where(RolePermission.role_id == role_id)
+        )
+        return frozenset(rows.scalars().all())
+
+    async def assert_can_grant(self, granter_id: UUID, role_id: UUID, organization_id: UUID) -> Role:
+        """No privilege escalation through workspaces: a workspace admin may give a role only when
+        they already hold every permission it carries there. Unscoped holders (the owner's super
+        admin) can give any role. role.admin assignments stay the documented break-glass path."""
+        role = await self.session.get(Role, role_id)
+        if role is None or role.deleted_at is not None:
+            raise NotFoundError("Role not found")
+        needed = await self.role_permission_keys(role_id)
+        missing = needed - await self.permission_keys(granter_id, organization_id)
+        if missing:
+            raise AppError(
+                "ROLE_NOT_GRANTABLE",
+                "You can't give a role with permissions you don't have",
+                403,
+                f"Missing: {', '.join(sorted(missing))}",
+            )
+        return role
+
+    async def grantable_roles(self, granter_id: UUID, organization_id: UUID) -> list[Role]:
+        """Staff roles (with at least one permission) this person may give in this workspace."""
+        held = await self.permission_keys(granter_id, organization_id)
+        out = []
+        for role in await self.list_roles():
+            needed = await self.role_permission_keys(role.id)
+            if needed and needed <= held:
+                out.append(role)
+        return out
+
     async def get_role_by_key(self, key: str) -> Role | None:
         stmt = select(Role).where(Role.key == key, Role.deleted_at.is_(None))
         return (await self.session.execute(stmt)).scalar_one_or_none()

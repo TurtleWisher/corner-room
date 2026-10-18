@@ -165,12 +165,28 @@ async def test_phase09_order_payment_fulfillment_entitlement_idor(client: AsyncC
     )
     assert opened.status_code == 201, opened.text
 
+    # D-AUDIO-14 (owner, 2026-10-17) supersedes the Phase 09 rule "TAKEN_DOWN blocks play even when
+    # entitled": after an ordinary takedown the buyer keeps the song; a legal takedown removes it.
     down = await client.post(
         f"/api/v1/tracks/{track['id']}/transition",
         headers=bearer(staff),
         json={"action": "takedown", "version": track["version"]},
     )
     assert down.status_code == 200
+    kept = await client.post(
+        "/api/v1/playback/sessions",
+        headers=bearer(buyer_token),
+        json={"track_id": track["id"]},
+    )
+    assert kept.status_code == 201, kept.text
+
+    from cornerroom.infra.db import get_session_factory
+    from cornerroom.modules.music.domain.models import Track
+    from uuid import UUID
+
+    async with get_session_factory()() as session:
+        (await session.get(Track, UUID(track["id"]))).takedown_kind = "LEGAL"
+        await session.commit()
     blocked = await client.post(
         "/api/v1/playback/sessions",
         headers=bearer(buyer_token),

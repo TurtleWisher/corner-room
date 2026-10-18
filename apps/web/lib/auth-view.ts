@@ -61,3 +61,35 @@ export function safeNextPath(next: string | null | undefined, fallback = "/accou
   }
   return next;
 }
+
+/**
+ * Carry where someone was going through sign-up and verification: "/login?next=%2Fartists%2Fapply".
+ * An unsafe or missing destination is simply left off. A "#fragment" in `path` stays at the end.
+ */
+export function withNext(path: string, next: string | null | undefined): string {
+  const safe = next ? safeNextPath(next, "") : "";
+  if (!safe) return path;
+  const hash = path.indexOf("#");
+  const base = hash < 0 ? path : path.slice(0, hash);
+  const fragment = hash < 0 ? "" : path.slice(hash);
+  return `${base}${base.includes("?") ? "&" : "?"}next=${encodeURIComponent(safe)}${fragment}`;
+}
+
+/** The sign-in pages: fans, artists and staff use the same accounts, each on their own page. */
+export const SIGN_IN_PAGES = ["/login", "/studio/sign-in", "/staff/sign-in"] as const;
+
+/** Only a known sign-in page; anything else is the fan one. */
+export function signInPageFrom(value: string | null | undefined): string {
+  return (SIGN_IN_PAGES as readonly string[]).includes(value ?? "") ? (value as string) : "/login";
+}
+
+/** The verification link, telling it where to sign in afterwards and where to go after that. */
+export function verifyLinkFor(verifyPath: string, next: string | null | undefined, signInPath: string): string {
+  const withDest = withNext(verifyPath, next);
+  if (signInPath === "/login") return withDest;
+  const hash = withDest.indexOf("#");
+  const base = hash < 0 ? withDest : withDest.slice(0, hash);
+  const fragment = hash < 0 ? "" : withDest.slice(hash);
+  return `${base}${base.includes("?") ? "&" : "?"}signin=${encodeURIComponent(signInPageFrom(signInPath))}${fragment}`;
+}
+

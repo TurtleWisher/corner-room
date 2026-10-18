@@ -27,6 +27,7 @@ htmlcov/
 # Node
 node_modules/
 .next/
+.next-staging/
 out/
 .turbo/
 *.tsbuildinfo
@@ -60,3 +61,4 @@ coverage.xml
 # Local agent config (copied from tooling/)
 /.claude/
 /.mcp.json
+graphify-out/

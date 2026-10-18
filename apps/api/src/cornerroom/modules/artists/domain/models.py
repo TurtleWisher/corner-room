@@ -6,6 +6,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -96,8 +98,40 @@ class ArtistApplication(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDel
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="SUBMITTED")
     payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Applications through a label's join link go to that label (owner, 2026-10-17).
+    join_link_id: Mapped[UUID | None] = mapped_column(ForeignKey("artists.artist_join_links.id"), nullable=True)
+    organization_id: Mapped[UUID | None] = mapped_column(ForeignKey("identity.organizations.id"), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     __mapper_args__ = {"version_id_col": version}
+
+
+class ArtistJoinLink(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
+    """A link a label shares with artists (owner, 2026-10-17: "one shared link + review").
+
+    Holding it lets someone create an account and apply to that label; staff still review every
+    application. It can be switched off at any time, and optionally ends on a date or after a
+    number of uses (both set by staff, no defaults). The code is kept readable so staff can copy
+    the link again: its only power is starting an application that staff review.
+    """
+
+    __tablename__ = "artist_join_links"
+    __table_args__ = (
+        CheckConstraint("status IN ('ACTIVE','DISABLED')", name="status"),
+        CheckConstraint("max_uses IS NULL OR max_uses > 0", name="max_uses"),
+        CheckConstraint("uses >= 0", name="uses"),
+        UniqueConstraint("code", name="uq_artist_join_links_code"),
+        Index("ix_artist_join_links_organization_id", "organization_id"),
+        {"schema": "artists"},
+    )
+
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("identity.organizations.id"), nullable=False)
+    code: Mapped[str] = mapped_column(String(64), nullable=False)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="ACTIVE")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    max_uses: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    uses: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Band(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Base):
@@ -169,6 +203,8 @@ class BandMember(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixi
     artist_id: Mapped[UUID | None] = mapped_column(ForeignKey("artists.artists.id"), nullable=True)
     role_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="INVITED")
+    # Band admin may publish the band's music (D-AUDIO-05). Only members with an account.
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

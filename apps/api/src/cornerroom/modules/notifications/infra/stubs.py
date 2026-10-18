@@ -9,18 +9,21 @@ from uuid import UUID
 
 import structlog
 
+from cornerroom.infra.logging import mask_email, mask_phone
+
 log = structlog.get_logger("notifications")
 
 
 class StubEmailSender:
     async def send(self, *, to: str, subject: str, body: str, locale: str = "en") -> str | None:
-        log.info("email_stub", to=to, subject=subject, locale=locale)
+        # Recipients are personal data: logs carry a masked address only.
+        log.info("email_stub", to=mask_email(to), subject=subject, locale=locale)
         return "stub-email"
 
 
 class StubSmsSender:
     async def send(self, *, to: str, body: str, locale: str = "en") -> str | None:
-        log.info("sms_stub", to=to, locale=locale)
+        log.info("sms_stub", to=mask_phone(to), locale=locale)
         return "stub-sms"
 
 
@@ -44,5 +47,5 @@ class DevMailboxEmailSender:
         record = {"at": datetime.now(timezone.utc).isoformat(), "to": to, "subject": subject, "body": body, "locale": locale}
         with self.file.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record) + "\n")
-        log.info("email_dev_mailbox", to=to, subject=subject, file=str(self.file))
+        log.info("email_dev_mailbox", to=mask_email(to), subject=subject, file=str(self.file))
         return "dev-mailbox"

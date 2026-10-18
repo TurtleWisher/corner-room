@@ -55,6 +55,9 @@ TRACK_TRANSITIONS: dict[tuple[str, str], str] = {
     ("RELEASED", "TAKEN_DOWN"): "takedown",
     ("RELEASED", "ARCHIVED"): "archive",
     ("TAKEN_DOWN", "ARCHIVED"): "archive",
+    # Audio platform (design 5.4, F5): the owner may withdraw a submission; a reviewer may send it back.
+    ("SUBMITTED", "DRAFT"): "withdraw",
+    ("IN_REVIEW", "DRAFT"): "request_changes",
 }
 
 TRACK_ACTION_TARGETS = {
@@ -66,10 +69,13 @@ TRACK_ACTION_TARGETS = {
     "release": "RELEASED",
     "takedown": "TAKEN_DOWN",
     "archive": "ARCHIVED",
+    "withdraw": "DRAFT",
+    "request_changes": "DRAFT",
 }
 
-TRACK_WRITE_ACTIONS = frozenset({"submit", "start_review"})
-TRACK_APPROVE_ACTIONS = frozenset({"approve", "schedule", "release"})
+# F4: starting a review is the reviewer's job, never the owner's (design 5.4).
+TRACK_WRITE_ACTIONS = frozenset({"submit", "withdraw"})
+TRACK_APPROVE_ACTIONS = frozenset({"start_review", "approve", "schedule", "release", "request_changes", "reject"})
 TRACK_TAKEDOWN_ACTIONS = frozenset({"takedown", "archive"})
 
 RELEASE_TRANSITIONS: dict[tuple[str, str], str] = {
@@ -89,6 +95,11 @@ RELEASE_TRANSITIONS: dict[tuple[str, str], str] = {
     ("RELEASED", "TAKEN_DOWN"): "takedown",
     ("RELEASED", "ARCHIVED"): "archive",
     ("TAKEN_DOWN", "ARCHIVED"): "archive",
+    # Audio platform (design 5.4): the artist submits a draft for review; a reviewer sends it back.
+    ("IDEA", "METADATA_REVIEW"): "submit",
+    ("DEMO", "METADATA_REVIEW"): "submit",
+    ("IN_PRODUCTION", "METADATA_REVIEW"): "submit",
+    ("METADATA_REVIEW", "IN_PRODUCTION"): "request_changes",
 }
 
 RELEASE_ACTION_TARGETS = {
@@ -101,12 +112,14 @@ RELEASE_ACTION_TARGETS = {
     "release": "RELEASED",
     "takedown": "TAKEN_DOWN",
     "archive": "ARCHIVED",
+    "submit": "METADATA_REVIEW",
+    "request_changes": "IN_PRODUCTION",
 }
 
 RELEASE_WRITE_ACTIONS = frozenset(
-    {"start_demo", "start_production", "start_qc", "start_metadata_review"}
+    {"start_demo", "start_production", "start_qc", "start_metadata_review", "submit"}
 )
-RELEASE_APPROVE_ACTIONS = frozenset({"approve", "schedule", "release"})
+RELEASE_APPROVE_ACTIONS = frozenset({"approve", "schedule", "release", "request_changes"})
 RELEASE_TAKEDOWN_ACTIONS = frozenset({"takedown", "archive"})
 
 VERSION_TRANSITIONS: dict[tuple[str, str], str] = {
@@ -201,3 +214,18 @@ def permission_for_release_action(action: str) -> str:
     if action in RELEASE_TAKEDOWN_ACTIONS:
         return "music.takedown"
     raise AppError("VALIDATION_ERROR", "Unknown release lifecycle action", 422)
+
+
+def track_action_target(current: str, action: str) -> str:
+    """Target of `action` from `current`, only when that exact action is allowed there."""
+    target = track_target_for_action(action)
+    if track_transition_action(current, target) != action:
+        raise _invalid(current, target)
+    return target
+
+
+def release_action_target(current: str, action: str) -> str:
+    target = release_target_for_action(action)
+    if release_transition_action(current, target) != action:
+        raise _invalid(current, target)
+    return target

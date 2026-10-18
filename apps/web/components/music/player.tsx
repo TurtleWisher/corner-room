@@ -12,7 +12,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { LogIn, Maximize2, Pause, Play, ShoppingBag, SkipBack, SkipForward } from "lucide-react";
+import { LogIn, Maximize2, Pause, Play, Repeat, Repeat1, ShoppingBag, Shuffle, SkipBack, SkipForward } from "lucide-react";
 
 import { RoomCube } from "@/components/brand/room-cube";
 import { ButtonLink } from "@/components/ds";
@@ -26,18 +26,27 @@ import {
   type ListeningSessionRecord,
 } from "@/lib/api";
 import {
+  acceptCodecs,
+  afterEnd,
   clock,
   durationLabel,
+  formatLabel,
   isAutoplayBlocked,
   isSuperseded,
+  levelMultiplier,
   listenedMs,
+  nextRepeat,
+  outputLevels,
   playProblem,
   previousAction,
   problemMessage,
   queueFor,
+  repeatLabel,
   seekTarget,
-  stepIndex,
+  shuffled,
+  stepWithRepeat,
   type PlayProblem,
+  type RepeatMode,
 } from "@/lib/player-model";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +71,15 @@ type PlayerState = {
   buffering: boolean;
   volume: number;
   muted: boolean;
+  repeat: RepeatMode;
+  /** The queue is in shuffled order (the list's own order is kept to restore). */
+  shuffle: boolean;
+  /** "Normalise volume" (D-AUDIO-08), on by default, remembered on this device. */
+  normalise: boolean;
+  /** Levelling for the current track from the API; null when it was never measured. */
+  gainDb: number | null;
+  /** What is streaming now, e.g. "Opus · 160 kbps"; null for older demo audio. */
+  format: string | null;
 };
 
 export type PlayerProgress = { position: number; duration: number };
@@ -106,12 +124,46 @@ type PlayerApi = PlayerState & {
   previous: () => void;
   setVolume: (volume: number) => void;
   toggleMute: () => void;
+  toggleShuffle: () => void;
+  cycleRepeat: () => void;
+  toggleNormalise: () => void;
+  /** Whether levelling can work here: element volume is ignored on some devices (iOS). */
+  levellingAvailable: boolean;
   isCurrent: (trackId: string) => boolean;
 };
 
 const PlayerContext = createContext<PlayerApi | null>(null);
 
 const VOLUME_KEY = "cr.player.volume";
+const PREFS_KEY = "cr.player.prefs";
+
+type Prefs = { shuffle: boolean; repeat: RepeatMode; normalise: boolean };
+
+/** Shuffle, repeat and levelling, remembered on this device only (a convenience, not account data). */
+function readPrefs(): Prefs {
+  const fallback: Prefs = { shuffle: false, repeat: "off", normalise: true };
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(PREFS_KEY) ?? "null") as Partial<Prefs> | null;
+    if (!raw || typeof raw !== "object") return fallback;
+    return {
+      shuffle: raw.shuffle === true,
+      repeat: raw.repeat === "all" || raw.repeat === "one" ? raw.repeat : "off",
+      normalise: raw.normalise !== false,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function writePrefs(prefs: Prefs): void {
+  try {
+    window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    /* storage unavailable: the choice still applies for this visit */
+  }
+}
+
+type WebAudioWindow = Window & { webkitAudioContext?: typeof AudioContext };
 
 function eventId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `play-${Date.now()}`;
@@ -144,6 +196,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const retried = useRef(false);
   // Every load gets a number; a slower, older load that finishes later is ignored.
   const loadSeq = useRef(0);
+  // The list's own order while shuffle is on, to restore when it is turned off.
+  const original = useRef<PlayerTrack[] | null>(null);
+  // Codecs this browser can decode (set on mount), and the other copies of the current version.
+  const accept = useRef<string[]>(["mp3"]);
+  const alternates = useRef<{ codec: string; url: string }[]>([]);
+  const failedCodecs = useRef<Set<string>>(new Set());
+  const currentCodec = useRef<string | null>(null);
+  // Boost for quiet songs needs a Web Audio gain stage, which can only read media fetched in CORS
+  // mode. `cors` says the element is in that mode; it is dropped for the visit if a load fails.
+  const cors = useRef(false);
+  // Set once media has played in CORS mode: later failures are then never blamed on CORS.
+  const corsProven = useRef(false);
+  const audioCtx = useRef<AudioContext | null>(null);
+  const graph = useRef<{ gain: GainNode } | null>(null);
+  const [routed, setRouted] = useState(false);
+  const [corsSeen, setCorsSeen] = useState(false);
   const progress = useMemo(createProgressStore, []);
   const [volumeSettable, setVolumeSettable] = useState(true);
   const [state, setState] = useState<PlayerState>({
@@ -157,9 +225,32 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     buffering: false,
     volume: 1,
     muted: false,
+    repeat: "off",
+    shuffle: false,
+    normalise: true,
+    gainDb: null,
+    format: null,
   });
   const stateRef = useRef(state);
   stateRef.current = state;
+
+  /** Called from a click or key press: browsers only let audio processing start from one. */
+  const wakeAudio = useCallback(() => {
+    if (!cors.current || !stateRef.current.normalise) return;
+    try {
+      const Ctor = window.AudioContext ?? (window as WebAudioWindow).webkitAudioContext;
+      if (!audioCtx.current && Ctor) audioCtx.current = new Ctor();
+      if (audioCtx.current?.state === "suspended") void audioCtx.current.resume().catch(() => undefined);
+    } catch {
+      /* no Web Audio here: levelling only turns loud songs down */
+    }
+  }, []);
+
+  /** The playback copy to try, the codecs to ask for next time, and the format line. */
+  const noteDelivery = useCallback((codec: string | null | undefined, kbps: number | null | undefined) => {
+    currentCodec.current = codec ?? null;
+    return formatLabel(codec, kbps);
+  }, []);
 
   const report = useCallback((completed: boolean) => {
     const s = session.current;
@@ -192,8 +283,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       a.removeAttribute("src");
       a.load();
       retried.current = false;
+      alternates.current = [];
+      failedCodecs.current = new Set();
       progress.set({ position: 0, duration: 0 });
-      setState((s) => ({ ...s, track: meta, status: "loading", problem: null, queue, index, source, needsGesture: false, buffering: false }));
+      setState((s) => ({ ...s, track: meta, status: "loading", problem: null, queue, index, source, needsGesture: false, buffering: false, gainDb: null, format: null }));
       try {
         const [opened, row] = await Promise.all([
           openListeningSession(meta.id),
@@ -209,10 +302,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           setState((s) => ({ ...s, track, status: "problem", problem: { kind: "unavailable" } }));
           return;
         }
-        const delivery = await fetchTrackAudio(meta.id);
+        const delivery = await fetchTrackAudio(meta.id, accept.current);
         if (seq !== loadSeq.current) return;
+        alternates.current = [...(delivery.alternates ?? [])];
+        const format = noteDelivery(delivery.codec, delivery.bitrate_kbps);
         a.src = resolveMediaUrl(delivery.url);
-        setState((s) => ({ ...s, track }));
+        setState((s) => ({ ...s, track, gainDb: delivery.gain_db ?? null, format }));
         try {
           await a.play();
         } catch (err) {
@@ -230,7 +325,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         setState((s) => ({ ...s, status: "problem", problem: playProblem(err) }));
       }
     },
-    [closeSession, progress, report],
+    [closeSession, progress, report, noteDelivery],
   );
 
   const play = useCallback(
@@ -242,7 +337,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       // Without a list, a track already in Up next keeps that queue (a click in the corridor).
       const list = options?.queue ?? (s.queue.some((t) => t.id === meta.id) ? s.queue : undefined);
       const source = options?.queue ? (options.source ?? null) : list ? s.source : (options?.source ?? null);
-      const { tracks, index } = queueFor(meta, list);
+      let { tracks, index } = queueFor(meta, list);
+      // A new list while shuffle is on plays in shuffled order, starting from the chosen track.
+      if (options?.queue) {
+        original.current = s.shuffle ? tracks : null;
+        if (s.shuffle && tracks.length > 1) {
+          tracks = shuffled(tracks, index);
+          index = 0;
+        }
+      }
+      wakeAudio();
       if (s.track?.id === meta.id && (s.status === "paused" || s.status === "playing")) {
         if (options?.queue) setState((x) => ({ ...x, queue: tracks, index, source }));
         if (a.paused) await a.play().catch((err) => isAutoplayBlocked(err) && setState((x) => ({ ...x, needsGesture: true })));
@@ -250,20 +354,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
       await load(tracks[index], tracks, index, source);
     },
-    [load],
+    [load, wakeAudio],
   );
 
   const toggle = useCallback(() => {
     const a = audio.current;
     const s = stateRef.current;
     if (!a || !s.track || s.status === "loading") return;
+    wakeAudio();
     if (s.status === "problem") {
       void load(s.track, s.queue, s.index, s.source);
       return;
     }
     if (a.paused) void a.play().catch((err) => isAutoplayBlocked(err) && setState((x) => ({ ...x, needsGesture: true })));
     else a.pause();
-  }, [load]);
+  }, [load, wakeAudio]);
 
   const seek = useCallback(
     (seconds: number) => {
@@ -278,20 +383,58 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const next = useCallback(() => {
     const s = stateRef.current;
-    const to = stepIndex(s.index, s.queue.length, 1);
+    const to = stepWithRepeat(s.index, s.queue.length, 1, s.repeat);
     if (to !== null) void load(s.queue[to], s.queue, to, s.source);
   }, [load]);
 
   const previous = useCallback(() => {
     const s = stateRef.current;
     if (!s.track) return;
-    if (previousAction(s.index) === "restart") {
+    // On the first track: restart it, unless repeat-all wraps round to the last one.
+    if (previousAction(s.index) === "restart" && !(s.repeat === "all" && s.queue.length > 1)) {
       seek(0);
       return;
     }
-    const to = stepIndex(s.index, s.queue.length, -1);
+    const to = stepWithRepeat(s.index, s.queue.length, -1, s.repeat);
     if (to !== null) void load(s.queue[to], s.queue, to, s.source);
   }, [load, seek]);
+
+  const savePrefs = useCallback((s: Pick<PlayerState, "shuffle" | "repeat" | "normalise">) => {
+    writePrefs({ shuffle: s.shuffle, repeat: s.repeat, normalise: s.normalise });
+  }, []);
+
+  const toggleShuffle = useCallback(() => {
+    const s = stateRef.current;
+    if (!s.shuffle) {
+      // On: the playing track stays first; the rest of the list follows in random order.
+      original.current = s.queue;
+      const reorder = s.queue.length > 1 && s.track !== null;
+      const queue = reorder ? shuffled(s.queue, s.index) : s.queue;
+      setState((x) => ({ ...x, shuffle: true, queue, index: reorder ? 0 : x.index }));
+    } else {
+      // Off: back to the list's own order, still on the same track.
+      const list = original.current ?? s.queue;
+      original.current = null;
+      const at = s.track ? list.findIndex((t) => t.id === s.track?.id) : -1;
+      setState((x) => ({ ...x, shuffle: false, queue: list, index: at >= 0 ? at : 0 }));
+    }
+    savePrefs({ ...s, shuffle: !s.shuffle });
+  }, [savePrefs]);
+
+  const cycleRepeat = useCallback(() => {
+    const s = stateRef.current;
+    const repeat = nextRepeat(s.repeat);
+    setState((x) => ({ ...x, repeat }));
+    savePrefs({ ...s, repeat });
+  }, [savePrefs]);
+
+  const toggleNormalise = useCallback(() => {
+    const s = stateRef.current;
+    const normalise = !s.normalise;
+    setState((x) => ({ ...x, normalise }));
+    savePrefs({ ...s, normalise });
+    if (normalise) wakeAudio();
+  }, [savePrefs, wakeAudio]);
 
   const setVolume = useCallback((volume: number) => {
     const v = Math.min(1, Math.max(0, volume));
@@ -305,47 +448,107 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const toggleMute = useCallback(() => setState((s) => ({ ...s, muted: !s.muted })), []);
 
-  // A signed URL lasts about five minutes (Q-P8-01). If the media fails, fetch a fresh one once.
+  /*
+   * When the media fails, in order: (1) if it was fetched in CORS mode and nothing depends on that
+   * yet, retry without it (boost is then off for this visit); (2) if this copy will not decode
+   * here, try the next verified copy of the same version; (3) a signed URL lasts about five
+   * minutes (Q-P8-01), so fetch a fresh one once, without the codecs that failed.
+   */
   const onMediaError = useCallback(async () => {
     const a = audio.current;
     const s = stateRef.current;
     if (!a || !a.getAttribute("src")) return;
     const seq = loadSeq.current;
-    if (!s.track || retried.current) {
-      setState((x) => (x.track ? { ...x, status: "problem", problem: { kind: "stopped" }, buffering: false } : x));
-      return;
-    }
-    retried.current = true;
-    try {
-      const at = a.currentTime;
-      const delivery = await fetchTrackAudio(s.track.id);
-      if (seq !== loadSeq.current) return;
-      a.src = resolveMediaUrl(delivery.url);
+    const at = a.currentTime;
+    const code = a.error?.code;
+    const resume = async (url: string) => {
+      a.src = url;
       a.currentTime = at;
       await a.play();
+    };
+    try {
+      if (cors.current && !corsProven.current && !graph.current) {
+        cors.current = false;
+        a.removeAttribute("crossorigin");
+        await resume(a.src);
+        return;
+      }
+      if ((code === 3 || code === 4) && alternates.current.length > 0) {
+        if (currentCodec.current) failedCodecs.current.add(currentCodec.current);
+        const alt = alternates.current.shift()!;
+        const format = noteDelivery(alt.codec, null);
+        setState((x) => ({ ...x, format }));
+        await resume(resolveMediaUrl(alt.url));
+        return;
+      }
+      if (!s.track || retried.current) {
+        setState((x) => (x.track ? { ...x, status: "problem", problem: { kind: "stopped" }, buffering: false } : x));
+        return;
+      }
+      retried.current = true;
+      const usable = accept.current.filter((c) => !failedCodecs.current.has(c));
+      const delivery = await fetchTrackAudio(s.track.id, usable.length > 0 ? usable : accept.current);
+      if (seq !== loadSeq.current) return;
+      alternates.current = (delivery.alternates ?? []).filter((alt) => !failedCodecs.current.has(alt.codec));
+      const format = noteDelivery(delivery.codec, delivery.bitrate_kbps);
+      setState((x) => ({ ...x, format, gainDb: delivery.gain_db ?? x.gainDb }));
+      await resume(resolveMediaUrl(delivery.url));
     } catch (err) {
       if (seq !== loadSeq.current || isSuperseded(err)) return;
       setState((x) => ({ ...x, status: "problem", problem: playProblem(err), buffering: false }));
     }
-  }, []);
+  }, [noteDelivery]);
 
   useEffect(() => () => closeSession(), [closeSession]);
 
-  // Volume: remembered on this device; some devices (iOS) only allow the hardware buttons.
+  // Volume: remembered on this device; some devices (iOS) only allow the hardware buttons, and
+  // there levelling is not offered either. Codec support and saved preferences are read here too.
   useEffect(() => {
     const probe = document.createElement("audio");
     probe.volume = 0.5;
-    setVolumeSettable(probe.volume === 0.5);
-    setState((s) => ({ ...s, volume: readVolume() }));
+    const settable = probe.volume === 0.5;
+    setVolumeSettable(settable);
+    accept.current = acceptCodecs((mime) => probe.canPlayType(mime));
+    const hasWebAudio = typeof window.AudioContext !== "undefined" || typeof (window as WebAudioWindow).webkitAudioContext !== "undefined";
+    // Boost needs readable media: ask for it in CORS mode before any source is set.
+    if (settable && hasWebAudio && audio.current) {
+      audio.current.crossOrigin = "anonymous";
+      cors.current = true;
+    }
+    const prefs = readPrefs();
+    setState((s) => ({ ...s, volume: readVolume(), ...prefs }));
   }, []);
+
+  // Listener volume, mute and levelling, on the element or (once routed) on the gain stage.
   useEffect(() => {
     const a = audio.current;
     if (!a) return;
-    a.volume = state.volume;
-    a.muted = state.muted;
-  }, [state.volume, state.muted]);
+    const levels = outputLevels(state.volume, state.muted, levelMultiplier(state.gainDb, state.normalise), routed);
+    a.volume = levels.element;
+    a.muted = routed ? false : state.muted;
+    if (graph.current) graph.current.gain.gain.value = levels.gain;
+  }, [state.volume, state.muted, state.gainDb, state.normalise, routed]);
 
-  const hasNext = stepIndex(state.index, state.queue.length, 1) !== null;
+  // A quiet song needs a boost: route the element through a gain stage, once, and only after media
+  // has played in CORS mode (so the stage can read it) with audio processing already running.
+  useEffect(() => {
+    if (state.status !== "playing" || graph.current || !cors.current || !corsProven.current) return;
+    if (levelMultiplier(state.gainDb, state.normalise) <= 1) return;
+    const a = audio.current;
+    const c = audioCtx.current;
+    if (!a || !c || c.state !== "running") return;
+    try {
+      const source = c.createMediaElementSource(a);
+      const gain = c.createGain();
+      source.connect(gain).connect(c.destination);
+      graph.current = { gain };
+      setRouted(true);
+    } catch {
+      /* routing refused: levelling keeps turning loud songs down only */
+    }
+  }, [state.status, state.gainDb, state.normalise, corsSeen]);
+
+  const hasNext = stepWithRepeat(state.index, state.queue.length, 1, state.repeat) !== null;
   const api = useRef({ toggle, next, previous, seek, hasNext });
   api.current = { toggle, next, previous, seek, hasNext };
 
@@ -416,9 +619,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       previous,
       setVolume,
       toggleMute,
+      toggleShuffle,
+      cycleRepeat,
+      toggleNormalise,
+      levellingAvailable: volumeSettable,
       isCurrent: (id) => state.track?.id === id,
     }),
-    [state, hasNext, volumeSettable, progress, play, toggle, seek, next, previous, setVolume, toggleMute],
+    [state, hasNext, volumeSettable, progress, play, toggle, seek, next, previous, setVolume, toggleMute, toggleShuffle, cycleRepeat, toggleNormalise],
   );
 
   return (
@@ -427,8 +634,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       <audio
         ref={audio}
         preload="none"
-        onPlay={() => setState((s) => ({ ...s, status: "playing", problem: null, needsGesture: false }))}
-        onPlaying={() => setState((s) => (s.buffering ? { ...s, buffering: false } : s))}
+        onPlay={() => {
+          setState((s) => ({ ...s, status: "playing", problem: null, needsGesture: false }));
+          if (audioCtx.current?.state === "suspended") void audioCtx.current.resume().catch(() => undefined);
+        }}
+        onPlaying={() => {
+          if (cors.current && !corsProven.current) {
+            corsProven.current = true;
+            setCorsSeen(true);
+          }
+          setState((s) => (s.buffering ? { ...s, buffering: false } : s));
+        }}
         onWaiting={() => setState((s) => (s.status === "playing" && !s.buffering ? { ...s, buffering: true } : s))}
         onPause={() => {
           setState((s) => (s.status === "playing" ? { ...s, status: "paused", buffering: false } : s));
@@ -437,9 +653,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         onEnded={() => {
           report(true);
           const s = stateRef.current;
-          const to = stepIndex(s.index, s.queue.length, 1);
-          if (to !== null) {
-            void load(s.queue[to], s.queue, to, s.source);
+          const step = afterEnd(s.index, s.queue.length, s.repeat);
+          // Each play, a repeat included, is its own listening session and listen.
+          if (step.kind === "go") {
+            void load(s.queue[step.index], s.queue, step.index, s.source);
+            return;
+          }
+          if (step.kind === "replay" && s.track) {
+            void load(s.track, s.queue, s.index, s.source);
             return;
           }
           progress.set({ position: 0 });
@@ -484,6 +705,46 @@ export function playerStatusText(p: Pick<PlayerApi, "status" | "problem" | "need
   if (p.status === "playing") return "Playing";
   if (p.status === "paused") return "Paused";
   return "";
+}
+
+/** Shuffle on or off; the state is in the name and aria-pressed, and the icon is lit when on. */
+export function ShuffleButton({ className }: { className?: string }) {
+  const p = usePlayer();
+  return (
+    <button
+      type="button"
+      onClick={p.toggleShuffle}
+      aria-pressed={p.shuffle}
+      aria-label={p.shuffle ? "Shuffle: on" : "Shuffle: off"}
+      title={p.shuffle ? "Shuffle on" : "Shuffle off"}
+      className={cn(
+        "cr-focus relative inline-flex size-10 items-center justify-center hover:text-fg",
+        p.shuffle ? "text-highlight" : "text-fg-muted",
+        className,
+      )}
+    >
+      <Shuffle aria-hidden="true" className="size-4" />
+      {p.shuffle ? <span aria-hidden="true" className="absolute bottom-1.5 size-1 rounded-full bg-current" /> : null}
+    </button>
+  );
+}
+
+/** Repeat off, all, or this track; one button cycles through them and says which is on. */
+export function RepeatButton({ className }: { className?: string }) {
+  const p = usePlayer();
+  const on = p.repeat !== "off";
+  return (
+    <button
+      type="button"
+      onClick={p.cycleRepeat}
+      aria-label={repeatLabel(p.repeat)}
+      title={repeatLabel(p.repeat)}
+      className={cn("cr-focus relative inline-flex size-10 items-center justify-center hover:text-fg", on ? "text-highlight" : "text-fg-muted", className)}
+    >
+      {p.repeat === "one" ? <Repeat1 aria-hidden="true" className="size-4" /> : <Repeat aria-hidden="true" className="size-4" />}
+      {on ? <span aria-hidden="true" className="absolute bottom-1.5 size-1 rounded-full bg-current" /> : null}
+    </button>
+  );
 }
 
 /** The listening room draws its own controls and its own screen: the bar and shell step aside. */
@@ -559,6 +820,7 @@ export function PlayerBar() {
           ) : (
             <>
               <div className="flex shrink-0 items-center gap-1">
+                <ShuffleButton className="hidden lg:inline-flex" />
                 <button
                   type="button"
                   onClick={p.previous}
@@ -586,6 +848,7 @@ export function PlayerBar() {
                     <SkipForward aria-hidden="true" className="size-4" />
                   </button>
                 ) : null}
+                <RepeatButton className="hidden lg:inline-flex" />
               </div>
               <BarProgress label={label} />
               <Link

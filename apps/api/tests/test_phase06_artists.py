@@ -340,6 +340,8 @@ async def test_phase06_audit_outbox_atomicity(pg_session: AsyncSession, settings
     pg_session.add(admin)
     await pg_session.flush()
     pg_session.add(RoleAssignment(user_id=admin.id, role_id=role.id, organization_id=None, status="ACTIVE"))
+    # The session does not autoflush: write the grant before the service checks permissions.
+    await pg_session.flush()
     org = (
         await pg_session.execute(
             select(Organization).where(Organization.type == "LABEL", Organization.deleted_at.is_(None))

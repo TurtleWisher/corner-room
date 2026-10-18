@@ -24,6 +24,10 @@ dependencies = [
     "structlog>=24.4.0",
     "python-multipart>=0.0.17",
     "httpx>=0.28.0",
+    # Media worker (D-AUDIO-04): pinned FFmpeg 7.1 binary for checks and playback copies; Pillow
+    # reads cover art. Pinned so every machine produces the same measurements and files.
+    "imageio-ffmpeg==0.6.0",
+    "pillow==11.3.0",
 ]
 
 [project.optional-dependencies]

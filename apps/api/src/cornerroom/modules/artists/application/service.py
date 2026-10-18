@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import secrets
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -17,13 +19,15 @@ from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import (
     ARTIST_ACTIVATED,
     ARTIST_APPLICATION_SUBMITTED,
+    ARTIST_JOIN_LINK_CREATED,
+    ARTIST_JOIN_LINK_DISABLED,
     ARTIST_FOLLOWED,
     ARTIST_SUSPENDED,
     ARTIST_UNFOLLOWED,
     BAND_MEMBER_CHANGED,
     DomainEvent,
 )
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.modules.artists.domain.lifecycle import (
     PUBLIC_ARTIST_STATUSES,
     PUBLIC_BAND_STATUSES,
@@ -39,6 +43,7 @@ from cornerroom.modules.artists.domain.lifecycle import (
 from cornerroom.modules.artists.domain.models import (
     Artist,
     ArtistApplication,
+    ArtistJoinLink,
     Band,
     BandMember,
     Follow,
@@ -57,6 +62,107 @@ class ArtistService:
         self.clock = clock or SystemClock()
         self.audit = AuditService(session)
         self.authz = AuthorizationService(session, clock=self.clock)
+
+    # --- join links (owner, 2026-10-17: one shared link per label, staff still review) ------------
+
+    async def _staff_label(self, ctx: AuthContext) -> UUID:
+        org_id = ctx.organization_id
+        if org_id is None or not await self._can_staff_manage_workspace(ctx, org_id):
+            raise AppError("FORBIDDEN", "Forbidden", 403, "Join links need artist.manage in the active workspace")
+        await self._require_active_org(org_id)
+        return org_id
+
+    async def create_join_link(
+        self, ctx: AuthContext, *, label: str, expires_at: datetime | None = None, max_uses: int | None = None
+    ) -> ArtistJoinLink:
+        org_id = await self._staff_label(ctx)
+        name = " ".join(label.split())[:120]
+        if not name:
+            raise AppError("VALIDATION_ERROR", "Give the link a name staff will recognise", 422)
+        if expires_at is not None and expires_at <= self.clock.now():
+            raise AppError("VALIDATION_ERROR", "Choose an end date in the future", 422)
+        if max_uses is not None and max_uses < 1:
+            raise AppError("VALIDATION_ERROR", "A use limit must be at least 1", 422)
+        row = ArtistJoinLink(
+            organization_id=org_id, code=secrets.token_urlsafe(18), label=name, status="ACTIVE",
+            expires_at=expires_at, max_uses=max_uses, uses=0, created_by=ctx.user_id,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        await self._emit(
+            event_type=ARTIST_JOIN_LINK_CREATED, aggregate_type="ArtistJoinLink", aggregate_id=row.id,
+            payload={"label": row.label}, ctx=ctx, organization_id=org_id,
+        )
+        await self.audit.record_from_auth(
+            ctx, action="artist_join_link.created", entity_type="ArtistJoinLink", entity_id=row.id,
+            new_state={"label": row.label, "expires_at": expires_at.isoformat() if expires_at else None, "max_uses": max_uses},
+            organization_id=org_id,
+        )
+        return row
+
+    async def list_join_links(self, ctx: AuthContext) -> list[ArtistJoinLink]:
+        org_id = await self._staff_label(ctx)
+        stmt = (
+            select(ArtistJoinLink)
+            .where(ArtistJoinLink.organization_id == org_id)
+            .order_by(ArtistJoinLink.created_at.desc())
+            .limit(200)
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def disable_join_link(self, ctx: AuthContext, link_id: UUID) -> ArtistJoinLink:
+        org_id = await self._staff_label(ctx)
+        row = await self.session.get(ArtistJoinLink, link_id)
+        if row is None or row.organization_id != org_id:
+            raise NotFoundError("Join link not found")
+        if row.status != "DISABLED":
+            row.status = "DISABLED"
+            row.disabled_at = self.clock.now()
+            row.updated_by = ctx.user_id
+            await self.session.flush()
+            await self._emit(
+                event_type=ARTIST_JOIN_LINK_DISABLED, aggregate_type="ArtistJoinLink", aggregate_id=row.id,
+                payload={"label": row.label}, ctx=ctx, organization_id=org_id,
+            )
+            await self.audit.record_from_auth(
+                ctx, action="artist_join_link.disabled", entity_type="ArtistJoinLink", entity_id=row.id,
+                previous_state={"status": "ACTIVE"}, new_state={"status": "DISABLED"}, organization_id=org_id,
+            )
+        return row
+
+    def join_link_usable(self, row: ArtistJoinLink | None) -> bool:
+        if row is None or row.status != "ACTIVE":
+            return False
+        if row.expires_at is not None and row.expires_at <= self.clock.now():
+            return False
+        return row.max_uses is None or row.uses < row.max_uses
+
+    async def check_join_code(self, code: str) -> tuple[ArtistJoinLink, Organization]:
+        """Public: is this link usable, and for which label. Unknown, off, ended and full links all
+        give the same answer, so a guess learns nothing."""
+        row = (
+            await self.session.execute(select(ArtistJoinLink).where(ArtistJoinLink.code == code.strip()))
+        ).scalar_one_or_none() if code else None
+        if not self.join_link_usable(row):
+            raise AppError("JOIN_LINK_INVALID", "This join link isn't active", 404, "Ask the label for a new link")
+        assert row is not None
+        org = await self._org(row.organization_id)
+        if org.status != "ACTIVE":
+            raise AppError("JOIN_LINK_INVALID", "This join link isn't active", 404, "Ask the label for a new link")
+        return row, org
+
+    async def _claim_join_code(self, code: str) -> ArtistJoinLink:
+        """Reserve one use of the link for an application (row lock: a full link is never exceeded)."""
+        row = (
+            await self.session.execute(
+                select(ArtistJoinLink).where(ArtistJoinLink.code == code.strip()).with_for_update()
+            )
+        ).scalar_one_or_none()
+        if not self.join_link_usable(row):
+            raise AppError("JOIN_LINK_INVALID", "This join link isn't active", 404, "Ask the label for a new link")
+        assert row is not None
+        row.uses += 1
+        return row
 
     async def list_ids_for_projection(self) -> list[UUID]:
         stmt = select(Artist.id).where(Artist.deleted_at.is_(None))
@@ -254,6 +360,7 @@ class ArtistService:
         bio: str | None = None,
         extra_metadata: dict[str, Any] | None = None,
         payload: dict[str, Any] | None = None,
+        join_code: str | None = None,
     ) -> tuple[ArtistApplication, Artist]:
         name = stage_name.strip()
         if not name:
@@ -268,6 +375,7 @@ class ArtistService:
         ).scalar_one_or_none()
         if existing_claim is not None:
             raise ConflictError("This account already claims an artist")
+        link = await self._claim_join_code(join_code) if join_code else None
         artist = Artist(
             claimed_user_id=ctx.user_id,
             stage_name=name,
@@ -284,6 +392,8 @@ class ArtistService:
             artist_id=artist.id,
             status="SUBMITTED",
             payload=payload,
+            join_link_id=link.id if link else None,
+            organization_id=link.organization_id if link else None,
             created_by=ctx.user_id,
         )
         self.session.add(application)
@@ -406,8 +516,7 @@ class ArtistService:
             stmt = stmt.where(Artist.status.in_(tuple(PUBLIC_ARTIST_STATUSES)))
         stmt = stmt.order_by(Artist.created_at.desc(), Artist.id.desc())
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Artist.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Artist.created_at, Artist.id, cursor))
         stmt = stmt.limit(page + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None
@@ -562,10 +671,14 @@ class ArtistService:
             staff = await self._can_staff_manage_workspace(ctx, ctx.organization_id)
         if mine or not staff:
             stmt = stmt.where(ArtistApplication.user_id == ctx.user_id)
+        else:
+            # A label's staff see applications sent to their label (join links) and open ones.
+            stmt = stmt.where(
+                (ArtistApplication.organization_id == ctx.organization_id) | ArtistApplication.organization_id.is_(None)
+            )
         stmt = stmt.order_by(ArtistApplication.created_at.desc(), ArtistApplication.id.desc())
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(ArtistApplication.created_at < data["t"])
+            stmt = stmt.where(keyset_before(ArtistApplication.created_at, ArtistApplication.id, cursor))
         stmt = stmt.limit(page + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None
@@ -579,8 +692,10 @@ class ArtistService:
         row = await self.get_application_row(application_id)
         if row.user_id == ctx.user_id:
             return row
-        if ctx.organization_id is not None and await self._can_staff_manage_workspace(
-            ctx, ctx.organization_id
+        if (
+            ctx.organization_id is not None
+            and row.organization_id in (None, ctx.organization_id)
+            and await self._can_staff_manage_workspace(ctx, ctx.organization_id)
         ):
             return row
         raise NotFoundError("Application not found")
@@ -604,6 +719,9 @@ class ArtistService:
             ):
                 raise NotFoundError("Application not found")
             await self._require_active_org(ctx.organization_id)
+            # Sent to another label through its join link: not this workspace's to decide.
+            if row.organization_id is not None and row.organization_id != ctx.organization_id:
+                raise NotFoundError("Application not found")
         if expected_version is not None and row.version != expected_version:
             raise ConflictError("Application version conflict")
         previous = row.status
@@ -621,7 +739,7 @@ class ArtistService:
             elif artist_action == "approve" and artist.status == "UNDER_REVIEW":
                 artist.status = "APPROVED"
                 if artist.primary_org_id is None:
-                    artist.primary_org_id = ctx.organization_id
+                    artist.primary_org_id = row.organization_id or ctx.organization_id
             elif artist_action == "reject" and artist.status == "UNDER_REVIEW":
                 artist.status = "REJECTED"
             artist.updated_by = ctx.user_id
@@ -748,8 +866,7 @@ class ArtistService:
             stmt = stmt.where(Band.status.in_(tuple(PUBLIC_BAND_STATUSES)))
         stmt = stmt.order_by(Band.created_at.desc(), Band.id.desc())
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Band.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Band.created_at, Band.id, cursor))
         stmt = stmt.limit(page + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None

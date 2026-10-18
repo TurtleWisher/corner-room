@@ -16,6 +16,8 @@ export type OfferRecord = {
   currency_code: string;
   status: string;
   version: number | null;
+  /** EVERYONE, or OWNS_PART_OF_RELEASE for the price fans who already own some songs pay (D-AUDIO-11). */
+  audience?: string;
 };
 
 export type ProductRecord = {
@@ -100,6 +102,39 @@ export async function fetchMyEntitlements(): Promise<Page<EntitlementRecord>> {
 
 export async function fetchStaffProducts(): Promise<Page<ProductRecord>> {
   return apiFetch<Page<ProductRecord>>("/api/v1/products", { retry: false });
+}
+
+/** A price an artist proposed for a release or one of its tracks (D-AUDIO-11, D-AUDIO-15). */
+export type OfferProposalRecord = {
+  id: string;
+  release_id: string;
+  release_title: string;
+  release_status: string;
+  subject_type: "TRACK" | "RELEASE";
+  subject_id: string;
+  subject_title: string;
+  audience: "EVERYONE" | "OWNS_PART_OF_RELEASE";
+  amount_minor: number;
+  currency_code: string;
+  note: string | null;
+  status: string;
+  decision_note: string | null;
+  created_at: string;
+};
+
+/** Ops queue of proposed prices in the active workspace (commerce.write). */
+export async function fetchOfferProposals(status: "PROPOSED" | "ACCEPTED" | "COUNTERED" | "WITHDRAWN" = "PROPOSED"): Promise<OfferProposalRecord[]> {
+  return apiFetch<OfferProposalRecord[]>(`/api/v1/offer-proposals?status=${status}`, { retry: false });
+}
+
+/** Accept puts exactly the proposed price on sale; counter sends a note back to the artist. */
+export async function decideOfferProposal(id: string, decision: "accept" | "counter", note?: string): Promise<OfferProposalRecord> {
+  return apiFetch<OfferProposalRecord>(`/api/v1/offer-proposals/${id}/decision`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(note ? { decision, note } : { decision }),
+    retry: false,
+  });
 }
 
 export async function fetchStaffPlans(): Promise<Page<PlanRecord>> {
