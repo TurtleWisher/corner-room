@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { CircleAlert, CircleCheck, Clock, FlaskConical, LoaderCircle, RefreshCw } from "lucide-react";
 
-import { Button, ButtonLink, Card, Money } from "@/components/ds";
-import { sandboxConfirmPayment, type OrderRecord } from "@/lib/api";
+import { Button, ButtonLink, Card, Field, Input, Money, Select } from "@/components/ds";
+import { ApiError, sandboxConfirmPayment, submitPayment, type OrderRecord } from "@/lib/api";
 import {
   formatCountdown,
   orderReference,
+  PAID_WITH_OPTIONS,
+  paidWithLabel,
   paymentPresentation,
+  rejectionNote,
   secondsLeft,
   type PurchaseStage,
 } from "@/lib/checkout-view";
@@ -39,17 +42,107 @@ function SampleCode() {
   );
 }
 
+/**
+ * Bangla QR (Q-PAY-01): after paying in their app, the buyer sends the app, the transaction ID and
+ * the number paid from. Finance staff check it; nothing here marks the order paid.
+ */
+function PaidForm({ order, onOrder }: { order: OrderRecord; onOrder: (next: OrderRecord) => void }) {
+  const [paidWith, setPaidWith] = useState("");
+  const [ref, setRef] = useState("");
+  const [from, setFrom] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<{ field: string | null; message: string } | null>(null);
+  const rejected = rejectionNote(order);
+
+  async function send(event: FormEvent) {
+    event.preventDefault();
+    if (!order.payment) return;
+    setBusy(true);
+    setError(null);
+    try {
+      onOrder(await submitPayment(order.payment.id, { transaction_ref: ref, paid_from: from, paid_with: paidWith }));
+    } catch (err) {
+      const field = err instanceof ApiError ? ((err.problem as { field?: string }).field ?? null) : null;
+      setError({ field, message: err instanceof ApiError && field ? err.message : friendlyError(err, "We couldn't send that. Please try again.") });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const fieldError = (name: string) => (error?.field === name ? error.message : undefined);
+
+  return (
+    <form onSubmit={send} className="mt-6 space-y-4 border-t border-line pt-5" noValidate>
+      <h3 className="text-base font-bold text-fg">Paid already? Tell us</h3>
+      {rejected ? (
+        <p role="alert" className="flex items-start gap-2 text-sm text-danger">
+          <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          <span>We couldn&apos;t confirm your last payment: {rejected}. Check the details and send them again.</span>
+        </p>
+      ) : (
+        <p className="text-sm text-fg-muted">Our team checks it against the payment and then your order is complete.</p>
+      )}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="Paid with" required error={fieldError("paid_with")}>
+          {(c) => (
+            <Select {...c} value={paidWith} onChange={(e) => setPaidWith(e.target.value)}>
+              <option value="">Choose the app</option>
+              {PAID_WITH_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="Transaction ID" required error={fieldError("transaction_ref")}>
+          {(c) => <Input {...c} value={ref} onChange={(e) => setRef(e.target.value)} autoComplete="off" spellCheck={false} maxLength={40} />}
+        </Field>
+        <Field label="Number you paid from" required error={fieldError("paid_from")}>
+          {(c) => <Input {...c} type="tel" inputMode="tel" value={from} onChange={(e) => setFrom(e.target.value)} maxLength={20} />}
+        </Field>
+      </div>
+      {error && !error.field ? (
+        <p role="alert" className="text-sm text-danger">
+          {error.message}
+        </p>
+      ) : null}
+      <Button type="submit" busy={busy} disabled={!paidWith || !ref.trim() || !from.trim()}>
+        Send payment details
+      </Button>
+    </form>
+  );
+}
+
 function StageLine({ stage, order }: { stage: PurchaseStage; order: OrderRecord }) {
   const lateAfterExpiry = order.hold_status === "EXPIRED" || order.hold_status === "RELEASED";
   const lines: Record<PurchaseStage, { icon: typeof Clock; text: string; tone: string }> = {
     awaiting_payment: { icon: LoaderCircle, text: "Waiting for your payment. This page updates by itself.", tone: "text-fg" },
+    verifying: {
+      icon: LoaderCircle,
+      text: order.payment_submission
+        ? `We're checking your ${paidWithLabel(order.payment_submission.paid_with)} payment (transaction ${order.payment_submission.transaction_ref}). ${order.purpose === "TICKET" ? "Your seats stay held until we confirm. " : ""}This page updates by itself.`
+        : "We're checking your payment. This page updates by itself.",
+      tone: "text-fg",
+    },
     expired: {
       icon: Clock,
       text: "Your reservation has run out. If you already paid, keep this page open: we will still confirm it.",
       tone: "text-warning",
     },
     failed: { icon: CircleAlert, text: "The payment did not go through.", tone: "text-danger" },
-    cancelled: { icon: CircleAlert, text: "This order was cancelled.", tone: "text-danger" },
+    cancelled: {
+      icon: CircleAlert,
+      text: lateAfterExpiry
+        ? "Your reservation ran out before the payment arrived, so this order was cancelled. Please start again."
+        : "This order was cancelled.",
+      tone: "text-danger",
+    },
+    late_payment: {
+      icon: CircleAlert,
+      text: "Your payment arrived after this order was cancelled. Our team will refund it in full; you do not need to do anything.",
+      tone: "text-warning",
+    },
     paid_processing: {
       icon: LoaderCircle,
       text: lateAfterExpiry
@@ -62,7 +155,7 @@ function StageLine({ stage, order }: { stage: PurchaseStage; order: OrderRecord 
     partly_refunded: { icon: CircleCheck, text: "Part of this order was refunded.", tone: "text-fg" },
   };
   const { icon: Icon, text, tone } = lines[stage];
-  const spinning = stage === "awaiting_payment" || stage === "paid_processing";
+  const spinning = stage === "awaiting_payment" || stage === "paid_processing" || stage === "verifying";
   return (
     <p role="status" aria-live="polite" className={`flex items-start gap-2 text-sm ${tone}`}>
       <Icon aria-hidden="true" className={`mt-0.5 size-4 shrink-0 ${spinning ? "animate-spin motion-reduce:animate-none" : ""}`} />
@@ -151,10 +244,11 @@ export function PaymentPanel({
             <li>
               Pay exactly <Money value={total} minorDigits="always" />.
             </li>
-            <li>Keep this page open. It updates by itself when the payment is confirmed.</li>
+            <li>Send us the app, transaction ID and number below. This page updates by itself when the payment is confirmed.</li>
           </ol>
         </div>
       ) : null}
+      {payable ? <PaidForm order={order} onOrder={onOrder} /> : null}
 
       <div className="mt-6 border-t border-line pt-5">
         <StageLine stage={stage} order={order} />
@@ -165,7 +259,7 @@ export function PaymentPanel({
               <FlaskConical aria-hidden="true" /> Complete test payment
             </Button>
           ) : null}
-          {stage === "awaiting_payment" || stage === "paid_processing" || stage === "expired" ? (
+          {stage === "awaiting_payment" || stage === "paid_processing" || stage === "expired" || stage === "verifying" ? (
             <Button
               variant="ghost"
               size="sm"

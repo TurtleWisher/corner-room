@@ -15,6 +15,7 @@ export default function StaffSignInPage() {
       intro="Sign in to the Corner Room staff console."
       defaultNext="/staff"
       google={false}
+      theme="staff"
       footer={() => <>Staff accounts are by invitation. Ask your administrator for an invitation link.</>}
     />
   );

@@ -27,6 +27,7 @@ class TrackOut(BaseModel):
     primary_org_id: UUID | None
     metadata: dict[str, Any] | None
     version: int
+    release_ids: list[UUID] = []
 
 
 class PublicTrackOut(BaseModel):
@@ -35,6 +36,9 @@ class PublicTrackOut(BaseModel):
     status: str
     primary_artist_id: UUID | None
     primary_band_id: UUID | None
+    # Released albums/EPs/singles the song is on (single-track reads), so a page can tell that
+    # buying one of them already owns the song (D-AUDIO-12).
+    release_ids: list[UUID] = []
 
 
 class TrackPage(BaseModel):
@@ -199,9 +203,22 @@ async def get_track(
     ctx: Annotated[AuthContext | None, Depends(get_optional_auth_context)],
 ) -> TrackOut | PublicTrackOut:
     row, public_view = await svc.get_track(track_id, ctx)
-    if public_view:
-        return _public_track(row)
-    return _track_out(row)
+    out = _public_track(row) if public_view else _track_out(row)
+    out.release_ids = await _released_release_ids(svc, row.id)
+    return out
+
+
+async def _released_release_ids(svc: MusicService, track_id: UUID) -> list[UUID]:
+    from sqlalchemy import select
+
+    from cornerroom.modules.music.domain.models import Release, ReleaseTrack
+
+    rows = await svc.session.execute(
+        select(Release.id)
+        .join(ReleaseTrack, ReleaseTrack.release_id == Release.id)
+        .where(ReleaseTrack.track_id == track_id, Release.deleted_at.is_(None), Release.status == "RELEASED")
+    )
+    return list(rows.scalars())
 
 
 @router.patch("/tracks/{track_id}", response_model=TrackOut)

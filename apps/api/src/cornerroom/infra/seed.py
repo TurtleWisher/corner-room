@@ -240,7 +240,9 @@ async def seed_foundation(session: AsyncSession, settings: Settings) -> None:
         ("campaign.task_completed", "A campaign task was completed."),
         ("ticket.issued", "Your ticket was issued."),
         ("order.paid", "Your order was paid."),
+        ("order.cancelled", "Your reservation ran out before your payment was confirmed, so your order was cancelled. If money already left your account, our team will refund it in full."),
         ("payment.failed", "A payment attempt failed."),
+        ("payment.rejected", "We couldn't confirm your payment: {reason}. Please check the details and send them again from your order."),
         ("refund.completed", "Your refund is complete."),
         ("track.approved", "A track was approved."),
         ("track.released", "A track was released."),
@@ -263,6 +265,32 @@ async def seed_foundation(session: AsyncSession, settings: Settings) -> None:
         if found is None:
             session.add(
                 NotificationTemplate(type=ntype, locale="en", version=1, body=body)
+            )
+
+    # D-REF-01 (owner, 2026-10-18): platform refund reasons; each needs a finance approval
+    # (Q-P0-05). The label lives in `notes` so screens show words, not codes.
+    from cornerroom.modules.ticketing.domain.models import RefundPolicy
+
+    for reason_code, label in (
+        ("CUSTOMER_REQUEST", "Customer request"),
+        ("EVENT_CANCELLED", "Event cancelled"),
+        ("EVENT_POSTPONED", "Event postponed, buyer can't attend"),
+        ("LATE_PAYMENT", "Payment arrived late, order cancelled"),
+        ("DUPLICATE_PAYMENT", "Duplicate payment"),
+        ("GOODWILL", "Goodwill / service issue"),
+    ):
+        found = (
+            await session.execute(
+                select(RefundPolicy).where(
+                    RefundPolicy.scope_type == "PLATFORM",
+                    RefundPolicy.scope_id.is_(None),
+                    RefundPolicy.reason_code == reason_code,
+                )
+            )
+        ).scalars().first()
+        if found is None:
+            session.add(
+                RefundPolicy(scope_type="PLATFORM", reason_code=reason_code, requires_finance_approve=True, notes=label)
             )
 
     if settings.bootstrap_admin_email and settings.bootstrap_admin_password:

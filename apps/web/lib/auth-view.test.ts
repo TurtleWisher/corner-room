@@ -44,6 +44,11 @@ describe("protected route view", () => {
   it("forbids an authenticated user missing a required permission", () => {
     expect(resolveProtectedView("authenticated", user, "role.admin").kind).toBe("forbidden");
   });
+
+  it("shows staff only to a signed-in fan or artist (no workspace, no staff permissions)", () => {
+    expect(resolveProtectedView("authenticated", { permissions: [], has_workspace: false }).kind).toBe("not_staff");
+    expect(resolveProtectedView("authenticated", { has_workspace: true, permissions: [] }).kind).toBe("ok");
+  });
 });
 
 describe("staff nav is UX-only", () => {

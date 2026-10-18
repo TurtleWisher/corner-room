@@ -82,6 +82,8 @@ class PlanPage(BaseModel):
 
 class SubscribeIn(BaseModel):
     plan_id: UUID
+    # D-ADDR-01: the buyer confirmed their saved Bangladesh delivery address before paying.
+    delivery_address_confirmed: bool = False
 
 
 class SubscriptionOut(BaseModel):
@@ -220,7 +222,10 @@ async def start_subscription(
         return JSONResponse(status_code=started.status_code, content=payload)
     try:
         order, payment = await svc.checkout_from_plan(
-            ctx, plan_id=body.plan_id, idempotency_key=f"{ctx.user_id}:{idempotency_key}"
+            ctx,
+            plan_id=body.plan_id,
+            idempotency_key=f"{ctx.user_id}:{idempotency_key}",
+            delivery_confirmed=body.delivery_address_confirmed,
         )
         out = _order_out(order, payment).model_dump(mode="json")
         await complete_idempotent(session, started, status_code=201, body=json.dumps(out, default=str))

@@ -1,14 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { LogOut, MonitorSmartphone } from "lucide-react";
+import { LogOut, MonitorSmartphone, Pencil } from "lucide-react";
 
+import { DeliveryAddressForm } from "@/components/account/delivery-address-form";
 import { useAuth } from "@/components/auth-provider";
 import { Avatar, Button, Card, DateTime, ErrorState, Skeleton, StatusChip } from "@/components/ds";
 import { Dialog } from "@/components/ds/dialog";
 import { AccountPage } from "@/components/shell/account-page";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
+import { fetchMyDeliveryAddress, type DeliveryAddress } from "@/features/identity/api";
+import { addressLines } from "@/lib/address-view";
 import { fetchMySessions, revokeAllSessions, revokeSession } from "@/lib/api";
 import { defineStatusMap } from "@/lib/format/status";
 
@@ -123,6 +126,62 @@ function Sessions() {
   );
 }
 
+/** D-ADDR-01: the Bangladesh address for gifts, editable any time. */
+function DeliveryAddressPanel() {
+  const loaded = useAsync(fetchMyDeliveryAddress, []);
+  const [address, setAddress] = useState<DeliveryAddress | null | undefined>(undefined);
+  const [editing, setEditing] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const current = address !== undefined ? address : loaded.status === "ok" ? loaded.data : undefined;
+
+  if (loaded.status === "loading" && current === undefined) return <Skeleton className="h-24 w-full" />;
+  if (loaded.status === "error" && current === undefined) {
+    return <ErrorState message={loadErrorMessage(loaded.error, "your delivery address")} action={<RetryButton onClick={loaded.reload} />} />;
+  }
+  if (current === null || editing) {
+    return (
+      <DeliveryAddressForm
+        initial={current ?? null}
+        onSaved={(next) => {
+          setAddress(next);
+          setEditing(false);
+          setSaved(true);
+        }}
+        onCancel={current ? () => setEditing(false) : undefined}
+      />
+    );
+  }
+  if (!current) return null;
+  return (
+    <div>
+      <address className="not-italic text-sm text-fg">
+        {addressLines(current).map((line) => (
+          <span key={line} className="block">
+            {line}
+          </span>
+        ))}
+      </address>
+      {saved ? (
+        <p role="status" className="mt-3 text-sm text-success">
+          Address saved.
+        </p>
+      ) : null}
+      <p className="mt-3 text-xs text-fg-muted">Used for gifts. You confirm it again before every payment.</p>
+      <Button
+        variant="secondary"
+        size="sm"
+        className="mt-4"
+        onClick={() => {
+          setSaved(false);
+          setEditing(true);
+        }}
+      >
+        <Pencil aria-hidden="true" /> Change address
+      </Button>
+    </div>
+  );
+}
+
 function Profile() {
   const { user, logout } = useAuth();
   if (!user) return null;
@@ -149,12 +208,20 @@ function Profile() {
           <LogOut aria-hidden="true" /> Sign out
         </Button>
       </Card>
-      <Card as="section" aria-labelledby="devices" className="p-6">
-        <h2 id="devices" className="mb-2 text-xl font-bold text-fg">
-          Signed-in devices
-        </h2>
-        <Sessions />
-      </Card>
+      <div className="space-y-6">
+        <Card as="section" aria-labelledby="delivery" className="p-6">
+          <h2 id="delivery" className="mb-2 text-xl font-bold text-fg">
+            Delivery address
+          </h2>
+          <DeliveryAddressPanel />
+        </Card>
+        <Card as="section" aria-labelledby="devices" className="p-6">
+          <h2 id="devices" className="mb-2 text-xl font-bold text-fg">
+            Signed-in devices
+          </h2>
+          <Sessions />
+        </Card>
+      </div>
     </div>
   );
 }

@@ -24,6 +24,7 @@ export function SignUpForm({
   signInPath = "/login",
   footer,
   google = true,
+  theme = "ember",
 }: {
   title?: string;
   intro?: React.ReactNode;
@@ -33,6 +34,8 @@ export function SignUpForm({
   signInPath?: string;
   footer?: React.ReactNode;
   google?: boolean;
+  /** Ember for fans and artists; "staff" (black, D-THEME-01) on the staff pages. */
+  theme?: "ember" | "staff";
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -73,7 +76,7 @@ export function SignUpForm({
   if (done) {
     if (!done.pending) {
       return (
-        <AuthCard title="Your account is ready">
+        <AuthCard theme={theme} title="Your account is ready">
           <p className="flex items-start gap-2 text-fg">
             <CircleCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-success" />
             Your account is ready.
@@ -85,7 +88,7 @@ export function SignUpForm({
       );
     }
     return (
-      <AuthCard title={done.delivery === "not_configured" ? "Account created" : "Check your email"}>
+      <AuthCard theme={theme} title={done.delivery === "not_configured" ? "Account created" : "Check your email"}>
         <p className="flex items-start gap-2 text-fg">
           <CircleCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-success" />
           {done.delivery === "not_configured"
@@ -109,7 +112,7 @@ export function SignUpForm({
   }
 
   return (
-    <AuthCard title={title} footer={footer}>
+    <AuthCard theme={theme} title={title} footer={footer}>
       {intro ? <div className="mb-5 text-sm text-fg">{intro}</div> : null}
       {error ? (
         <div ref={errorRef} tabIndex={-1} className="mb-5 outline-none">

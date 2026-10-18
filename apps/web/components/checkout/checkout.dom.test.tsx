@@ -6,9 +6,15 @@ import type { OrderRecord } from "@/lib/api";
 
 const fetchOrder = vi.fn();
 const sandboxConfirmPayment = vi.fn();
+const submitPayment = vi.fn();
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
-  return { ...actual, fetchOrder: (id: string) => fetchOrder(id), sandboxConfirmPayment: (id: string) => sandboxConfirmPayment(id) };
+  return {
+    ...actual,
+    fetchOrder: (id: string) => fetchOrder(id),
+    sandboxConfirmPayment: (id: string) => sandboxConfirmPayment(id),
+    submitPayment: (id: string, body: unknown) => submitPayment(id, body),
+  };
 });
 
 import { PaymentPanel } from "./payment-panel";
@@ -42,6 +48,7 @@ beforeEach(() => {
   setReducedMotion(false);
   fetchOrder.mockReset();
   sandboxConfirmPayment.mockReset();
+  submitPayment.mockReset();
 });
 afterEach(() => {
   cleanup();
@@ -117,6 +124,52 @@ describe("PaymentPanel", () => {
   it("says a late payment is safe and needs no second payment", () => {
     render(<PaymentPanel order={order({ status: "PAID", pay: "CAPTURED", hold_status: "EXPIRED" })} stage="paid_processing" now={NOW} onOrder={() => {}} onRefresh={noop} restartHref="/" />);
     expect(screen.getByRole("status").textContent).toMatch(/do not need to pay again/);
+    expect(screen.queryByRole("button", { name: /Complete test payment/ })).toBeNull();
+  });
+
+  it("lets the buyer send the app, transaction ID and number after paying (Q-PAY-01)", async () => {
+    const onOrder = vi.fn();
+    const checking = order({ payment_submission: { status: "SUBMITTED", transaction_ref: "8N7A6B5C4D", paid_with: "BKASH", decision_note: null, submitted_at: "2026-10-13T09:59:00Z" } });
+    submitPayment.mockResolvedValue(checking);
+    render(<PaymentPanel order={order()} stage="awaiting_payment" now={NOW} onOrder={onOrder} onRefresh={noop} restartHref="/" />);
+    const send = screen.getByRole("button", { name: "Send payment details" }) as HTMLButtonElement;
+    expect(send.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText(/Paid with/), { target: { value: "BKASH" } });
+    fireEvent.change(screen.getByLabelText(/Transaction ID/), { target: { value: "8n7a6b5c4d" } });
+    fireEvent.change(screen.getByLabelText(/Number you paid from/), { target: { value: "01712 345678" } });
+    fireEvent.click(send);
+    await act(async () => {});
+    expect(submitPayment).toHaveBeenCalledWith("pay-1", { transaction_ref: "8n7a6b5c4d", paid_from: "01712 345678", paid_with: "BKASH" });
+    expect(onOrder).toHaveBeenCalledWith(checking);
+  });
+
+  it("while staff check, says so and hides the code and the form (Q-PAY-05)", () => {
+    const checking = order({ payment_submission: { status: "SUBMITTED", transaction_ref: "8N7A6B5C4D", paid_with: "BKASH", decision_note: null, submitted_at: "2026-10-13T09:59:00Z" } });
+    render(<PaymentPanel order={checking} stage="verifying" now={NOW} onOrder={() => {}} onRefresh={noop} restartHref="/" />);
+    expect(screen.getByRole("status").textContent).toMatch(/checking your bKash payment \(transaction 8N7A6B5C4D\)\. Your seats stay held/);
+    expect(screen.queryByText("The Bangla QR code goes here")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send payment details" })).toBeNull();
+  });
+
+  it("after a rejection shows the staff reason above the form", () => {
+    const rejected = order({ payment_submission: { status: "REJECTED", transaction_ref: "8N7A6B5C4D", paid_with: "NAGAD", decision_note: "Transaction ID not found", submitted_at: "2026-10-13T09:59:00Z" } });
+    render(<PaymentPanel order={rejected} stage="awaiting_payment" now={NOW} onOrder={() => {}} onRefresh={noop} restartHref="/" />);
+    expect(screen.getByRole("alert").textContent).toMatch(/Transaction ID not found/);
+    expect(screen.getByRole("button", { name: "Send payment details" })).toBeTruthy();
+  });
+
+  it("says why an unpaid order was cancelled and offers a fresh start (Q-COM-03)", () => {
+    render(<PaymentPanel order={order({ status: "CANCELLED", hold_status: "EXPIRED" })} stage="cancelled" now={NOW} onOrder={() => {}} onRefresh={noop} restartHref="/events/e" />);
+    expect(screen.getByRole("status").textContent).toMatch(/reservation ran out before the payment arrived/);
+    expect(screen.getByRole("link", { name: "Start again" }).getAttribute("href")).toBe("/events/e");
+    expect(screen.queryByText("The Bangla QR code goes here")).toBeNull();
+  });
+
+  it("tells a buyer whose money arrived after cancellation that it will be refunded", () => {
+    render(
+      <PaymentPanel order={order({ status: "CANCELLED", pay: "CAPTURED", hold_status: "EXPIRED" })} stage="late_payment" now={NOW} onOrder={() => {}} onRefresh={noop} restartHref="/" />,
+    );
+    expect(screen.getByRole("status").textContent).toMatch(/refund it in full/);
     expect(screen.queryByRole("button", { name: /Complete test payment/ })).toBeNull();
   });
 

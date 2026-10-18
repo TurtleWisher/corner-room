@@ -99,6 +99,8 @@ class HoldOut(BaseModel):
 class OrderCreate(BaseModel):
     hold_id: UUID | None = None
     offer_id: UUID | None = None
+    # D-ADDR-01: the buyer confirmed their saved Bangladesh delivery address for this order.
+    delivery_address_confirmed: bool = False
 
 
 class PaymentOut(BaseModel):
@@ -144,6 +146,12 @@ class OrderOut(BaseModel):
     created_at: datetime | None = None
     hold_expires_at: datetime | None = None
     hold_status: str | None = None
+    # Completed refunds on the payment (single-order reads), e.g. a refunded late payment.
+    refunded_amount_minor: int | None = None
+    # The buyer's latest Bangla QR payment report and the staff decision (single-order reads).
+    payment_submission: dict[str, Any] | None = None
+    # The Bangladesh delivery address confirmed for this order (single-order reads, owner only).
+    delivery_address: dict[str, str | None] | None = None
 
 
 class OrderPage(BaseModel):
@@ -251,6 +259,9 @@ def _order_out(row: Order, payment: Payment | None, details: dict[str, Any] | No
         out.created_at = details["created_at"]
         out.hold_expires_at = details["hold_expires_at"]
         out.hold_status = details["hold_status"]
+        out.refunded_amount_minor = details["refunded_amount_minor"]
+        out.delivery_address = details["delivery_address"]
+        out.payment_submission = details["payment_submission"]
     return out
 
 
@@ -435,11 +446,17 @@ async def create_order(
     try:
         if body.hold_id is not None:
             order, payment = await svc.checkout_from_hold(
-                ctx, hold_id=body.hold_id, idempotency_key=f"{ctx.user_id}:{idempotency_key}"
+                ctx,
+                hold_id=body.hold_id,
+                idempotency_key=f"{ctx.user_id}:{idempotency_key}",
+                delivery_confirmed=body.delivery_address_confirmed,
             )
         else:
             order, payment = await svc.checkout_from_offer(
-                ctx, offer_id=body.offer_id, idempotency_key=f"{ctx.user_id}:{idempotency_key}"
+                ctx,
+                offer_id=body.offer_id,
+                idempotency_key=f"{ctx.user_id}:{idempotency_key}",
+                delivery_confirmed=body.delivery_address_confirmed,
             )
         out = (await _order_full(svc, order, payment)).model_dump(mode="json")
         await complete_idempotent(session, started, status_code=201, body=json.dumps(out, default=str))
@@ -496,6 +513,28 @@ async def sandbox_confirm(
     svc: Annotated[CheckoutService, Depends(checkout_service)],
 ) -> OrderOut:
     order, payment = await svc.sandbox_confirm(ctx, payment_id)
+    return await _order_full(svc, order, payment)
+
+
+class PaymentSubmissionIn(BaseModel):
+    transaction_ref: str = Field(max_length=80)
+    paid_from: str = Field(max_length=40)
+    paid_with: str = Field(max_length=16)
+
+
+@router.post("/payments/{payment_id}/submissions", response_model=OrderOut, status_code=201)
+async def submit_payment(
+    payment_id: UUID,
+    body: PaymentSubmissionIn,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[CheckoutService, Depends(checkout_service)],
+) -> OrderOut:
+    """Q-PAY-01: the buyer reports a Bangla QR payment for finance staff to check."""
+    await svc.submit_payment(
+        ctx, payment_id=payment_id, transaction_ref=body.transaction_ref, paid_from=body.paid_from, paid_with=body.paid_with
+    )
+    payment = await svc.payments.get_payment(payment_id)
+    order = await svc.get_order(ctx, payment.order_id)
     return await _order_full(svc, order, payment)
 
 

@@ -151,7 +151,8 @@ export default function TrackPage() {
   const artist = creditName(track, people.artists, people.bands);
   const artistHref = creditHref(track);
   const play = playState(playable);
-  const buy = trackBuyState(commerce.entitlements, commerce.offers, track.id);
+  // A song bought as part of its album or EP counts as owned here too (D-AUDIO-12).
+  const buy = trackBuyState(commerce.entitlements, commerce.offers, track.id, track.release_ids ?? []);
   const pass = hasCatalogAccess(commerce.entitlements) ? null : catalogOffer(commerce.offers);
   const duration = formatDuration(playable?.duration_ms);
   const canStaff = signedIn && typeof track.version === "number";
@@ -177,7 +178,16 @@ export default function TrackPage() {
             </p>
             {play.kind === "unavailable" ? <p className="mt-2 text-sm text-fg-muted">{play.reason}</p> : null}
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              {play.kind === "unavailable" ? null : <TrackBuyControl track={{ id: track.id, title: track.title, artist }} commerce={commerce} size="lg" showPlan={false} playFrom={yourMusic} />}
+              {play.kind === "unavailable" ? null : (
+                <TrackBuyControl
+                  track={{ id: track.id, title: track.title, artist }}
+                  commerce={commerce}
+                  size="lg"
+                  showPlan={false}
+                  playFrom={yourMusic}
+                  releaseIds={track.release_ids ?? []}
+                />
+              )}
               {signedIn && buy.kind !== "owned" && pass ? (
                 <ButtonLink href={`/checkout?offer=${pass.id}`} variant="secondary" size="lg">
                   <ShoppingBag aria-hidden="true" /> Full catalog <Money value={{ amount_minor: pass.amount_minor, currency_code: pass.currency_code }} />
@@ -190,7 +200,13 @@ export default function TrackPage() {
               ) : null}
             </div>
             {buy.kind === "owned" ? (
-              <p className="mt-3 text-sm text-fg">{buy.via === "track" ? "You own this track." : "Included with your catalog access."}</p>
+              <p className="mt-3 text-sm text-fg">
+                {buy.via === "track"
+                  ? "You own this track."
+                  : buy.via === "release"
+                    ? "You own this track with the release you bought."
+                    : "Included with your catalog access."}
+              </p>
             ) : null}
           </div>
         </div>

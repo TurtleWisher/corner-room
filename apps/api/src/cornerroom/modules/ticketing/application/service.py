@@ -174,6 +174,8 @@ class TicketingService:
                 TicketHold.status == "ACTIVE",
                 TicketHold.expires_at <= now,
                 TicketHold.deleted_at.is_(None),
+                # Q-PAY-05: a payment staff are still checking keeps its seats.
+                TicketHold.verification_pending.is_(False),
             )
             .order_by(TicketHold.ticket_type_id, TicketHold.id)
             .with_for_update(skip_locked=True)
@@ -584,7 +586,39 @@ class TicketingService:
         hold = await self.session.get(TicketHold, hold_id)
         if hold is None or hold.status != "ACTIVE":
             raise AppError("INVALID_TRANSITION", "Hold is not active", 409)
+        if hold.verification_pending:
+            raise AppError("HOLD_VERIFICATION_PENDING", "Your payment is being checked; these seats stay held", 409)
         await self._release_hold(hold, status="RELEASED", ctx=ctx)
+        return hold
+
+    async def _order_hold(self, order_id: UUID) -> TicketHold | None:
+        return (
+            await self.session.execute(
+                select(TicketHold).where(TicketHold.order_id == order_id).with_for_update()
+            )
+        ).scalar_one_or_none()
+
+    async def pause_hold_for_verification(self, order_id: UUID) -> TicketHold | None:
+        """Q-PAY-05: once a Bangla QR payment is submitted, its seats stay held until staff decide.
+        Refuses when the reservation has already run out (nothing is left to hold)."""
+        hold = await self._order_hold(order_id)
+        if hold is None:
+            return None
+        if hold.status != "ACTIVE" or (not hold.verification_pending and hold.expires_at <= self.clock.now()):
+            raise AppError("HOLD_EXPIRED", "Your reservation ran out before the payment was sent", 409)
+        hold.verification_pending = True
+        await self.session.flush()
+        return hold
+
+    async def resume_hold_after_rejection(self, order_id: UUID) -> TicketHold | None:
+        """Q-PAY-05 (owner, 2026-10-18): after a rejection the buyer may fix and resend; the seats
+        stay held for the normal hold time from now, then expire as usual."""
+        hold = await self._order_hold(order_id)
+        if hold is None or hold.status != "ACTIVE":
+            return hold
+        hold.verification_pending = False
+        hold.expires_at = self.clock.now() + timedelta(seconds=self.settings.ticket_hold_ttl_seconds)
+        await self.session.flush()
         return hold
 
     async def get_active_hold_for_user(self, hold_id: UUID, user_id: UUID) -> TicketHold:
@@ -635,6 +669,7 @@ class TicketingService:
         if hold.status != "ACTIVE":
             raise AppError("INVALID_TRANSITION", "Hold cannot be converted", 409)
         hold.status = "CONVERTED"
+        hold.verification_pending = False
         tickets = list(
             (
                 await self.session.execute(
@@ -676,26 +711,14 @@ class TicketingService:
         await self.session.flush()
         return issued
 
-    async def refund_order_tickets(
-        self,
-        ctx: AuthContext | None,
-        *,
-        order_id: UUID,
-        refund_id: UUID,
-    ) -> list[Ticket]:
-        """A fully refunded ticket order: its tickets become REFUNDED and their QR stops working
-        (06_FINANCIAL_ARCHITECTURE §5, 08_EVENT_ARCHITECTURE: "reverse revenue; void QR").
-
-        Seats are not put back on sale: no documented rule says a refunded seat is resold.
-        Tickets that were never issued (for example after a late payment, Q-PAY-02) are left as
-        they are. Idempotent: a repeated call finds nothing left to refund.
-        """
+    async def refundable_order_tickets(self, order_id: UUID) -> list[Ticket]:
+        """Tickets of an order that a refund may still cover (STATE_MACHINES Ticket)."""
         hold = (
             await self.session.execute(select(TicketHold).where(TicketHold.order_id == order_id))
         ).scalar_one_or_none()
         if hold is None:
             return []
-        tickets = list(
+        return list(
             (
                 await self.session.execute(
                     select(Ticket)
@@ -704,15 +727,56 @@ class TicketingService:
                         Ticket.status.in_(REFUNDABLE_TICKET_STATUSES),
                         Ticket.deleted_at.is_(None),
                     )
-                    .with_for_update()
+                    .order_by(Ticket.created_at, Ticket.id)
                 )
             ).scalars().all()
         )
+
+    async def refund_order_tickets(
+        self,
+        ctx: AuthContext | None,
+        *,
+        order_id: UUID,
+        refund_id: UUID,
+        ticket_ids: list[UUID] | None = None,
+    ) -> list[Ticket]:
+        """Refunded tickets become REFUNDED and their QR stops working (06_FINANCIAL_ARCHITECTURE
+        §5, 08_EVENT_ARCHITECTURE: "reverse revenue; void QR").
+
+        `ticket_ids` limits it to the tickets a per-ticket refund named (Q-COM-01); without it every
+        refundable ticket of the order is refunded (a full refund). Q-COM-02: a refunded seat goes
+        back on sale only while its ticket type is still selling, the event is TICKETING_OPEN and
+        has not started; a checked-in ticket never does. Tickets that were never issued (a late
+        payment, Q-PAY-02) are left as they are. Idempotent: a repeat finds nothing left to refund.
+        """
+        hold = (
+            await self.session.execute(select(TicketHold).where(TicketHold.order_id == order_id))
+        ).scalar_one_or_none()
+        if hold is None:
+            return []
+        stmt = (
+            select(Ticket)
+            .where(
+                Ticket.hold_id == hold.id,
+                Ticket.status.in_(REFUNDABLE_TICKET_STATUSES),
+                Ticket.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        if ticket_ids is not None:
+            stmt = stmt.where(Ticket.id.in_(ticket_ids))
+        tickets = list((await self.session.execute(stmt)).scalars().all())
         if not tickets:
             return []
         ticket_type = await self.get_ticket_type_row(hold.ticket_type_id)
         event = await self.session.get(Event, ticket_type.event_id)
         organization_id = event.organization_id if event is not None else None
+        resellable = [t for t in tickets if t.status != "CHECKED_IN"]
+        if resellable and self._seat_returns_to_sale(event, ticket_type):
+            inventory = await self._lock_inventory(ticket_type.id)
+            inventory.remaining += len(resellable)
+            if ticket_type.status == "SOLD_OUT" and inventory.remaining > 0:
+                ticket_type.status = "ON_SALE"
         for ticket in tickets:
             previous = ticket.status
             ticket.status = "REFUNDED"
@@ -742,8 +806,16 @@ class TicketingService:
                 await self.audit.record_from_auth(ctx, **audit)
             else:
                 await self.audit.record(actor_id="system:ticketing", actor_type="system", **audit)
-        await self.session.flush()
+        await self._flush_versioned()
         return tickets
+
+    def _seat_returns_to_sale(self, event: Event | None, ticket_type: TicketType) -> bool:
+        """Q-COM-02 (owner, 2026-10-18): only while the seat can still be sold."""
+        if event is None or event.status not in PURCHASABLE_EVENT_STATUSES:
+            return False
+        if event.starts_at is not None and event.starts_at <= self.clock.now():
+            return False
+        return ticket_type.status in {"ON_SALE", "SOLD_OUT"}
 
     def presentation_token(self, ticket: Ticket) -> str | None:
         if ticket.status not in {"ISSUED", "CHECKED_IN"}:

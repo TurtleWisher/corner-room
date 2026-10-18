@@ -13,10 +13,12 @@ from cornerroom.kernel.events import (
     CAMPAIGN_TASK_COMPLETED,
     DomainEvent,
     ENTITLEMENT_GRANTED,
+    ORDER_CANCELLED,
     ORDER_PAID,
     ORGANIZATION_INVITATION_ISSUED,
     PASSWORD_CHANGED,
     PAYMENT_FAILED,
+    PAYMENT_SUBMISSION_REJECTED,
     PAYOUT_COMPLETED,
     PAYOUT_FAILED,
     REFRESH_TOKEN_REPLAY_DETECTED,
@@ -71,7 +73,7 @@ async def resolve_recipient(session: AsyncSession, event: DomainEvent) -> UUID |
             return None
         return ticket.owner_user_id
 
-    if event_type == ORDER_PAID:
+    if event_type in {ORDER_PAID, ORDER_CANCELLED}:
         order_id = _uuid(payload.get("order_id")) or event.aggregate_id
         from cornerroom.modules.commerce.application.service import CheckoutService
 
@@ -81,7 +83,7 @@ async def resolve_recipient(session: AsyncSession, event: DomainEvent) -> UUID |
             return None
         return order.user_id
 
-    if event_type == PAYMENT_FAILED:
+    if event_type in {PAYMENT_FAILED, PAYMENT_SUBMISSION_REJECTED}:
         payment_id = _uuid(payload.get("payment_id")) or event.aggregate_id
         from cornerroom.modules.finance.application.service import PaymentService
 

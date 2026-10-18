@@ -21,11 +21,12 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 from cornerroom.infra.base import ActorMixin, Base, TimestampMixin, UUIDPrimaryKeyMixin, VersionMixin
-from cornerroom.modules.finance.domain.models_payments import Payment, PaymentAttempt, Refund
+from cornerroom.modules.finance.domain.models_payments import Payment, PaymentAttempt, PaymentSubmission, Refund
 
 __all__ = [
     "Payment",
     "PaymentAttempt",
+    "PaymentSubmission",
     "Refund",
     "LedgerAccount",
     "FinanceTransaction",

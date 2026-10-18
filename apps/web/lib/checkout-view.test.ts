@@ -6,9 +6,11 @@ import {
   formatCountdown,
   isSettled,
   orderReference,
+  paidWithLabel,
   paymentPresentation,
   pollDelayMs,
   purchaseStage,
+  rejectionNote,
   secondsLeft,
   shouldCelebrate,
   shouldPoll,
@@ -49,6 +51,17 @@ describe("purchaseStage follows the server only", () => {
     expect(purchaseStage(order({ pay: "FAILED" }), NOW)).toBe("failed");
     expect(purchaseStage(order({ pay: "CANCELLED" }), NOW)).toBe("cancelled");
     expect(purchaseStage(order({ status: "CANCELLED" }), NOW)).toBe("cancelled");
+    // Q-COM-03: money that arrived after cancellation is refunded by staff.
+    expect(purchaseStage(order({ status: "CANCELLED", pay: "CAPTURED", refunded_amount_minor: 0 }), NOW)).toBe("late_payment");
+    expect(purchaseStage(order({ status: "CANCELLED", pay: "CAPTURED", refunded_amount_minor: 300000 }), NOW)).toBe("refunded");
+    expect(isSettled("late_payment")).toBe(true);
+    // Q-PAY-05: a submitted payment is being checked; the expired timer doesn't matter meanwhile.
+    const checking = { status: "SUBMITTED", transaction_ref: "8N7A6B5C4D", paid_with: "BKASH", decision_note: null, submitted_at: "2026-10-13T09:59:00Z" };
+    expect(purchaseStage(order({ payment_submission: checking, hold_expires_at: "2026-10-13T09:00:00Z" }), NOW)).toBe("verifying");
+    expect(shouldPoll("verifying")).toBe(true);
+    expect(rejectionNote(order({ payment_submission: { ...checking, status: "REJECTED", decision_note: "Not on the statement" } }))).toBe("Not on the statement");
+    expect(rejectionNote(order())).toBeNull();
+    expect(paidWithLabel("BKASH")).toBe("bKash");
     expect(purchaseStage(order({ status: "REFUNDED", pay: "CAPTURED" }), NOW)).toBe("refunded");
     expect(purchaseStage(order({ status: "PARTIALLY_REFUNDED", pay: "CAPTURED" }), NOW)).toBe("partly_refunded");
   });

@@ -9,12 +9,16 @@ import type { OrderRecord } from "@/lib/api";
 export type PurchaseStage =
   /** Order placed, waiting for the payment to be confirmed by the server. */
   | "awaiting_payment"
+  /** The buyer sent their Bangla QR payment details; finance staff are checking (seats stay held, Q-PAY-05). */
+  | "verifying"
   /** The reservation ran out before payment was confirmed. A late payment is still kept by the server. */
   | "expired"
   /** The payment provider reported a failure. */
   | "failed"
   /** The order or payment was cancelled. */
   | "cancelled"
+  /** Money arrived after the order was cancelled (Q-COM-03): staff refund it. */
+  | "late_payment"
   /** Payment confirmed, tickets or access not granted yet (e.g. a late payment after the hold expired). */
   | "paid_processing"
   /** Paid and fulfilled: tickets issued or the track is in the library. */
@@ -23,7 +27,7 @@ export type PurchaseStage =
   | "partly_refunded";
 
 /** Stages that no longer change by waiting, so status checks can stop. */
-const SETTLED: ReadonlySet<PurchaseStage> = new Set(["failed", "cancelled", "complete", "refunded", "partly_refunded"]);
+const SETTLED: ReadonlySet<PurchaseStage> = new Set(["failed", "cancelled", "late_payment", "complete", "refunded", "partly_refunded"]);
 
 export function purchaseStage(order: OrderRecord, nowMs: number): PurchaseStage {
   const payment = order.payment?.status;
@@ -35,10 +39,14 @@ export function purchaseStage(order: OrderRecord, nowMs: number): PurchaseStage 
     case "PARTIALLY_REFUNDED":
       return "partly_refunded";
     case "CANCELLED":
-      return "cancelled";
+      if (payment !== "CAPTURED") return "cancelled";
+      // The refund amount comes from the server; the browser only compares it with the total.
+      return (order.refunded_amount_minor ?? 0) >= order.total_amount_minor ? "refunded" : "late_payment";
     case "PAID":
       return "paid_processing";
   }
+  // A submitted payment is being checked by staff; the hold timer does not run meanwhile.
+  if (order.payment_submission?.status === "SUBMITTED" && payment !== "CAPTURED") return "verifying";
   if (payment === "FAILED") return "failed";
   if (payment === "CANCELLED") return "cancelled";
   if (payment === "CAPTURED") return "paid_processing";
@@ -106,4 +114,25 @@ export function paymentPresentation(order: OrderRecord): PaymentPresentation {
   if (p?.qr_image_url) return { kind: "qr", src: p.qr_image_url };
   if (p?.mode !== "live") return { kind: "sample" };
   return { kind: "unavailable" };
+}
+
+
+/** The apps a Bangla QR payment can be made with (owner, 2026-10-18), in the order shown. */
+export const PAID_WITH_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "BKASH", label: "bKash" },
+  { value: "NAGAD", label: "Nagad" },
+  { value: "ROCKET", label: "Rocket" },
+  { value: "UPAY", label: "Upay" },
+  { value: "BANK_APP", label: "Bank app" },
+  { value: "OTHER", label: "Other" },
+];
+
+export function paidWithLabel(value: string): string {
+  return PAID_WITH_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
+
+/** The staff reason to show above the form after a rejection, or null. */
+export function rejectionNote(order: Pick<OrderRecord, "payment_submission">): string | null {
+  const sub = order.payment_submission;
+  return sub && sub.status === "REJECTED" ? (sub.decision_note ?? "We couldn't find this payment.") : null;
 }

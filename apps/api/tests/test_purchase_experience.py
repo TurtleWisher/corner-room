@@ -37,7 +37,7 @@ async def _ticket_order(client: AsyncClient, *, email: str, quantity: int = 2, k
     order = await client.post(
         "/api/v1/orders",
         headers={**bearer(buyer["access_token"]), "Idempotency-Key": key},
-        json={"hold_id": hold.json()["id"]},
+        json={"hold_id": hold.json()["id"], "delivery_address_confirmed": True},
     )
     assert order.status_code == 201, order.text
     return order.json(), {"event": event, "ticket_type": ticket_type, "hold": hold.json()}, buyer["access_token"]
@@ -172,7 +172,7 @@ async def test_track_order_items_and_entitlement(client: AsyncClient) -> None:
     order = await client.post(
         "/api/v1/orders",
         headers={**bearer(buyer["access_token"]), "Idempotency-Key": "t1"},
-        json={"offer_id": offer["id"]},
+        json={"offer_id": offer["id"], "delivery_address_confirmed": True},
     )
     assert order.status_code == 201, order.text
     body = order.json()

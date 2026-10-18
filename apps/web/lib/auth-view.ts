@@ -4,11 +4,13 @@ export type ProtectedView =
   | { kind: "loading" }
   | { kind: "unauthenticated"; reason: "anonymous" | "expired" }
   | { kind: "forbidden" }
+  /** Signed in, but not staff (no workspace, no staff permissions): a fan or an artist. */
+  | { kind: "not_staff" }
   | { kind: "ok" };
 
 export function resolveProtectedView(
   status: AuthStatus,
-  user: { permissions?: string[] } | null,
+  user: { permissions?: string[]; has_workspace?: boolean } | null,
   permission?: string,
 ): ProtectedView {
   if (status === "loading") {
@@ -16,6 +18,11 @@ export function resolveProtectedView(
   }
   if (status === "anonymous" || status === "expired" || !user) {
     return { kind: "unauthenticated", reason: status === "expired" ? "expired" : "anonymous" };
+  }
+  // The console is for staff: someone in a workspace or holding staff permissions. A fan or an
+  // artist sees "staff only" instead of an empty console (the API refuses them everything anyway).
+  if (!user.has_workspace && (user.permissions ?? []).length === 0) {
+    return { kind: "not_staff" };
   }
   if (permission && !(user.permissions ?? []).includes(permission)) {
     return { kind: "forbidden" };

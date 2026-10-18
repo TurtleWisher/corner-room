@@ -185,16 +185,29 @@ async def test_stub_email_failure_sets_retry_and_is_idempotent(
             )
         )
     ).scalar_one()
-    assert delivery.status == "FAILED"
-    assert delivery.next_attempt_at == clock.now()
+    # BACKGROUND_JOBS (module pass 8, 2026-10-18): a failed send stays PENDING with a backoff
+    # (the outbox's OUTBOX_BACKOFF_SECONDS x attempt) until OUTBOX_MAX_ATTEMPTS, then FAILED.
+    from datetime import timedelta
+
+    from cornerroom.infra.settings import get_settings
+
+    backoff = get_settings().outbox_backoff_seconds
+    assert delivery.status == "PENDING"
+    assert delivery.next_attempt_at == clock.now() + timedelta(seconds=backoff * delivery.attempt)
     assert delivery.last_error
     assert "secret" not in (delivery.last_error or "").lower()
     assert delivery.attempt >= 1
     first_attempt = delivery.attempt
-    sent_again = await service.process_pending_email_deliveries()
+    # Not due yet: the next tick leaves it alone.
+    assert await service.process_pending_email_deliveries() == 0
+    await pg_session.refresh(delivery)
+    assert delivery.attempt == first_attempt
+    # Once due, it is tried again.
+    later = NotificationService(pg_session, email=FailingEmailSender(), clock=FrozenClock(delivery.next_attempt_at))
+    sent_again = await later.process_pending_email_deliveries()
     assert sent_again == 0
     await pg_session.refresh(delivery)
-    assert delivery.status == "FAILED"
+    assert delivery.status == "PENDING"
     assert delivery.attempt == first_attempt + 1
     count = (
         await pg_session.execute(

@@ -104,9 +104,14 @@ class GrantIn(BaseModel):
 
 
 class RefundCreate(BaseModel):
-    payment_id: UUID
-    amount_minor: int = Field(ge=0)
+    payment_id: UUID | None = None
+    amount_minor: int | None = Field(default=None, ge=0)
     reason_code: str = Field(min_length=1, max_length=64)
+    # Q-COM-01: refund exactly these tickets of `order_id`; the server works out the amount.
+    order_id: UUID | None = None
+    ticket_ids: list[UUID] | None = Field(default=None, max_length=100)
+    # Refund everything still refundable on `order_id`; the server works out the amount.
+    refund_remaining: bool = False
 
 
 class RefundOut(BaseModel):
@@ -116,6 +121,46 @@ class RefundOut(BaseModel):
     amount_minor: int
     currency_code: str
     reason_code: str
+    ticket_ids: list[UUID] | None = None
+
+
+class RefundReasonOut(BaseModel):
+    reason_code: str
+    label: str
+    requires_finance_approve: bool
+
+
+class StaffTicketOut(BaseModel):
+    id: UUID
+    status: str
+    ticket_type_name: str | None
+    unit_amount_minor: int
+    currency_code: str
+    refundable: bool
+    refund_pending: bool
+
+
+class StaffRefundOut(RefundOut):
+    order_id: UUID
+    created_at: datetime
+    payment_provider: str | None = None
+
+
+class StaffOrderOut(BaseModel):
+    id: UUID
+    status: str
+    purpose: str
+    total_amount_minor: int
+    currency_code: str
+    created_at: datetime | None
+    buyer_email: str | None
+    payment_id: UUID | None
+    payment_status: str | None
+    payment_provider: str | None
+    refunded_amount_minor: int
+    items: list[dict]
+    tickets: list[StaffTicketOut]
+    refunds: list[StaffRefundOut]
 
 
 def _product_out(row: Product) -> ProductOut:
@@ -165,6 +210,7 @@ def _refund_out(row: Refund) -> RefundOut:
         amount_minor=row.amount_minor,
         currency_code=row.currency_code,
         reason_code=row.reason_code,
+        ticket_ids=row.ticket_ids,
     )
 
 
@@ -304,18 +350,165 @@ async def request_refund(
     body: RefundCreate,
     ctx: Annotated[AuthContext, Depends(get_auth_context)],
     svc: Annotated[PaymentService, Depends(payment_service)],
+    checkout: Annotated[CheckoutService, Depends(checkout_service)],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> RefundOut:
     if not idempotency_key:
         raise AppError("VALIDATION_ERROR", "Idempotency-Key is required", 422)
+    key = f"{ctx.user_id}:{idempotency_key}"
+    if body.refund_remaining:
+        if body.order_id is None or body.amount_minor is not None or body.ticket_ids is not None:
+            raise AppError("VALIDATION_ERROR", "refund_remaining needs order_id only", 422)
+        row = await checkout.request_remaining_refund(
+            ctx, order_id=body.order_id, reason_code=body.reason_code, idempotency_key=key
+        )
+        return _refund_out(row)
+    if body.ticket_ids is not None:
+        if body.order_id is None:
+            raise AppError("VALIDATION_ERROR", "order_id is required with ticket_ids", 422)
+        if body.amount_minor is not None:
+            raise AppError("VALIDATION_ERROR", "The amount of a per-ticket refund is worked out by the server", 422)
+        row = await checkout.request_ticket_refund(
+            ctx, order_id=body.order_id, ticket_ids=body.ticket_ids, reason_code=body.reason_code, idempotency_key=key
+        )
+        return _refund_out(row)
+    if body.payment_id is None or body.amount_minor is None:
+        raise AppError("VALIDATION_ERROR", "payment_id and amount_minor are required", 422)
     row = await svc.request_refund(
         ctx,
         payment_id=body.payment_id,
         amount_minor=body.amount_minor,
         reason_code=body.reason_code,
-        idempotency_key=f"{ctx.user_id}:{idempotency_key}",
+        idempotency_key=key,
     )
     return _refund_out(row)
+
+
+class ManualRefundIn(BaseModel):
+    payout_reference: str = Field(max_length=120)
+
+
+@router.post("/refunds/{refund_id}/complete-manual", response_model=RefundOut)
+async def complete_manual_refund(
+    refund_id: UUID,
+    body: ManualRefundIn,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    payments: Annotated[PaymentService, Depends(payment_service)],
+    checkout: Annotated[CheckoutService, Depends(checkout_service)],
+) -> RefundOut:
+    """Bangla QR: finance paid the money back by hand and records the transfer reference."""
+    row = await payments.complete_manual_refund(ctx, refund_id, payout_reference=body.payout_reference)
+    await checkout.apply_completed_refund(ctx, row)
+    return _refund_out(row)
+
+
+@router.get("/refund-reasons", response_model=list[RefundReasonOut])
+async def refund_reasons(
+    _ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    checkout: Annotated[CheckoutService, Depends(checkout_service)],
+) -> list[RefundReasonOut]:
+    """The platform refund reasons (D-REF-01), as data from the policy table."""
+    from sqlalchemy import select
+
+    from cornerroom.modules.ticketing.domain.models import RefundPolicy
+
+    rows = (
+        await checkout.session.execute(
+            select(RefundPolicy)
+            .where(RefundPolicy.scope_type == "PLATFORM", RefundPolicy.scope_id.is_(None))
+            .order_by(RefundPolicy.created_at)
+        )
+    ).scalars()
+    return [
+        RefundReasonOut(reason_code=r.reason_code, label=r.notes or r.reason_code, requires_finance_approve=r.requires_finance_approve)
+        for r in rows
+    ]
+
+
+@router.get("/staff/orders/lookup", response_model=StaffOrderOut)
+async def staff_order_lookup(
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    checkout: Annotated[CheckoutService, Depends(checkout_service)],
+    reference: str = Query(min_length=8, max_length=16),
+) -> StaffOrderOut:
+    view = await checkout.staff_order_view(ctx, reference)
+    order, payment, details = view["order"], view["payment"], view["details"]
+    return StaffOrderOut(
+        id=order.id,
+        status=order.status,
+        purpose=order.purpose,
+        total_amount_minor=order.total_amount_minor,
+        currency_code=order.currency_code,
+        created_at=details["created_at"],
+        buyer_email=view["buyer_email"],
+        payment_id=payment.id if payment else None,
+        payment_status=payment.status if payment else None,
+        payment_provider=payment.provider if payment else None,
+        refunded_amount_minor=details["refunded_amount_minor"],
+        items=[{k: (str(v) if isinstance(v, UUID) else v) for k, v in item.items()} for item in details["items"]],
+        tickets=[StaffTicketOut(**t) for t in view["tickets"]],
+        refunds=[StaffRefundOut(**r) for r in view["refunds"]],
+    )
+
+
+class StaffSubmissionOut(BaseModel):
+    id: UUID
+    order_id: UUID
+    purpose: str
+    amount_minor: int
+    currency_code: str
+    transaction_ref: str
+    paid_from: str
+    paid_with: str
+    status: str
+    decision_note: str | None
+    buyer_email: str | None
+    submitted_at: datetime
+
+
+class SubmissionRejectIn(BaseModel):
+    reason: str = Field(max_length=400)
+
+
+@router.get("/staff/payment-submissions", response_model=list[StaffSubmissionOut])
+async def staff_payment_submissions(
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    checkout: Annotated[CheckoutService, Depends(checkout_service)],
+    status: str = Query(default="SUBMITTED", pattern="^(SUBMITTED|CONFIRMED|REJECTED)$"),
+) -> list[StaffSubmissionOut]:
+    """Bangla QR payments waiting for finance to check them against the statement (Q-PAY-01)."""
+    return [StaffSubmissionOut(**row) for row in await checkout.staff_submissions(ctx, status=status)]
+
+
+@router.post("/staff/payment-submissions/{submission_id}/confirm", response_model=StaffSubmissionOut)
+async def confirm_payment_submission(
+    submission_id: UUID,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    checkout: Annotated[CheckoutService, Depends(checkout_service)],
+) -> StaffSubmissionOut:
+    await checkout.confirm_submission(ctx, submission_id)
+    return StaffSubmissionOut(**(await checkout.staff_submissions(ctx, status=None, submission_id=submission_id))[0])
+
+
+@router.post("/staff/payment-submissions/{submission_id}/reject", response_model=StaffSubmissionOut)
+async def reject_payment_submission(
+    submission_id: UUID,
+    body: SubmissionRejectIn,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    checkout: Annotated[CheckoutService, Depends(checkout_service)],
+) -> StaffSubmissionOut:
+    await checkout.reject_submission(ctx, submission_id, reason=body.reason)
+    return StaffSubmissionOut(**(await checkout.staff_submissions(ctx, status=None, submission_id=submission_id))[0])
+
+
+@router.get("/staff/refunds", response_model=list[StaffRefundOut])
+async def staff_open_refunds(
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    checkout: Annotated[CheckoutService, Depends(checkout_service)],
+) -> list[StaffRefundOut]:
+    if ctx.organization_id is None:
+        raise AppError("WORKSPACE_REQUIRED", "An active organization is required", 409)
+    return [StaffRefundOut(**r) for r in await checkout.staff_open_refunds(ctx)]
 
 
 @router.post("/refunds/{refund_id}/approve", response_model=RefundOut)

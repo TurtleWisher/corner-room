@@ -18,6 +18,8 @@ import {
 } from "@/lib/api";
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
 import { PriceProposals } from "@/components/staff/price-proposals";
+import { PaymentChecks } from "@/components/staff/payment-checks";
+import { Refunds } from "@/components/staff/refunds";
 import { Money, StatusChip } from "@/components/ds";
 
 function CommerceBody() {
@@ -122,7 +124,9 @@ function CommerceBody() {
         Products, offers and subscription plans. Enter prices in the currency&apos;s smallest unit (for BDT, poisha: 150000 is ৳1,500).
       </p>
       {error ? <ErrorState title="Commerce" message={error} /> : null}
+      <PaymentChecks />
       <PriceProposals onDecided={() => void reload()} />
+      <Refunds />
       <Card>
         <form onSubmit={onProduct} className="space-y-3">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name" />

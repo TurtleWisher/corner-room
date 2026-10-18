@@ -8,6 +8,7 @@ import { CircleCheck, LogIn } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { RoomCube } from "@/components/brand/room-cube";
+import { DeliveryAddressStep } from "@/components/checkout/delivery-address-step";
 import { PaymentPanel } from "@/components/checkout/payment-panel";
 import { PowerTransition } from "@/components/checkout/power-transition";
 import { GenericSummary, MusicReceipt, TicketConfirmation, TicketSummary, TrackSummary } from "@/components/checkout/summaries";
@@ -217,7 +218,15 @@ function OrderCheckout({ initial }: { initial: OrderRecord }) {
 
   return (
     <>
-      <Heading>{stage === "paid_processing" ? "Finishing your order" : stage === "awaiting_payment" ? "Review and pay" : "Your order"}</Heading>
+      <Heading>
+        {stage === "paid_processing"
+          ? "Finishing your order"
+          : stage === "awaiting_payment"
+            ? "Review and pay"
+            : stage === "verifying"
+              ? "Checking your payment"
+              : "Your order"}
+      </Heading>
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-8">
         {ctx?.kind === "tickets" ? (
           <TicketSummary order={order} event={ctx.event} />
@@ -281,6 +290,8 @@ function NewCheckout() {
   const [quantity, setQuantity] = useState("1");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // D-ADDR-01: the buyer confirms a Bangladesh delivery address before every payment.
+  const [addressConfirmed, setAddressConfirmed] = useState(false);
   const summary = useAsync(() => (item ? loadSummary(item) : Promise.resolve(null)), [item?.kind, item?.id]);
   const owned = useAsync(
     () =>
@@ -331,11 +342,11 @@ function NewCheckout() {
     setBusy(true);
     try {
       let order: OrderRecord;
-      if (item.kind === "offer") order = await createCatalogOrder(item.id, key);
-      else if (item.kind === "plan") order = await createSubscriptionOrder(item.id, key);
+      if (item.kind === "offer") order = await createCatalogOrder(item.id, key, addressConfirmed);
+      else if (item.kind === "plan") order = await createSubscriptionOrder(item.id, key, addressConfirmed);
       else {
         const hold = await createHold(item.id, Number.parseInt(quantity, 10));
-        order = await createOrder(hold.id, key);
+        order = await createOrder(hold.id, key, addressConfirmed);
       }
       // The order now lives at its own address, so a reload or a later visit resumes it.
       const world = item.kind === "tickets" ? "" : "&world=sky";
@@ -407,14 +418,18 @@ function NewCheckout() {
           </ButtonLink>
         </Card>
       ) : summary.status === "ok" && summary.data ? (
-        <div className="flex flex-wrap items-center gap-4">
-          <Button size="lg" busy={busy} onClick={() => void place()}>
-            {item.kind === "tickets" ? "Reserve and pay" : "Continue to payment"}
-          </Button>
-          <Link href="/store" className="cr-focus text-sm font-semibold text-fg-muted hover:text-fg">
-            Cancel
-          </Link>
-        </div>
+        <>
+          <DeliveryAddressStep confirmed={addressConfirmed} onConfirmedChange={setAddressConfirmed} />
+          <div className="flex flex-wrap items-center gap-4">
+            <Button size="lg" busy={busy} disabled={!addressConfirmed} onClick={() => void place()}>
+              {item.kind === "tickets" ? "Reserve and pay" : "Continue to payment"}
+            </Button>
+            <Link href="/store" className="cr-focus text-sm font-semibold text-fg-muted hover:text-fg">
+              Cancel
+            </Link>
+          </div>
+          {!addressConfirmed ? <p className="text-sm text-fg-muted">Confirm where we can send gifts to continue.</p> : null}
+        </>
       ) : null}
     </div>
   );

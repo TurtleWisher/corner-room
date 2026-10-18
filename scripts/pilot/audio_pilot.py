@@ -307,8 +307,13 @@ class Pilot:
         before = await self.call("GET", f"/api/v1/playback/tracks/{track_id}/audio", fan)
         r.check("not playable before buying", before.status_code in (402, 403), str(before.status_code))
 
+        # D-ADDR-01: a Bangladesh delivery address is saved and confirmed before paying.
+        await self.ok("PUT", "/api/v1/me/delivery-address", fan, json={
+            "recipient_name": "Pilot Fan", "phone": "01712345678", "division": "Dhaka", "district": "Dhaka",
+            "upazila": "Dhanmondi", "area": "Road 27", "house_road": "House 12, Road 27",
+        })
         timer = Timer()
-        order = await self.ok("POST", "/api/v1/orders", fan, expect=201, headers={"Idempotency-Key": f"pilot-{self.run}"}, json={"offer_id": offer["id"]})
+        order = await self.ok("POST", "/api/v1/orders", fan, expect=201, headers={"Idempotency-Key": f"pilot-{self.run}"}, json={"offer_id": offer["id"], "delivery_address_confirmed": True})
         shortcut = await self.call("POST", f"/api/v1/payments/{order['payment']['id']}/sandbox-confirm", fan)
         r.check("staging refuses self-confirmed payments", shortcut.status_code in (403, 404, 409), str(shortcut.status_code))
         from cornerroom.modules.finance.application.sandbox import sign_sandbox_payload

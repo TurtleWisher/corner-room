@@ -30,6 +30,15 @@ PAYMENT_CAPTURED_EVENT = PAYMENT_CAPTURED
 PAYMENT_FAILED_EVENT = PAYMENT_FAILED
 
 
+def _provider_for(settings: Settings) -> PaymentProvider:
+    """PAYMENT_PROVIDER picks how new payments are taken (Q-PAY-01). Default: the sandbox."""
+    if settings.payment_provider == "bangla_qr":
+        from cornerroom.modules.finance.application.bangla_qr import BanglaQrStaffVerifiedProvider
+
+        return BanglaQrStaffVerifiedProvider()
+    return SandboxPaymentProvider()
+
+
 class PaymentService:
     def __init__(
         self,
@@ -42,7 +51,7 @@ class PaymentService:
         self.settings = settings or get_settings()
         self.clock = clock or SystemClock()
         self.audit = AuditService(session)
-        self.provider = provider or SandboxPaymentProvider()
+        self.provider = provider or _provider_for(self.settings)
 
     def webhook_secret(self) -> str:
         return resolve_webhook_secret(
@@ -268,6 +277,7 @@ class PaymentService:
         reason_code: str,
         idempotency_key: str,
         scope_id: UUID | None = None,
+        ticket_ids: list[UUID] | None = None,
     ) -> Refund:
         existing = (
             await self.session.execute(select(Refund).where(Refund.idempotency_key == idempotency_key))
@@ -331,6 +341,7 @@ class PaymentService:
             reason_code=reason_code,
             policy_id=policy.id,
             idempotency_key=idempotency_key,
+            ticket_ids=[str(t) for t in ticket_ids] if ticket_ids else None,
             created_by=ctx.user_id,
             updated_by=ctx.user_id,
         )
@@ -426,6 +437,55 @@ class PaymentService:
             entity_type="Refund",
             entity_id=row.id,
             new_state={"status": row.status, "payment_status": payment.status},
+        )
+        from cornerroom.modules.finance.application.recognition import RecognitionService
+
+        await RecognitionService(self.session, clock=self.clock).reverse_refund(ctx, row)
+        return row
+
+    async def complete_manual_refund(self, ctx: AuthContext, refund_id: UUID, *, payout_reference: str) -> Refund:
+        """Bangla QR (Q-PAY-01): money is paid back by hand from the merchant account. Finance marks
+        the approved refund complete with the reference of that transfer; the same reversal and
+        RefundCompleted follow as for any refund. Sandbox payments use `complete_sandbox_refund`."""
+        from cornerroom.modules.authorization.application.service import AuthorizationService
+
+        await AuthorizationService(self.session, clock=self.clock).authorize(ctx.user_id, "finance.post")
+        reference = " ".join((payout_reference or "").split())
+        if not 4 <= len(reference) <= 80:
+            raise AppError("VALIDATION_ERROR", "Enter the reference of the transfer you sent back", 422, extras={"field": "payout_reference"})
+        row = await self.session.get(Refund, refund_id)
+        if row is None:
+            raise NotFoundError("Refund not found")
+        if row.status == "COMPLETED":
+            return row
+        if row.status not in {"APPROVED", "PROCESSING"}:
+            raise AppError("INVALID_TRANSITION", "Refund is not approved", 409)
+        payment = await self.get_payment(row.payment_id)
+        if payment.provider == "sandbox":
+            raise AppError("PAYMENT_PROVIDER_UNSUPPORTED", "Test payments are completed with the test button", 409)
+        if payment.status != "CAPTURED":
+            raise AppError("INVALID_TRANSITION", "Payment must remain CAPTURED", 409)
+        row.status = "COMPLETED"
+        row.updated_by = ctx.user_id
+        await self.session.flush()
+        await self._emit(
+            ctx,
+            event_type=REFUND_COMPLETED,
+            aggregate_id=row.id,
+            payload={
+                "refund_id": str(row.id),
+                "payment_id": str(payment.id),
+                "amount_minor": row.amount_minor,
+                "currency_code": row.currency_code,
+            },
+            actor_id=ctx.user_id,
+        )
+        await self.audit.record_from_auth(
+            ctx,
+            action="refund.completed",
+            entity_type="Refund",
+            entity_id=row.id,
+            new_state={"status": row.status, "payout_reference": reference, "method": "manual"},
         )
         from cornerroom.modules.finance.application.recognition import RecognitionService
 

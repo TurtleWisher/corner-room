@@ -376,6 +376,13 @@ class StreamingService:
         self._playability_error(playability, require_audio=False)
         if playability.track_version_id is None:
             raise AppError("VERSION_NOT_READY", "Track is not playable", 409)
+        # The chain is Playability -> Entitlement -> session -> PlaybackEvent (modules/streaming.md).
+        # A session is not tied to one track, so without this check a session opened for a song
+        # the listener may play could record plays (analytics and royalty input) for any other.
+        await self._require_entitlement(ctx.user_id, track_id)
+        # Nobody listens longer than the song: clamp to the version's length when it is known.
+        if playability.duration_ms is not None and playability.duration_ms > 0:
+            duration_ms = min(duration_ms, playability.duration_ms)
         event = PlaybackEvent(
             client_event_id=token,
             user_id=ctx.user_id,
@@ -645,6 +652,7 @@ class StreamingService:
         ).scalar_one_or_none()
         if existing is not None:
             return existing
+        await self._assert_library_target(ctx, item_type, item_id)
         row = LibraryItem(
             user_id=ctx.user_id,
             item_type=item_type,
@@ -672,6 +680,24 @@ class StreamingService:
                 organization_id=None,
             )
         return row
+
+    async def _assert_library_target(self, ctx: AuthContext, item_type: str, item_id: UUID) -> None:
+        """Only real, public things can be liked or saved (module pass 9: made-up ids were stored
+        and a like on one still reached analytics as TrackLiked)."""
+        if item_type == "track":
+            track = await self.session.get(Track, item_id)
+            if track is None or track.deleted_at is not None or track.status != PLAYABLE_TRACK_STATUS:
+                raise NotFoundError("Track not found")
+        elif item_type == "release":
+            release = await self.session.get(Release, item_id)
+            if release is None or release.deleted_at is not None or release.status != "RELEASED":
+                raise NotFoundError("Release not found")
+        elif item_type == "artist":
+            artist = await self.session.get(Artist, item_id)
+            if artist is None or artist.deleted_at is not None:
+                raise NotFoundError("Artist not found")
+        elif item_type == "playlist":
+            await self.get_playlist(ctx, item_id)
 
     async def list_library(
         self,
@@ -852,6 +878,9 @@ class StreamingService:
         track = await self.session.get(Track, track_id)
         if track is None or track.deleted_at is not None:
             raise AppError("VALIDATION_ERROR", "Track was not found", 422)
+        # Only released songs go on playlists (an editorial playlist is public once published).
+        if track.status != PLAYABLE_TRACK_STATUS:
+            raise AppError("TRACK_NOT_RELEASED", "Only released songs can be added to a playlist", 409)
         item = PlaylistItem(
             playlist_id=playlist_id,
             track_id=track_id,

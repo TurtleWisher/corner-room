@@ -163,3 +163,76 @@ async def revoke_all_my_sessions(
     svc: Annotated[IdentityService, Depends(identity_service)],
 ) -> None:
     await svc.revoke_all_sessions(ctx, keep_current=False)
+
+
+# --- Delivery address for gifts (D-ADDR-01) -------------------------------------------------
+
+
+class DeliveryAddressIn(BaseModel):
+    recipient_name: str = Field(max_length=200)
+    phone: str = Field(max_length=32)
+    division: str = Field(max_length=64)
+    district: str = Field(max_length=64)
+    upazila: str = Field(max_length=200)
+    area: str = Field(max_length=200)
+    house_road: str = Field(max_length=300)
+    postcode: str | None = Field(default=None, max_length=16)
+    landmark: str | None = Field(default=None, max_length=300)
+
+
+class DeliveryAddressOut(BaseModel):
+    recipient_name: str
+    phone: str
+    division: str
+    district: str
+    upazila: str
+    area: str
+    house_road: str
+    postcode: str | None
+    landmark: str | None
+    updated_at: datetime | None = None
+
+
+class AddressOptionsOut(BaseModel):
+    country: str = "Bangladesh"
+    divisions: list[dict]
+
+
+def _address_out(row) -> DeliveryAddressOut:
+    from cornerroom.modules.identity.domain.bd_address import ADDRESS_FIELDS
+
+    return DeliveryAddressOut(**{f: getattr(row, f) for f in ADDRESS_FIELDS}, updated_at=row.updated_at)
+
+
+@router.get("/address-options", response_model=AddressOptionsOut)
+async def address_options() -> AddressOptionsOut:
+    """Bangladesh divisions and their districts, so the form and the API use the same names."""
+    from cornerroom.modules.identity.domain.bd_address import DIVISIONS
+
+    return AddressOptionsOut(divisions=[{"name": name, "districts": list(districts)} for name, districts in DIVISIONS.items()])
+
+
+@router.get("/me/delivery-address", response_model=DeliveryAddressOut)
+async def my_delivery_address(
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[IdentityService, Depends(identity_service)],
+) -> DeliveryAddressOut:
+    from cornerroom.infra.errors import NotFoundError
+    from cornerroom.modules.identity.application.delivery_address import DeliveryAddressService
+
+    row = await DeliveryAddressService(svc.session).get_for_user(ctx.user_id)
+    if row is None:
+        raise NotFoundError("No delivery address yet")
+    return _address_out(row)
+
+
+@router.put("/me/delivery-address", response_model=DeliveryAddressOut)
+async def save_my_delivery_address(
+    body: DeliveryAddressIn,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[IdentityService, Depends(identity_service)],
+) -> DeliveryAddressOut:
+    from cornerroom.modules.identity.application.delivery_address import DeliveryAddressService
+
+    row = await DeliveryAddressService(svc.session).save(ctx, body.model_dump())
+    return _address_out(row)

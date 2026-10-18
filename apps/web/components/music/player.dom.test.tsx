@@ -440,6 +440,29 @@ describe("Phase 8 controls", () => {
     expect(api.fetchTrackAudio.mock.calls.length).toBe(fetched);
   });
 
+  it("refreshes an expired link each time during one long song, but stops when a fresh link fails at once", async () => {
+    render(
+      <PlayerProvider>
+        <Start />
+        <PlayerBar />
+      </PlayerProvider>,
+    );
+    await act(async () => screen.getByText("start t1").click());
+    const a = audioEl();
+    a.removeAttribute("crossorigin");
+    Object.defineProperty(a, "error", { value: { code: 2 }, configurable: true }); // network: the link expired
+    const before = api.fetchTrackAudio.mock.calls.length;
+    await act(async () => fireEvent.error(a));
+    expect(api.fetchTrackAudio.mock.calls.length).toBe(before + 1);
+    await act(async () => fireEvent.playing(a)); // audio flows again
+    await act(async () => fireEvent.error(a)); // the next link expires later in the same song
+    expect(api.fetchTrackAudio.mock.calls.length).toBe(before + 2);
+    // This time the fresh link fails straight away: no endless refreshing, an honest stop.
+    await act(async () => fireEvent.error(a));
+    expect(api.fetchTrackAudio.mock.calls.length).toBe(before + 2);
+    expect(screen.getByText(/stopped|couldn't|could not/i)).toBeTruthy();
+  });
+
   it("offers normalise volume, on by default, and remembers the choice on this device", async () => {
     render(
       <PlayerProvider>

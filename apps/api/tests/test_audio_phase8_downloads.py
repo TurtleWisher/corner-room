@@ -153,9 +153,14 @@ async def test_takedown_kinds_and_refund_decide_buyer_access(client: AsyncClient
     assert dl.status_code == 201, dl.text
     lost = await client.get(f"/api/v1/playback/tracks/{track_id}/audio", headers=bearer(subscriber["access_token"]))
     assert lost.status_code == 409 and lost.json()["code"] == "TRACK_TAKEN_DOWN"
+    # Module pass 10: the buyer can still open the song's page; others and visitors cannot.
+    assert (await client.get(f"/api/v1/tracks/{track_id}", headers=bearer(buyer["access_token"]))).status_code == 200
+    assert (await client.get(f"/api/v1/tracks/{track_id}", headers=bearer(subscriber["access_token"]))).status_code == 404
+    assert (await client.get(f"/api/v1/tracks/{track_id}")).status_code == 404
 
     # A legal takedown removes it for buyers too, including links already handed out.
     await _set(Track, UUID(track_id), takedown_kind="LEGAL")
+    assert (await client.get(f"/api/v1/tracks/{track_id}", headers=bearer(buyer["access_token"]))).status_code == 404
     assert (await client.get(f"/api/v1/playback/tracks/{track_id}/audio", headers=bearer(buyer["access_token"]))).status_code == 409
     assert (await client.get(dl.json()["url"])).status_code == 409
     again = await client.post("/api/v1/me/downloads", headers=bearer(buyer["access_token"]), json={"track_id": track_id, "format": "mp3"})

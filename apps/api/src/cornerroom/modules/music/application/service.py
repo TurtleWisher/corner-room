@@ -510,7 +510,31 @@ class MusicService:
             return track, False
         if public:
             return track, True
+        if await self._buyer_keeps_after_takedown(ctx.user_id, track=track):
+            return track, True
         raise NotFoundError("Track not found")
+
+    async def _buyer_keeps_after_takedown(
+        self, user_id: UUID, *, track: Track | None = None, release: Release | None = None
+    ) -> bool:
+        """D-AUDIO-14: after an ordinary takedown the people who bought the song (or its release)
+        keep it, so they can still open its page. A legal takedown hides it from everyone."""
+        from cornerroom.modules.entitlements.application.service import EntitlementService
+
+        entitlements = EntitlementService(self.session)
+        if track is not None:
+            return (
+                track.status == "TAKEN_DOWN"
+                and getattr(track, "takedown_kind", None) != "LEGAL"
+                and await entitlements.owns_by_purchase(user_id, track.id)
+            )
+        if release is not None:
+            return (
+                release.status == "TAKEN_DOWN"
+                and getattr(release, "takedown_kind", None) != "LEGAL"
+                and await entitlements.find_active_release(user_id, release.id) is not None
+            )
+        return False
 
     async def get_release(self, release_id: UUID, ctx: AuthContext | None) -> tuple[Release, bool]:
         release = await self.get_release_row(release_id)
@@ -535,6 +559,8 @@ class MusicService:
         if allowed:
             return release, False
         if public:
+            return release, True
+        if await self._buyer_keeps_after_takedown(ctx.user_id, release=release):
             return release, True
         raise NotFoundError("Release not found")
 

@@ -26,7 +26,7 @@ type Invite = { organization_name: string; role_name: string | null; email_hint:
 
 function Welcome({ invite }: { invite: Invite }) {
   return (
-    <AuthCard title={`Welcome to ${invite.organization_name}`}>
+    <AuthCard theme="staff" title={`Welcome to ${invite.organization_name}`}>
       <p role="status" className="text-fg">
         You joined{invite.role_name ? ` as ${invite.role_name}` : ""}. Staff pages now open in this workspace.
       </p>
@@ -69,7 +69,7 @@ function Accept({ token, invite, onJoined }: { token: string; invite: Invite; on
   }
 
   return (
-    <AuthCard title={`Join ${invite.organization_name}`}>
+    <AuthCard theme="staff" title={`Join ${invite.organization_name}`}>
       <p className="text-fg">
         You have been invited to join the {invite.organization_name} staff{invite.role_name ? ` as ${invite.role_name}` : ""}.
       </p>
@@ -101,7 +101,7 @@ function Join() {
   if (!token && status === "authenticated") {
     // After joining the token is removed from the address; a plain visit goes to the console.
     return (
-      <AuthCard title="Staff">
+      <AuthCard theme="staff" title="Staff">
         <ButtonLink href="/staff" block>
           <LayoutGrid aria-hidden="true" /> Open the staff console
         </ButtonLink>
@@ -110,14 +110,14 @@ function Join() {
   }
   if (invite.status === "loading" || status === "loading") {
     return (
-      <AuthCard title="Join the staff">
+      <AuthCard theme="staff" title="Join the staff">
         <Skeleton className="h-40 w-full" />
       </AuthCard>
     );
   }
   if (invite.status === "error") {
     return (
-      <AuthCard title="This invitation isn't available">
+      <AuthCard theme="staff" title="This invitation isn't available">
         <p className="text-fg">It may have been used, withdrawn or expired. Ask your administrator for a new invitation link.</p>
         <p className="mt-4 text-sm text-fg-muted">
           Already staff?{" "}
@@ -141,6 +141,7 @@ function Join() {
       next={here}
       signInPath="/staff/sign-in"
       google={false}
+      theme="staff"
       footer={
         <>
           Already have a Corner Room account?{" "}
