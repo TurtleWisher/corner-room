@@ -10,6 +10,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from cornerroom.infra.logging import redact_path
+from cornerroom.kernel.pagination import InvalidCursorError
+
 log = structlog.get_logger("errors")
 
 
@@ -100,8 +103,23 @@ def register_exception_handlers(app: FastAPI) -> None:
                 title=exc.title,
                 detail=exc.detail,
                 request_id=_request_id(request),
-                instance=str(request.url.path),
+                instance=redact_path(str(request.url.path)),
                 extras=exc.extras,
+            ),
+            media_type="application/problem+json",
+        )
+
+    @app.exception_handler(InvalidCursorError)
+    async def cursor_handler(request: Request, exc: InvalidCursorError) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content=problem(
+                status=422,
+                code="VALIDATION_ERROR",
+                title="Invalid cursor",
+                detail="Invalid cursor",
+                request_id=_request_id(request),
+                instance=redact_path(str(request.url.path)),
             ),
             media_type="application/problem+json",
         )
@@ -116,7 +134,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 title="Validation Error",
                 detail="Request failed validation",
                 request_id=_request_id(request),
-                instance=str(request.url.path),
+                instance=redact_path(str(request.url.path)),
                 extras={"errors": exc.errors()},
             ),
             media_type="application/problem+json",
@@ -134,7 +152,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 title=title,
                 detail=str(exc.detail),
                 request_id=_request_id(request),
-                instance=str(request.url.path),
+                instance=redact_path(str(request.url.path)),
             ),
             media_type="application/problem+json",
         )
@@ -150,7 +168,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 title="Internal Error",
                 detail="An unexpected error occurred",
                 request_id=_request_id(request),
-                instance=str(request.url.path),
+                instance=redact_path(str(request.url.path)),
             ),
             media_type="application/problem+json",
         )

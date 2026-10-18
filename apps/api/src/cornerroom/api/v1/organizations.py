@@ -64,6 +64,17 @@ class MembershipOut(BaseModel):
     role_id: UUID | None
     status: str
     ended_at: datetime | None = None
+    # Workspace admins only; null for everyone else.
+    display_name: str | None = None
+    email: str | None = None
+    role_key: str | None = None
+    role_name: str | None = None
+
+
+class GrantableRoleOut(BaseModel):
+    id: UUID
+    key: str
+    name: str
 
 
 class MembershipPage(BaseModel):
@@ -127,7 +138,7 @@ def _org_out(org) -> OrganizationOut:
     )
 
 
-def _membership_out(row) -> MembershipOut:
+def _membership_out(row, details: dict | None = None) -> MembershipOut:
     return MembershipOut(
         id=row.id,
         organization_id=row.organization_id,
@@ -135,6 +146,7 @@ def _membership_out(row) -> MembershipOut:
         role_id=row.role_id,
         status=row.status,
         ended_at=row.ended_at,
+        **(details or {}),
     )
 
 
@@ -163,6 +175,25 @@ async def create_organization(
         ctx, name=body.name, org_type=body.type, share_bps=body.share_bps
     )
     return _org_out(org)
+
+
+class InvitationCheckOut(BaseModel):
+    organization_name: str
+    role_name: str | None
+    # "m***@example.com": enough to know which address to sign up with, not the address itself.
+    email_hint: str
+
+
+@router.post("/invitations/check", response_model=InvitationCheckOut)
+async def check_invitation(
+    body: InvitationAcceptIn,
+    svc: Annotated[OrganizationService, Depends(organization_service)],
+) -> InvitationCheckOut:
+    """Public, for the staff join page. The token travels in the body, never in a logged URL."""
+    from cornerroom.infra.logging import mask_email
+
+    invitation, org, role_name = await svc.check_invitation(body.token)
+    return InvitationCheckOut(organization_name=org.name, role_name=role_name, email_hint=mask_email(invitation.email))
 
 
 @router.post("/invitations/accept", response_model=MembershipOut)
@@ -237,7 +268,20 @@ async def list_memberships(
     limit: int = Query(default=50, ge=1, le=100),
 ) -> MembershipPage:
     rows, next_cursor = await svc.list_memberships(user.id, org_id, cursor=cursor, limit=limit)
-    return MembershipPage(items=[_membership_out(m) for m in rows], next_cursor=next_cursor)
+    details = await svc.member_details(user.id, org_id, rows)
+    return MembershipPage(items=[_membership_out(m, details.get(m.id)) for m in rows], next_cursor=next_cursor)
+
+
+@router.get("/{org_id}/grantable-roles", response_model=list[GrantableRoleOut])
+async def grantable_roles(
+    org_id: UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    svc: Annotated[OrganizationService, Depends(organization_service)],
+) -> list[GrantableRoleOut]:
+    """Staff roles this workspace admin may give (never more than they hold themselves)."""
+    await svc.get_organization(org_id)
+    await svc.authz.authorize(user.id, "org.admin", resource_type="organization", resource_id=org_id)
+    return [GrantableRoleOut(id=r.id, key=r.key, name=r.name) for r in await svc.authz.grantable_roles(user.id, org_id)]
 
 
 @router.post("/{org_id}/memberships", response_model=MembershipOut, status_code=201)

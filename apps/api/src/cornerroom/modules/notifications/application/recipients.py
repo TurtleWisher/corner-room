@@ -20,6 +20,7 @@ from cornerroom.kernel.events import (
     PAYOUT_COMPLETED,
     PAYOUT_FAILED,
     REFRESH_TOKEN_REPLAY_DETECTED,
+    REFUND_COMPLETED,
     ROYALTY_STATEMENT_ADJUSTED,
     ROYALTY_STATEMENT_ISSUED,
     SETTLEMENT_COMPLETED,
@@ -86,6 +87,21 @@ async def resolve_recipient(session: AsyncSession, event: DomainEvent) -> UUID |
 
         try:
             payment = await PaymentService(session).get_payment(payment_id)
+        except NotFoundError:
+            return None
+        return payment.user_id
+
+    if event_type == REFUND_COMPLETED:
+        # The buyer: the refund's payment belongs to them.
+        refund_id = _uuid(payload.get("refund_id")) or event.aggregate_id
+        payment_id = _uuid(payload.get("payment_id"))
+        from cornerroom.modules.finance.application.service import PaymentService
+
+        payments = PaymentService(session)
+        try:
+            if payment_id is None:
+                payment_id = (await payments.get_refund(refund_id)).payment_id
+            payment = await payments.get_payment(payment_id)
         except NotFoundError:
             return None
         return payment.user_id

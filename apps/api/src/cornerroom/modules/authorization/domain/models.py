@@ -45,6 +45,10 @@ FOUNDATION_PERMISSIONS = (
     "royalty.read",
     "royalty.run",
     "campaign.write",
+    # Audio platform (AUDIO_PHASE_1_DESIGN 3.4, S5)
+    "music.intake_assist",
+    "music.intake_manage",
+    "media.ops",
 )
 
 RESOURCE_TYPES = (

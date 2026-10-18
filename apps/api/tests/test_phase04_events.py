@@ -216,8 +216,21 @@ async def test_phase04_event_venue_isolation(client: AsyncClient) -> None:
     )
     token_label = await _workspace(client, staff["access_token"], label["id"])
 
+    # A cancelled event stays public (D-EV-05), so another org gets only the public view of it.
     cross_get = await client.get(f"/api/v1/events/{event_id}", headers=bearer(token_label))
-    assert cross_get.status_code == 404
+    assert cross_get.status_code == 200
+    assert "version" not in cross_get.json()
+    assert "organization_id" not in cross_get.json()
+
+    # A private event in another org is hidden entirely.
+    private = await client.post(
+        "/api/v1/events",
+        headers=bearer(admin_p),
+        json={"title": "Private Draft", "timezone": "UTC", "starts_at": FUTURE_START.isoformat()},
+    )
+    assert private.status_code == 201
+    cross_private = await client.get(f"/api/v1/events/{private.json()['id']}", headers=bearer(token_label))
+    assert cross_private.status_code == 404
 
     cross_patch = await client.patch(
         f"/api/v1/events/{event_id}",
@@ -236,7 +249,12 @@ async def test_phase04_event_venue_isolation(client: AsyncClient) -> None:
     other_event = await client.post(
         "/api/v1/events",
         headers=bearer(token_label),
-        json={"title": "Label Show", "timezone": "Asia/Tokyo", "starts_at": FUTURE_START.isoformat()},
+        json={
+            "title": "Label Show",
+            "timezone": "Asia/Tokyo",
+            "starts_at": FUTURE_START.isoformat(),
+            "ends_at": FUTURE_END.isoformat(),
+        },
     )
     assert other_event.status_code == 201
     assert other_event.json()["organization_id"] == label["id"]
@@ -301,6 +319,8 @@ async def test_phase04_audit_outbox_atomicity(pg_session: AsyncSession, settings
     pg_session.add(
         RoleAssignment(user_id=admin.id, role_id=role.id, organization_id=None, status="ACTIVE")
     )
+    # The session does not autoflush: write the grant before the service checks permissions.
+    await pg_session.flush()
     org = (
         await pg_session.execute(
             select(Organization).where(Organization.type == "PLATFORM", Organization.deleted_at.is_(None))
@@ -349,9 +369,7 @@ async def test_phase04_audit_outbox_atomicity(pg_session: AsyncSession, settings
     )
     assert audits
 
-    await pg_session.rollback()
-    svc2 = EventService(pg_session)
-    await svc2.create_event(ctx, title="Rolled", timezone="UTC")
+    # Rolling back the domain write also drops its outbox rows (same transaction).
     await pg_session.rollback()
     leftover = (
         await pg_session.execute(select(OutboxEvent).where(OutboxEvent.correlation_id == "phase04-outbox"))

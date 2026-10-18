@@ -12,17 +12,16 @@ import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ButtonLink, Card, ErrorState, Field, Input, Money, Skeleton, StatusChip } from "@/components/ds";
 import { TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
 import { useCredits } from "@/components/music/credits";
+import { TrackAudioPanel } from "@/components/music/track-audio-panel";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import {
   ApiError,
   addTrackCredit,
-  createTrackVersion,
   fetchPlayableCatalog,
   fetchTrack,
   fetchTrackCredits,
   transitionTrack,
-  transitionTrackVersion,
   type TrackRecord,
 } from "@/lib/api";
 import { humanizeStatus } from "@/lib/format/status";
@@ -68,16 +67,8 @@ function TrackStaffTools({ track, onChanged }: { track: TrackRecord; onChanged: 
             {humanizeStatus(a)}
           </Button>
         ))}
-        <Button variant="secondary" size="sm" busy={busy === "version"} disabled={busy !== null}
-          onClick={() =>
-            void run("version", async () => {
-              const v = await createTrackVersion(track.id);
-              await transitionTrackVersion(track.id, v.id, "mark_ready", v.version);
-            }, () => onChanged())
-          }>
-          Add ready version (no audio)
-        </Button>
       </div>
+      <TrackAudioPanel trackId={track.id} />
       <form
         className="mt-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end"
         onSubmit={(e: FormEvent) => {

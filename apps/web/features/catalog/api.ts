@@ -2,6 +2,7 @@
 
 import { type Page } from "@/features/identity/api";
 import { apiFetch } from "@/lib/api/client";
+import type { MediaReport } from "@/lib/media-report-view";
 
 export type TrackRecord = {
   id: string;
@@ -53,6 +54,7 @@ export type TrackVersionRecord = {
   status: string;
   is_current: boolean;
   version: number;
+  processing_detail?: string | null;
 };
 
 export async function fetchTracks(opts?: { skipAuth?: boolean }): Promise<Page<TrackRecord>> {
@@ -96,6 +98,14 @@ export async function createTrackVersion(id: string): Promise<TrackVersionRecord
     body: JSON.stringify({ version_type: "MASTER" }),
     retry: false,
   });
+}
+
+export async function fetchTrackVersions(id: string): Promise<{ items: TrackVersionRecord[] }> {
+  return apiFetch<{ items: TrackVersionRecord[] }>(`/api/v1/tracks/${id}/versions`);
+}
+
+export async function fetchMediaReport(trackId: string, versionId: string): Promise<MediaReport> {
+  return apiFetch<MediaReport>(`/api/v1/tracks/${trackId}/versions/${versionId}/media-report`);
 }
 
 export async function transitionTrackVersion(

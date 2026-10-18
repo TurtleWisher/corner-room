@@ -65,12 +65,33 @@ class Settings(BaseSettings):
 
     residency_region: str | None = None
 
+    # Audio masters and cover art (owner decisions D-AUDIO-17, S11, S12). Technical limits, config.
+    media_master_max_bytes: int = 2 * 1024 * 1024 * 1024
+    media_master_max_duration_seconds: int = 3600
+    media_cover_max_bytes: int = 20 * 1024 * 1024
+    media_cover_min_px: int = 1400
+    media_cover_max_px: int = 6000
+    upload_part_size_bytes: int = 8 * 1024 * 1024
+    upload_intent_ttl_seconds: int = 86400
+    upload_max_open_intents: int = 20
+    # Media worker (FFmpeg). Path empty = look on PATH. Expected version empty = do not pin (local).
+    media_ffmpeg_path: str = ""
+    media_ffprobe_path: str = ""
+    media_ffmpeg_expected_version: str = ""
+    media_job_timeout_seconds: int = 600
+    media_job_max_attempts: int = 4
+    media_job_backoff_seconds: int = 30
+
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
 
     # Auth controls. 0 = disabled. Do not treat defaults as product lockout/OTP policy.
     auth_rate_limit_max_attempts: int = 0
     auth_rate_limit_window_seconds: int = 0
+    # Buyer downloads (D-AUDIO-06): unlimited by policy; this only stops abuse. The numbers are not
+    # decided: 0 means the limiter is off, like the other limits.
+    download_rate_limit_max: int = 0
+    download_rate_limit_window_seconds: int = 0
     verification_challenge_ttl_seconds: int = 0
     # Public web origin used to build links in messages (verification). No trailing slash.
     web_base_url: str = "http://localhost:3000"

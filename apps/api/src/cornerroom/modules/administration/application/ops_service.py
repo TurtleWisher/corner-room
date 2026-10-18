@@ -8,7 +8,6 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cornerroom.infra.errors import AppError
 from cornerroom.infra.logging import SENSITIVE_KEY_FRAGMENTS
 from cornerroom.infra.outbox import OutboxEvent
 from cornerroom.kernel.health_status import (
@@ -18,7 +17,7 @@ from cornerroom.kernel.health_status import (
     overall_status,
     public_dependency_checks,
 )
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.modules.analytics.domain.metrics import (
     UNIQUE_LISTENERS_NOT_AVAILABLE,
     attribution_status,
@@ -43,6 +42,9 @@ REGISTERED_JOBS = (
     "process_notification_delivery",
     "rebuild_search_index",
     "aggregate_daily_metrics",
+    "expire_ticket_holds",
+    "expire_upload_intents",
+    "run_media_jobs",
 )
 
 
@@ -202,11 +204,7 @@ class OpsService:
         if status:
             stmt = stmt.where(OutboxEvent.status == status)
         if cursor:
-            try:
-                data = decode_cursor(cursor)
-            except Exception as exc:
-                raise AppError("VALIDATION_ERROR", "Invalid cursor", 422) from exc
-            stmt = stmt.where(OutboxEvent.created_at < data["t"])
+            stmt = stmt.where(keyset_before(OutboxEvent.created_at, OutboxEvent.id, cursor))
         stmt = stmt.limit(page + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None

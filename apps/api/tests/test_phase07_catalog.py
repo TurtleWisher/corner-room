@@ -19,6 +19,7 @@ from cornerroom.kernel.events import (
 )
 from cornerroom.modules.audit.domain.models import AuditLog
 from cornerroom.modules.documents.domain.models import MediaAsset
+from tests.media_helpers import mark_version_ready
 from tests.auth_helpers import admin_token, bearer, register_and_login
 
 
@@ -35,15 +36,19 @@ async def _ready_version(client: AsyncClient, token: str, track_id: str) -> dict
         json={"version_type": "MASTER"},
     )
     assert created.status_code == 201, created.text
-    ready = await client.post(
+    # Since F2 only the media worker marks a version READY; the API refuses it.
+    refused = await client.post(
         f"/api/v1/tracks/{track_id}/versions/{created.json()['id']}/transition",
         headers=bearer(token),
         json={"action": "mark_ready", "version": created.json()["version"]},
     )
-    assert ready.status_code == 200, ready.text
-    assert ready.json()["status"] == "READY"
-    assert ready.json()["media_asset_id"] is None
-    return ready.json()
+    assert refused.status_code == 403 and refused.json()["code"] == "SYSTEM_TRANSITION"
+    await mark_version_ready(created.json()["id"])
+    versions = (await client.get(f"/api/v1/tracks/{track_id}/versions", headers=bearer(token))).json()["items"]
+    ready = next(v for v in versions if v["id"] == created.json()["id"])
+    assert ready["status"] == "READY"
+    assert ready["media_asset_id"] is None
+    return ready
 
 
 async def _release_track(client: AsyncClient, token: str, track_id: str, version: int) -> dict:
@@ -264,6 +269,8 @@ async def test_phase07_media_gate(pg_session: AsyncSession, settings: Settings) 
     pg_session.add(admin)
     await pg_session.flush()
     pg_session.add(RoleAssignment(user_id=admin.id, role_id=role.id, organization_id=None, status="ACTIVE"))
+    # The session does not autoflush: write the grant before the service checks permissions.
+    await pg_session.flush()
     org = (
         await pg_session.execute(
             select(Organization).where(Organization.type == "LABEL", Organization.deleted_at.is_(None))
@@ -331,6 +338,8 @@ async def test_phase07_audit_outbox_atomicity(pg_session: AsyncSession, settings
     pg_session.add(admin)
     await pg_session.flush()
     pg_session.add(RoleAssignment(user_id=admin.id, role_id=role.id, organization_id=None, status="ACTIVE"))
+    # The session does not autoflush: write the grant before the service checks permissions.
+    await pg_session.flush()
     org = (
         await pg_session.execute(
             select(Organization).where(Organization.type == "LABEL", Organization.deleted_at.is_(None))
@@ -351,7 +360,8 @@ async def test_phase07_audit_outbox_atomicity(pg_session: AsyncSession, settings
     )
     assert created
     version = await svc.create_version(ctx, track.id)
-    await svc.transition_version(ctx, track.id, version.id, action="mark_ready")
+    version.status = "READY"  # what the media worker does after its checks (F2)
+    await pg_session.flush()
     track = await svc.transition_track(ctx, track.id, action="submit")
     track = await svc.transition_track(ctx, track.id, action="start_review")
     track = await svc.transition_track(ctx, track.id, action="approve")

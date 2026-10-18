@@ -31,10 +31,12 @@ async def test_phase11_ledger_payout_dual_control_idor_idempotency(client: Async
 
     roles = (await client.get("/api/v1/roles", headers=bearer(staff))).json()
     finance_role = next(row for row in roles if row["key"] == "finance_manager")
+    # A workspace is usable only with an ACTIVE membership (or unscoped org.admin): Phase 03
+    # "switch denied without membership". A bare role assignment is not enough, so join with the role.
     assigned = await client.post(
-        f"/api/v1/users/{other['user']['id']}/assignments",
+        f"/api/v1/organizations/{org_id}/memberships",
         headers=bearer(staff),
-        json={"role_id": finance_role["id"], "organization_id": org_id},
+        json={"user_id": other["user"]["id"], "status": "ACTIVE", "role_id": finance_role["id"]},
     )
     assert assigned.status_code == 201, assigned.text
     other_token = await _workspace(client, other["access_token"], org_id)

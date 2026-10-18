@@ -5,6 +5,7 @@ import { Check, LogIn, Play, ShoppingBag } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { Button, ButtonLink, Money } from "@/components/ds";
+import { DownloadButton } from "@/components/music/download-button";
 import { useOptionalPlayer, type PlayOptions, type PlayerTrack } from "@/components/music/player";
 import { useAsync } from "@/components/use-async";
 import { fetchMyEntitlements, fetchOffers, fetchPlayableCatalog, type EntitlementRecord, type OfferRecord, type PlayableTrackRecord } from "@/lib/api";
@@ -42,6 +43,7 @@ export function TrackBuyControl({
   size = "sm",
   showPlan = true,
   playFrom,
+  releaseIds,
 }: {
   track: PlayerTrack;
   commerce: CustomerCommerce;
@@ -49,6 +51,8 @@ export function TrackBuyControl({
   showPlan?: boolean;
   /** The list this track is shown in: playing it queues the list as Up next. */
   playFrom?: PlayOptions;
+  /** Releases the track is known to be on, so a bought release counts as owning it. */
+  releaseIds?: readonly string[];
 }) {
   const { status } = useAuth();
   const player = useOptionalPlayer();
@@ -60,10 +64,10 @@ export function TrackBuyControl({
     );
   }
   if (!commerce.ready) return <span className="inline-block h-9 w-24" aria-hidden="true" />;
-  const state = trackBuyState(commerce.entitlements, commerce.offers, track.id);
+  const state = trackBuyState(commerce.entitlements, commerce.offers, track.id, releaseIds);
   if (state.kind === "owned") {
     const current = player?.isCurrent(track.id) && player.status === "playing";
-    return player ? (
+    const main = player ? (
       <Button size={size} onClick={() => (current ? player.toggle() : void player.play(track, playFrom))} aria-label={`${current ? "Pause" : "Play"} ${track.title}`}>
         <Play aria-hidden="true" /> {current ? "Playing" : "Play"}
       </Button>
@@ -71,6 +75,14 @@ export function TrackBuyControl({
       <ButtonLink href={`/tracks/${track.id}`} size={size}>
         <Check aria-hidden="true" /> Owned
       </ButtonLink>
+    );
+    // Bought songs download (D-AUDIO-06); listening through a plan does not.
+    if (state.via === "catalog") return main;
+    return (
+      <span className="inline-flex items-center gap-1">
+        {main}
+        <DownloadButton trackId={track.id} title={track.title} size={size === "sm" ? "sm" : "md"} />
+      </span>
     );
   }
   if (state.kind === "buy") {

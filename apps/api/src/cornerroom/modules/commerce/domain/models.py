@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 from cornerroom.infra.base import ActorMixin, Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin, VersionMixin
@@ -19,7 +20,7 @@ class Order(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ba
             name="status",
         ),
         CheckConstraint(
-            "purpose IN ('TICKET','TRACK','SUBSCRIPTION')",
+            "purpose IN ('TICKET','TRACK','SUBSCRIPTION','RELEASE')",
             name="purpose",
         ),
         CheckConstraint("total_amount_minor >= 0", name="total_non_negative"),
@@ -40,7 +41,7 @@ class OrderItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "order_items"
     __table_args__ = (
         CheckConstraint(
-            "item_type IN ('TICKET','TRACK','SUBSCRIPTION','OTHER')",
+            "item_type IN ('TICKET','TRACK','SUBSCRIPTION','OTHER','RELEASE')",
             name="item_type",
         ),
         CheckConstraint("quantity >= 1", name="quantity_positive"),
@@ -85,7 +86,7 @@ class Product(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, 
     __tablename__ = "products"
     __table_args__ = (
         CheckConstraint(
-            "product_type IN ('TRACK','CATALOG_ACCESS','SUBSCRIPTION_PLAN')",
+            "product_type IN ('TRACK','CATALOG_ACCESS','SUBSCRIPTION_PLAN','RELEASE')",
             name="product_type",
         ),
         CheckConstraint("status IN ('DRAFT','ACTIVE','RETIRED')", name="status"),
@@ -115,6 +116,7 @@ class Offer(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ve
     __table_args__ = (
         CheckConstraint("status IN ('DRAFT','ACTIVE','RETIRED')", name="status"),
         CheckConstraint("amount_minor >= 0", name="amount_non_negative"),
+        CheckConstraint("audience IN ('EVERYONE','OWNS_PART_OF_RELEASE')", name="audience"),
         Index("ix_offers_product_status", "product_id", "status"),
         Index("ix_offers_org_status", "organization_id", "status"),
         {"schema": "commerce"},
@@ -128,6 +130,8 @@ class Offer(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ve
     amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT")
+    # Who this price is for (D-AUDIO-11): everyone, or fans who already own part of the release.
+    audience: Mapped[str] = mapped_column(String(24), nullable=False, default="EVERYONE", server_default="EVERYONE")
     # The version column comes from VersionMixin, so reference the Column, not its name.
     @declared_attr.directive
     def __mapper_args__(cls) -> dict[str, object]:
@@ -149,3 +153,35 @@ class RefundEntitlementPolicy(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, B
     scope_id: Mapped[UUID | None] = mapped_column(nullable=True)
     reason_code: Mapped[str] = mapped_column(String(64), nullable=False)
     action: Mapped[str] = mapped_column(String(32), nullable=False)
+
+
+class OfferProposal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """A price an artist proposes for a track or release; ops accept or counter it (D-AUDIO-11, D-AUDIO-15).
+
+    Money is stored as given (integer minor units and currency). Nothing here computes a price.
+    """
+
+    __tablename__ = "offer_proposals"
+    __table_args__ = (
+        CheckConstraint("subject_type IN ('TRACK','RELEASE')", name="subject_type"),
+        CheckConstraint("audience IN ('EVERYONE','OWNS_PART_OF_RELEASE')", name="audience"),
+        CheckConstraint("status IN ('PROPOSED','ACCEPTED','COUNTERED','WITHDRAWN')", name="status"),
+        CheckConstraint("amount_minor >= 0", name="amount_non_negative"),
+        Index("ix_offer_proposals_subject", "subject_type", "subject_id"),
+        Index("ix_offer_proposals_status", "status"),
+        {"schema": "commerce"},
+    )
+
+    release_id: Mapped[UUID] = mapped_column(nullable=False)
+    subject_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    subject_id: Mapped[UUID] = mapped_column(nullable=False)
+    audience: Mapped[str] = mapped_column(String(24), nullable=False, default="EVERYONE")
+    amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    proposed_by: Mapped[UUID] = mapped_column(nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PROPOSED")
+    decided_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decision_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    resulting_offer_id: Mapped[UUID | None] = mapped_column(nullable=True)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -69,6 +70,8 @@ class TrackTransitionIn(BaseModel):
         pattern="^(submit|start_review|approve|reject|schedule|release|takedown|archive)$"
     )
     version: int | None = Field(default=None, ge=1)
+    # Takedowns only (D-AUDIO-14): STANDARD keeps buyers' access, LEGAL removes it for everyone.
+    takedown_kind: str | None = Field(default=None, pattern="^(STANDARD|LEGAL)$")
 
 
 class VersionCreate(BaseModel):
@@ -86,6 +89,7 @@ class VersionOut(BaseModel):
     status: str
     is_current: bool
     version: int
+    processing_detail: str | None = None
 
 
 class VersionTransitionIn(BaseModel):
@@ -142,6 +146,7 @@ def _version_out(row: TrackVersion) -> VersionOut:
         status=row.status,
         is_current=row.is_current,
         version=row.version,
+        processing_detail=row.processing_detail,
     )
 
 
@@ -229,7 +234,7 @@ async def track_transition(
     svc: Annotated[MusicService, Depends(music_service)],
 ) -> TrackOut:
     row = await svc.transition_track(
-        ctx, track_id, action=body.action, expected_version=body.version
+        ctx, track_id, action=body.action, expected_version=body.version, takedown_kind=body.takedown_kind
     )
     return _track_out(row)
 
@@ -306,3 +311,68 @@ async def list_track_credits(
     await svc.get_track(track_id, ctx)
     rows = await svc.list_credits(track_id=track_id)
     return {"items": [_credit_out(r) for r in rows]}
+
+
+class MediaFindingOut(BaseModel):
+    code: str
+    severity: str
+    measured: str | None = None
+    limit: str | None = None
+
+
+class MediaInspectionOut(BaseModel):
+    outcome: str
+    container: str | None = None
+    codec: str | None = None
+    sample_rate_hz: int | None = None
+    bit_depth: int | None = None
+    sample_format: str | None = None
+    channels: int | None = None
+    duration_ms: int | None = None
+    integrated_lufs: float | None = None
+    loudness_range_lu: float | None = None
+    true_peak_dbtp: float | None = None
+    inspected_at: datetime
+
+
+class RenditionSummaryOut(BaseModel):
+    profile_key: str
+    codec: str
+    bitrate_kbps: int
+    sample_rate_hz: int
+    duration_ms: int
+    byte_size: int
+    status: str
+    # PLAYBACK copies stream; the DOWNLOAD copy (lossless FLAC) is what buyers download.
+    purpose: str = "PLAYBACK"
+    bit_depth: int | None = None
+
+
+class MediaJobSummaryOut(BaseModel):
+    kind: str
+    profile_key: str | None = None
+    status: str
+    attempts: int
+    last_error_code: str | None = None
+
+
+class MediaReportOut(BaseModel):
+    version_id: UUID
+    status: str
+    processing_detail: str | None = None
+    is_current: bool
+    asset_status: str | None = None
+    inspection: MediaInspectionOut | None = None
+    findings: list[MediaFindingOut]
+    renditions: list[RenditionSummaryOut]
+    jobs: list[MediaJobSummaryOut]
+
+
+@router.get("/tracks/{track_id}/versions/{version_id}/media-report", response_model=MediaReportOut)
+async def media_report(
+    track_id: UUID,
+    version_id: UUID,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[MusicService, Depends(music_service)],
+) -> MediaReportOut:
+    return MediaReportOut(**await svc.media_report(ctx, track_id, version_id))

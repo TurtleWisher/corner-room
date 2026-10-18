@@ -8,7 +8,7 @@ from uuid import UUID
 import json
 
 from fastapi import APIRouter, Depends, Header, Query
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from cornerroom.api.deps import get_auth_context, get_optional_auth_context, streaming_service
@@ -106,12 +106,24 @@ class AvailabilityOut(BaseModel):
     eligibility: str = "not_computed"
 
 
+class AudioAlternateOut(BaseModel):
+    codec: str
+    url: str
+
+
 class AudioOut(BaseModel):
     url: str
     expires_at: datetime
     track_id: UUID
     track_version_id: UUID
     media_asset_id: UUID
+    codec: str | None = None
+    container: str | None = None
+    bitrate_kbps: int | None = None
+    # Volume levelling to about -14 LUFS (D-AUDIO-08); null when not measured (older audio).
+    gain_db: float | None = None
+    legacy_delivery: bool = False
+    alternates: list[AudioAlternateOut] = []
 
 
 class PlayableTrackOut(BaseModel):
@@ -408,9 +420,14 @@ async def track_audio(
     svc: Annotated[StreamingService, Depends(streaming_service)],
     release_id: UUID | None = Query(default=None),
     track_version_id: UUID | None = Query(default=None),
+    accept: str | None = Query(default=None, max_length=64, description="Codecs the browser can play, best first: opus,mp3"),
 ) -> AudioOut:
     minted = await svc.mint_audio(
-        ctx, track_id, release_id=release_id, track_version_id=track_version_id
+        ctx,
+        track_id,
+        release_id=release_id,
+        track_version_id=track_version_id,
+        accept=accept.split(",") if accept else None,
     )
     return AudioOut(
         url=minted.url,
@@ -418,6 +435,12 @@ async def track_audio(
         track_id=minted.track_id,
         track_version_id=minted.track_version_id,
         media_asset_id=minted.media_asset_id,
+        codec=minted.codec,
+        container=minted.container,
+        bitrate_kbps=minted.bitrate_kbps,
+        gain_db=minted.gain_db,
+        legacy_delivery=minted.legacy_delivery,
+        alternates=[AudioAlternateOut(codec=codec, url=url) for codec, url in minted.alternates],
     )
 
 
@@ -427,25 +450,29 @@ async def playback_media(
     svc: Annotated[StreamingService, Depends(streaming_service)],
     range_header: Annotated[str | None, Header(alias="Range")] = None,
 ) -> Response:
-    data, mime = await svc.load_media_bytes(token)
-    media_type = mime or "application/octet-stream"
-    size = len(data)
-    # Access is checked above for every request, ranged or not; ranges only let players seek.
+    # Access is re-checked on every request, ranged or not; ranges only let players seek.
+    asset = await svc.open_media(token)
+    storage = svc.delivery.storage
+    size = await storage.stat(asset.object_key)
+    if size is None:
+        return JSONResponse(status_code=409, content={"code": "TRACK_AUDIO_UNAVAILABLE", "title": "Audio is not available"})
+    media_type = asset.mime or "application/octet-stream"
+    headers = {"Accept-Ranges": "bytes", "Cache-Control": "private, no-store"}
     try:
         span = parse_byte_range(range_header, size)
     except RangeNotSatisfiable:
-        return Response(
-            status_code=416,
-            headers={"Content-Range": f"bytes */{size}", "Accept-Ranges": "bytes"},
-        )
-    if span is None:
-        return Response(content=data, media_type=media_type, headers={"Accept-Ranges": "bytes"})
-    start, end = span
-    return Response(
-        content=data[start : end + 1],
-        status_code=206,
+        return Response(status_code=416, headers={**headers, "Content-Range": f"bytes */{size}"})
+    start, end = (0, size - 1) if span is None else span
+    # Bytes stream from storage in bounded chunks: memory does not grow with file size (fix F7).
+    return StreamingResponse(
+        storage.read_range(asset.object_key, start, end),
+        status_code=200 if span is None else 206,
         media_type=media_type,
-        headers={"Content-Range": f"bytes {start}-{end}/{size}", "Accept-Ranges": "bytes"},
+        headers={
+            **headers,
+            "Content-Length": str(end - start + 1),
+            **({} if span is None else {"Content-Range": f"bytes {start}-{end}/{size}"}),
+        },
     )
 
 

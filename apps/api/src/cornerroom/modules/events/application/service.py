@@ -30,7 +30,7 @@ from cornerroom.kernel.events import (
     VENUE_BOOKING_CHANGED,
     DomainEvent,
 )
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.events.domain.lifecycle import (
@@ -418,8 +418,7 @@ class EventService:
             )
         stmt = stmt.order_by(Event.created_at.desc(), Event.id.desc())
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Event.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Event.created_at, Event.id, cursor))
         stmt = stmt.limit(page + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None
@@ -736,8 +735,7 @@ class EventService:
             .order_by(EventMilestone.occurred_at.desc(), EventMilestone.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(EventMilestone.occurred_at < data["t"])
+            stmt = stmt.where(keyset_before(EventMilestone.occurred_at, EventMilestone.id, cursor))
         stmt = stmt.limit(page + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None
@@ -821,8 +819,7 @@ class EventService:
         )
         stmt = stmt.order_by(Venue.created_at.desc(), Venue.id.desc())
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Venue.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Venue.created_at, Venue.id, cursor))
         stmt = stmt.limit(page + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None

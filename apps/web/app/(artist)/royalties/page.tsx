@@ -58,7 +58,7 @@ function Statements() {
 
 export default function RoyaltiesPage() {
   return (
-    <AccountPage eyebrow="Artist" title="Royalties" what="your royalty statements">
+    <AccountPage audience="artist" eyebrow="Artist" title="Royalties" what="your royalty statements">
       <Statements />
     </AccountPage>
   );

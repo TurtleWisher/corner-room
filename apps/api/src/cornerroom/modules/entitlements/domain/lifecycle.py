@@ -10,7 +10,8 @@ ENTITLEMENT_TYPES = frozenset(
     {"PURCHASE", "SUBSCRIPTION", "ADMIN_GRANT", "PROMOTIONAL_GRANT"}
 )
 ENTITLEMENT_STATUSES = frozenset({"ACTIVE", "REVOKED", "EXPIRED"})
-ENTITLEMENT_SCOPES = frozenset({"TRACK", "CATALOG"})
+# RELEASE: an album/EP purchase; it covers the tracks on that release now (D-AUDIO-12).
+ENTITLEMENT_SCOPES = frozenset({"TRACK", "CATALOG", "RELEASE"})
 
 TRANSITIONS: dict[tuple[str, str], str] = {
     ("ACTIVE", "REVOKED"): "revoke",
@@ -38,6 +39,7 @@ def is_covering(
     track_id,
     expires_at: datetime | None,
     now: datetime,
+    release_ids: set | None = None,
 ) -> bool:
     if status != "ACTIVE":
         return False
@@ -45,4 +47,6 @@ def is_covering(
         return False
     if scope == "CATALOG":
         return True
+    if scope == "RELEASE":
+        return release_ids is not None and ref_id in release_ids
     return ref_id == track_id

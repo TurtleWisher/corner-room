@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -23,7 +24,7 @@ from cornerroom.kernel.events import (
     USER_SUSPENDED,
     DomainEvent,
 )
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.modules.artists.domain.models import Artist
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
@@ -48,7 +49,21 @@ from cornerroom.modules.streaming.domain.models import (
     Playlist,
     PlaylistItem,
 )
-from cornerroom.modules.streaming.domain.playability import CatalogSnapshot, Playability, evaluate_playability
+from cornerroom.modules.streaming.domain.playability import (
+    PLAYABLE_TRACK_STATUS,
+    CatalogSnapshot,
+    Playability,
+    evaluate_playability,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryChoice:
+    asset: MediaAsset
+    codec: str | None
+    container: str | None
+    bitrate_kbps: int | None
+    legacy: bool
 
 
 class StreamingService:
@@ -137,6 +152,24 @@ class StreamingService:
             release_track_present = rt is not None
             release = await self.session.get(Release, release_id)
             release_status = None if release is None or release.deleted_at is not None else release.status
+        media_status = None if asset is None or asset.deleted_at is not None else asset.status
+        if asset is not None and asset.deleted_at is None and asset.purpose == "AUDIO_MASTER" and version is not None:
+            # A master never streams; once accepted by the checks it is deliverable through its
+            # verified playback copies (design 8), so it counts as ready only when one exists.
+            from cornerroom.modules.music.domain.models import TrackRendition
+
+            copy = (
+                await self.session.execute(
+                    select(TrackRendition.id)
+                    .where(
+                        TrackRendition.track_version_id == version.id,
+                        TrackRendition.status == "READY",
+                        TrackRendition.purpose == "PLAYBACK",
+                    )
+                    .limit(1)
+                )
+            ).first()
+            media_status = "READY" if asset.status == "ACCEPTED" and copy is not None else "NOT_PREPARED"
         snapshot = CatalogSnapshot(
             track_id=None if track is None or track.deleted_at is not None else track.id,
             track_status=None if track is None or track.deleted_at is not None else track.status,
@@ -146,7 +179,7 @@ class StreamingService:
             version_is_current=bool(version is not None and version.is_current),
             version_deleted=version is None or version.deleted_at is not None,
             media_asset_id=None if asset is None or asset.deleted_at is not None else asset.id,
-            media_status=None if asset is None or asset.deleted_at is not None else asset.status,
+            media_status=media_status,
             media_class=None if asset is None or asset.deleted_at is not None else asset.storage_class,
             media_deleted=asset is None or asset.deleted_at is not None,
             release_id=release_id,
@@ -189,10 +222,20 @@ class StreamingService:
         release_id: UUID | None = None,
         track_version_id: UUID | None = None,
     ) -> Playability:
-        snapshot, _track, version, duration = await self._snapshot(
+        snapshot, track, version, duration = await self._snapshot(
             track_id, release_id=release_id, track_version_id=track_version_id
         )
         playability = evaluate_playability(snapshot)
+        # D-AUDIO-14: after an ordinary takedown, people who bought the song (or a release it is on)
+        # keep it; everything else about it must still be in order. A legal takedown removes it for
+        # everyone.
+        if (
+            playability.reason == "TRACK_TAKEN_DOWN"
+            and track is not None
+            and track.takedown_kind != "LEGAL"
+            and await self.entitlements.owns_by_purchase(ctx.user_id, track_id)
+        ):
+            playability = evaluate_playability(replace(snapshot, track_status=PLAYABLE_TRACK_STATUS))
         return Playability(
             catalog_playable=playability.catalog_playable,
             audio_deliverable=playability.audio_deliverable,
@@ -415,6 +458,7 @@ class StreamingService:
         *,
         release_id: UUID | None = None,
         track_version_id: UUID | None = None,
+        accept: list[str] | None = None,
     ) -> SignedAudioUrl:
         playability = await self.availability(
             ctx, track_id, release_id=release_id, track_version_id=track_version_id
@@ -423,34 +467,110 @@ class StreamingService:
         await self._require_entitlement(ctx.user_id, track_id)
         if playability.media_asset_id is None or playability.track_version_id is None:
             raise AppError("TRACK_AUDIO_UNAVAILABLE", "Audio is not available", 409)
-        asset = await self.session.get(MediaAsset, playability.media_asset_id)
-        if asset is None or asset.deleted_at is not None:
-            raise AppError("TRACK_AUDIO_UNAVAILABLE", "Audio is not available", 409)
-        return self.delivery.mint(
-            user_id=ctx.user_id,
-            track_id=track_id,
-            track_version_id=playability.track_version_id,
-            media_asset_id=asset.id,
-            object_key=asset.object_key,
-            now=self.clock.now(),
+        choices = await self._delivery_choices(playability.track_version_id, playability.media_asset_id, accept)
+        gain = await self._gain_for_master(playability.media_asset_id)
+        minted = [
+            (
+                choice,
+                self.delivery.mint(
+                    user_id=ctx.user_id,
+                    track_id=track_id,
+                    track_version_id=playability.track_version_id,
+                    media_asset_id=choice.asset.id,
+                    object_key=choice.asset.object_key,
+                    now=self.clock.now(),
+                ),
+            )
+            for choice in choices
+        ]
+        first_choice, first = minted[0]
+        return replace(
+            first,
+            codec=first_choice.codec,
+            container=first_choice.container,
+            bitrate_kbps=first_choice.bitrate_kbps,
+            gain_db=gain,
+            legacy_delivery=first_choice.legacy,
+            alternates=tuple((c.codec or "unknown", m.url) for c, m in minted[1:]),
         )
 
-    async def load_media_bytes(self, token: str) -> tuple[bytes, str]:
+    async def _delivery_choices(
+        self, version_id: UUID, master_asset_id: UUID, accept: list[str] | None
+    ) -> list[DeliveryChoice]:
+        """Verified playback copies of this version, best match for the browser first.
+
+        Masters never stream. Versions from before the audio pipeline (demo audio) have no copies;
+        they are served as stored outside production only."""
+        from cornerroom.modules.music.domain.models import TrackRendition
+
+        rows = (
+            await self.session.execute(
+                select(TrackRendition, MediaAsset)
+                .join(MediaAsset, MediaAsset.id == TrackRendition.media_asset_id)
+                .where(
+                    TrackRendition.track_version_id == version_id,
+                    TrackRendition.status == "READY",
+                    # Download copies (lossless FLAC) are never streamed.
+                    TrackRendition.purpose == "PLAYBACK",
+                    MediaAsset.deleted_at.is_(None),
+                )
+            )
+        ).all()
+        if rows:
+            order = [c.strip().lower() for c in (accept or ["mp3", "opus"]) if c.strip()]
+            choices = [
+                DeliveryChoice(asset, rendition.codec, rendition.container, rendition.bitrate_kbps, False)
+                for rendition, asset in rows
+            ]
+            rank = {codec: i for i, codec in enumerate(order)}
+            choices.sort(key=lambda c: rank.get(c.codec or "", len(order)))
+            return choices
+        master = await self.session.get(MediaAsset, master_asset_id)
+        if master is None or master.deleted_at is not None:
+            raise AppError("TRACK_AUDIO_UNAVAILABLE", "Audio is not available", 409)
+        if master.purpose == "AUDIO_MASTER" or self.settings.is_production:
+            raise AppError(
+                "AUDIO_NOT_PREPARED",
+                "This song's playback copies aren't ready yet",
+                409,
+                "Masters are never streamed; playback uses verified copies",
+            )
+        return [DeliveryChoice(master, None, None, None, True)]
+
+    async def _gain_for_master(self, master_asset_id: UUID) -> float | None:
+        from cornerroom.modules.documents.domain.models import MediaInspection
+        from cornerroom.modules.documents.domain.qc import playback_gain_db
+
+        row = (
+            await self.session.execute(
+                select(MediaInspection)
+                .where(MediaInspection.media_asset_id == master_asset_id)
+                .order_by(MediaInspection.inspected_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            return None
+        return playback_gain_db(row.integrated_lufs, row.true_peak_dbtp)
+
+    async def open_media(self, token: str) -> MediaAsset:
+        """Re-check access for this request and return the exact asset the token names."""
         payload = self.delivery.parse_token(token)
         track_id = UUID(str(payload["tid"]))
         version_id = UUID(str(payload["vid"]))
+        asset_id = UUID(str(payload["aid"]))
         user_id = UUID(str(payload["sub"]))
         ctx = AuthContext(user_id=user_id, request_id="audio-delivery")
         playability = await self.availability(ctx, track_id, track_version_id=version_id)
         self._playability_error(playability, require_audio=True)
         await self._require_entitlement(user_id, track_id)
-        if playability.media_asset_id is None:
+        if playability.media_asset_id is None or playability.track_version_id is None:
             raise AppError("TRACK_AUDIO_UNAVAILABLE", "Audio is not available", 409)
-        asset = await self.session.get(MediaAsset, playability.media_asset_id)
-        if asset is None or asset.deleted_at is not None:
-            raise AppError("TRACK_AUDIO_UNAVAILABLE", "Audio is not available", 409)
-        data = await self.delivery.read_bytes(asset.object_key)
-        return data, asset.mime
+        choices = await self._delivery_choices(playability.track_version_id, playability.media_asset_id, None)
+        for choice in choices:
+            if choice.asset.id == asset_id:
+                return choice.asset
+        raise AppError("TRACK_AUDIO_UNAVAILABLE", "Audio is not available", 409)
 
     async def list_playable_tracks(
         self,
@@ -466,11 +586,7 @@ class StreamingService:
             .order_by(Track.created_at.desc(), Track.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(
-                (Track.created_at < datetime.fromisoformat(data["t"]))
-                | ((Track.created_at == datetime.fromisoformat(data["t"])) & (Track.id < UUID(data["id"])))
-            )
+            stmt = stmt.where(keyset_before(Track.created_at, Track.id, cursor))
         rows = list((await self.session.execute(stmt.limit(size + 1))).scalars())
         items: list[tuple[Track, Playability]] = []
         for track in rows[:size]:
@@ -571,14 +687,7 @@ class StreamingService:
             .order_by(LibraryItem.created_at.desc(), LibraryItem.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(
-                (LibraryItem.created_at < datetime.fromisoformat(data["t"]))
-                | (
-                    (LibraryItem.created_at == datetime.fromisoformat(data["t"]))
-                    & (LibraryItem.id < UUID(data["id"]))
-                )
-            )
+            stmt = stmt.where(keyset_before(LibraryItem.created_at, LibraryItem.id, cursor))
         rows = list((await self.session.execute(stmt.limit(size + 1))).scalars())
         next_cursor = None
         if len(rows) > size:
@@ -678,11 +787,7 @@ class StreamingService:
             .order_by(Playlist.created_at.desc(), Playlist.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(
-                (Playlist.created_at < datetime.fromisoformat(data["t"]))
-                | ((Playlist.created_at == datetime.fromisoformat(data["t"])) & (Playlist.id < UUID(data["id"])))
-            )
+            stmt = stmt.where(keyset_before(Playlist.created_at, Playlist.id, cursor))
         rows = list((await self.session.execute(stmt.limit(size + 1))).scalars())
         next_cursor = None
         if len(rows) > size:
@@ -798,14 +903,7 @@ class StreamingService:
             .order_by(PlaybackEvent.started_at.desc(), PlaybackEvent.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(
-                (PlaybackEvent.started_at < datetime.fromisoformat(data["t"]))
-                | (
-                    (PlaybackEvent.started_at == datetime.fromisoformat(data["t"]))
-                    & (PlaybackEvent.id < UUID(data["id"]))
-                )
-            )
+            stmt = stmt.where(keyset_before(PlaybackEvent.started_at, PlaybackEvent.id, cursor))
         rows = list((await self.session.execute(stmt.limit(size + 1))).scalars())
         next_cursor = None
         if len(rows) > size:

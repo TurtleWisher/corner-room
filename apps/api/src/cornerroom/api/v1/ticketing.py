@@ -127,6 +127,9 @@ class OrderItemOut(BaseModel):
     currency_code: str
     ticket_type_name: str | None = None
     event_id: UUID | None = None
+    # Album / EP purchases (D-AUDIO-12): what the receipt names.
+    release_title: str | None = None
+    release_type: str | None = None
 
 
 class OrderOut(BaseModel):
@@ -346,10 +349,8 @@ async def list_event_ticket_types(
     rows, next_cursor, public_only = await svc.list_ticket_types(
         ctx, event_id, cursor=cursor, limit=limit
     )
-    items = []
-    for row in rows:
-        remaining = await svc.remaining_for(row.id)
-        items.append(_type_out(row, remaining, staff=not public_only))
+    remaining = await svc.remaining_for_many([row.id for row in rows])
+    items = [_type_out(row, remaining[row.id], staff=not public_only) for row in rows]
     return TicketTypePage(items=items, next_cursor=next_cursor)
 
 
@@ -456,11 +457,8 @@ async def my_orders(
     limit: int = Query(default=50, ge=1, le=100),
 ) -> OrderPage:
     rows, next_cursor = await svc.list_my_orders(ctx, cursor=cursor, limit=limit)
-    items = []
-    for row in rows:
-        payment = await svc.payment_for_order(row.id)
-        items.append(_order_out(row, payment))
-    return OrderPage(items=items, next_cursor=next_cursor)
+    payments = await svc.payments_for_orders([row.id for row in rows])
+    return OrderPage(items=[_order_out(row, payments.get(row.id)) for row in rows], next_cursor=next_cursor)
 
 
 @router.get("/orders/{order_id}", response_model=OrderOut)
@@ -483,6 +481,10 @@ async def payment_callback(
     payload: dict[str, Any] = body.model_dump(mode="json")
     order, payment = await svc.apply_provider_callback(payload, signature)
     if order is None:
+        # A failed payment is a real outcome: keep it (payment FAILED, PaymentFailed event, the
+        # provider event for idempotency, a renewal's PAST_DUE) before answering 409. Raising
+        # alone would roll all of it back.
+        await svc.session.commit()
         raise AppError("PAYMENT_NOT_CAPTURED", "Payment was not captured", 409)
     return _order_out(order, payment)
 

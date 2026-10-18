@@ -67,7 +67,7 @@ function Aggregates({ artistId }: { artistId: string }) {
 export default function ArtistAnalyticsPage() {
   const { id } = useParams<{ id: string }>();
   return (
-    <AccountPage eyebrow="Artist" title="Your plays" what="these plays">
+    <AccountPage audience="artist" eyebrow="Artist" title="Your plays" what="these plays">
       <Aggregates artistId={id} />
     </AccountPage>
   );

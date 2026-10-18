@@ -111,10 +111,18 @@ class FinanceRecognizedRevenue:
             stmt = stmt.where(Revenue.organization_id == self.organization_id)
         rows = list((await self.session.execute(stmt)).scalars())
         if rows:
+            # Finance is authoritative for the amount. The pool's funding link points at the
+            # royalties intake mirror that record() writes beside it; a Finance Revenue id here
+            # broke the foreign key, so pools funded this way could never be frozen.
             total = sum(row.amount_minor for row in rows)
-            first = rows[0]
+            mirror = await self.intake.amount_for(
+                source_type=source_type,
+                period_start=period_start,
+                period_end=period_end,
+                currency_code=code,
+            )
             return RecognizedRevenueFact(
-                intake_id=first.id,
+                intake_id=mirror.intake_id if mirror is not None else None,
                 source_type=source_type,
                 period_start=period_start,
                 period_end=period_end,

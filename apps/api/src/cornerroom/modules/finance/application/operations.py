@@ -15,7 +15,7 @@ from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import ADJUSTMENT_POSTED, DomainEvent, EXPENSE_RECOGNIZED, INVOICE_ISSUED
 from cornerroom.kernel.money import Money
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.finance.application.ledger import LedgerLineInput, LedgerService
@@ -82,8 +82,7 @@ class FinanceOpsService:
             .order_by(FinanceTransaction.occurred_at.desc(), FinanceTransaction.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(FinanceTransaction.occurred_at < data["t"])
+            stmt = stmt.where(keyset_before(FinanceTransaction.occurred_at, FinanceTransaction.id, cursor))
         size = clamp_limit(limit)
         rows = list((await self.session.execute(stmt.limit(size + 1))).scalars().all())
         next_cursor = None

@@ -41,7 +41,7 @@ export default function StatementPage() {
         </Link>
         {status !== "authenticated" && status !== "loading" ? (
           <div className="mt-6">
-            <ButtonLink href={`/login?next=${encodeURIComponent(`/royalties/statements/${id}`)}`}>Sign in to see this statement</ButtonLink>
+            <ButtonLink href={`/studio/sign-in?next=${encodeURIComponent(`/royalties/statements/${id}`)}`}>Sign in to see this statement</ButtonLink>
           </div>
         ) : data.status === "error" ? (
           <div className="mt-6">

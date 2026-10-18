@@ -33,6 +33,11 @@ export type ApplicationRecord = {
   artist_id: string | null;
   status: string;
   version?: number;
+  stage_name?: string | null;
+  bio?: string | null;
+  /** The artist profile's own state: ACTIVE means the artist can publish from Studio. */
+  artist_status?: string | null;
+  created_at?: string | null;
 };
 
 export type BandMemberRecord = {
@@ -108,6 +113,8 @@ export async function transitionArtist(id: string, action: string, version?: num
 export async function submitArtistApplication(body: {
   stage_name: string;
   bio?: string;
+  /** From a label's join link: the application goes to that label. */
+  join_code?: string;
 }): Promise<ApplicationRecord> {
   return apiFetch<ApplicationRecord>("/api/v1/artist-applications", {
     method: "POST",
@@ -115,6 +122,54 @@ export async function submitArtistApplication(body: {
     body: JSON.stringify(body),
     retry: false,
   });
+}
+
+/** A label's shared link for artists to join (owner, 2026-10-17). */
+export type JoinLinkRecord = {
+  id: string;
+  code: string;
+  label: string;
+  status: string;
+  expires_at: string | null;
+  max_uses: number | null;
+  uses: number;
+  /** Active, not ended and not full. */
+  usable: boolean;
+  created_at: string;
+  disabled_at: string | null;
+};
+
+export async function fetchJoinLinks(): Promise<JoinLinkRecord[]> {
+  return apiFetch<JoinLinkRecord[]>("/api/v1/artist-join-links", { retry: false });
+}
+
+export async function createJoinLink(body: { label: string; expires_at?: string | null; max_uses?: number | null }): Promise<JoinLinkRecord> {
+  return apiFetch<JoinLinkRecord>("/api/v1/artist-join-links", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    retry: false,
+  });
+}
+
+export async function disableJoinLink(id: string): Promise<JoinLinkRecord> {
+  return apiFetch<JoinLinkRecord>(`/api/v1/artist-join-links/${id}/disable`, { method: "POST", retry: false });
+}
+
+/** Public: which label a join link is for. 404 JOIN_LINK_INVALID when it is off, ended or full. */
+export async function checkJoinCode(code: string): Promise<{ organization_name: string }> {
+  return apiFetch<{ organization_name: string }>("/api/v1/artist-join-links/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+    retry: false,
+    skipAuth: true,
+  });
+}
+
+/** The signed-in person's own applications, newest first. */
+export async function fetchMyArtistApplications(): Promise<Page<ApplicationRecord>> {
+  return apiFetch<Page<ApplicationRecord>>("/api/v1/artist-applications?mine=true", { retry: false });
 }
 
 export async function fetchArtistApplications(): Promise<Page<ApplicationRecord>> {

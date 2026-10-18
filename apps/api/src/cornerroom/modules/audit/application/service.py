@@ -9,7 +9,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.kernel.auth_context import AuthContext
-from cornerroom.kernel.pagination import decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import encode_cursor, keyset_before
 from cornerroom.modules.audit.domain.models import AuditLog
 
 FORBIDDEN_KEYS = {
@@ -136,8 +136,7 @@ class AuditService:
         if entity_id:
             stmt = stmt.where(AuditLog.entity_id == entity_id)
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(AuditLog.occurred_at < data["t"])
+            stmt = stmt.where(keyset_before(AuditLog.occurred_at, AuditLog.id, cursor))
         stmt = stmt.limit(limit + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None

@@ -9,7 +9,7 @@ import { ButtonLink } from "@/components/ds";
 import { Drawer } from "@/components/ds/dialog";
 import { NavIcon } from "@/components/shell/nav-icons";
 import { useWorkspace } from "@/components/workspace-provider";
-import { activeHref, initials, menuSections, showStaffEntry, staffHomeHref } from "@/lib/nav-view";
+import { activeHref, initials, menuSections, navFlagsFor, showStaffEntry, staffHomeHref } from "@/lib/nav-view";
 import { cn } from "@/lib/utils";
 
 /** The red initials square that opens the account menu. */
@@ -41,7 +41,7 @@ export function AccountMenu({ open, onClose }: { open: boolean; onClose: () => v
   const { organizations } = useWorkspace();
   const pathname = usePathname();
   const signedIn = status === "authenticated" && !!user;
-  const sections = menuSections(signedIn);
+  const sections = menuSections(signedIn, navFlagsFor(user));
   const active = activeHref(pathname, sections.flatMap((s) => s.items));
   const title = signedIn ? user.display_name || user.email || "Your account" : "Menu";
 

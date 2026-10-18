@@ -128,7 +128,7 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
                   <AvatarButton onClick={() => setMenuOpen(true)} className="ml-1" />
                 </>
               ) : status === "loading" ? null : (
-                <ButtonLink href="/login" size="sm">
+                <ButtonLink href="/staff/sign-in" size="sm">
                   Sign in
                 </ButtonLink>
               )}

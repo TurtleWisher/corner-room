@@ -125,13 +125,9 @@ export function RosterPage({ kind, title, lede, loadPublic, loadWorkspace, creat
       <LitSurface as="section" theme="ember" aria-labelledby="roster-title">
         <div className="mx-auto max-w-[90rem] px-4 pb-10 pt-12 md:px-6 md:pt-16">
           <div id="roster-title">
-            <PageIntro eyebrow="Label" title={title} lede={lede}>
-              {kind === "artist" ? (
-                <Link href="/artists/apply" className="cr-focus text-sm font-semibold text-highlight hover:underline">
-                  Are you an artist? Apply
-                </Link>
-              ) : null}
-            </PageIntro>
+            {/* Owner, 2026-10-17: applying lives in the signed-in profile menu, and artists join
+                through their label's link; the public roster does not advertise it. */}
+            <PageIntro eyebrow="Label" title={title} lede={lede} />
           </div>
         </div>
       </LitSurface>

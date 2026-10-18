@@ -8,7 +8,9 @@ import {
   activeHref,
   initials,
   isActivePath,
+  filterNavForUser,
   menuSections,
+  navFlagsFor,
   showStaffEntry,
   staffBreadcrumb,
   staffNavSections,
@@ -19,13 +21,13 @@ const hrefs = (sections: { items: { href: string }[] }[]) => sections.flatMap((s
 
 describe("staffNavSections", () => {
   it("keeps the always-visible staff destinations without permissions", () => {
-    expect(hrefs(staffNavSections([]))).toEqual(["/staff/events", "/staff/venues", "/staff/commerce", "/staff/royalties", "/staff/campaigns"]);
-    expect(staffNavSections(undefined).map((s) => s.label)).toEqual(["Live", "Money", "Marketing"]);
+    expect(hrefs(staffNavSections([]))).toEqual(["/staff/events", "/staff/venues", "/staff/catalog", "/staff/catalog/artists", "/staff/catalog/processing", "/staff/commerce", "/staff/royalties", "/staff/campaigns"]);
+    expect(staffNavSections(undefined).map((s) => s.label)).toEqual(["Live", "Catalog", "Money", "Marketing"]);
   });
 
   it("adds gated destinations with the same flags as before", () => {
     const sections = staffNavSections(ALL);
-    expect(sections.map((s) => s.label)).toEqual(["Live", "Money", "Marketing", "Insight", "Admin"]);
+    expect(sections.map((s) => s.label)).toEqual(["Live", "Catalog", "Money", "Marketing", "Insight", "Admin"]);
     expect(hrefs(sections)).toEqual(
       expect.arrayContaining(["/staff/finance", "/staff/analytics", "/staff/ops", "/staff/audit", "/staff/users", "/staff/organizations"]),
     );
@@ -43,7 +45,16 @@ describe("staffNavSections", () => {
 describe("menuSections", () => {
   it("adds the You section only when signed in", () => {
     expect(menuSections(false).map((s) => s.label)).toEqual(["Discover", "Listen"]);
-    expect(menuSections(true).map((s) => s.label)).toEqual(["Discover", "Listen", "You"]);
+    expect(menuSections(true).map((s) => s.label)).toEqual(["Discover", "Listen", "You", "Artist"]);
+    // A fan: no artist or staff places, only the way to apply.
+    const fan = menuSections(true);
+    expect(fan.find((x) => x.label === "You")?.items.map((i) => i.href)).not.toContain("/organizations");
+    expect(fan.find((x) => x.label === "You")?.items.map((i) => i.href)).not.toContain("/royalties");
+    expect(fan.at(-1)?.items.map((i) => i.href)).toEqual(["/artists/apply"]);
+    // An artist who is also staff: Studio and royalties, workspaces, no apply.
+    const both = menuSections(true, { isArtist: true, hasWorkspace: true });
+    expect(both.find((x) => x.label === "You")?.items.map((i) => i.href)).toContain("/organizations");
+    expect(both.at(-1)?.items.map((i) => i.href)).toEqual(["/studio", "/royalties"]);
   });
 });
 
@@ -86,5 +97,13 @@ describe("every pre-Stage 5 destination is still linked", () => {
       "/staff/ops", "/staff/audit", "/staff/users", "/staff/organizations", "/account",
     ];
     for (const href of old) expect(linked).toContain(href);
+  });
+});
+
+describe("filterNavForUser", () => {
+  it("reads the flags from /me and treats missing as no", () => {
+    expect(navFlagsFor(null)).toEqual({ isArtist: false, hasWorkspace: false });
+    expect(navFlagsFor({ is_artist: true })).toEqual({ isArtist: true, hasWorkspace: false });
+    expect(filterNavForUser([{ href: "/studio", label: "Studio" }, { href: "/account", label: "Account" }], {})).toEqual([{ href: "/account", label: "Account" }]);
   });
 });

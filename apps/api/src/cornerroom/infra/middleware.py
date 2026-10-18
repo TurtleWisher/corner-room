@@ -9,6 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from cornerroom.infra.logging import redact_path
 from cornerroom.kernel.correlation import resolve_correlation_id
 
 log = structlog.get_logger("http")
@@ -30,7 +31,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             request_id=request_id,
             correlation_id=correlation_id,
             method=request.method,
-            path=request.url.path,
+            path=redact_path(request.url.path),
         )
         started = time.perf_counter()
         try:

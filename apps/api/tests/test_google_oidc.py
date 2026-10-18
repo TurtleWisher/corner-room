@@ -187,7 +187,9 @@ def test_0016_is_the_sole_head_and_purely_additive() -> None:
 
     api_root = Path(__file__).resolve().parents[1]
     script = ScriptDirectory.from_config(Config(str(api_root / "alembic.ini")))
-    assert script.get_heads() == ["0016_external_identities"]
+    # Head moved on with the audio platform (0017+); 0016 stays in the linear chain.
+    assert len(script.get_heads()) == 1
+    assert "0016_external_identities" in {rev.revision for rev in script.walk_revisions()}
     assert script.get_revision("0016_external_identities").down_revision == "0015_database_integrity"
     text = (api_root / "alembic" / "versions" / "0016_external_identities.py").read_text(encoding="utf-8")
     upgrade = text.split("def upgrade", 1)[1].split("def downgrade", 1)[0].upper()

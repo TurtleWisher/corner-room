@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import type { EntitlementRecord, OfferRecord } from "@/lib/api";
-import { catalogOffer, hasCatalogAccess, offerForTrack, ownsTrack, trackBuyState } from "@/lib/ownership";
+import {
+  catalogOffer,
+  hasCatalogAccess,
+  offerForRelease,
+  offerForTrack,
+  ownsRelease,
+  ownsTrack,
+  releaseBuyLabel,
+  releaseBuyState,
+  trackBuyState,
+} from "@/lib/ownership";
 
 const ent = (scope: string, ref_id: string, status = "ACTIVE"): EntitlementRecord => ({
   id: `${scope}-${ref_id}`,
@@ -46,5 +56,36 @@ describe("ownership", () => {
     expect(trackBuyState([ent("CATALOG", "s")], offers, "t1")).toEqual({ kind: "owned", via: "catalog" });
     expect(trackBuyState([], offers, "t1")).toMatchObject({ kind: "buy", offer: { id: "a" } });
     expect(trackBuyState([], offers, "t2")).toEqual({ kind: "not_for_sale" });
+  });
+
+  it("counts a bought release as owning every track the page knows is on it", () => {
+    const owned = [ent("RELEASE", "r1")];
+    expect(ownsRelease(owned, "r1")).toBe(true);
+    expect(ownsRelease([ent("RELEASE", "r1", "REVOKED")], "r1")).toBe(false);
+    expect(ownsTrack(owned, "t1", ["r1"])).toBe(true);
+    expect(ownsTrack(owned, "t1")).toBe(false);
+    expect(trackBuyState(owned, [offer("a", "TRACK", "t1")], "t1", ["r1"])).toEqual({ kind: "owned", via: "release" });
+    // Catalog access lets you listen but is not owning the release.
+    expect(ownsRelease([ent("CATALOG", "s")], "r1")).toBe(false);
+  });
+
+  it("offers the owners' price only to fans who own part of the release", () => {
+    const everyone = offer("all", "RELEASE", "r1");
+    const owners = { ...offer("own", "RELEASE", "r1"), audience: "OWNS_PART_OF_RELEASE" };
+    const offers = [owners, everyone, offer("other", "RELEASE", "r2")];
+    expect(offerForRelease([], offers, "r1", ["t1", "t2"])?.id).toBe("all");
+    expect(offerForRelease([ent("TRACK", "t2")], offers, "r1", ["t1", "t2"])?.id).toBe("own");
+    expect(offerForRelease([ent("TRACK", "t9")], offers, "r1", ["t1", "t2"])?.id).toBe("all");
+    expect(offerForRelease([ent("TRACK", "t1")], [owners], "r1", ["t1"])?.id).toBe("own");
+    expect(offerForRelease([], [owners], "r1", ["t1"])).toBeNull();
+    expect(releaseBuyState([ent("RELEASE", "r1")], offers, "r1", [])).toEqual({ kind: "owned", via: "release" });
+    expect(releaseBuyState([], offers, "r3", [])).toEqual({ kind: "not_for_sale" });
+    expect(releaseBuyState([], offers, "r1", [])).toMatchObject({ kind: "buy", offer: { id: "all" } });
+  });
+
+  it("names the release buy button", () => {
+    expect(releaseBuyLabel("ALBUM", {})).toBe("Buy the album");
+    expect(releaseBuyLabel("EP", { audience: "OWNS_PART_OF_RELEASE" })).toBe("Complete the EP");
+    expect(releaseBuyLabel(null, { audience: "EVERYONE" })).toBe("Buy the release");
   });
 });

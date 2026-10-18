@@ -72,6 +72,8 @@ class OfferOut(BaseModel):
     currency_code: str
     status: str
     version: int | None = None
+    # EVERYONE, or OWNS_PART_OF_RELEASE for the price fans who own some songs pay (D-AUDIO-11).
+    audience: str = "EVERYONE"
 
 
 class OfferPage(BaseModel):
@@ -140,6 +142,7 @@ def _offer_out(row: Offer, product: Product | None = None, *, staff: bool) -> Of
         currency_code=row.currency_code,
         status=row.status,
         version=row.version if staff else None,
+        audience=getattr(row, "audience", None) or "EVERYONE",
     )
 
 
@@ -335,3 +338,49 @@ async def sandbox_complete_refund(
     row = await payments.complete_sandbox_refund(ctx, refund_id)
     await checkout.apply_completed_refund(ctx, row)
     return _refund_out(row)
+
+
+# --- Price proposals from the artist Studio (D-AUDIO-11, D-AUDIO-15) -----------------------------
+
+
+class ProposalQueueOut(BaseModel):
+    id: UUID
+    release_id: UUID
+    release_title: str
+    release_status: str
+    subject_type: str
+    subject_id: UUID
+    subject_title: str
+    audience: str
+    amount_minor: int
+    currency_code: str
+    note: str | None
+    status: str
+    decision_note: str | None
+    created_at: datetime
+
+
+class ProposalDecisionIn(BaseModel):
+    decision: str = Field(pattern="^(accept|counter)$")
+    note: str | None = Field(default=None, max_length=500)
+
+
+@router.get("/offer-proposals", response_model=list[ProposalQueueOut])
+async def list_offer_proposals(
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[CatalogCommerceService, Depends(catalog_commerce_service)],
+    status: str | None = Query(default="PROPOSED", pattern="^(PROPOSED|ACCEPTED|COUNTERED|WITHDRAWN)$"),
+) -> list[ProposalQueueOut]:
+    return [ProposalQueueOut(**row) for row in await svc.list_proposals(ctx, status=status)]
+
+
+@router.post("/offer-proposals/{proposal_id}/decision", response_model=ProposalQueueOut)
+async def decide_offer_proposal(
+    proposal_id: UUID,
+    body: ProposalDecisionIn,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[CatalogCommerceService, Depends(catalog_commerce_service)],
+) -> ProposalQueueOut:
+    proposal = await svc.decide_proposal(ctx, proposal_id, decision=body.decision, note=body.note)
+    rows = await svc.list_proposals(ctx, status=None, proposal_id=proposal.id)
+    return ProposalQueueOut(**rows[0])

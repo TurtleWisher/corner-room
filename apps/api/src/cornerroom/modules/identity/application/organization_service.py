@@ -25,7 +25,7 @@ from cornerroom.kernel.events import (
     ORGANIZATION_SUSPENDED,
     DomainEvent,
 )
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.authorization.domain.models import Permission, Role, RoleAssignment, RolePermission
@@ -143,8 +143,7 @@ class OrganizationService:
             )
         stmt = stmt.order_by(Organization.created_at.desc(), Organization.id.desc())
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Organization.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Organization.created_at, Organization.id, cursor))
         stmt = stmt.limit(page + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None
@@ -320,8 +319,7 @@ class OrganizationService:
             .order_by(OrganizationMembership.created_at.desc(), OrganizationMembership.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(OrganizationMembership.created_at < data["t"])
+            stmt = stmt.where(keyset_before(OrganizationMembership.created_at, OrganizationMembership.id, cursor))
         stmt = stmt.limit(page + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None
@@ -330,6 +328,29 @@ class OrganizationService:
             next_cursor = encode_cursor(last.created_at.isoformat(), last.id)
             rows = rows[:page]
         return rows, next_cursor
+
+    async def member_details(self, user_id: UUID, org_id: UUID, memberships: list[OrganizationMembership]) -> dict[UUID, dict[str, str | None]]:
+        """Names, emails and role names for a workspace's members, for its admins only (any member
+        may list memberships, so personal details stay with the people who manage the workspace)."""
+        if not (await self.has_unscoped_permission(user_id, "org.admin") or await self.can_admin_org(user_id, org_id)):
+            return {}
+        from cornerroom.modules.authorization.domain.models import Role
+        from cornerroom.modules.identity.domain.models import CustomerProfile
+
+        out: dict[UUID, dict[str, str | None]] = {}
+        for m in memberships:
+            user = await self.session.get(User, m.user_id)
+            profile = (
+                await self.session.execute(select(CustomerProfile).where(CustomerProfile.user_id == m.user_id))
+            ).scalar_one_or_none()
+            role = await self.session.get(Role, m.role_id) if m.role_id else None
+            out[m.id] = {
+                "display_name": profile.display_name if profile else None,
+                "email": user.email if user else None,
+                "role_key": role.key if role else None,
+                "role_name": role.name if role else None,
+            }
+        return out
 
     async def add_membership(
         self,
@@ -356,6 +377,8 @@ class OrganizationService:
             )
         if status not in {"INVITED", "ACTIVE"}:
             raise AppError("VALIDATION_ERROR", "Invalid membership status", 422)
+        if role_id is not None:
+            await self.authz.assert_can_grant(ctx.user_id, role_id, organization_id)
         user = await self.session.get(User, user_id)
         if user is None or user.deleted_at is not None:
             raise NotFoundError("User not found")
@@ -410,6 +433,8 @@ class OrganizationService:
         ):
             raise NotFoundError("Membership not found")
         membership_transition_action(membership.status, status)
+        if role_id is not ... and role_id is not None:
+            await self.authz.assert_can_grant(ctx.user_id, role_id, organization_id)
         if status == "REVOKED":
             await self._assert_not_last_org_admin(organization_id, membership)
         previous = {"status": membership.status, "role_id": str(membership.role_id) if membership.role_id else None}
@@ -469,6 +494,8 @@ class OrganizationService:
                 409,
                 "Suspended or archived organizations cannot issue invitations",
             )
+        if role_id is not None:
+            await self.authz.assert_can_grant(ctx.user_id, role_id, organization_id)
         email_n = _normalize_email(email)
         invited_user = await self._get_user_by_email(email_n)
         raw = new_opaque_token()
@@ -542,8 +569,7 @@ class OrganizationService:
             .order_by(OrganizationInvitation.created_at.desc(), OrganizationInvitation.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(OrganizationInvitation.created_at < data["t"])
+            stmt = stmt.where(keyset_before(OrganizationInvitation.created_at, OrganizationInvitation.id, cursor))
         stmt = stmt.limit(page + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None
@@ -603,6 +629,28 @@ class OrganizationService:
             organization_id=organization_id,
         )
         return invitation
+
+    async def check_invitation(self, token: str) -> tuple[OrganizationInvitation, Organization, str | None]:
+        """Public, for the staff join page: which workspace and role an open invitation is for.
+        Unknown, used, revoked and expired invitations all give the same answer."""
+        from cornerroom.modules.authorization.domain.models import Role
+
+        invitation = (
+            await self.session.execute(
+                select(OrganizationInvitation).where(OrganizationInvitation.token_hash == hash_secret(token))
+            )
+        ).scalar_one_or_none()
+        now = self.clock.now()
+        if (
+            invitation is None
+            or invitation.deleted_at is not None
+            or invitation.status != "ISSUED"
+            or (invitation.expires_at is not None and invitation.expires_at <= now)
+        ):
+            raise AppError("INVITATION_INVALID", "This invitation isn't available", 404, "Ask for a new invitation")
+        org = await self.get_organization(invitation.organization_id)
+        role = await self.session.get(Role, invitation.role_id) if invitation.role_id else None
+        return invitation, org, role.name if role else None
 
     async def accept_invitation(self, ctx: AuthContext, *, token: str) -> OrganizationMembership:
         token_hash = hash_secret(token)

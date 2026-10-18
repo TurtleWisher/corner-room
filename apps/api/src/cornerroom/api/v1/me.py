@@ -16,6 +16,41 @@ from cornerroom.modules.identity.domain.models import User
 
 router = APIRouter(tags=["me"])
 
+# Artist states after approval: Studio, royalties and the artist menu apply.
+ARTIST_PROFILE_STATES = ("APPROVED", "CONTRACT_PENDING", "SIGNED", "ACTIVE", "SUSPENDED")
+
+
+async def _roles_for_menu(svc: IdentityService, user_id: UUID, permission_keys: frozenset[str] | set[str]) -> dict[str, bool]:
+    from sqlalchemy import exists, select
+
+    from cornerroom.modules.artists.domain.models import Artist, BandMember
+    from cornerroom.modules.identity.domain.models import OrganizationMembership
+
+    session = svc.session
+    is_artist = await session.scalar(
+        select(
+            exists().where(
+                Artist.claimed_user_id == user_id, Artist.deleted_at.is_(None), Artist.status.in_(ARTIST_PROFILE_STATES)
+            )
+        )
+    ) or await session.scalar(
+        select(
+            exists().where(
+                BandMember.user_id == user_id, BandMember.status == "ACTIVE", BandMember.is_admin.is_(True), BandMember.deleted_at.is_(None)
+            )
+        )
+    )
+    member = await session.scalar(
+        select(
+            exists().where(
+                OrganizationMembership.user_id == user_id,
+                OrganizationMembership.status == "ACTIVE",
+                OrganizationMembership.deleted_at.is_(None),
+            )
+        )
+    )
+    return {"is_artist": bool(is_artist), "has_workspace": bool(member) or "org.admin" in permission_keys}
+
 
 class MeOut(BaseModel):
     id: UUID
@@ -27,6 +62,10 @@ class MeOut(BaseModel):
     email_verified: bool
     security_locked: bool
     organization_id: UUID | None = None
+    # What the menus offer (UX only; every page still asks the API). An artist has an approved
+    # artist profile or runs a band; a workspace member belongs to an organization.
+    is_artist: bool = False
+    has_workspace: bool = False
 
 
 class MePatch(BaseModel):
@@ -62,6 +101,7 @@ async def get_me(
         email_verified=user.email_verified_at is not None,
         security_locked=user.security_locked_at is not None,
         organization_id=ctx.organization_id,
+        **await _roles_for_menu(svc, user.id, ctx.permission_keys),
     )
 
 
@@ -83,6 +123,7 @@ async def patch_me(
         email_verified=user.email_verified_at is not None,
         security_locked=user.security_locked_at is not None,
         organization_id=ctx.organization_id,
+        **await _roles_for_menu(svc, user.id, ctx.permission_keys),
     )
 
 

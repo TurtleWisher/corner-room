@@ -26,10 +26,12 @@ from cornerroom.kernel.events import (
     TRACK_RELEASED,
     TRACK_TAKEN_DOWN,
     TRACK_UPLOADED,
+    TRACK_VERSION_READY,
+    TRACK_VERSION_REJECTED,
     DomainEvent,
 )
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
-from cornerroom.modules.artists.domain.models import Artist, Band
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
+from cornerroom.modules.artists.domain.models import Artist, Band, BandMember
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.documents.domain.models import MediaAsset
@@ -41,16 +43,15 @@ from cornerroom.modules.music.domain.lifecycle import (
     VERSION_TYPES,
     permission_for_release_action,
     permission_for_track_action,
-    release_target_for_action,
-    release_transition_action,
-    track_target_for_action,
-    track_transition_action,
+    release_action_target,
+    track_action_target,
     version_target_for_action,
     version_transition_action,
 )
 from cornerroom.modules.music.domain.models import Credit, Release, ReleaseTrack, Track, TrackVersion
 
 FLEXIBLE_META_KEYS = frozenset({"genres", "liner_notes"})
+SYSTEM_VERSION_ACTIONS = frozenset({"start_processing", "mark_ready", "reject"})
 
 
 class MusicService:
@@ -132,15 +133,51 @@ class MusicService:
         except ForbiddenError:
             return False
 
-    async def _owner_user_id(
+    async def catalog_owner_ids(
         self, primary_artist_id: UUID | None, primary_band_id: UUID | None
+    ) -> set[UUID]:
+        """Who may self-publish this profile's music (D-AUDIO-05, design S1).
+
+        Solo artist: the claimed user, artist ACTIVE. Band: ACTIVE band admins with an account,
+        band ACTIVE. Anything else owns nothing (fail closed).
+        """
+        if primary_artist_id is not None:
+            artist = await self.session.get(Artist, primary_artist_id)
+            if (
+                artist is None
+                or artist.deleted_at is not None
+                or artist.status != "ACTIVE"
+                or artist.claimed_user_id is None
+            ):
+                return set()
+            return {artist.claimed_user_id}
+        if primary_band_id is not None:
+            band = await self.session.get(Band, primary_band_id)
+            if band is None or band.deleted_at is not None or band.status != "ACTIVE":
+                return set()
+            rows = await self.session.execute(
+                select(BandMember.user_id).where(
+                    BandMember.band_id == band.id,
+                    BandMember.status == "ACTIVE",
+                    BandMember.is_admin.is_(True),
+                    BandMember.user_id.is_not(None),
+                    BandMember.deleted_at.is_(None),
+                )
+            )
+            return {user_id for user_id in rows.scalars().all() if user_id is not None}
+        return set()
+
+    async def _owner_user_id(
+        self,
+        primary_artist_id: UUID | None,
+        primary_band_id: UUID | None,
+        user_id: UUID | None = None,
     ) -> UUID | None:
-        if primary_artist_id is None:
-            return None
-        artist = await self.session.get(Artist, primary_artist_id)
-        if artist is None or artist.deleted_at is not None:
-            return None
-        return artist.claimed_user_id
+        """The owner id to hand the kernel: the caller when they are an owner, else None."""
+        owners = await self.catalog_owner_ids(primary_artist_id, primary_band_id)
+        if user_id is not None:
+            return user_id if user_id in owners else None
+        return next(iter(owners)) if len(owners) == 1 else None
 
     async def _assert_track_perm(
         self,
@@ -148,7 +185,7 @@ class MusicService:
         track: Track,
         permission: str,
     ) -> None:
-        owner = await self._owner_user_id(track.primary_artist_id, track.primary_band_id)
+        owner = await self._owner_user_id(track.primary_artist_id, track.primary_band_id, ctx.user_id)
         allowed = await self._is_allowed(
             ctx.user_id,
             permission,
@@ -166,7 +203,7 @@ class MusicService:
         release: Release,
         permission: str,
     ) -> None:
-        owner = await self._owner_user_id(release.primary_artist_id, release.primary_band_id)
+        owner = await self._owner_user_id(release.primary_artist_id, release.primary_band_id, ctx.user_id)
         allowed = await self._is_allowed(
             ctx.user_id,
             permission,
@@ -219,12 +256,22 @@ class MusicService:
             raise AppError("VALIDATION_ERROR", "Artwork upload is not ready", 422)
         return asset.id
 
-    async def _audio_asset(self, asset_id: UUID | None) -> UUID | None:
+    async def _audio_asset(self, asset_id: UUID | None, ctx: AuthContext) -> UUID | None:
         if asset_id is None:
             return None
         asset = await self.session.get(MediaAsset, asset_id)
         if asset is None or asset.deleted_at is not None:
             raise AppError("VALIDATION_ERROR", "Audio media was not found", 422)
+        # Only audio the caller uploaded (fix F1). Same answer as "not found": no existence hint.
+        if ctx.user_id not in {asset.created_by, asset.uploaded_by}:
+            raise AppError("VALIDATION_ERROR", "Audio media was not found", 422)
+        if asset.purpose == "AUDIO_MASTER":
+            raise AppError(
+                "VALIDATION_ERROR",
+                "Masters attach through an upload",
+                422,
+                "Upload the master to the track version instead of attaching an asset id",
+            )
         if asset.storage_class == "legal_document":
             raise AppError("RESIDENCY_GATE", "Identity documents are not catalog audio", 403)
         if asset.storage_class != "catalog_audio":
@@ -446,7 +493,7 @@ class MusicService:
             if not public:
                 raise NotFoundError("Track not found")
             return track, True
-        owner = await self._owner_user_id(track.primary_artist_id, track.primary_band_id)
+        owner = await self._owner_user_id(track.primary_artist_id, track.primary_band_id, ctx.user_id)
         allowed = False
         for perm in ("music.write", "music.approve", "music.takedown"):
             if await self._is_allowed(
@@ -472,7 +519,7 @@ class MusicService:
             if not public:
                 raise NotFoundError("Release not found")
             return release, True
-        owner = await self._owner_user_id(release.primary_artist_id, release.primary_band_id)
+        owner = await self._owner_user_id(release.primary_artist_id, release.primary_band_id, ctx.user_id)
         allowed = False
         for perm in ("music.write", "music.approve", "music.takedown"):
             if await self._is_allowed(
@@ -509,8 +556,7 @@ class MusicService:
             stmt = stmt.where(Track.status.in_(tuple(PUBLIC_TRACK_STATUSES)))
         stmt = stmt.order_by(Track.created_at.desc(), Track.id.desc())
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Track.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Track.created_at, Track.id, cursor))
         stmt = stmt.limit(page + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None
@@ -538,8 +584,7 @@ class MusicService:
             stmt = stmt.where(Release.status.in_(tuple(PUBLIC_RELEASE_STATUSES)))
         stmt = stmt.order_by(Release.created_at.desc(), Release.id.desc())
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Release.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Release.created_at, Release.id, cursor))
         stmt = stmt.limit(page + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None
@@ -706,6 +751,7 @@ class MusicService:
         *,
         action: str,
         expected_version: int | None = None,
+        takedown_kind: str | None = None,
     ) -> Track:
         track = await self.get_track_row(track_id)
         permission = permission_for_track_action(action)
@@ -713,8 +759,9 @@ class MusicService:
         if track.primary_org_id is not None:
             await self._require_active_org(track.primary_org_id)
         self._require_version(track.version, expected_version)
-        target = track_target_for_action(action)
-        track_transition_action(track.status, target)
+        target = track_action_target(track.status, action)
+        if action in {"approve", "schedule", "release"}:
+            await self.assert_independent_reviewer(ctx, await self._releases_of_track(track.id))
         if target == "RELEASED":
             ready = await self._current_ready_version(track.id)
             if ready is None:
@@ -726,6 +773,12 @@ class MusicService:
                 )
         previous = track.status
         track.status = target
+        if target == "TAKEN_DOWN":
+            # D-AUDIO-14: ordinary takedowns keep buyers' access; LEGAL removes it for everyone.
+            kind = (takedown_kind or "STANDARD").upper()
+            if kind not in {"STANDARD", "LEGAL"}:
+                raise AppError("VALIDATION_ERROR", "Takedown kind must be STANDARD or LEGAL", 422)
+            track.takedown_kind = kind
         track.updated_by = ctx.user_id
         await self._flush_versioned()
         event_type = TRACK_APPROVED if target == "APPROVED" else None
@@ -738,7 +791,7 @@ class MusicService:
                 event_type=event_type,
                 aggregate_type="Track",
                 aggregate_id=track.id,
-                payload={"status": track.status, "previous_status": previous},
+                payload={"status": track.status, "previous_status": previous, "takedown_kind": track.takedown_kind},
                 ctx=ctx,
                 organization_id=track.primary_org_id,
             )
@@ -748,7 +801,7 @@ class MusicService:
             entity_type="Track",
             entity_id=track.id,
             previous_state={"status": previous},
-            new_state={"status": track.status},
+            new_state={"status": track.status, **({"takedown_kind": track.takedown_kind} if target == "TAKEN_DOWN" else {})},
             organization_id=track.primary_org_id,
         )
         return track
@@ -768,8 +821,9 @@ class MusicService:
         if release.primary_org_id is not None:
             await self._require_active_org(release.primary_org_id)
         self._require_version(release.version, expected_version)
-        target = release_target_for_action(action)
-        release_transition_action(release.status, target)
+        target = release_action_target(release.status, action)
+        if action in {"approve", "schedule", "release"}:
+            await self.assert_independent_reviewer(ctx, [release.id])
         previous = release.status
         release.status = target
         if action == "schedule" and release_at is not None:
@@ -891,14 +945,25 @@ class MusicService:
         duration_ms: int | None = None,
     ) -> TrackVersion:
         track = await self.get_track_row(track_id)
-        await self._assert_track_perm(ctx, track, "music.write")
+        await self._assert_track_editor(ctx, track)
         if track.primary_org_id is not None:
             await self._require_active_org(track.primary_org_id)
         if version_type not in VERSION_TYPES:
             raise AppError("VALIDATION_ERROR", "Invalid version_type", 422)
         if duration_ms is not None and duration_ms < 0:
             raise AppError("VALIDATION_ERROR", "duration_ms must be >= 0", 422)
-        audio_id = await self._audio_asset(media_asset_id)
+        audio_id = await self._audio_asset(media_asset_id, ctx)
+        in_progress = (
+            await self.session.execute(
+                select(TrackVersion.id).where(
+                    TrackVersion.track_id == track.id,
+                    TrackVersion.status.in_(("UPLOADING", "PROCESSING")),
+                    TrackVersion.deleted_at.is_(None),
+                )
+            )
+        ).first()
+        if in_progress is not None:
+            raise ConflictError("A track version is already in progress")
         existing_current = (
             await self.session.execute(
                 select(TrackVersion).where(
@@ -908,12 +973,10 @@ class MusicService:
                 )
             )
         ).scalar_one_or_none()
-        if existing_current is not None:
-            if existing_current.status in {"UPLOADING", "PROCESSING"}:
-                raise ConflictError("A current track version is already in progress")
-            if existing_current.status == "READY":
-                version_transition_action(existing_current.status, "SUPERSEDED")
-                existing_current.status = "SUPERSEDED"
+        # Fix F3: a READY current version keeps playing; the new one waits as a candidate and
+        # takes over only when its audio is ready (system_version_ready).
+        candidate = existing_current is not None and existing_current.status == "READY"
+        if existing_current is not None and not candidate:
             existing_current.is_current = False
             existing_current.updated_by = ctx.user_id
             await self.session.flush()
@@ -923,7 +986,7 @@ class MusicService:
             media_asset_id=audio_id,
             duration_ms=duration_ms,
             status="UPLOADING",
-            is_current=True,
+            is_current=not candidate,
             created_by=ctx.user_id,
         )
         self.session.add(row)
@@ -951,6 +1014,332 @@ class MusicService:
         )
         return row
 
+    # --- Upload targets (called by the documents upload service; AUDIO_PHASE_1_DESIGN 6) ---
+
+    @staticmethod
+    def profile_of(row: Track | Release) -> tuple[str | None, UUID | None]:
+        if row.primary_artist_id is not None:
+            return "artist", row.primary_artist_id
+        if row.primary_band_id is not None:
+            return "band", row.primary_band_id
+        return None, None
+
+    async def studio_can_edit(self, ctx: AuthContext, row: Track | Release) -> bool:
+        """Studio editors: the profile's owner (solo artist / band admin), or staff with catalog
+        intake or catalog write in the profile's organization (design 3.4)."""
+        owners = await self.catalog_owner_ids(row.primary_artist_id, row.primary_band_id)
+        if ctx.user_id in owners:
+            return True
+        if row.primary_org_id is None:
+            return False
+        for perm in ("music.intake_assist", "music.write"):
+            if await self._is_allowed(
+                ctx.user_id, perm, resource_type="track" if isinstance(row, Track) else "release",
+                resource_id=row.id, organization_id=row.primary_org_id,
+            ):
+                return True
+        return False
+
+    async def assert_independent_reviewer(self, ctx: AuthContext, release_ids: list[UUID]) -> None:
+        """Two-person rule (D-AUDIO-09, A17): whoever prepared a release, or owns it, may not approve,
+        schedule or release it."""
+        from cornerroom.modules.music.domain.models import ReleaseContributor
+
+        if not release_ids:
+            return
+        prepared = (
+            await self.session.execute(
+                select(ReleaseContributor.release_id).where(
+                    ReleaseContributor.release_id.in_(release_ids), ReleaseContributor.user_id == ctx.user_id
+                )
+            )
+        ).first()
+        owns = False
+        for release in (await self.session.execute(select(Release).where(Release.id.in_(release_ids)))).scalars():
+            if ctx.user_id in await self.catalog_owner_ids(release.primary_artist_id, release.primary_band_id):
+                owns = True
+        if prepared is not None or owns:
+            raise AppError(
+                "SAME_PERSON_REVIEW",
+                "Someone else must approve this",
+                403,
+                "The person who prepared or owns a release can't approve or publish it",
+            )
+
+    async def _releases_of_track(self, track_id: UUID) -> list[UUID]:
+        rows = await self.session.execute(select(ReleaseTrack.release_id).where(ReleaseTrack.track_id == track_id))
+        return list(rows.scalars().all())
+
+    async def _assert_track_editor(self, ctx: AuthContext, track: Track) -> None:
+        if await self.studio_can_edit(ctx, track):
+            return
+        await self._assert_track_perm(ctx, track, "music.write")
+
+    async def authorize_master_upload(self, ctx: AuthContext, version_id: UUID) -> tuple[Track, TrackVersion]:
+        """The caller may upload this version's master: write access, version still waiting for audio."""
+        version = await self.session.get(TrackVersion, version_id)
+        if version is None or version.deleted_at is not None:
+            raise NotFoundError("Track version not found")
+        track = await self.get_track_row(version.track_id)
+        await self._assert_track_editor(ctx, track)
+        if track.primary_org_id is not None:
+            await self._require_active_org(track.primary_org_id)
+        if track.status in {"TAKEN_DOWN", "ARCHIVED", "REJECTED"}:
+            raise AppError("INVALID_TRANSITION", "This track no longer accepts audio", 409)
+        if version.status != "UPLOADING" or version.media_asset_id is not None:
+            raise AppError(
+                "INVALID_TRANSITION",
+                "This version already has audio",
+                409,
+                "Start a new version to replace the audio",
+            )
+        return track, version
+
+    async def attach_uploaded_master(
+        self, ctx: AuthContext, version_id: UUID, asset_id: UUID
+    ) -> TrackVersion:
+        """Bytes verified and quarantined: the version moves to PROCESSING (checks run next)."""
+        track, version = await self.authorize_master_upload(ctx, version_id)
+        version_transition_action(version.status, "PROCESSING")
+        previous = version.status
+        version.media_asset_id = asset_id
+        version.status = "PROCESSING"
+        version.processing_detail = "QUEUED"
+        version.uploaded_by = ctx.user_id
+        version.on_behalf_profile_type, version.on_behalf_profile_id = self.profile_of(track)
+        version.updated_by = ctx.user_id
+        await self._flush_versioned()
+        await self._emit(
+            event_type=TRACK_UPLOADED,
+            aggregate_type="Track",
+            aggregate_id=track.id,
+            payload={"version_id": str(version.id), "status": version.status},
+            ctx=ctx,
+            organization_id=track.primary_org_id,
+        )
+        await self.audit.record_from_auth(
+            ctx,
+            action="track_version.uploaded",
+            entity_type="TrackVersion",
+            entity_id=version.id,
+            previous_state={"status": previous},
+            new_state={"status": version.status, "media_asset_id": str(asset_id)},
+            organization_id=track.primary_org_id,
+        )
+        return version
+
+    # --- System transitions (media worker only; AUDIO_PHASE_1_DESIGN 5.3, fixes F2/F3) ---
+
+    async def _system_event(
+        self, event_type: str, aggregate_type: str, aggregate_id: UUID, payload: dict[str, Any], org: UUID | None
+    ) -> None:
+        await enqueue_outbox(
+            self.session,
+            DomainEvent(
+                event_type=event_type,
+                producer="music",
+                aggregate_type=aggregate_type,
+                aggregate_id=aggregate_id,
+                payload=payload,
+                occurred_at=self.clock.now(),
+                actor_id=None,
+                organization_id=org,
+                correlation_id=f"media:{aggregate_id}",
+            ),
+        )
+
+    async def versions_for_master(self, asset_id: UUID) -> list[TrackVersion]:
+        rows = await self.session.execute(
+            select(TrackVersion).where(TrackVersion.media_asset_id == asset_id, TrackVersion.deleted_at.is_(None))
+        )
+        return list(rows.scalars().all())
+
+    async def system_version_progress(self, version: TrackVersion, detail: str, duration_ms: int | None = None) -> None:
+        version.processing_detail = detail
+        if duration_ms is not None:
+            version.duration_ms = duration_ms
+        await self._flush_versioned()
+
+    async def system_reject_version(self, version: TrackVersion, detail: str) -> None:
+        if version.status not in {"UPLOADING", "PROCESSING"}:
+            return
+        track = await self.get_track_row(version.track_id)
+        previous = version.status
+        version_transition_action(previous, "REJECTED")
+        version.status = "REJECTED"
+        version.processing_detail = detail
+        version.is_current = False
+        await self._flush_versioned()
+        await self._system_event(
+            TRACK_VERSION_REJECTED, "TrackVersion", version.id,
+            {"track_id": str(track.id), "version_id": str(version.id), "reason": detail}, track.primary_org_id,
+        )
+        await self.audit.record(
+            action="track_version.rejected", entity_type="TrackVersion", entity_id=version.id,
+            actor_id="system:media", actor_type="system",
+            previous_state={"status": previous}, new_state={"status": "REJECTED", "reason": detail},
+        )
+
+    async def system_version_ready(self, version: TrackVersion) -> None:
+        """All required playback copies verified: the version becomes READY and, if it was a
+        candidate replacing a READY version, takes over as current in the same transaction."""
+        if version.status != "PROCESSING":
+            return
+        track = await self.get_track_row(version.track_id)
+        if not version.is_current:
+            current = (
+                await self.session.execute(
+                    select(TrackVersion).where(
+                        TrackVersion.track_id == track.id,
+                        TrackVersion.is_current.is_(True),
+                        TrackVersion.deleted_at.is_(None),
+                    )
+                )
+            ).scalar_one_or_none()
+            if current is not None:
+                if current.status == "READY":
+                    current.status = "SUPERSEDED"
+                current.is_current = False
+                await self._flush_versioned()
+            version.is_current = True
+        version_transition_action(version.status, "READY")
+        version.status = "READY"
+        version.processing_detail = "READY"
+        await self._flush_versioned()
+        await self._system_event(
+            TRACK_VERSION_READY, "TrackVersion", version.id,
+            {"track_id": str(track.id), "version_id": str(version.id)}, track.primary_org_id,
+        )
+        await self.audit.record(
+            action="track_version.ready", entity_type="TrackVersion", entity_id=version.id,
+            actor_id="system:media", actor_type="system",
+            previous_state={"status": "PROCESSING"}, new_state={"status": "READY", "is_current": True},
+        )
+
+    async def system_attach_cover(self, release_id: UUID, asset_id: UUID) -> None:
+        release = await self.get_release_row(release_id)
+        previous = release.cover_asset_id
+        release.cover_asset_id = asset_id
+        await self._flush_versioned()
+        await self.audit.record(
+            action="release.cover_attached", entity_type="Release", entity_id=release.id,
+            actor_id="system:media", actor_type="system",
+            previous_state={"cover_asset_id": str(previous) if previous else None},
+            new_state={"cover_asset_id": str(asset_id)},
+        )
+
+    async def media_report(self, ctx: AuthContext, track_id: UUID, version_id: UUID) -> dict[str, Any]:
+        """What the checks found for one version: for its editors and reviewers only (404 otherwise).
+        No storage keys, tool paths or bytes."""
+        from cornerroom.modules.documents.domain.models import MediaFinding, MediaInspection, MediaJob
+        from cornerroom.modules.music.domain.models import TrackRendition
+
+        track = await self.get_track_row(track_id)
+        owner = await self._owner_user_id(track.primary_artist_id, track.primary_band_id, ctx.user_id)
+        allowed = await self.studio_can_edit(ctx, track)
+        for perm in () if allowed else ("music.write", "music.approve"):
+            if await self._is_allowed(
+                ctx.user_id, perm, resource_type="track", resource_id=track.id,
+                organization_id=track.primary_org_id, owner_user_id=owner if perm == "music.write" else None,
+            ):
+                allowed = True
+                break
+        if not allowed:
+            raise NotFoundError("Track not found")
+        version = await self.session.get(TrackVersion, version_id)
+        if version is None or version.deleted_at is not None or version.track_id != track.id:
+            raise NotFoundError("Track version not found")
+        report: dict[str, Any] = {
+            "version_id": version.id,
+            "status": version.status,
+            "processing_detail": version.processing_detail,
+            "is_current": version.is_current,
+            "asset_status": None,
+            "inspection": None,
+            "findings": [],
+            "renditions": [],
+            "jobs": [],
+        }
+        if version.media_asset_id is None:
+            return report
+        asset = await self.session.get(MediaAsset, version.media_asset_id)
+        report["asset_status"] = asset.status if asset else None
+        inspection = (
+            await self.session.execute(
+                select(MediaInspection)
+                .where(MediaInspection.media_asset_id == version.media_asset_id)
+                .order_by(MediaInspection.inspected_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if inspection is not None:
+            report["inspection"] = {
+                "outcome": inspection.outcome,
+                "container": inspection.container,
+                "codec": inspection.codec,
+                "sample_rate_hz": inspection.sample_rate_hz,
+                "bit_depth": inspection.bit_depth,
+                "sample_format": inspection.sample_format,
+                "channels": inspection.channels,
+                "duration_ms": inspection.duration_ms,
+                "integrated_lufs": inspection.integrated_lufs,
+                "loudness_range_lu": inspection.loudness_range_lu,
+                "true_peak_dbtp": inspection.true_peak_dbtp,
+                "inspected_at": inspection.inspected_at,
+            }
+            findings = (
+                await self.session.execute(select(MediaFinding).where(MediaFinding.inspection_id == inspection.id))
+            ).scalars().all()
+            order = {"BLOCK": 0, "WARN": 1}
+            report["findings"] = sorted(
+                (
+                    {"code": f.code, "severity": f.severity, "measured": f.measured, "limit": f.limit_value}
+                    for f in findings
+                ),
+                key=lambda f: order.get(f["severity"], 2),
+            )
+        renditions = (
+            await self.session.execute(
+                select(TrackRendition).where(TrackRendition.track_version_id == version.id).order_by(TrackRendition.profile_key)
+            )
+        ).scalars().all()
+        report["renditions"] = [
+            {
+                "profile_key": r.profile_key,
+                "codec": r.codec,
+                "bitrate_kbps": r.bitrate_kbps,
+                "sample_rate_hz": r.sample_rate_hz,
+                "duration_ms": r.duration_ms,
+                "byte_size": r.byte_size,
+                "status": r.status,
+                "purpose": r.purpose,
+                "bit_depth": r.bit_depth,
+            }
+            for r in renditions
+        ]
+        jobs = (
+            await self.session.execute(
+                select(MediaJob).where(MediaJob.media_asset_id == version.media_asset_id).order_by(MediaJob.created_at)
+            )
+        ).scalars().all()
+        report["jobs"] = [
+            {"kind": j.kind, "profile_key": j.profile_key, "status": j.status, "attempts": j.attempts,
+             "last_error_code": j.last_error_code}
+            for j in jobs
+            if j.kind == "INSPECT" or j.target_id == version.id
+        ]
+        return report
+
+    async def authorize_cover_upload(self, ctx: AuthContext, release_id: UUID) -> Release:
+        release = await self.get_release_row(release_id)
+        if not await self.studio_can_edit(ctx, release):
+            await self._assert_release_perm(ctx, release, "music.write")
+        if release.primary_org_id is not None:
+            await self._require_active_org(release.primary_org_id)
+        if release.status in {"TAKEN_DOWN", "ARCHIVED"}:
+            raise AppError("INVALID_TRANSITION", "This release no longer accepts artwork", 409)
+        return release
+
     async def transition_version(
         self,
         ctx: AuthContext,
@@ -968,6 +1357,14 @@ class MusicService:
         if row is None or row.deleted_at is not None or row.track_id != track_id:
             raise NotFoundError("Track version not found")
         self._require_version(row.version, expected_version)
+        if action in SYSTEM_VERSION_ACTIONS:
+            # Fix F2: only the media worker decides that audio is ready or rejected.
+            raise AppError(
+                "SYSTEM_TRANSITION",
+                "Only Corner Room's audio checks can change this",
+                403,
+                "Upload audio to the version; it becomes ready when its checks pass",
+            )
         target = version_target_for_action(action)
         version_transition_action(row.status, target)
         previous = row.status

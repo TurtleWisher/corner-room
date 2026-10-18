@@ -19,7 +19,7 @@ class Entitlement(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMix
             name="entitlement_type",
         ),
         CheckConstraint("status IN ('ACTIVE','REVOKED','EXPIRED')", name="status"),
-        CheckConstraint("scope IN ('TRACK','CATALOG')", name="scope"),
+        CheckConstraint("scope IN ('TRACK','CATALOG','RELEASE')", name="scope"),
         Index("ix_entitlements_user_type_status", "user_id", "entitlement_type", "status"),
         UniqueConstraint(
             "user_id",

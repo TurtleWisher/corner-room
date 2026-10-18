@@ -29,7 +29,7 @@ import {
   type TrackRecord,
 } from "@/lib/api";
 import { creditHref, creditName, formatDuration, playQueue, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
-import { catalogOffer, hasCatalogAccess, ownsTrack } from "@/lib/ownership";
+import { catalogOffer, hasCatalogAccess, ownsTrack, releaseBuyLabel, releaseBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 import { cn } from "@/lib/utils";
 
@@ -144,6 +144,7 @@ function TrackList({
   artist,
   commerce,
   playFrom,
+  releaseId,
 }: {
   rows: Row[];
   playable: Map<string, PlayableTrackRecord>;
@@ -151,6 +152,7 @@ function TrackList({
   artist: string | null;
   commerce: CustomerCommerce;
   playFrom: PlayOptions;
+  releaseId: string;
 }) {
   return (
     <ol aria-label="Track list" className="border-t border-line">
@@ -174,7 +176,7 @@ function TrackList({
               {duration ? <span className="cr-num text-sm text-fg-muted">{duration}</span> : null}
               {signedIn ? <SaveButton trackId={trackId} title={title} /> : null}
               {signedIn && state.kind !== "unavailable" ? (
-                <TrackBuyControl track={{ id: trackId, title, artist }} commerce={commerce} showPlan={false} playFrom={playFrom} />
+                <TrackBuyControl track={{ id: trackId, title, artist }} commerce={commerce} showPlan={false} playFrom={playFrom} releaseIds={[releaseId]} />
               ) : null}
             </div>
           </li>
@@ -239,16 +241,19 @@ export default function ReleasePage() {
   const durations = rows.map((r) => playable.get(r.trackId)?.duration_ms);
   const canStaff = signedIn && typeof release.version === "number";
   const catalogAccess = hasCatalogAccess(commerce.entitlements);
-  const firstOwned = rows.find(
-    (r) => playState(playable.get(r.trackId)).kind === "playable" && ownsTrack(commerce.entitlements, r.trackId),
-  );
+  const owns = (trackId: string) => ownsTrack(commerce.entitlements, trackId, [release.id]);
+  const firstOwned = rows.find((r) => playState(playable.get(r.trackId)).kind === "playable" && owns(r.trackId));
+  // A whole-release price (D-AUDIO-10, -11). Shown only once the customer's ownership is known.
+  const releaseBuy =
+    signedIn && commerce.ready ? releaseBuyState(commerce.entitlements, commerce.offers, release.id, rows.map((r) => r.trackId)) : null;
+  const buyRelease = releaseBuy?.kind === "buy" ? releaseBuy.offer : null;
   const pass = catalogAccess ? null : catalogOffer(commerce.offers);
   // Up next: this release's tracks in order, the ones the customer can play.
   const playFrom: PlayOptions = {
     queue: playQueue(
       rows.map((r) => ({ trackId: r.trackId, title: r.track?.title, artist })),
       playable,
-      (trackId) => ownsTrack(commerce.entitlements, trackId),
+      owns,
     ),
     source: release.title,
   };
@@ -291,10 +296,20 @@ export default function ReleasePage() {
                 <ButtonLink href={`/login?next=${encodeURIComponent(`/releases/${release.id}`)}`} size="lg">
                   <LogIn aria-hidden="true" /> Sign in to listen
                 </ButtonLink>
-              ) : firstOwned ? (
-                <Button size="lg" onClick={() => void player.play({ id: firstOwned.trackId, title: firstOwned.track?.title ?? "", artist }, playFrom)}>
-                  <Play aria-hidden="true" /> Play
-                </Button>
+              ) : firstOwned || buyRelease ? (
+                <>
+                  {firstOwned ? (
+                    <Button size="lg" onClick={() => void player.play({ id: firstOwned.trackId, title: firstOwned.track?.title ?? "", artist }, playFrom)}>
+                      <Play aria-hidden="true" /> Play
+                    </Button>
+                  ) : null}
+                  {buyRelease ? (
+                    <ButtonLink href={`/checkout?offer=${buyRelease.id}`} size="lg" variant={firstOwned ? "secondary" : undefined}>
+                      <ShoppingBag aria-hidden="true" /> {releaseBuyLabel(release.release_type, buyRelease)}{" "}
+                      <Money value={{ amount_minor: buyRelease.amount_minor, currency_code: buyRelease.currency_code }} />
+                    </ButtonLink>
+                  ) : null}
+                </>
               ) : pass ? (
                 <ButtonLink href={`/checkout?offer=${pass.id}`} size="lg">
                   <ShoppingBag aria-hidden="true" /> Get the full catalog{" "}
@@ -319,7 +334,7 @@ export default function ReleasePage() {
           {rows.length === 0 ? (
             <EmptyState title="No tracks on this release yet" />
           ) : (
-            <TrackList rows={rows} playable={playable} signedIn={signedIn} artist={artist} commerce={commerce} playFrom={playFrom} />
+            <TrackList rows={rows} playable={playable} signedIn={signedIn} artist={artist} commerce={commerce} playFrom={playFrom} releaseId={release.id} />
           )}
         </section>
         {canStaff ? (

@@ -2,18 +2,91 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/api";
 import {
+  acceptCodecs,
+  afterEnd,
   clock,
   durationLabel,
+  formatLabel,
   isAutoplayBlocked,
   isSuperseded,
+  levelMultiplier,
   listenedMs,
+  nextRepeat,
+  outputLevels,
   playProblem,
   previousAction,
   problemMessage,
   queueFor,
+  repeatLabel,
   seekTarget,
+  shuffled,
   stepIndex,
+  stepWithRepeat,
 } from "@/lib/player-model";
+
+describe("repeat and shuffle", () => {
+  it("cycles repeat and names it", () => {
+    expect(nextRepeat("off")).toBe("all");
+    expect(nextRepeat("all")).toBe("one");
+    expect(nextRepeat("one")).toBe("off");
+    expect(repeatLabel("one")).toBe("Repeat: this track");
+  });
+
+  it("wraps only with repeat all", () => {
+    expect(stepWithRepeat(2, 3, 1, "off")).toBeNull();
+    expect(stepWithRepeat(2, 3, 1, "all")).toBe(0);
+    expect(stepWithRepeat(0, 3, -1, "all")).toBe(2);
+    expect(stepWithRepeat(0, 1, 1, "all")).toBeNull();
+    expect(stepWithRepeat(0, 3, 1, "one")).toBe(1);
+  });
+
+  it("decides what follows the end of a track", () => {
+    expect(afterEnd(0, 3, "off")).toEqual({ kind: "go", index: 1 });
+    expect(afterEnd(2, 3, "off")).toEqual({ kind: "stop" });
+    expect(afterEnd(2, 3, "all")).toEqual({ kind: "go", index: 0 });
+    expect(afterEnd(1, 3, "one")).toEqual({ kind: "replay" });
+    expect(afterEnd(0, 1, "all")).toEqual({ kind: "stop" });
+  });
+
+  it("shuffles with the current track first and every track kept once", () => {
+    const list = ["a", "b", "c", "d", "e"];
+    let seed = 0.37;
+    const random = () => (seed = (seed * 9301 + 0.49297) % 1);
+    const out = shuffled(list, 2, random);
+    expect(out[0]).toBe("c");
+    expect([...out].sort()).toEqual(list);
+    expect(shuffled(["only"], 0)).toEqual(["only"]);
+    expect(shuffled([], 0)).toEqual([]);
+  });
+});
+
+describe("codecs and levelling", () => {
+  it("asks for what the browser can decode, MP3 always included", () => {
+    expect(acceptCodecs((m) => (m.includes("opus") || m === "audio/mpeg" ? "probably" : ""))).toEqual(["opus", "mp3"]);
+    expect(acceptCodecs(() => "")).toEqual(["mp3"]);
+    expect(
+      acceptCodecs(() => {
+        throw new Error("no");
+      }),
+    ).toEqual(["mp3"]);
+    expect(formatLabel("opus", 160)).toBe("Opus · 160 kbps");
+    expect(formatLabel(null, 320)).toBeNull();
+  });
+
+  it("turns gain into levels, never louder than the volume without a gain stage", () => {
+    expect(levelMultiplier(-6, true)).toBeCloseTo(0.501, 3);
+    expect(levelMultiplier(-6, false)).toBe(1);
+    expect(levelMultiplier(null, true)).toBe(1);
+    // Loud song, not routed: the element carries the cut.
+    expect(outputLevels(0.8, false, 0.5, false)).toEqual({ element: 0.4, gain: 1 });
+    // Quiet song, not routed: plays at its own level.
+    expect(outputLevels(0.8, false, 1.5, false)).toEqual({ element: 0.8, gain: 1 });
+    // Routed: the element stays neutral and the gain stage does it all.
+    expect(outputLevels(0.8, false, 1.5, true)).toEqual({ element: 1, gain: 0.8 * 1.5 });
+    expect(outputLevels(0.8, true, 1.5, true)).toEqual({ element: 1, gain: 0 });
+    expect(outputLevels(0.8, true, 0.5, false).element).toBe(0);
+  });
+});
 
 describe("player model", () => {
   it("maps API answers to player states", () => {

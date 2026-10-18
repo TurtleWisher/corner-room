@@ -18,7 +18,9 @@ from cornerroom.modules.royalties.domain.models import RecognizedRevenueIntake
 
 @dataclass(frozen=True, slots=True)
 class RecognizedRevenueFact:
-    intake_id: UUID
+    # A royalties.recognized_revenue_intakes row (what revenue_pools.funding_intake_id references).
+    # None when Finance recognized the revenue without an intake mirror; never a Finance row id.
+    intake_id: UUID | None
     source_type: str
     period_start: datetime
     period_end: datetime

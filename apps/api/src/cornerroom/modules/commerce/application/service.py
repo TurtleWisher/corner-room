@@ -16,7 +16,7 @@ from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import DomainEvent, ORDER_PAID, ORDER_PLACED, TRACK_PURCHASED
 from cornerroom.kernel.money import Money
-from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
+from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.commerce.domain.lifecycle import order_transition_action
 from cornerroom.modules.commerce.domain.models import (
@@ -89,19 +89,9 @@ class CheckoutService:
         hold_id: UUID,
         idempotency_key: str,
     ) -> tuple[Order, Payment]:
-        existing = (
-            await self.session.execute(select(Order).where(Order.idempotency_key == idempotency_key))
-        ).scalar_one_or_none()
-        if existing is not None:
-            if existing.user_id != ctx.user_id:
-                raise AppError("CONFLICT", "Idempotency-Key reused", 409)
-            payment = (
-                await self.session.execute(select(Payment).where(Payment.order_id == existing.id))
-            ).scalar_one_or_none()
-            if payment is None:
-                raise AppError("CONFLICT", "Order exists without payment", 409)
-            return existing, payment
-
+        found = await self._existing_order(ctx, idempotency_key)
+        if found is not None:
+            return found
         hold = await self.ticketing.get_active_hold_for_user(hold_id, ctx.user_id)
         ticket_type = await self.ticketing.get_ticket_type_row(hold.ticket_type_id)
         event = await self.session.get(Event, ticket_type.event_id)
@@ -222,15 +212,20 @@ class CheckoutService:
                 "Subscribe through POST /subscriptions",
                 409,
             )
+        await self._check_music_offer(ctx, offer, product)
         money = Money(amount_minor=offer.amount_minor, currency_code=offer.currency_code)
-        item_type = "TRACK" if product.product_type in {"TRACK", "CATALOG_ACCESS"} else "OTHER"
+        if product.product_type == "RELEASE":
+            item_type, purpose = "RELEASE", "RELEASE"
+        else:
+            item_type = "TRACK" if product.product_type in {"TRACK", "CATALOG_ACCESS"} else "OTHER"
+            purpose = "TRACK"
         order = Order(
             user_id=ctx.user_id,
             status="PENDING_PAYMENT",
             total_amount_minor=money.amount_minor,
             currency_code=money.currency_code,
             idempotency_key=idempotency_key,
-            purpose="TRACK",
+            purpose=purpose,
             created_by=ctx.user_id,
             updated_by=ctx.user_id,
         )
@@ -273,6 +268,36 @@ class CheckoutService:
             organization_id=product.organization_id,
         )
         return order, payment
+
+    async def _check_music_offer(self, ctx: AuthContext, offer: Offer, product: Product) -> None:
+        """Release and song purchases follow the artist's choices (D-AUDIO-10, -11, -12)."""
+        from cornerroom.modules.commerce.application.catalog import CatalogCommerceService
+        from cornerroom.modules.music.domain.models import Release, ReleaseTrack
+
+        if product.product_type == "TRACK":
+            await CatalogCommerceService(self.session).assert_track_sold_separately(product.subject_id)
+        if product.product_type != "RELEASE":
+            return
+        release = await self.session.get(Release, product.subject_id)
+        if release is None or release.deleted_at is not None or release.status != "RELEASED":
+            raise AppError("RELEASE_NOT_AVAILABLE", "This release isn't on sale", 409)
+        if await self.entitlements.find_active_release(ctx.user_id, release.id) is not None:
+            raise AppError("ALREADY_OWNED", "You already own this release", 409)
+        if offer.audience == "OWNS_PART_OF_RELEASE":
+            track_ids = (
+                await self.session.execute(select(ReleaseTrack.track_id).where(ReleaseTrack.release_id == release.id))
+            ).scalars().all()
+            owns_part = False
+            for track_id in track_ids:
+                if await self.entitlements.has_catalog_access(ctx.user_id, track_id):
+                    owns_part = True
+                    break
+            if not owns_part:
+                raise AppError(
+                    "OFFER_NOT_ELIGIBLE",
+                    "This price is for fans who already own some of these songs",
+                    403,
+                )
 
     async def checkout_from_plan(
         self,
@@ -509,6 +534,52 @@ class CheckoutService:
                             organization_id=organization_id,
                         ),
                     )
+            elif item.item_type == "RELEASE":
+                # D-AUDIO-12: one release entitlement covers the release's current tracklist.
+                from cornerroom.kernel.events import RELEASE_PURCHASED
+                from cornerroom.modules.music.domain.models import Release
+
+                release = await self.session.get(Release, item.ref_id)
+                organization_id = release.primary_org_id if release is not None else organization_id
+                await self.entitlements.grant(
+                    ctx,
+                    user_id=order.user_id,
+                    entitlement_type="PURCHASE",
+                    ref_id=item.ref_id,
+                    scope="RELEASE",
+                    expires_at=None,
+                    source_type="ORDER_ITEM",
+                    source_id=item.id,
+                    organization_id=organization_id,
+                    actor_id=order.user_id,
+                )
+                existing_lib = (
+                    await self.session.execute(
+                        select(LibraryItem).where(
+                            LibraryItem.user_id == order.user_id,
+                            LibraryItem.item_type == "release",
+                            LibraryItem.item_id == item.ref_id,
+                            LibraryItem.kind == "PURCHASE_REF",
+                        )
+                    )
+                ).scalar_one_or_none()
+                if existing_lib is None:
+                    self.session.add(
+                        LibraryItem(user_id=order.user_id, item_type="release", item_id=item.ref_id, kind="PURCHASE_REF", created_at=self.clock.now())
+                    )
+                await enqueue_outbox(
+                    self.session,
+                    DomainEvent(
+                        event_type=RELEASE_PURCHASED,
+                        producer="commerce",
+                        aggregate_type="Order",
+                        aggregate_id=order.id,
+                        payload={"order_id": str(order.id), "release_id": str(item.ref_id), "user_id": str(order.user_id)},
+                        occurred_at=self.clock.now(),
+                        actor_id=ctx.user_id if ctx is not None else None,
+                        organization_id=organization_id,
+                    ),
+                )
             elif item.item_type == "SUBSCRIPTION":
                 existing = await self.subscriptions.active_for_user(order.user_id)
                 if existing is not None:
@@ -598,8 +669,7 @@ class CheckoutService:
             .order_by(Order.created_at.desc(), Order.id.desc())
         )
         if cursor:
-            data = decode_cursor(cursor)
-            stmt = stmt.where(Order.created_at < data["t"])
+            stmt = stmt.where(keyset_before(Order.created_at, Order.id, cursor))
         stmt = stmt.limit(limit + 1)
         rows = list((await self.session.execute(stmt)).scalars().all())
         next_cursor = None
@@ -633,6 +703,12 @@ class CheckoutService:
                 if ticket_type is not None:
                     entry["ticket_type_name"] = ticket_type.name
                     entry["event_id"] = ticket_type.event_id
+            if item.item_type == "RELEASE":
+                from cornerroom.modules.music.domain.models import Release
+
+                release = await self.session.get(Release, item.ref_id)
+                entry["release_title"] = release.title if release is not None else None
+                entry["release_type"] = release.release_type if release is not None else None
             items.append(entry)
         hold = (
             await self.session.execute(select(TicketHold).where(TicketHold.order_id == order.id))
@@ -648,6 +724,13 @@ class CheckoutService:
         return (
             await self.session.execute(select(Payment).where(Payment.order_id == order_id))
         ).scalar_one_or_none()
+
+    async def payments_for_orders(self, order_ids: list[UUID]) -> dict[UUID, Payment]:
+        """One query for an order list page (one payment per order)."""
+        if not order_ids:
+            return {}
+        rows = (await self.session.execute(select(Payment).where(Payment.order_id.in_(order_ids)))).scalars()
+        return {row.order_id: row for row in rows if row.order_id is not None}
 
     async def apply_completed_refund(self, ctx: AuthContext, refund: Refund) -> Order | None:
         payment = await self.payments.get_payment(refund.payment_id)
@@ -667,6 +750,10 @@ class CheckoutService:
                 order.status = "PARTIALLY_REFUNDED"
         order.updated_by = ctx.user_id
         await self.session.flush()
+        if remaining == 0 and order.purpose == "TICKET":
+            # 06 §5: a refunded ticket is REFUNDED and its QR no longer opens the door. Partial
+            # refunds leave tickets alone: which seat a part refund covers is not decided (Q-P5-*).
+            await self.ticketing.refund_order_tickets(ctx, order_id=order.id, refund_id=refund.id)
         mapping = (
             await self.session.execute(
                 select(RefundEntitlementPolicy).where(
@@ -674,7 +761,10 @@ class CheckoutService:
                 )
             )
         ).scalars().first()
-        if mapping is None or mapping.action != "REVOKE":
+        # D-AUDIO-06: a refunded song or release purchase no longer streams or downloads, whatever
+        # the refund reason. Other purchases follow the reason-code policy as before.
+        music_refunded = remaining == 0 and order.purpose in {"TRACK", "RELEASE"}
+        if not music_refunded and (mapping is None or mapping.action != "REVOKE"):
             return order
         items = list(
             (await self.session.execute(select(OrderItem).where(OrderItem.order_id == order.id))).scalars()

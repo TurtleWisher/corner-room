@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import or_, select
@@ -310,13 +310,23 @@ class NotificationService:
         return row
 
     async def process_pending_email_deliveries(self, limit: int = 50) -> int:
-        """Send PENDING/FAILED email deliveries. Never raises into the OLTP txn."""
+        """Send due PENDING email deliveries. Never raises into the OLTP txn.
+
+        BACKGROUND_JOBS: a failed send stays PENDING with a backoff until the attempt limit, then
+        FAILED. The limit and backoff are the outbox's (`OUTBOX_MAX_ATTEMPTS`,
+        `OUTBOX_BACKOFF_SECONDS`), not new numbers. Failures that a retry cannot fix (no template,
+        no notification) are FAILED at once. FAILED rows are never picked again, so they cannot
+        crowd new mail out of the batch.
+        """
+        from cornerroom.infra.settings import get_settings
+
+        settings = get_settings()
         now = self.clock.now()
         stmt = (
             select(NotificationDelivery)
             .where(
                 NotificationDelivery.channel == CHANNEL_EMAIL,
-                NotificationDelivery.status.in_(("PENDING", "FAILED")),
+                NotificationDelivery.status == "PENDING",
                 or_(
                     NotificationDelivery.next_attempt_at.is_(None),
                     NotificationDelivery.next_attempt_at <= now,
@@ -324,12 +334,11 @@ class NotificationService:
             )
             .order_by(NotificationDelivery.created_at.asc())
             .limit(limit)
+            .with_for_update(skip_locked=True)
         )
         rows = list((await self.session.execute(stmt)).scalars().all())
         sent = 0
-        from cornerroom.infra.settings import get_settings
-
-        identity = IdentityService(self.session, get_settings())
+        identity = IdentityService(self.session, settings)
         for delivery in rows:
             notification = await self.session.get(Notification, delivery.notification_id)
             if notification is None:
@@ -363,10 +372,16 @@ class NotificationService:
                     body=notification.body,
                     locale=notification.locale,
                 )
-            except Exception as exc:
-                delivery.status = "FAILED"
+            except Exception as exc:  # noqa: BLE001 - recorded on the delivery and retried
                 delivery.last_error = str(exc)[:2000]
-                delivery.next_attempt_at = now
+                if delivery.attempt >= settings.outbox_max_attempts:
+                    delivery.status = "FAILED"
+                    delivery.next_attempt_at = None
+                else:
+                    delivery.status = "PENDING"
+                    delivery.next_attempt_at = now + timedelta(
+                        seconds=settings.outbox_backoff_seconds * delivery.attempt
+                    )
                 continue
             delivery.status = "SENT"
             delivery.provider_ref = ref

@@ -23,6 +23,10 @@ export type AuthUser = {
   permissions?: string[];
   email_verified?: boolean;
   organization_id?: string | null;
+  /** Menus only (the API still decides every page): an approved artist, or a band admin. */
+  is_artist?: boolean;
+  /** Menus only: belongs to a workspace (staff). */
+  has_workspace?: boolean;
 };
 
 export type Organization = {
@@ -40,7 +44,15 @@ export type Membership = {
   role_id: string | null;
   status: string;
   ended_at: string | null;
+  /** Shared with workspace admins only; null for everyone else. */
+  display_name?: string | null;
+  email?: string | null;
+  role_key?: string | null;
+  role_name?: string | null;
 };
+
+/** A role this workspace admin may give (never more than they hold themselves). */
+export type GrantableRole = { id: string; key: string; name: string };
 
 export type Invitation = {
   id: string;
@@ -95,12 +107,27 @@ export async function switchOrganization(orgId: string): Promise<{ access_token:
   return result;
 }
 
-export async function createInvitation(orgId: string, email: string): Promise<Invitation & { token: string }> {
+export async function createInvitation(orgId: string, email: string, roleId?: string | null): Promise<Invitation & { token: string }> {
   return apiFetch<Invitation & { token: string }>(`/api/v1/organizations/${orgId}/invites`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify(roleId ? { email, role_id: roleId } : { email }),
     retry: false,
+  });
+}
+
+export async function fetchGrantableRoles(orgId: string): Promise<GrantableRole[]> {
+  return apiFetch<GrantableRole[]>(`/api/v1/organizations/${orgId}/grantable-roles`, { retry: false });
+}
+
+/** Public: which workspace and role an invitation is for (the email only as a hint). */
+export async function checkInvitation(token: string): Promise<{ organization_name: string; role_name: string | null; email_hint: string }> {
+  return apiFetch<{ organization_name: string; role_name: string | null; email_hint: string }>("/api/v1/organizations/invitations/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+    retry: false,
+    skipAuth: true,
   });
 }
 

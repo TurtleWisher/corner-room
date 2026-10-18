@@ -46,7 +46,7 @@ Corner Room is a Bangladesh-first "unified entertainment operating system": live
 
 Modules: identity, authorization, audit, documents, events (with venues), ticketing, artists (with bands), music, streaming, commerce, entitlements, subscriptions, royalties, finance, campaigns, notifications, search, analytics, administration.
 
-Migrations: `apps/api/alembic/versions/0001` to `0016`, a linear chain with head `0016_external_identities`. Additive only: **never rewrite an existing revision**, and never use `create_all` on a migrated database.
+Migrations: `apps/api/alembic/versions/0001` to `0023`, a linear chain with head `0023_artist_join_links` (0017 to 0022 are the audio platform; 0023 is artist join links). Additive only: **never rewrite an existing revision**, and never use `create_all` on a migrated database.
 
 ### Frontend layout (`apps/web/`)
 
@@ -119,3 +119,44 @@ npx playwright install chromium; npm run test:e2e   # browser checks on the them
 - This repo is public. Never commit `.env`, `docs/`, `.cursor/`, `brand/`, `tooling/`, `.claude/`, `.mcp.json`, `HANDOFF.md`, `Claude outputs/` or security audit findings. These all exist only on the owner's PC (back them up separately). The web app's own copies of logos and fonts live in `apps/web/public/brand/` and `apps/web/app/fonts/`, and those are tracked.
 - `docs/## Research Objective.txt` is an unrelated note (YOLOv8 weed detection). Ignore it.
 - Agent tooling in `tooling/` (brand skill, design skills, Playwright and 21st.dev MCP) is not active for Claude Code until it's copied into `.claude/skills/` and `.mcp.json` (see `tooling/README.md`).
+
+## Session start and graphify
+
+Do this at the start of every session, in order:
+
+1. Read `HANDOFF.md` if it exists (current state), then the docs named in rule 1 for whatever you are about to touch.
+2. Graphify is the first stop for "where is X / how does A reach B" questions (see the `## graphify` section below). Check `graphify --version`. If it is missing: `uv tool install graphifyy`, `graphify install`, then in this folder `graphify install --project`, and confirm `.claude\skills\graphify\SKILL.md` exists. If `graphify-out/graph.json` does not exist, run `/graphify .` once from the repo root. After editing code, run `graphify update .`.
+3. Git: `.claude/` is on the never-commit list above (this repo is public), so do not follow the installer's "git add .claude/" hint. Whether `graphify-out/` is committed or ignored is the owner's call; ask, and never run git commit, push or reset unprompted (rule 5).
+4. Say what you will do and what you verified. Never claim a check you did not run (for example "measured, not listened to", "tests not run").
+5. Keep this file and `HANDOFF.md` current: when a decision is made or a blocker closes, update them in the same session.
+
+## Content rules for promo and marketing work
+
+- Only product facts visible on the live site or in `docs/`. No invented testimonials, prices, user counts, press or ratings. If the site is silent (for example the problem statement or proof), write "not stated", not something plausible.
+- Track, artist and event names in the local database are seeded demo data (Rumi, Kaal Bela, Night Bus, Low Tide). Never present them as launch data.
+- The tagline and mission line are provisional (D-P16-07, OD-30, LB-02) and Sikat is not licensed for commercial use (D-P16-04, LB-01). Anything public needs both resolved first.
+- Music rights: use no third-party recording, composition, lyrics, artwork or footage without cleared rights. Original generated audio is fine. For any licensed or label-artist track, clear both the master and the composition. Bangladeshi-law points are a lawyer's call, not final conclusions (see the owner's "Corner Room Music Launch Playbook" doc if available).
+- Do not publish or send anything for the owner without an explicit yes. Never put the public Railway site into development mode (it would expose the fake "Test payment" and "Verify now" shortcuts); use a separate private test copy for demo data online.
+
+## Intro film (`apps/web/components/promo/intro-video/`)
+
+- A 40 s, 1920 x 1080, 30 fps film; every frame is a pure function of time `t`, so no real-time animation, `Date.now()` or randomness. Scenes: hero 0 to 6.4, events 6.4 to 13.2, hand-over 13.2 to 15.2, listening room 15.2 to 29.2 (longest on purpose; keep it in any cut), your room 29.2 to 33.6, store 33.6 to 36.8, end card 36.8 to 40.
+- All on-screen text lives in `copy.ts` with its source page. Timing and curves live in `timeline.ts`. The listening-room numbers are copied from `app/styles/modules/listen.css` (OD-32); reuse them, do not invent new ones. Ember and Sky lights never overlap (D1).
+- Render: `CR_THEME_KIT=1 npm run dev` in `apps/web`, then `node scripts/render-intro-video.mjs` (needs ffmpeg; `--silent`, `--from`, `--to` supported). Output goes to `var/promo/`. Do not use a CSS blur filter on the cover backdrop (renders time out); use the stretched 40 px canvas in `useStretchedCovers`.
+- The score is synthesised in `scripts/build-intro-soundtrack.mjs` (no samples, nothing to license, -14 LUFS). Its `CUES` block mirrors `timeline.ts`; change both together, and update the film's `README.md` and `timeline.test.ts` in the same change.
+- Not yet verified in the project: `npm run lint`, `npm test` for the film files, and the preview page in the real Next app. Run them before merging.
+
+## Band logo work (MIZULS)
+
+The owner's band logo is separate from Corner Room. When asked to change one part, change only that part and keep the rest pixel-identical; keep the transparent, 1080 x 1920 and print-PDF versions in step.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.

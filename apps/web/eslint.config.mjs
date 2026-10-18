@@ -8,7 +8,7 @@ const compat = new FlatCompat({ baseDirectory: __dirname });
 
 /** Next.js recommended rules (core web vitals + TypeScript). Added in Phase 16 (D-P16-06). */
 const eslintConfig = [
-  { ignores: [".next/**", "node_modules/**", "out/**", "next-env.d.ts", "playwright-report/**", "test-results/**"] },
+  { ignores: [".next/**", ".next-staging/**", "node_modules/**", "out/**", "next-env.d.ts", "playwright-report/**", "test-results/**"] },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 ];
 

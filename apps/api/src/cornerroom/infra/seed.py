@@ -6,6 +6,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cornerroom.infra.logging import mask_email
 from cornerroom.infra.security import hash_password
 from cornerroom.infra.settings import Settings
 from cornerroom.modules.authorization.domain.models import (
@@ -16,6 +17,7 @@ from cornerroom.modules.authorization.domain.models import (
     RolePermission,
 )
 from cornerroom.modules.identity.domain.models import Organization, User
+from cornerroom.modules.music.domain.models import CreditRole, Genre, RenditionProfile
 from cornerroom.modules.notifications.domain.models import NotificationTemplate
 
 log = structlog.get_logger("seed")
@@ -69,7 +71,71 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
     "sponsor": ("Sponsor", ()),
     "producer": ("Producer", ()),
     "songwriter": ("Songwriter", ()),
+    # Audio platform roles (S5); the owner assigns people.
+    "catalog_assistant": ("Catalog Assistant", ("music.intake_assist",)),
+    "catalog_manager": ("Catalog Manager", ("music.intake_assist", "music.intake_manage")),
+    "media_operator": ("Media Operator", ("media.ops",)),
 }
+
+# Playback copy recipes (D-AUDIO-03). CANDIDATE until the blind listening comparison sets the
+# final bitrates; seeded once, never overwritten here.
+# Credit vocabulary (D-AUDIO-16). Performer roles link to an Artist; the rest may be a typed name.
+CREDIT_ROLES = (
+    ("primary_artist", "Primary artist", "প্রধান শিল্পী", True, False),
+    ("featured_artist", "Featured artist", "অতিথি শিল্পী", True, False),
+    ("performer", "Performer", "পরিবেশক", True, True),
+    ("remixer", "Remixer", "রিমিক্সার", False, False),
+    ("producer", "Producer", "প্রযোজক", False, False),
+    ("songwriter", "Songwriter", "গীতিকার ও সুরকার", False, False),
+    ("composer", "Composer", "সুরকার", False, False),
+    ("lyricist", "Lyricist", "গীতিকার", False, False),
+    ("arranger", "Arranger", "সংগীত আয়োজক", False, False),
+    ("mixing_engineer", "Mixing engineer", "মিক্সিং প্রকৌশলী", False, False),
+    ("mastering_engineer", "Mastering engineer", "মাস্টারিং প্রকৌশলী", False, False),
+)
+
+# Genre list approved with the design (S10). Data: staff can retire or add rows later.
+GENRES = (
+    ("bangla_folk", "Bangla Folk", "বাংলা লোকগীতি"),
+    ("baul", "Baul", "বাউল"),
+    ("rabindra_sangeet", "Rabindra Sangeet", "রবীন্দ্রসংগীত"),
+    ("nazrul_geeti", "Nazrul Geeti", "নজরুলগীতি"),
+    ("lalon_geeti", "Lalon Geeti", "লালনগীতি"),
+    ("adhunik", "Adhunik", "আধুনিক"),
+    ("bangla_rock", "Bangla Rock / Band", "বাংলা রক / ব্যান্ড"),
+    ("bangla_hiphop", "Bangla Hip-Hop", "বাংলা হিপহপ"),
+    ("bangla_pop", "Bangla Pop", "বাংলা পপ"),
+    ("film_music", "Film Music (Dhallywood)", "চলচ্চিত্রের গান"),
+    ("devotional", "Islamic / Devotional", "ইসলামি / ভক্তিমূলক"),
+    ("pop", "Pop", "পপ"),
+    ("rock", "Rock", "রক"),
+    ("indie", "Alternative / Indie", "অল্টারনেটিভ / ইন্ডি"),
+    ("hiphop", "Hip-Hop / Rap", "হিপহপ / র‍্যাপ"),
+    ("rnb_soul", "R&B / Soul", "আর অ্যান্ড বি / সোল"),
+    ("electronic", "Electronic / Dance", "ইলেকট্রনিক / ড্যান্স"),
+    ("jazz", "Jazz", "জ্যাজ"),
+    ("blues", "Blues", "ব্লুজ"),
+    ("classical_western", "Classical (Western)", "পাশ্চাত্য ধ্রুপদী"),
+    ("hindustani_classical", "Hindustani Classical", "উচ্চাঙ্গসংগীত"),
+    ("world", "World", "ওয়ার্ল্ড"),
+    ("metal", "Metal", "মেটাল"),
+    ("soundtrack", "Soundtrack / Score", "সাউন্ডট্র্যাক"),
+    ("ambient", "Ambient", "অ্যাম্বিয়েন্ট"),
+    ("lofi", "Lo-fi", "লো-ফাই"),
+    ("acoustic", "Acoustic / Singer-songwriter", "অ্যাকুস্টিক"),
+    ("childrens", "Children's", "শিশুতোষ"),
+    ("spoken_word", "Spoken word", "আবৃত্তি"),
+)
+
+RENDITION_PROFILES = (
+    {"key": "opus_hq", "codec": "opus", "container": "ogg", "bitrate_kbps": 160, "sample_rate_hz": 48000, "sort": 1},
+    {"key": "mp3_compat", "codec": "mp3", "container": "mp3", "bitrate_kbps": 320, "sample_rate_hz": 44100, "sort": 2},
+    # D-AUDIO-06: the buyer's lossless download. Rate and bit depth stay as the master's (0 = as
+    # master), so there is no bitrate to choose by listening test: ACTIVE from the start. The MP3
+    # download is the mp3_compat playback copy above (MP3 320).
+    {"key": "flac_download", "codec": "flac", "container": "flac", "bitrate_kbps": 0, "sample_rate_hz": 0, "sort": 3,
+     "purpose": "DOWNLOAD", "status": "ACTIVE"},
+)
 
 SEED_ORGS = (
     ("PLATFORM", "Corner Room Platform"),
@@ -101,6 +167,19 @@ async def seed_foundation(session: AsyncSession, settings: Settings) -> None:
             existing = await session.get(RolePermission, (role.id, perms[perm_key].id))
             if existing is None:
                 session.add(RolePermission(role_id=role.id, permission_id=perms[perm_key].id))
+
+    for sort, (key, label_en, label_bn, performer, instrument) in enumerate(CREDIT_ROLES):
+        if await session.get(CreditRole, key) is None:
+            session.add(CreditRole(key=key, label_en=label_en, label_bn=label_bn, performer=performer, allows_instrument=instrument, sort=sort))
+    for sort, (key, label_en, label_bn) in enumerate(GENRES):
+        if await session.get(Genre, key) is None:
+            session.add(Genre(key=key, label_en=label_en, label_bn=label_bn, status="ACTIVE", sort=sort))
+
+    for spec in RENDITION_PROFILES:
+        if await session.get(RenditionProfile, spec["key"]) is None:
+            session.add(
+                RenditionProfile(**{"status": "CANDIDATE", "purpose": "PLAYBACK", **spec}, channels=2, profile_version=1, required=True)
+            )
 
     for org_type, name in SEED_ORGS:
         found = (
@@ -162,6 +241,7 @@ async def seed_foundation(session: AsyncSession, settings: Settings) -> None:
         ("ticket.issued", "Your ticket was issued."),
         ("order.paid", "Your order was paid."),
         ("payment.failed", "A payment attempt failed."),
+        ("refund.completed", "Your refund is complete."),
         ("track.approved", "A track was approved."),
         ("track.released", "A track was released."),
         ("settlement.completed", "A settlement was completed."),
@@ -204,7 +284,7 @@ async def seed_foundation(session: AsyncSession, settings: Settings) -> None:
                     status="ACTIVE",
                 )
             )
-            log.info("bootstrap_admin_created", email=email)
+            log.info("bootstrap_admin_created", email=mask_email(email))
 
     await session.flush()
     log.info("foundation_seeded")
