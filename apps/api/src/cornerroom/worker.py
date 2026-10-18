@@ -109,14 +109,21 @@ async def expire_ticket_holds(ctx: dict) -> int:
     Without it, an abandoned checkout keeps its tickets held (and a type SOLD_OUT, hidden from
     the public list) until someone else happens to try the same ticket type.
     """
+    from cornerroom.modules.commerce.application.service import CheckoutService
     from cornerroom.modules.ticketing.application.service import TicketingService
 
     factory = get_session_factory()
     async with factory() as session:
         expired = await TicketingService(session).expire_due_holds(batch=HOLD_EXPIRY_BATCH)
         await session.commit()
+    # Q-COM-03: unpaid orders whose hold expired (here, on checkout, or was released) are cancelled.
+    async with factory() as session:
+        cancelled = await CheckoutService(session).cancel_unpaid_ticket_orders(batch=HOLD_EXPIRY_BATCH)
+        await session.commit()
     if expired:
         log.info("ticket_holds_expired", expired=expired, operation="ticketing.hold_expiry")
+    if cancelled:
+        log.info("unpaid_orders_cancelled", cancelled=cancelled, operation="commerce.order_cancel")
     return expired
 
 

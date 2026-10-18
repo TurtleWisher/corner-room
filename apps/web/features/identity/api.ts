@@ -282,3 +282,46 @@ export async function revokeSession(id: string): Promise<void> {
 export async function revokeAllSessions(): Promise<void> {
   await apiFetch<null>("/api/v1/me/sessions/revoke-all", { method: "POST", retry: false });
 }
+
+
+// --- Delivery address for gifts (D-ADDR-01). Personal data: only the owner reads it. ---
+
+export type DeliveryAddress = {
+  recipient_name: string;
+  phone: string;
+  division: string;
+  district: string;
+  upazila: string;
+  area: string;
+  house_road: string;
+  postcode: string | null;
+  landmark: string | null;
+  updated_at?: string | null;
+};
+
+export type DeliveryAddressDraft = Omit<DeliveryAddress, "updated_at">;
+
+export type AddressOptions = { country: string; divisions: Array<{ name: string; districts: string[] }> };
+
+export async function fetchAddressOptions(): Promise<AddressOptions> {
+  return apiFetch<AddressOptions>("/api/v1/address-options", { skipAuth: true });
+}
+
+/** The saved address, or null when the user has not added one yet. */
+export async function fetchMyDeliveryAddress(): Promise<DeliveryAddress | null> {
+  try {
+    return await apiFetch<DeliveryAddress>("/api/v1/me/delivery-address", { retry: false });
+  } catch (err) {
+    if (err instanceof Error && "status" in err && (err as { status: number }).status === 404) return null;
+    throw err;
+  }
+}
+
+export async function saveMyDeliveryAddress(address: DeliveryAddressDraft): Promise<DeliveryAddress> {
+  return apiFetch<DeliveryAddress>("/api/v1/me/delivery-address", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(address),
+    retry: false,
+  });
+}

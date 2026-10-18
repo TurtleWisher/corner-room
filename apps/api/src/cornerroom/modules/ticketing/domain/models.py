@@ -96,6 +96,9 @@ class TicketHold(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixi
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="ACTIVE")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Q-PAY-05: a submitted Bangla QR payment is being checked by staff; the hold does not expire
+    # until they decide (a rejection restarts the normal hold time).
+    verification_pending: Mapped[bool] = mapped_column(nullable=False, default=False, server_default=text("false"))
 
 
 class Ticket(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Base):

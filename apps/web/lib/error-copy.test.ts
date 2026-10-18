@@ -12,6 +12,11 @@ describe("friendlyError", () => {
     expect(message).toBe("You already have an active subscription.");
     expect(message).not.toMatch(/Q-P|P1/);
   });
+  it("explains purchase refusals in plain words", () => {
+    expect(friendlyError(err("TRACK_NOT_SOLD_SEPARATELY", 409))).toBe("This song is sold only as part of its album or EP.");
+    expect(friendlyError(err("DELIVERY_ADDRESS_REQUIRED", 409))).toMatch(/Bangladesh address/);
+    expect(friendlyError(err("ORDER_CANCELLED", 409))).toMatch(/start again/);
+  });
   it("falls back by status, then to a generic line", () => {
     expect(friendlyError(err("SOMETHING_NEW", 404))).toBe("We could not find that.");
     expect(friendlyError(err("SOMETHING_NEW", 500))).toBe("Something went wrong. Please try again.");

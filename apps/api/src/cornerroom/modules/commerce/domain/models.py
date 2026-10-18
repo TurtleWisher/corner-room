@@ -57,6 +57,9 @@ class OrderItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
     unit_amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # The exact product bought (offer checkouts), so fulfilment never guesses it from subject_id
+    # (one subject can carry two product types). NULL on older lines and on ticket/plan lines.
+    product_id: Mapped[UUID | None] = mapped_column(ForeignKey("commerce.products.id"), nullable=True)
 
 
 class TaxLine(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -185,3 +188,25 @@ class OfferProposal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     decision_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     resulting_offer_id: Mapped[UUID | None] = mapped_column(nullable=True)
+
+
+class OrderDeliveryAddress(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """The delivery address the buyer confirmed for this order (D-ADDR-01), copied at checkout so
+    a later change to the account's address does not rewrite past orders. Personal data."""
+
+    __tablename__ = "order_delivery_addresses"
+    __table_args__ = (
+        UniqueConstraint("order_id", name="uq_order_delivery_addresses_order_id"),
+        {"schema": "commerce"},
+    )
+
+    order_id: Mapped[UUID] = mapped_column(ForeignKey("commerce.orders.id"), nullable=False)
+    recipient_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    phone: Mapped[str] = mapped_column(String(16), nullable=False)
+    division: Mapped[str] = mapped_column(String(32), nullable=False)
+    district: Mapped[str] = mapped_column(String(64), nullable=False)
+    upazila: Mapped[str] = mapped_column(String(80), nullable=False)
+    area: Mapped[str] = mapped_column(String(120), nullable=False)
+    house_road: Mapped[str] = mapped_column(String(200), nullable=False)
+    postcode: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    landmark: Mapped[str | None] = mapped_column(String(200), nullable=True)

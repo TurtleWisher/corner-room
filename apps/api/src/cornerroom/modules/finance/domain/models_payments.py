@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from cornerroom.infra.base import ActorMixin, Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -72,3 +74,40 @@ class Refund(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
     policy_id: Mapped[UUID | None] = mapped_column(nullable=True)
     approved_by: Mapped[UUID | None] = mapped_column(nullable=True)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    # Q-COM-01: the tickets this refund covers (ids as strings). NULL: names no tickets.
+    ticket_ids: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+
+
+class PaymentSubmission(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """A buyer's report of a Bangla QR payment, waiting for finance staff to check it (Q-PAY-01).
+
+    The buyer gives the transaction ID, the number paid from and the app. Staff confirm (the
+    payment is captured through the normal pipeline) or reject with a reason (the buyer may fix
+    and resend, Q-PAY-05). A transaction ID can't be on two live submissions.
+    """
+
+    __tablename__ = "payment_submissions"
+    __table_args__ = (
+        CheckConstraint("status IN ('SUBMITTED','CONFIRMED','REJECTED')", name="status"),
+        CheckConstraint("paid_with IN ('BKASH','NAGAD','ROCKET','UPAY','BANK_APP','OTHER')", name="paid_with"),
+        Index("ix_payment_submissions_payment_id", "payment_id"),
+        Index("ix_payment_submissions_status", "status"),
+        Index(
+            "uq_payment_submissions_live_transaction_ref",
+            text("lower(transaction_ref)"),
+            unique=True,
+            postgresql_where=text("status <> 'REJECTED'"),
+        ),
+        {"schema": "finance"},
+    )
+
+    payment_id: Mapped[UUID] = mapped_column(ForeignKey("finance.payments.id"), nullable=False)
+    order_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    user_id: Mapped[UUID] = mapped_column(nullable=False)
+    transaction_ref: Mapped[str] = mapped_column(String(64), nullable=False)
+    paid_from: Mapped[str] = mapped_column(String(32), nullable=False)
+    paid_with: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="SUBMITTED")
+    decided_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decision_note: Mapped[str | None] = mapped_column(String(300), nullable=True)

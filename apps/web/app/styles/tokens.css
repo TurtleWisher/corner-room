@@ -173,9 +173,11 @@
   --cr-focus: #fcf475;
   --cr-display-shadow: transparent;
 
+  /* D-THEME-01 (owner, 2026-10-18): the staff and admin console is the black Corner Room palette,
+     not Ember or Sky. A quiet neutral lamp instead of the red pool; Lamp stays the action colour. */
   --cr-light-size: 50% 40%;
   --cr-light-bulb: transparent;
-  --cr-light-pool: rgb(178 31 36 / 0.2);
+  --cr-light-pool: rgb(246 236 230 / 0.05);
   --cr-light-falloff: transparent;
   --cr-light-counter: transparent;
   --cr-light-sweep: transparent;
@@ -389,6 +391,12 @@
   [data-theme="staff"] .cr-pl-spot,
   [data-theme="paper"] .cr-pl-spot {
     display: none;
+  }
+  /* The staff console has a side navigation next to <main>. A layer fixed to the viewport would
+     spill over it (and the header gap) where its soft-light grain has nothing to blend with and
+     shows as raw grey noise (owner report, 2026-10-18). Keep staff page layers inside <main>. */
+  #main.cr-scope[data-theme="staff"] > .cr-pl-page {
+    position: absolute;
   }
 
   /* A lit region of the same world inside a lit page does not repaint: the page light shows

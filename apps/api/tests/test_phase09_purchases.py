@@ -112,7 +112,7 @@ async def test_phase09_order_payment_fulfillment_entitlement_idor(client: AsyncC
     mixed = await client.post(
         "/api/v1/orders",
         headers={**bearer(buyer_token), "Idempotency-Key": "mix-1"},
-        json={"hold_id": str(uuid4()), "offer_id": offer["id"]},
+        json={"hold_id": str(uuid4()), "offer_id": offer["id"], "delivery_address_confirmed": True},
     )
     assert mixed.status_code == 422
     assert mixed.json()["code"] == "MIXED_ORDER"
@@ -120,13 +120,13 @@ async def test_phase09_order_payment_fulfillment_entitlement_idor(client: AsyncC
     first = await client.post(
         "/api/v1/orders",
         headers={**bearer(buyer_token), "Idempotency-Key": "buy-track-1"},
-        json={"offer_id": offer["id"]},
+        json={"offer_id": offer["id"], "delivery_address_confirmed": True},
     )
     assert first.status_code == 201, first.text
     replay = await client.post(
         "/api/v1/orders",
         headers={**bearer(buyer_token), "Idempotency-Key": "buy-track-1"},
-        json={"offer_id": offer["id"]},
+        json={"offer_id": offer["id"], "delivery_address_confirmed": True},
     )
     assert replay.status_code == 201
     assert replay.json()["id"] == first.json()["id"]
@@ -208,13 +208,13 @@ async def test_phase09_subscription_lifecycle_renewal_fail_and_authz(client: Asy
     created = await client.post(
         "/api/v1/subscriptions",
         headers={**bearer(token), "Idempotency-Key": "sub-1"},
-        json={"plan_id": plan["id"]},
+        json={"plan_id": plan["id"], "delivery_address_confirmed": True},
     )
     assert created.status_code == 201, created.text
     replay = await client.post(
         "/api/v1/subscriptions",
         headers={**bearer(token), "Idempotency-Key": "sub-1"},
-        json={"plan_id": plan["id"]},
+        json={"plan_id": plan["id"], "delivery_address_confirmed": True},
     )
     assert replay.json()["id"] == created.json()["id"]
 
@@ -239,7 +239,7 @@ async def test_phase09_subscription_lifecycle_renewal_fail_and_authz(client: Asy
     second = await client.post(
         "/api/v1/subscriptions",
         headers={**bearer(token), "Idempotency-Key": "sub-2"},
-        json={"plan_id": plan["id"]},
+        json={"plan_id": plan["id"], "delivery_address_confirmed": True},
     )
     assert second.status_code == 409
     assert second.json()["code"] == "SUBSCRIPTION_EXISTS"
@@ -258,7 +258,7 @@ async def test_phase09_subscription_lifecycle_renewal_fail_and_authz(client: Asy
     start2 = await client.post(
         "/api/v1/subscriptions",
         headers={**bearer(fan2["access_token"]), "Idempotency-Key": "sub-b"},
-        json={"plan_id": plan["id"]},
+        json={"plan_id": plan["id"], "delivery_address_confirmed": True},
     )
     assert start2.status_code == 201
     paid2 = await client.post(
@@ -318,7 +318,7 @@ async def test_phase09_refund_additive_duplicate_webhook_org_grant(client: Async
     order = await client.post(
         "/api/v1/orders",
         headers={**bearer(token), "Idempotency-Key": "ref-order"},
-        json={"offer_id": offer["id"]},
+        json={"offer_id": offer["id"], "delivery_address_confirmed": True},
     )
     paid = await client.post(
         f"/api/v1/payments/{order.json()['payment']['id']}/sandbox-confirm",

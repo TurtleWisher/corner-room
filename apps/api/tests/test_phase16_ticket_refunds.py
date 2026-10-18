@@ -38,7 +38,7 @@ async def _paid_ticket_order(client: AsyncClient, buyer: str, ticket_type_id: st
     order = await client.post(
         "/api/v1/orders",
         headers={**bearer(buyer), "Idempotency-Key": key},
-        json={"hold_id": hold.json()["id"]},
+        json={"hold_id": hold.json()["id"], "delivery_address_confirmed": True},
     )
     assert order.status_code == 201, order.text
     paid = await client.post(f"/api/v1/payments/{order.json()['payment']['id']}/sandbox-confirm", headers=bearer(buyer))

@@ -315,19 +315,32 @@ class CatalogCommerceService:
         )
         return row
 
+    async def tracks_not_sold_separately(self, track_ids: list[UUID]) -> set[UUID]:
+        """D-AUDIO-10, in one query: the songs that may not be bought on their own (every release
+        they are on is a whole-release-only album or EP)."""
+        from cornerroom.modules.music.domain.models import Release, ReleaseTrack
+
+        if not track_ids:
+            return set()
+        rows = (
+            await self.session.execute(
+                select(ReleaseTrack.track_id, Release.release_type, Release.track_sales)
+                .join(Release, ReleaseTrack.release_id == Release.id)
+                .where(ReleaseTrack.track_id.in_(track_ids), Release.deleted_at.is_(None))
+            )
+        ).all()
+        on_release: set[UUID] = set()
+        allowed: set[UUID] = set()
+        for track_id, release_type, track_sales in rows:
+            on_release.add(track_id)
+            if release_type == "SINGLE" or track_sales == "TRACKS_ALLOWED":
+                allowed.add(track_id)
+        return on_release - allowed
+
     async def assert_track_sold_separately(self, track_id: UUID) -> None:
         """D-AUDIO-10: a song is sold on its own only from a single, or from a release whose artist
         allows songs to be bought individually. Tracks on no release (older catalog) are unaffected."""
-        from cornerroom.modules.music.domain.models import Release, ReleaseTrack
-
-        releases = (
-            await self.session.execute(
-                select(Release)
-                .join(ReleaseTrack, ReleaseTrack.release_id == Release.id)
-                .where(ReleaseTrack.track_id == track_id, Release.deleted_at.is_(None))
-            )
-        ).scalars().all()
-        if releases and not any(r.release_type == "SINGLE" or r.track_sales == "TRACKS_ALLOWED" for r in releases):
+        if track_id in await self.tracks_not_sold_separately([track_id]):
             raise AppError(
                 "TRACK_NOT_SOLD_SEPARATELY",
                 "This song is sold only as part of its release",
@@ -495,7 +508,17 @@ class CatalogCommerceService:
             last_offer = rows[limit - 1][0]
             next_cursor = encode_cursor(last_offer.created_at.isoformat(), last_offer.id)
             rows = rows[:limit]
-        return [(offer, product) for offer, product in rows], next_cursor
+        # D-AUDIO-10: a song whose artist sells the release only as a whole is not on sale by
+        # itself, so its offer is not listed (buying it would be refused). The cursor still comes
+        # from the unfiltered page, so paging stays correct.
+        blocked = await self.tracks_not_sold_separately(
+            [product.subject_id for _offer, product in rows if product.product_type == "TRACK"]
+        )
+        return [
+            (offer, product)
+            for offer, product in rows
+            if not (product.product_type == "TRACK" and product.subject_id in blocked)
+        ], next_cursor
 
     async def list_org_products(
         self,

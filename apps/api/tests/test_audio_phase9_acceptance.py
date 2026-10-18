@@ -30,7 +30,7 @@ async def _release_offer(client: AsyncClient, tag: str) -> tuple[str, str, str, 
 
 
 async def _order(client: AsyncClient, token: str, offer_id: str) -> dict:
-    res = await client.post("/api/v1/orders", headers={**bearer(token), "Idempotency-Key": f"k-{uuid4()}"}, json={"offer_id": offer_id})
+    res = await client.post("/api/v1/orders", headers={**bearer(token), "Idempotency-Key": f"k-{uuid4()}"}, json={"offer_id": offer_id, "delivery_address_confirmed": True})
     assert res.status_code == 201, res.text
     return res.json()
 
@@ -143,4 +143,4 @@ async def test_release_refund_revokes_and_other_accounts_never_see_it(client: As
     assert all(e["status"] != "ACTIVE" for e in await _release_entitlements(client, token, release_id))
     assert await _owns(client, token, track_id) is False
     # The release can be bought again after a refund.
-    assert (await client.post("/api/v1/orders", headers={**bearer(token), "Idempotency-Key": f"k-{uuid4()}"}, json={"offer_id": offer_id})).status_code == 201
+    assert (await client.post("/api/v1/orders", headers={**bearer(token), "Idempotency-Key": f"k-{uuid4()}"}, json={"offer_id": offer_id, "delivery_address_confirmed": True})).status_code == 201

@@ -26,7 +26,7 @@ async def _released(client: AsyncClient, admin: str, label: str, email: str, nam
 
 async def _buy(client: AsyncClient, token: str, offer_id: str) -> dict:
     order = await client.post(
-        "/api/v1/orders", headers={**bearer(token), "Idempotency-Key": f"k-{uuid4()}"}, json={"offer_id": offer_id}
+        "/api/v1/orders", headers={**bearer(token), "Idempotency-Key": f"k-{uuid4()}"}, json={"offer_id": offer_id, "delivery_address_confirmed": True}
     )
     assert order.status_code == 201, order.text
     paid = await client.post(f"/api/v1/payments/{order.json()['payment']['id']}/sandbox-confirm", headers=bearer(token))
@@ -77,7 +77,7 @@ async def test_release_purchase_from_proposal_to_listening(client: AsyncClient) 
     assert await can_play(track_id) is True
     library = (await client.get("/api/v1/me/library", headers=bearer(fan["access_token"]))).json()["items"]
     assert any(i["item_type"] == "release" and i["item_id"] == release_id and i["kind"] == "PURCHASE_REF" for i in library)
-    again = await client.post("/api/v1/orders", headers={**bearer(fan["access_token"]), "Idempotency-Key": f"k-{uuid4()}"}, json={"offer_id": offer["id"]})
+    again = await client.post("/api/v1/orders", headers={**bearer(fan["access_token"]), "Idempotency-Key": f"k-{uuid4()}"}, json={"offer_id": offer["id"], "delivery_address_confirmed": True})
     assert again.status_code == 409 and again.json()["code"] == "ALREADY_OWNED"
 
     # D-AUDIO-12 / A24: a bonus track added to the same release later is covered;
@@ -117,6 +117,20 @@ async def test_track_sales_and_audience_rules(client: AsyncClient) -> None:
     await client.patch(f"/api/v1/studio/releases/{album_id}", headers=bearer(owner["access_token"]), json={"track_sales": "TRACKS_ALLOWED"})
     allowed = await client.post("/api/v1/products", headers=bearer(ops), json={"product_type": "TRACK", "subject_id": track_id, "name": "Part"})
     assert allowed.status_code == 201, allowed.text
+
+    # If the artist later switches back to whole-release-only, the song's price leaves the public
+    # list (2026-10-18: it stayed listed and every attempt to buy it was refused).
+    product_id = allowed.json()["id"]
+    assert (await client.post(f"/api/v1/products/{product_id}/lifecycle", headers=bearer(ops), json={"action": "activate"})).status_code == 200
+    offer = await client.post("/api/v1/offers", headers=bearer(ops), json={"product_id": product_id, "amount_minor": 500, "currency_code": "BDT"})
+    assert offer.status_code == 201, offer.text
+    assert (await client.post(f"/api/v1/offers/{offer.json()['id']}/lifecycle", headers=bearer(ops), json={"action": "activate"})).status_code == 200
+    listed = {o["id"] for o in (await client.get("/api/v1/offers")).json()["items"]}
+    assert offer.json()["id"] in listed
+    switched = await client.patch(f"/api/v1/studio/releases/{album_id}", headers=bearer(owner["access_token"]), json={"track_sales": "RELEASE_ONLY"})
+    assert switched.status_code == 200, switched.text
+    listed = {o["id"] for o in (await client.get("/api/v1/offers")).json()["items"]}
+    assert offer.json()["id"] not in listed
 
     # A partial-owner price can only be bought by fans who already own part of the release.
     release_id, _track, owner2, _a = await _released(client, admin, label, "rc2-b@example.com", "Partial")

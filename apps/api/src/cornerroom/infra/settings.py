@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     # Bangla QR payment image (owner supplies it later). A web path or URL to the image only; it
     # proves nothing about payment. Empty = no image yet: test servers show a marked placeholder.
     bangla_qr_image_url: str = ""
+    # How new payments are taken (Q-PAY-01): "sandbox" (test payments, the default) or
+    # "bangla_qr" (real Bangla QR payments confirmed by finance staff). The owner switches it.
+    payment_provider: str = "sandbox"
     # Local/dev/test only: where the dev mailbox writes outgoing email (no real provider, OD-08).
     dev_mailbox_path: str = "./var/dev-mailbox"
     password_recovery_ttl_seconds: int = 0
@@ -160,6 +163,14 @@ class Settings(BaseSettings):
         allowed = {"local", "s3"}
         if value not in allowed:
             raise ValueError(f"STORAGE_BACKEND must be one of {sorted(allowed)}")
+        return value
+
+    @field_validator("payment_provider")
+    @classmethod
+    def require_known_payment_provider(cls, value: str) -> str:
+        allowed = {"sandbox", "bangla_qr"}
+        if value not in allowed:
+            raise ValueError(f"PAYMENT_PROVIDER must be one of {sorted(allowed)}")
         return value
 
     @model_validator(mode="after")

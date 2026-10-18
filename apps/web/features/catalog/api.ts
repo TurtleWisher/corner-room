@@ -14,6 +14,8 @@ export type TrackRecord = {
   primary_org_id?: string | null;
   metadata?: Record<string, unknown> | null;
   version?: number;
+  /** Released albums/EPs/singles the song is on (single-track reads, D-AUDIO-12). */
+  release_ids?: string[];
 };
 
 export type ReleaseRecord = {

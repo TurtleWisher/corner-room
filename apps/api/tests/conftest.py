@@ -110,6 +110,8 @@ async def pg_session(postgres_available: str | None) -> AsyncIterator[AsyncSessi
         ):
             await conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        # Start clean: an interrupted earlier run never reached its teardown and left rows behind.
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
     async with factory() as session:
@@ -165,6 +167,8 @@ async def client(settings: Settings, postgres_available: str | None) -> AsyncIte
         ):
             await conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        # Start clean: an interrupted earlier run never reached its teardown and left rows behind.
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as session:

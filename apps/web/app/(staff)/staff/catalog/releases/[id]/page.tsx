@@ -152,7 +152,8 @@ export default function StaffCatalogReleasePage() {
     <Protected>
       <div className="grid gap-6">
         <h1 className="text-2xl font-bold">Release workspace</h1>
-        <div data-theme="ember" className="cr-scope rounded p-4">
+        {/* D-THEME-01: inside the console the editor uses the staff (black) palette, not Ember. */}
+        <div className="rounded border border-line p-4">
           <ReleaseEditor releaseId={id} />
         </div>
         <ReviewPanel releaseId={id} />

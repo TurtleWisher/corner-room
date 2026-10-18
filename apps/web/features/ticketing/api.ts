@@ -68,6 +68,12 @@ export type OrderRecord = {
   created_at?: string | null;
   hold_expires_at?: string | null;
   hold_status?: string | null;
+  /** Completed refunds on the payment, minor units (single-order reads). */
+  refunded_amount_minor?: number | null;
+  /** The delivery address confirmed for this order (single-order reads, D-ADDR-01). */
+  delivery_address?: Record<string, string | null> | null;
+  /** The buyer's latest Bangla QR payment report and what staff decided (Q-PAY-01/05). */
+  payment_submission?: PaymentSubmission | null;
 };
 
 export type TicketRecord = {
@@ -133,20 +139,21 @@ export async function createHold(ticket_type_id: string, quantity: number): Prom
   });
 }
 
-export async function createOrder(hold_id: string, idempotencyKey: string): Promise<OrderRecord> {
+/** `deliveryConfirmed`: the buyer confirmed their Bangladesh delivery address (D-ADDR-01). */
+export async function createOrder(hold_id: string, idempotencyKey: string, deliveryConfirmed = false): Promise<OrderRecord> {
   return apiFetch<OrderRecord>("/api/v1/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-    body: JSON.stringify({ hold_id }),
+    body: JSON.stringify({ hold_id, delivery_address_confirmed: deliveryConfirmed }),
     retry: false,
   });
 }
 
-export async function createCatalogOrder(offer_id: string, idempotencyKey: string): Promise<OrderRecord> {
+export async function createCatalogOrder(offer_id: string, idempotencyKey: string, deliveryConfirmed = false): Promise<OrderRecord> {
   return apiFetch<OrderRecord>("/api/v1/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-    body: JSON.stringify({ offer_id }),
+    body: JSON.stringify({ offer_id, delivery_address_confirmed: deliveryConfirmed }),
     retry: false,
   });
 }
@@ -182,4 +189,23 @@ export async function checkInTicket(token: string): Promise<CheckInRecord> {
 
 export async function fetchAttendance(eventId: string): Promise<Page<CheckInRecord>> {
   return apiFetch<Page<CheckInRecord>>(`/api/v1/events/${eventId}/attendance`, { retry: false });
+}
+
+
+/** A buyer's report of a Bangla QR payment (Q-PAY-01). Staff confirm or reject it. */
+export type PaymentSubmission = {
+  status: "SUBMITTED" | "CONFIRMED" | "REJECTED" | string;
+  transaction_ref: string;
+  paid_with: string;
+  decision_note: string | null;
+  submitted_at: string;
+};
+
+export async function submitPayment(paymentId: string, body: { transaction_ref: string; paid_from: string; paid_with: string }): Promise<OrderRecord> {
+  return apiFetch<OrderRecord>(`/api/v1/payments/${paymentId}/submissions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    retry: false,
+  });
 }

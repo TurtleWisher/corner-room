@@ -175,7 +175,7 @@ async def test_checkout_issues_tickets_without_fake_success_flag(
     order = await client.post(
         "/api/v1/orders",
         headers={**bearer(buyer["access_token"]), "Idempotency-Key": "checkout-1"},
-        json={"hold_id": hold.json()["id"]},
+        json={"hold_id": hold.json()["id"], "delivery_address_confirmed": True},
     )
     assert order.status_code == 201, order.text
     body = order.json()
@@ -225,7 +225,7 @@ async def test_check_in_and_idor(client: AsyncClient) -> None:
     order = await client.post(
         "/api/v1/orders",
         headers={**bearer(buyer["access_token"]), "Idempotency-Key": "door-1"},
-        json={"hold_id": hold.json()["id"]},
+        json={"hold_id": hold.json()["id"], "delivery_address_confirmed": True},
     )
     await client.post(
         f"/api/v1/payments/{order.json()['payment']['id']}/sandbox-confirm",
@@ -275,7 +275,7 @@ async def test_cancelled_event_blocks_holds_postpone_keeps_tickets(client: Async
     order = await client.post(
         "/api/v1/orders",
         headers={**bearer(buyer["access_token"]), "Idempotency-Key": "keep-1"},
-        json={"hold_id": hold.json()["id"]},
+        json={"hold_id": hold.json()["id"], "delivery_address_confirmed": True},
     )
     await client.post(
         f"/api/v1/payments/{order.json()['payment']['id']}/sandbox-confirm",
@@ -400,7 +400,7 @@ async def test_concurrency_b_duplicate_checkout_key(client: AsyncClient) -> None
         headers=bearer(buyer["access_token"]),
         json={"ticket_type_id": ticket_type["id"], "quantity": 1},
     )
-    payload = {"hold_id": hold.json()["id"]}
+    payload = {"hold_id": hold.json()["id"], "delivery_address_confirmed": True}
     headers = {**bearer(buyer["access_token"]), "Idempotency-Key": "same-checkout-key"}
     first = await client.post("/api/v1/orders", headers=headers, json=payload)
     second = await client.post("/api/v1/orders", headers=headers, json=payload)
@@ -427,7 +427,7 @@ async def test_concurrency_c_duplicate_payment_callback(client: AsyncClient, set
     order = await client.post(
         "/api/v1/orders",
         headers={**bearer(buyer["access_token"]), "Idempotency-Key": "pay-dup"},
-        json={"hold_id": hold.json()["id"]},
+        json={"hold_id": hold.json()["id"], "delivery_address_confirmed": True},
     )
     payment_id = order.json()["payment"]["id"]
     payload = {
@@ -474,7 +474,7 @@ async def test_concurrency_d_duplicate_issuance(client: AsyncClient) -> None:
     order = await client.post(
         "/api/v1/orders",
         headers={**bearer(buyer["access_token"]), "Idempotency-Key": "issue-dup"},
-        json={"hold_id": hold.json()["id"]},
+        json={"hold_id": hold.json()["id"], "delivery_address_confirmed": True},
     )
     payment_id = order.json()["payment"]["id"]
     first = await client.post(
@@ -507,7 +507,7 @@ async def test_concurrency_e_concurrent_check_in(client: AsyncClient) -> None:
     order = await client.post(
         "/api/v1/orders",
         headers={**bearer(buyer["access_token"]), "Idempotency-Key": "scan-dup"},
-        json={"hold_id": hold.json()["id"]},
+        json={"hold_id": hold.json()["id"], "delivery_address_confirmed": True},
     )
     await client.post(
         f"/api/v1/payments/{order.json()['payment']['id']}/sandbox-confirm",

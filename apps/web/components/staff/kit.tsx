@@ -81,6 +81,24 @@ export function Protected({ children, permission }: { children: React.ReactNode;
       </DsCard>
     );
   }
+  if (view.kind === "not_staff") {
+    return (
+      <DsCard className="max-w-xl p-6">
+        <p className="text-lg font-bold text-fg">This is the staff console</p>
+        <p className="mt-2 text-sm text-fg-muted">
+          It is only for Corner Room staff. Staff accounts come from an invitation; if you have one, open its link or sign in with the invited account.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <ButtonLink href={`/staff/sign-in?next=${encodeURIComponent(pathname ?? "/staff")}`} variant="secondary">
+            <LogIn aria-hidden="true" /> Staff sign-in
+          </ButtonLink>
+          <ButtonLink href="/" variant="ghost">
+            Back to Corner Room
+          </ButtonLink>
+        </div>
+      </DsCard>
+    );
+  }
   if (view.kind === "forbidden") {
     return (
       <DsCard className="max-w-xl p-6">

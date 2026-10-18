@@ -7,10 +7,21 @@ import { TAGLINE, TAGLINE_BN } from "@/components/shell/site-footer";
  * Sign-in and registration frame (account.md composition 1): one card on the lit corner, the
  * logo above, the provisional tagline beneath. Full width on phones.
  */
-export function AuthCard({ title, children, footer }: { title: string; children: React.ReactNode; footer?: React.ReactNode }) {
+/** `theme`: Ember for fans and artists; "staff" (black, D-THEME-01) for the staff sign-in and join pages. */
+export function AuthCard({
+  title,
+  children,
+  footer,
+  theme = "ember",
+}: {
+  title: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  theme?: "ember" | "staff";
+}) {
   return (
-    <main id="main" data-theme="ember" className="cr-scope">
-      <LitSurface as="section" theme="ember" aria-labelledby="auth-title" className="min-h-[80dvh]">
+    <main id="main" data-theme={theme} className="cr-scope">
+      <LitSurface as="section" theme={theme} aria-labelledby="auth-title" className="min-h-[80dvh]">
         <div className="mx-auto flex max-w-md flex-col items-center px-4 py-12 md:py-20">
           <Logo height={72} alt="Corner Room" />
           <Card className="mt-8 w-full p-6 md:p-8">

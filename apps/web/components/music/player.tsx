@@ -639,6 +639,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           if (audioCtx.current?.state === "suspended") void audioCtx.current.resume().catch(() => undefined);
         }}
         onPlaying={() => {
+          // Audio is flowing again: a later expiry of this song's signed link (they last about five
+          // minutes, Q-P8-01; songs may run 60) may be refreshed once more. A fresh link that fails
+          // at once never reaches here, so this cannot loop.
+          retried.current = false;
           if (cors.current && !corsProven.current) {
             corsProven.current = true;
             setCorsSeen(true);

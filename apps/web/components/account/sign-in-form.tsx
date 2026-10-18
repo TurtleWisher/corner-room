@@ -23,6 +23,7 @@ export function SignInForm({
   defaultNext = "/account",
   footer,
   google = true,
+  theme = "ember",
 }: {
   title?: string;
   intro?: React.ReactNode;
@@ -31,6 +32,8 @@ export function SignInForm({
   /** Receives the `next` destination so a sign-up link can keep it. */
   footer?: (next: string | null) => React.ReactNode;
   google?: boolean;
+  /** Ember for fans and artists; "staff" (black, D-THEME-01) on the staff pages. */
+  theme?: "ember" | "staff";
 }) {
   const router = useRouter();
   const { status, user, login } = useAuth();
@@ -103,7 +106,7 @@ export function SignInForm({
 
   if (status === "authenticated" && user) {
     return (
-      <AuthCard title="You are signed in">
+      <AuthCard theme={theme} title="You are signed in">
         <p className="text-fg">Signed in as {user.display_name || user.email}.</p>
         <ButtonLink href={nextPath()} className="mt-6" block>
           Continue
@@ -113,7 +116,7 @@ export function SignInForm({
   }
 
   return (
-    <AuthCard title={title} footer={footer ? footer(next) : undefined}>
+    <AuthCard theme={theme} title={title} footer={footer ? footer(next) : undefined}>
       {intro ? <div className="mb-5 text-sm text-fg">{intro}</div> : null}
       {error ? (
         <div ref={errorRef} tabIndex={-1} className="mb-5 outline-none">

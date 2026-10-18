@@ -72,11 +72,11 @@ export async function fetchSubscriptionPlans(): Promise<Page<PlanRecord>> {
   });
 }
 
-export async function createSubscriptionOrder(plan_id: string, idempotencyKey: string): Promise<OrderRecord> {
+export async function createSubscriptionOrder(plan_id: string, idempotencyKey: string, deliveryConfirmed = false): Promise<OrderRecord> {
   return apiFetch<OrderRecord>("/api/v1/subscriptions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-    body: JSON.stringify({ plan_id }),
+    body: JSON.stringify({ plan_id, delivery_address_confirmed: deliveryConfirmed }),
     retry: false,
   });
 }
@@ -206,6 +206,135 @@ export async function transitionPlan(id: string, action: string): Promise<PlanRe
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action }),
+    retry: false,
+  });
+}
+
+
+// --- Refunds (Q-COM-01, D-REF-01). The server works out every amount; nothing is computed here. ---
+
+export type RefundReason = { reason_code: string; label: string; requires_finance_approve: boolean };
+
+export type RefundRecord = {
+  id: string;
+  payment_id: string;
+  order_id?: string;
+  status: string;
+  amount_minor: number;
+  currency_code: string;
+  reason_code: string;
+  ticket_ids: string[] | null;
+  created_at?: string;
+  /** sandbox: completed with the test button; bangla_qr: paid back by hand with a reference. */
+  payment_provider?: string | null;
+};
+
+export type StaffTicket = {
+  id: string;
+  status: string;
+  ticket_type_name: string | null;
+  unit_amount_minor: number;
+  currency_code: string;
+  refundable: boolean;
+  refund_pending: boolean;
+};
+
+export type StaffOrder = {
+  id: string;
+  status: string;
+  purpose: string;
+  total_amount_minor: number;
+  currency_code: string;
+  created_at: string | null;
+  buyer_email: string | null;
+  payment_id: string | null;
+  payment_status: string | null;
+  payment_provider: string | null;
+  refunded_amount_minor: number;
+  items: Array<{ item_type: string; quantity: number; ticket_type_name?: string | null; release_title?: string | null }>;
+  tickets: StaffTicket[];
+  refunds: RefundRecord[];
+};
+
+export async function fetchRefundReasons(): Promise<RefundReason[]> {
+  return apiFetch<RefundReason[]>("/api/v1/refund-reasons");
+}
+
+export async function lookupStaffOrder(reference: string): Promise<StaffOrder> {
+  return apiFetch<StaffOrder>(`/api/v1/staff/orders/lookup?reference=${encodeURIComponent(reference)}`);
+}
+
+export async function fetchStaffRefunds(): Promise<RefundRecord[]> {
+  return apiFetch<RefundRecord[]>("/api/v1/staff/refunds");
+}
+
+export async function requestTicketRefund(orderId: string, ticketIds: string[], reasonCode: string, idempotencyKey: string): Promise<RefundRecord> {
+  return apiFetch<RefundRecord>("/api/v1/refunds", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify({ order_id: orderId, ticket_ids: ticketIds, reason_code: reasonCode }),
+    retry: false,
+  });
+}
+
+export async function requestRemainingRefund(orderId: string, reasonCode: string, idempotencyKey: string): Promise<RefundRecord> {
+  return apiFetch<RefundRecord>("/api/v1/refunds", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify({ order_id: orderId, refund_remaining: true, reason_code: reasonCode }),
+    retry: false,
+  });
+}
+
+export async function approveRefund(refundId: string): Promise<RefundRecord> {
+  return apiFetch<RefundRecord>(`/api/v1/refunds/${refundId}/approve`, { method: "POST", retry: false });
+}
+
+/** Sandbox payments only: marks the refund as paid back (no real money moves on test servers). */
+export async function completeSandboxRefund(refundId: string): Promise<RefundRecord> {
+  return apiFetch<RefundRecord>(`/api/v1/refunds/${refundId}/sandbox-complete`, { method: "POST", retry: false });
+}
+
+/** Bangla QR: finance paid the money back by hand and records the transfer reference. */
+export async function completeManualRefund(refundId: string, payoutReference: string): Promise<RefundRecord> {
+  return apiFetch<RefundRecord>(`/api/v1/refunds/${refundId}/complete-manual`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ payout_reference: payoutReference }),
+    retry: false,
+  });
+}
+
+// --- Bangla QR payment checks (Q-PAY-01): finance confirm or reject what buyers sent. ---
+
+export type StaffSubmission = {
+  id: string;
+  order_id: string;
+  purpose: string;
+  amount_minor: number;
+  currency_code: string;
+  transaction_ref: string;
+  paid_from: string;
+  paid_with: string;
+  status: string;
+  decision_note: string | null;
+  buyer_email: string | null;
+  submitted_at: string;
+};
+
+export async function fetchStaffSubmissions(): Promise<StaffSubmission[]> {
+  return apiFetch<StaffSubmission[]>("/api/v1/staff/payment-submissions");
+}
+
+export async function confirmSubmission(id: string): Promise<StaffSubmission> {
+  return apiFetch<StaffSubmission>(`/api/v1/staff/payment-submissions/${id}/confirm`, { method: "POST", retry: false });
+}
+
+export async function rejectSubmission(id: string, reason: string): Promise<StaffSubmission> {
+  return apiFetch<StaffSubmission>(`/api/v1/staff/payment-submissions/${id}/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason }),
     retry: false,
   });
 }
