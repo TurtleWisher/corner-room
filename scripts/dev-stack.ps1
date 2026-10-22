@@ -19,12 +19,21 @@ $envFiles = @("-f", (Join-Path $root ".env"))
 $seedEnv = Join-Path $root ".env.seed.local"
 if (Test-Path $seedEnv) { $envFiles = @("-f", $seedEnv, "run", "--no-override", "--", $py, "-m", "dotenv") + $envFiles }
 function Invoke-WithEnv([string[]]$command) {
-  & $py -m dotenv @envFiles run --no-override -- @command
+  # Alembic and the seed log to stderr; under "Stop", Windows PowerShell 5.1 would abort on the
+  # first INFO line. Print everything and fail only on a non-zero exit code.
+  $ErrorActionPreference = "Continue"
+  & $py -m dotenv @envFiles run --no-override -- @command 2>&1 | ForEach-Object { Write-Host "$_" }
   if ($LASTEXITCODE -ne 0) { throw "Command failed: $($command -join ' ')" }
 }
 
 Write-Host "Starting PostgreSQL and Redis..." -ForegroundColor Yellow
-docker compose -f (Join-Path $root "docker-compose.yml") up -d postgres redis | Out-Null
+# Docker prints its progress ("Container ... Running") on stderr. Windows PowerShell 5.1 turns
+# that into a terminating error under "Stop", so judge Docker by its exit code instead.
+$ErrorActionPreference = "Continue"
+docker compose -f (Join-Path $root "docker-compose.yml") up -d postgres redis 2>&1 | Out-Null
+$composeExit = $LASTEXITCODE
+$ErrorActionPreference = "Stop"
+if ($composeExit -ne 0) { throw "docker compose could not start PostgreSQL and Redis (exit $composeExit). Is Docker Desktop running?" }
 
 Write-Host "Applying migrations..." -ForegroundColor Yellow
 Push-Location $api
