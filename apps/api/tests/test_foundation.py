@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.settings_helpers import PROD_HARDENING
+
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 import os
@@ -60,6 +62,7 @@ def test_invalid_configuration_rejected() -> None:
             app_env="production",
             jwt_secret="change-me-to-a-long-random-secret",
             cookie_secure=True,
+            **PROD_HARDENING,
         )
     with pytest.raises(ValidationError):
         Settings(
@@ -72,6 +75,7 @@ def test_invalid_configuration_rejected() -> None:
             app_env="production",
             jwt_secret="a-sufficiently-long-production-secret!!",
             cookie_secure=True,
+            **PROD_HARDENING,
             cors_origins=["*"],
         )
     with pytest.raises(ValidationError):
@@ -79,6 +83,7 @@ def test_invalid_configuration_rejected() -> None:
             app_env="production",
             jwt_secret="a-sufficiently-long-production-secret!!",
             cookie_secure=True,
+            **PROD_HARDENING,
             log_level="DEBUG",
         )
 
@@ -200,6 +205,7 @@ async def test_object_storage_local_roundtrip(tmp_path) -> None:
         app_env="production",
         jwt_secret="a-sufficiently-long-production-secret!!",
         cookie_secure=True,
+            **PROD_HARDENING,
     )
     with pytest.raises(ResidencyGateError):
         assert_storage_class_allowed("catalog_audio", settings)

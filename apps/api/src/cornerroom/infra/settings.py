@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     jwt_access_ttl_seconds: int = 900
     jwt_refresh_ttl_seconds: int = 604800
     jwt_issuer: str = "cornerroom"
+    # Separate keys so one leaked secret cannot forge the others (Gate 1 M7). Required and distinct
+    # in production; elsewhere unset falls back to JWT_SECRET so local QR codes keep working.
+    ticket_signing_secret: str | None = None
+    media_token_secret: str | None = None
 
     cookie_secure: bool = False
     cookie_samesite: str = "lax"
@@ -54,6 +58,15 @@ class Settings(BaseSettings):
 
     # NoDecode: accept the comma list in .env.example as well as the JSON list Compose passes.
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["http://localhost:3000"])
+    # Host names this API answers to (TrustedHost, Gate 1 M9). "*" = any; set the real API host(s)
+    # on a server. Same comma or JSON list format as CORS_ORIGINS.
+    allowed_hosts: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
+    # Proxy addresses whose X-Forwarded-For / -Proto are believed (Gate 1 M11). Empty = ignore
+    # those headers and use the socket address. "*" only when the API is reachable solely through
+    # the platform's proxy (for example Railway).
+    forwarded_allow_ips: str = ""
+    # Strict-Transport-Security max-age, sent only when COOKIE_SECURE is true (HTTPS). 0 = off.
+    hsts_max_age_seconds: int = 31536000
 
     storage_backend: str = "local"
     storage_local_path: str = "./var/storage"
@@ -126,7 +139,7 @@ class Settings(BaseSettings):
     pagination_default_limit: int = 50
     pagination_max_limit: int = 100
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "allowed_hosts", mode="before")
     @classmethod
     def split_origins(cls, value: object) -> object:
         if isinstance(value, str):
@@ -142,6 +155,14 @@ class Settings(BaseSettings):
         normalized = value.strip().lower()
         aliases = {"dev": "development", "prod": "production", "stage": "staging"}
         return aliases.get(normalized, normalized)
+
+    @field_validator("cookie_samesite")
+    @classmethod
+    def require_known_samesite(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"lax", "strict", "none"}:
+            raise ValueError("COOKIE_SAMESITE must be lax, strict or none")
+        return normalized
 
     @field_validator("database_url", "database_url_sync")
     @classmethod
@@ -174,13 +195,31 @@ class Settings(BaseSettings):
         return value
 
     @model_validator(mode="after")
+    def samesite_none_needs_secure(self) -> Settings:
+        # Browsers drop a SameSite=None cookie that is not Secure, so sign-in would silently fail.
+        if self.cookie_samesite == "none" and not self.cookie_secure:
+            raise ValueError("COOKIE_SAMESITE=none requires COOKIE_SECURE=true")
+        return self
+
+    @model_validator(mode="after")
     def production_must_not_use_insecure_defaults(self) -> Settings:
         if not self.is_production:
             return self
         if self.jwt_secret in INSECURE_JWT_SECRETS or len(self.jwt_secret) < 32:
             raise ValueError("JWT_SECRET must be a strong unique secret in production")
+        signing = {
+            "TICKET_SIGNING_SECRET": self.ticket_signing_secret,
+            "MEDIA_TOKEN_SECRET": self.media_token_secret,
+        }
+        for name, value in signing.items():
+            if not value or value in INSECURE_JWT_SECRETS or len(value) < 32:
+                raise ValueError(f"{name} must be a strong unique secret in production")
+        if len({self.jwt_secret, *signing.values()}) != 1 + len(signing):
+            raise ValueError("JWT_SECRET, TICKET_SIGNING_SECRET and MEDIA_TOKEN_SECRET must all differ")
         if not self.cookie_secure:
             raise ValueError("COOKIE_SECURE must be true in production")
+        if any(host.strip() == "*" for host in self.allowed_hosts):
+            raise ValueError("ALLOWED_HOSTS must list the API host name(s) in production")
         if self.storage_backend == "s3" and not self.s3_bucket:
             raise ValueError("S3_BUCKET is required when STORAGE_BACKEND=s3 in production")
         if not self.cors_origins:
@@ -199,6 +238,16 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env in {"prod", "production"}
+
+    @property
+    def ticket_secret(self) -> str:
+        """HMAC key for ticket QR codes. Production validation guarantees a dedicated one."""
+        return self.ticket_signing_secret or self.jwt_secret
+
+    @property
+    def media_secret(self) -> str:
+        """Key for signed playback and download links. Production guarantees a dedicated one."""
+        return self.media_token_secret or self.jwt_secret
 
     @property
     def google_enabled(self) -> bool:

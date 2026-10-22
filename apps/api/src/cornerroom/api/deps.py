@@ -11,7 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.infra.db import get_session
-from cornerroom.infra.errors import UnauthorizedError
+from cornerroom.infra.errors import AppError, UnauthorizedError
 from cornerroom.infra.security import decode_access_token
 from cornerroom.infra.settings import Settings, get_settings
 from cornerroom.kernel.auth_context import AuthContext
@@ -71,6 +71,36 @@ def google_oidc_dep(settings: Settings = Depends(settings_dep)) -> GoogleOIDC:
 
 async def authz_service(session: AsyncSession = Depends(db_session)) -> AuthorizationService:
     return AuthorizationService(session)
+
+
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+class OriginNotAllowedError(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            "ORIGIN_NOT_ALLOWED", "Request blocked", 403, "This request did not come from Corner Room"
+        )
+
+
+def require_trusted_origin(request: Request, settings: Settings = Depends(settings_dep)) -> None:
+    """CSRF guard for the cookie-carrying auth routes (Gate 1 M1).
+
+    A browser names the page that sent a request in Origin (and Sec-Fetch-Site). A state-changing
+    request from a page that is not the web app or this API is refused, so another site cannot make
+    a signed-in browser refresh, sign out or sign in. Clients that send neither header (servers,
+    tests, curl) carry no ambient cookie risk and are not affected.
+    """
+    if request.method in SAFE_METHODS:
+        return
+    origin = request.headers.get("origin")
+    if origin is not None:
+        own = f"{request.url.scheme}://{request.url.netloc}"
+        if origin != "null" and (origin in settings.cors_origins or origin == own):
+            return
+        raise OriginNotAllowedError()
+    if request.headers.get("sec-fetch-site") == "cross-site":
+        raise OriginNotAllowedError()
 
 
 def _client_meta(request: Request) -> tuple[str | None, str | None]:
@@ -251,6 +281,15 @@ def require_permission(
     resource_type: str | None = None,
     resource_id_param: str | None = None,
 ) -> Callable:
+    """Route gate that honours only unscoped (platform) role assignments.
+
+    Deliberately not workspace-aware (Gate 1 M2, kept fail-closed in Gate 4): the routes behind it
+    (/users lifecycle, /roles, /audit, /staff/ops, media ops) do not filter their data by workspace,
+    so letting a workspace-scoped admin through would give them platform-wide reach (H5, H7, H8).
+    Each route can move to a workspace check only once its data is scoped and the OPEN questions
+    behind it are answered (Q-P14-06 users, Q-P15-04 audit, Q-P14-14 outbox).
+    """
+
     async def _inner(
         request: Request,
         user: User = Depends(get_current_user),

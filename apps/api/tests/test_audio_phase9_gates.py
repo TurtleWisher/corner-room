@@ -7,12 +7,14 @@ placeholder media URL." Q-P0-12 keeps production master upload off until a regio
 
 from __future__ import annotations
 
+from tests.settings_helpers import PROD_HARDENING
+
 import pytest
 
 from cornerroom.infra.settings import Settings
 from cornerroom.infra.storage import StorageUnavailableError, get_storage
 
-PROD = dict(app_env="production", jwt_secret="a-sufficiently-long-production-secret!!", cookie_secure=True)
+PROD = dict(app_env="production", jwt_secret="a-sufficiently-long-production-secret!!", cookie_secure=True, **PROD_HARDENING)
 
 
 @pytest.mark.asyncio

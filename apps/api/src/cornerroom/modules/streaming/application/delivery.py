@@ -86,7 +86,7 @@ class ObjectStorageAudioDelivery:
             "jti": str(new_uuid()),
             "token_use": AUDIO_TOKEN_USE,
         }
-        token = jwt.encode(payload, self.settings.jwt_secret, algorithm="HS256")
+        token = jwt.encode(payload, self.settings.media_secret, algorithm="HS256")
         return SignedAudioUrl(
             url=f"/api/v1/playback/media/{token}",
             expires_at=expires,
@@ -100,7 +100,7 @@ class ObjectStorageAudioDelivery:
         try:
             payload = jwt.decode(
                 token,
-                self.settings.jwt_secret,
+                self.settings.media_secret,
                 algorithms=["HS256"],
                 issuer=self.settings.jwt_issuer,
             )

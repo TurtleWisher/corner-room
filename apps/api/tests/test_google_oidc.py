@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.settings_helpers import PROD_HARDENING
+
 import logging
 import time
 from urllib.parse import parse_qs, urlparse
@@ -152,6 +154,7 @@ def test_google_settings_and_production_guards() -> None:
         app_env="production",
         jwt_secret="p" * 48,
         cookie_secure=True,
+            **PROD_HARDENING,
         cors_origins=["https://cornerroom.example"],
         web_base_url="https://cornerroom.example",
         google_redirect_uri="https://api.cornerroom.example/api/v1/auth/google/callback",

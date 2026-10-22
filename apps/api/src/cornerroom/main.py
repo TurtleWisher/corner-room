@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from cornerroom import __version__
 from cornerroom.api.health import router as health_router
@@ -50,6 +52,19 @@ from cornerroom.modules.streaming.application.service import register_streaming_
 log = structlog.get_logger("app")
 
 
+CORS_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+CORS_HEADERS = [
+    "Authorization",
+    "Content-Type",
+    "Idempotency-Key",
+    "Range",
+    "X-Correlation-ID",
+    "X-Part-SHA256",
+    "X-Request-ID",
+]
+CORS_EXPOSE_HEADERS = ["X-Correlation-ID", "X-Request-ID", "Content-Range", "Content-Disposition"]
+
+
 def create_app(settings: Settings | None = None, *, enable_lifespan: bool = True) -> FastAPI:
     cfg = settings or get_settings()
     register_streaming_handlers()
@@ -86,14 +101,24 @@ def create_app(settings: Settings | None = None, *, enable_lifespan: bool = True
         lifespan=lifespan if enable_lifespan else None,
     )
     app.add_middleware(RequestContextMiddleware)
-    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        hsts_max_age_seconds=cfg.hsts_max_age_seconds if cfg.cookie_secure else 0,
+    )
+    # Only what the web app actually sends and reads (Gate 1 M12); origins stay an allowlist.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cfg.cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=CORS_METHODS,
+        allow_headers=CORS_HEADERS,
+        expose_headers=CORS_EXPOSE_HEADERS,
     )
+    if cfg.allowed_hosts and "*" not in cfg.allowed_hosts:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=cfg.allowed_hosts)
+    if cfg.forwarded_allow_ips.strip():
+        # Outermost: the client address and scheme are fixed before anything else reads them.
+        app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=cfg.forwarded_allow_ips)
     register_exception_handlers(app)
     app.include_router(health_router)
     app.include_router(auth_router, prefix="/api/v1")

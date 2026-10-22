@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.settings_helpers import PROD_HARDENING
+
 import json
 from uuid import uuid4
 
@@ -118,6 +120,7 @@ def test_production_rejects_wildcard_cors_and_debug() -> None:
             app_env="production",
             jwt_secret="a-sufficiently-long-production-secret!!",
             cookie_secure=True,
+            **PROD_HARDENING,
             cors_origins=["*"],
         )
     with pytest.raises(ValidationError):
@@ -125,6 +128,7 @@ def test_production_rejects_wildcard_cors_and_debug() -> None:
             app_env="production",
             jwt_secret="a-sufficiently-long-production-secret!!",
             cookie_secure=True,
+            **PROD_HARDENING,
             log_level="DEBUG",
         )
 
@@ -135,6 +139,7 @@ def test_production_disables_openapi() -> None:
             app_env="production",
             jwt_secret="a-sufficiently-long-production-secret!!",
             cookie_secure=True,
+            **PROD_HARDENING,
             cors_origins=["https://cornerroom.example"],
             log_level="INFO",
         ),

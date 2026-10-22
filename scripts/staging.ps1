@@ -116,6 +116,8 @@ switch ($Action) {
                 "STORAGE_LOCAL_PATH=$storage",
                 "JWT_SECRET=$(New-Secret 48)",
                 "SANDBOX_PAYMENT_SECRET=$(New-Secret 36)",
+                "TICKET_SIGNING_SECRET=$(New-Secret 48)",
+                "MEDIA_TOKEN_SECRET=$(New-Secret 48)",
                 "BOOTSTRAP_ADMIN_EMAIL=pilot-admin@example.com",
                 "BOOTSTRAP_ADMIN_PASSWORD=Pilot-$(New-Secret 18)",
                 "CORS_ORIGINS=http://localhost:3010",

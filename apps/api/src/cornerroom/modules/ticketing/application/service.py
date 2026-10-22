@@ -64,7 +64,7 @@ class TicketingService:
         self.authz = AuthorizationService(session, clock=self.clock)
 
     def _token_secret(self) -> str:
-        return self.settings.jwt_secret
+        return self.settings.ticket_secret
 
     async def _is_allowed(
         self,

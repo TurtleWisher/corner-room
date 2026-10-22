@@ -208,7 +208,7 @@ class DownloadService:
                 "jti": str(new_uuid()),
                 "token_use": DOWNLOAD_TOKEN_USE,
             },
-            self.settings.jwt_secret,
+            self.settings.media_secret,
             algorithm="HS256",
         )
         _purpose, _codec, extension, _label = FORMATS[fmt]
@@ -231,7 +231,7 @@ class DownloadService:
     async def open(self, token: str) -> tuple[MediaAsset, str]:
         """Re-check everything for this request and return the exact copy the grant names."""
         try:
-            payload = jwt.decode(token, self.settings.jwt_secret, algorithms=["HS256"], issuer=self.settings.jwt_issuer)
+            payload = jwt.decode(token, self.settings.media_secret, algorithms=["HS256"], issuer=self.settings.jwt_issuer)
         except jwt.PyJWTError as exc:
             raise UnauthorizedError("This download link has expired. Start the download again.") from exc
         if payload.get("token_use") != DOWNLOAD_TOKEN_USE or payload.get("fmt") not in FORMATS:

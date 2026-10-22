@@ -111,6 +111,9 @@ class LocalObjectStorage:
         return self._path(object_key).read_bytes()
 
     async def signed_url(self, object_key: str, expires_seconds: int = 300) -> str:
+        """A label, not a credential (Gate 1 M5): no route serves local:// keys, so it opens nothing.
+        Local bytes leave only through API routes that re-check access on every request; real
+        presigned URLs arrive with the S3 adapter once a provider and region exist (Q-P0-12)."""
         expires = datetime.now(timezone.utc) + timedelta(seconds=expires_seconds)
         return f"local://{self.bucket}/{object_key}?expires={int(expires.timestamp())}"
 

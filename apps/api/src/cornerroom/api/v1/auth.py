@@ -12,7 +12,13 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 
-from cornerroom.api.deps import get_auth_context, google_oidc_dep, identity_service, settings_dep
+from cornerroom.api.deps import (
+    get_auth_context,
+    google_oidc_dep,
+    identity_service,
+    require_trusted_origin,
+    settings_dep,
+)
 from cornerroom.infra.errors import AppError, UnauthorizedError
 from cornerroom.infra.settings import Settings
 from cornerroom.kernel.auth_context import AuthContext
@@ -21,7 +27,9 @@ from cornerroom.modules.identity.application.services import IdentityService
 from cornerroom.modules.identity.domain.models import CustomerProfile, User
 from cornerroom.modules.identity.infra.google import GoogleAuthError, GoogleOIDC
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+# Every state-changing auth route sets, rotates or clears the refresh cookie, so all of them get the
+# CSRF origin check (Gate 1 M1). Google start/callback are top-level GETs and are unaffected.
+router = APIRouter(prefix="/auth", tags=["auth"], dependencies=[Depends(require_trusted_origin)])
 
 REFRESH_PATH = "/api/v1/auth"
 
@@ -118,10 +126,14 @@ def _set_refresh_cookie(response: Response, token: str, settings: Settings) -> N
 
 
 def _clear_refresh_cookie(response: Response, settings: Settings) -> None:
+    # Same attributes as when it was set, so browsers that require them (SameSite=None) drop it.
     response.delete_cookie(
         key=settings.refresh_cookie_name,
         path=REFRESH_PATH,
         domain=settings.cookie_domain or None,
+        secure=settings.cookie_secure,
+        httponly=True,
+        samesite=settings.cookie_samesite,  # type: ignore[arg-type]
     )
 
 

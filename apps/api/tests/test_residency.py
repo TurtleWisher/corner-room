@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.settings_helpers import PROD_HARDENING
+
 import pytest
 
 from cornerroom.infra.errors import ResidencyGateError
@@ -15,6 +17,7 @@ def test_production_blocks_masters_without_region() -> None:
         residency_region=None,
         jwt_secret="a-sufficiently-long-production-secret!!",
         cookie_secure=True,
+            **PROD_HARDENING,
     )
     with pytest.raises(ResidencyGateError):
         assert_storage_class_allowed("catalog_audio", settings)
@@ -33,5 +36,6 @@ def test_named_region_allows_gated_class() -> None:
         residency_region="ap-south-1",
         jwt_secret="a-sufficiently-long-production-secret!!",
         cookie_secure=True,
+            **PROD_HARDENING,
     )
     assert_storage_class_allowed("catalog_audio", settings)
