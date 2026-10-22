@@ -5,7 +5,8 @@
  * Three layers:
  *   1. Brand primitives   @theme         -> bg-cr-signal, text-cr-lamp ...  (brand pieces only)
  *   2. Semantic roles     @theme inline  -> bg-surface, text-fg, border-line ... (every component)
- *   3. Theme scopes       [data-theme]   -> ember (default), sky (Music), staff (graphite)
+ *   3. Theme scopes       [data-theme]   -> ember (default), sky (Music), staff (graphite),
+ *                                          paper (documents), artist-studio (mint, signed-in artists)
  *
  * Components use semantic roles only. A module re-skins by setting data-theme (and later
  * data-module overrides) on its layout, never by editing components.
@@ -196,6 +197,52 @@
   --cr-pl-size: 0px;
   --cr-pl-core: transparent;
   --cr-pl-mid: transparent;
+}
+
+/* Artist Studio (D-THEME-02, owner 2026-10-22; docs/frontend/ARTIST_STUDIO_DESIGN_GUIDE.md): the
+   green/mint world of the signed-in artist and band workspace only. Public artist pages, fan,
+   listening and staff pages keep their worlds. Light from the same corner along the same 117 deg
+   axis: a dim Signal Mint pool falling through Forest, a Pale Mint bulb, a quiet Forest counter.
+   The pool stays dim so muted text at the lit corner keeps AA (tokens.test.ts checks the blend). */
+[data-theme="artist-studio"] {
+  --cr-surface: #0b1710;
+  --cr-surface-raised: #12251a;
+  --cr-surface-sunken: #07110b;
+  --cr-surface-overlay: rgb(211 236 201 / 0.07);
+  --cr-line: #355340;
+  --cr-line-strong: rgb(211 236 201 / 0.34);
+  --cr-fg: #f6f2ec;
+  --cr-fg-muted: #b7c5b9;
+  --cr-accent: #2cbb76;
+  --cr-on-accent: #07110b;
+  --cr-brand: #2cbb76;
+  --cr-on-brand: #07110b;
+  --cr-highlight: #d3ecc9;
+  --cr-link: #d3ecc9;
+  --cr-focus: #2cbb76;
+  --cr-display-shadow: #326000;
+
+  --cr-light-size: 70% 62%;
+  --cr-light-bulb: rgb(211 236 201 / 0.08);
+  --cr-light-pool: rgb(44 187 118 / 0.28);
+  --cr-light-falloff: rgb(50 96 0 / 0.42);
+  --cr-light-counter: rgb(50 96 0 / 0.3);
+  --cr-light-sweep: rgb(44 187 118 / 0.04);
+  --cr-light-side: rgb(50 96 0 / 0.3);
+
+  --cr-cube-field: #2cbb76;
+  --cr-cube-face: #d3ecc9;
+  --cr-cube-shadow: #326000;
+
+  --cr-glass-fill: linear-gradient(135deg, rgb(211 236 201 / 0.07), rgb(211 236 201 / 0.018) 55%), rgb(18 37 26 / 0.56);
+  --cr-glass-edge: linear-gradient(135deg, rgb(211 236 201 / 0.3), rgb(211 236 201 / 0.11) 40%, rgb(211 236 201 / 0.07));
+  --cr-glass-edge-hover: linear-gradient(135deg, rgb(44 187 118 / 0.6), rgb(211 236 201 / 0.18) 40%, rgb(211 236 201 / 0.1));
+  --cr-glass-blur: blur(18px) saturate(1.3);
+  --cr-bar: rgb(11 23 16 / 0.7);
+  /* Pointer light: Pale Mint at the core, Signal Mint, restrained. */
+  --cr-pl-size: max(62vmax, 760px);
+  --cr-pl-core: rgb(211 236 201 / 0.07);
+  --cr-pl-mid: rgb(44 187 118 / 0.1);
 }
 
 /* Status colours, identical in every world, reset on every scope so nesting never leaks.
@@ -394,8 +441,10 @@
   }
   /* The staff console has a side navigation next to <main>. A layer fixed to the viewport would
      spill over it (and the header gap) where its soft-light grain has nothing to blend with and
-     shows as raw grey noise (owner report, 2026-10-18). Keep staff page layers inside <main>. */
-  #main.cr-scope[data-theme="staff"] > .cr-pl-page {
+     shows as raw grey noise (owner report, 2026-10-18). Keep staff page layers inside <main>; the
+     Artist Studio shell has a side navigation too. */
+  #main.cr-scope[data-theme="staff"] > .cr-pl-page,
+  #main.cr-scope[data-theme="artist-studio"] > .cr-pl-page {
     position: absolute;
   }
 
@@ -405,7 +454,8 @@
   [data-theme="ember"] .cr-scope[data-theme="ember"],
   [data-theme="sky"] .cr-scope[data-theme="sky"],
   [data-theme="staff"] .cr-scope[data-theme="staff"],
-  [data-theme="paper"] .cr-scope[data-theme="paper"] {
+  [data-theme="paper"] .cr-scope[data-theme="paper"],
+  [data-theme="artist-studio"] .cr-scope[data-theme="artist-studio"] {
     background-color: transparent;
   }
   [data-theme="ember"] .cr-scope[data-theme="ember"] > .cr-light,
@@ -415,7 +465,9 @@
   [data-theme="ember"] .cr-scope[data-theme="ember"] > .cr-pl,
   [data-theme="sky"] .cr-scope[data-theme="sky"] > .cr-pl,
   [data-theme="staff"] .cr-scope[data-theme="staff"] > .cr-pl,
-  [data-theme="paper"] .cr-scope[data-theme="paper"] > .cr-pl {
+  [data-theme="paper"] .cr-scope[data-theme="paper"] > .cr-pl,
+  [data-theme="artist-studio"] .cr-scope[data-theme="artist-studio"] > .cr-light,
+  [data-theme="artist-studio"] .cr-scope[data-theme="artist-studio"] > .cr-pl {
     display: none;
   }
 
@@ -609,6 +661,9 @@ body:has(#main.cr-scope[data-theme="sky"]) {
 }
 body:has(#main.cr-scope[data-theme="staff"]) {
   background: #110e0f;
+}
+body:has(#main.cr-scope[data-theme="artist-studio"]) {
+  background: #0b1710;
 }
 
 /* Sky eyebrows sit in the lit corner, where small Ice text drops below AA (BRAND_GUIDELINE 5.7):

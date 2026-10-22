@@ -35,7 +35,8 @@ from cornerroom.kernel.events import MEDIA_UPLOAD_COMPLETED, DomainEvent
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.documents.domain.models import MediaAsset, UploadIntent, UploadPart
 
-PURPOSE_TARGET = {"AUDIO_MASTER": "track_version", "COVER_ART": "release_cover"}
+# Artwork may also go to an event (OD-06): same checks, attached to the event when accepted.
+PURPOSE_TARGETS = {"AUDIO_MASTER": {"track_version"}, "COVER_ART": {"release_cover", "event_cover"}}
 PURPOSE_CLASS = {"AUDIO_MASTER": "catalog_audio", "COVER_ART": "catalog_art"}
 SHA256_HEX = frozenset("0123456789abcdef")
 
@@ -90,6 +91,11 @@ class UploadService:
             release = await music.authorize_cover_upload(ctx, target_id)
             kind, profile = music.profile_of(release)
             return TargetInfo(release.primary_org_id, kind, profile)
+        if target_type == "event_cover":
+            from cornerroom.modules.events.application.service import EventService
+
+            event = await EventService(self.session, clock=self.clock).authorize_cover_upload(ctx, target_id)
+            return TargetInfo(event.organization_id, None, None)
         raise AppError("VALIDATION_ERROR", "Unknown upload target", 422)
 
     def _max_bytes(self, purpose: str) -> int:
@@ -111,7 +117,7 @@ class UploadService:
         sha256: str | None = None,
     ) -> tuple[UploadIntent, bool]:
         """Open (or resume) an upload. Returns (intent, resumed)."""
-        if PURPOSE_TARGET.get(purpose) != target_type:
+        if target_type not in PURPOSE_TARGETS.get(purpose, set()):
             raise AppError("VALIDATION_ERROR", "This file type cannot go to that target", 422)
         if byte_size <= 0:
             raise AppError("VALIDATION_ERROR", "The file is empty", 422, extras={"finding": "ZERO_LENGTH"})

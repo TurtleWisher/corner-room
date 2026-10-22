@@ -8,9 +8,11 @@ import { ArrowDown, ArrowUp, CircleAlert, CircleCheck, Plus, Save, Send, Trash2,
 
 import { Button, Card, DateTime, ErrorState, Field, Input, Money, Select, Skeleton } from "@/components/ds";
 import { MediaReport } from "@/components/music/media-report";
+import { ArtworkReport } from "@/components/uploads/artwork-report";
 import { UploadCard } from "@/components/uploads/upload-card";
 import {
   addStudioTrack,
+  fetchCoverReport,
   fetchStudioRelease,
   fetchTaxonomy,
   newStudioVersion,
@@ -27,6 +29,7 @@ import {
   type StudioTrack,
   type Taxonomy,
 } from "@/features/studio/api";
+import { coverUrl } from "@/lib/cover-view";
 import { friendlyError } from "@/lib/error-copy";
 import {
   EDITABLE_STATUSES,
@@ -39,6 +42,7 @@ import {
   parsePriceToMinor,
   readinessRows,
   reviewEventText,
+  submitPanelMode,
 } from "@/lib/studio-view";
 
 type Reload = (next?: StudioReleaseDetail) => void;
@@ -487,23 +491,30 @@ function SubmitPanel({ detail, reload }: { detail: StudioReleaseDetail; reload: 
   const { busy, error, run } = useAction(reload);
   const rows = readinessRows(detail.readiness.items, detail.tracks);
   const missing = missingCount(detail.readiness.items);
-  const inReview = detail.release.status === "METADATA_REVIEW";
+  const mode = submitPanelMode(detail.release.status);
   const staffPreparing = detail.viewer_role === "staff" && detail.release.intake_mode !== "MANAGED";
 
   return (
     <div>
-      <ul className="grid gap-1 text-sm">
-        {rows.map((row) => (
-          <li key={row.key} className={`flex items-start gap-2 ${row.ok ? "text-fg" : "text-danger"}`}>
-            {row.ok ? <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" /> : <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />}
-            <span>
-              <span className="sr-only">{row.ok ? "Done: " : "Missing: "}</span>
-              {row.text}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {inReview ? (
+      {/* After review the checklist no longer applies: it only steered the submission. */}
+      {mode === "past_review" ? null : (
+        <ul className="grid gap-1 text-sm">
+          {rows.map((row) => (
+            <li key={row.key} className={`flex items-start gap-2 ${row.ok ? "text-fg" : "text-danger"}`}>
+              {row.ok ? <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" /> : <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />}
+              <span>
+                <span className="sr-only">{row.ok ? "Done: " : "Missing: "}</span>
+                {row.text}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {mode === "past_review" ? (
+        <p className="mt-5 text-sm text-fg">
+          This release is past review ({displayStateLabel(detail.display_state)}), so there is nothing to submit. Corner Room takes it from here.
+        </p>
+      ) : mode === "in_review" ? (
         <div className="mt-5">
           <p className="text-sm text-fg">Corner Room is reviewing this release. You can withdraw it to make changes before the review starts.</p>
           <Button variant="secondary" className="mt-3" busy={busy === "withdraw"} onClick={() => void run("withdraw", () => withdrawStudioRelease(detail.release.id))}>
@@ -534,6 +545,7 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
+  const [coverUploads, setCoverUploads] = useState(0);
 
   const reload = useCallback<Reload>(
     (next) => {
@@ -586,12 +598,27 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
       </Section>
 
       <Section id="cover" title="Cover art" done={coverOk}>
-        {editable ? <UploadCard purpose="COVER_ART" targetType="release_cover" targetId={detail.release.id} onCompleted={() => setTimeout(() => reload(), 4000)} /> : null}
-        {!coverOk && detail.release.cover_asset_id === null ? <p className="mt-2 text-sm text-fg-muted">No cover yet. It appears here once its checks pass.</p> : null}
+        {editable ? <UploadCard purpose="COVER_ART" targetType="release_cover" targetId={detail.release.id} onCompleted={() => setCoverUploads((n) => n + 1)} /> : null}
+        {detail.cover_url ? (
+          // The cover fans will see (accepted by the checks), as uploaded.
+          // eslint-disable-next-line @next/next/no-img-element -- signed cover link from the API
+          <img src={coverUrl({ signed: detail.cover_url }) ?? ""} alt="Current cover" className="mb-4 size-40 object-cover" />
+        ) : null}
+        {/* The checks' verdict on the latest cover; the readiness list updates once they finish. */}
+        <ArtworkReport load={() => fetchCoverReport(detail.release.id)} refresh={coverUploads} onSettled={() => reload()} />
       </Section>
 
       <Section id="tracks" title="Tracks">
-        {detail.tracks.length === 0 ? <p className="text-sm text-fg-muted">Add the first song.</p> : null}
+        {detail.tracks.length === 0 ? (
+          <div className="text-sm text-fg">
+            <p>{detail.release.release_type === "SINGLE" ? "A single has one song." : "Add each song on this release, in order."}</p>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-fg-muted">
+              <li>Type the song&apos;s name below and press Add song.</li>
+              <li>A card for the song opens. Upload its master audio there (FLAC or WAV) and add its credits.</li>
+              <li>The song counts as ready once its audio has passed Corner Room&apos;s checks.</li>
+            </ol>
+          </div>
+        ) : null}
         <ol className="grid gap-4">
           {detail.tracks.map((t, i) => (
             <TrackCard
@@ -619,7 +646,7 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
               });
             }}
           >
-            <Field label="New song title" className="min-w-64 flex-1">
+            <Field label="Song title" hint="The name fans will see" className="min-w-64 flex-1">
               {(c) => <Input {...c} value={newTitle} onChange={(e) => setNewTitle(e.target.value)} maxLength={300} required />}
             </Field>
             <Button type="submit" busy={tracksAction.busy === "add"}>
@@ -643,7 +670,7 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
         </Card>
       </Section>
 
-      <Section id="submit" title="Review and submit" done={detail.release.status === "METADATA_REVIEW"}>
+      <Section id="submit" title="Review and submit" done={submitPanelMode(detail.release.status) !== "submit"}>
         <SubmitPanel detail={detail} reload={reload} />
       </Section>
 

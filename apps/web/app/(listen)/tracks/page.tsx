@@ -5,6 +5,7 @@ import { FormEvent, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
+import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, EmptyState, ErrorState, Field, Input, Skeleton, StatusChip, Table, TBody, TD, TH, THead, TR } from "@/components/ds";
 import { TrackBuyControl, useCustomerCommerce } from "@/components/music/commerce";
@@ -13,6 +14,7 @@ import { PageIntro, RetryButton, StaffPanel } from "@/components/shell/staff-pan
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import { useWorkspace } from "@/components/workspace-provider";
 import { ApiError, createTrack, fetchPlayableCatalog, fetchTracks, type PlayableTrackRecord } from "@/lib/api";
+import { coverUrl } from "@/lib/cover-view";
 import { creditName, formatDuration, playQueue } from "@/lib/music-view";
 import { ownsTrack } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
@@ -144,7 +146,11 @@ export default function TracksPage() {
               return (
                 <li key={t.id} className="grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-4 border-b border-line py-3">
                   <div className="size-12 bg-cr-sky">
-                    <RoomCube front={t.title} side={artist ?? t.title} tone="sky" size="front" label="" className="size-full" />
+                    <CoverArt
+                      src={coverUrl({ track: t.id }, 160)}
+                      fallback={<RoomCube front={t.title} side={artist ?? t.title} tone="sky" size="front" label="" className="size-full" />}
+                      className="size-full"
+                    />
                   </div>
                   <div className="min-w-0">
                     <Link href={`/tracks/${t.id}`} className="cr-focus block truncate font-semibold text-fg hover:text-highlight">

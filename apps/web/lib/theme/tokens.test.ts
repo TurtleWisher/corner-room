@@ -3,14 +3,14 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { contrastRatio } from "./contrast";
-import { THEMES, type ThemeName } from "./palette";
+import { contrastRatio, hexToRgb } from "./contrast";
+import { THEMES, palette, type ThemeName } from "./palette";
 
 /** Reads custom properties per scope straight from tokens.css, so the CSS itself is what is tested. */
 function readThemes(): Record<ThemeName, Record<string, string>> {
   const css = readFileSync(path.resolve(__dirname, "../../app/styles/tokens.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
-  const out = { ember: {}, sky: {}, staff: {}, paper: {} } as Record<ThemeName, Record<string, string>>;
+  const out = Object.fromEntries(THEMES.map((t) => [t, {}])) as Record<ThemeName, Record<string, string>>;
   for (const [, selector, body] of blocks) {
     const sel = selector.trim();
     const vars = Object.fromEntries(
@@ -70,6 +70,45 @@ describe.each(THEMES)("theme %s", (theme) => {
 
   it.each(NON_TEXT_PAIRS)("%s against %s meets 3:1", (fg, bg) => {
     expect(contrastRatio(v[fg], v[bg])).toBeGreaterThanOrEqual(NON_TEXT);
+  });
+});
+
+/** "rgb(44 187 118 / 0.28)" -> its colour and alpha. */
+function rgba(value: string): { hex: string; alpha: number } {
+  const m = value.match(/^rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)\)$/);
+  if (!m) throw new Error(`Not an rgb() colour: ${value}`);
+  const hex = `#${[m[1], m[2], m[3]].map((c) => Number(c).toString(16).padStart(2, "0")).join("")}`;
+  return { hex, alpha: Number(m[4]) };
+}
+
+/** Paints `top` at `alpha` over the opaque `bottom`. */
+function over(top: string, alpha: number, bottom: string): string {
+  const [t, b] = [hexToRgb(top), hexToRgb(bottom)];
+  return `#${t.map((c, i) => Math.round(c * alpha + b[i] * (1 - alpha)).toString(16).padStart(2, "0")).join("")}`;
+}
+
+describe("artist studio world (D-THEME-02)", () => {
+  const v = THEME_VARS["artist-studio"];
+
+  it("uses the mint logo's colours", () => {
+    expect(v["--cr-brand"]).toBe(palette.signalMint.toLowerCase());
+    expect(v["--cr-cube-field"]).toBe(palette.signalMint.toLowerCase());
+    expect(v["--cr-cube-face"]).toBe(palette.paleMint.toLowerCase());
+    expect(v["--cr-cube-shadow"]).toBe(palette.forest.toLowerCase());
+  });
+
+  // Text sits in the brightest spot of the corner light: the pool and the bulb over the base.
+  it.each(["--cr-fg", "--cr-fg-muted", "--cr-highlight"])("%s stays AA in the lit corner", (fg) => {
+    const pool = rgba(v["--cr-light-pool"]);
+    const bulb = rgba(v["--cr-light-bulb"]);
+    const lit = over(bulb.hex, bulb.alpha, over(pool.hex, pool.alpha, v["--cr-surface"]));
+    expect(contrastRatio(v[fg], lit)).toBeGreaterThanOrEqual(AA_TEXT);
+  });
+
+  it("never puts small text in Forest on Signal Mint", () => {
+    expect(contrastRatio(palette.forest, palette.signalMint)).toBeLessThan(AA_TEXT);
+    expect(v["--cr-on-brand"]).not.toBe(palette.forest.toLowerCase());
+    expect(v["--cr-on-accent"]).not.toBe(palette.forest.toLowerCase());
   });
 });
 

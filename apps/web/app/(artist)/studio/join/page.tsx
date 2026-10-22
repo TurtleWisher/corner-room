@@ -48,7 +48,7 @@ function Apply({ code, labelName, onSent }: { code: string; labelName: string; o
   }
 
   return (
-    <AuthCard title={`Join ${labelName} as an artist`}>
+    <AuthCard theme="artist-studio" title={`Join ${labelName} as an artist`}>
       <p className="mb-5 text-sm text-fg">
         Tell {labelName} your stage name and a little about your music. Their team reviews it; once you are approved you publish from Studio.
       </p>
@@ -75,7 +75,7 @@ function SignedIn({ code, labelName }: { code: string; labelName: string }) {
   const mine = useAsync(() => fetchMyArtistApplications().then((p) => p.items), [user?.id]);
   if (user?.is_artist) {
     return (
-      <AuthCard title="You are already an artist here">
+      <AuthCard theme="artist-studio" title="You are already an artist here">
         <p className="text-fg">Your artist profile is set up. Publish from Studio.</p>
         <ButtonLink href="/studio" className="mt-6" block>
           <Music aria-hidden="true" /> Open Studio
@@ -85,14 +85,14 @@ function SignedIn({ code, labelName }: { code: string; labelName: string }) {
   }
   if (mine.status === "loading") {
     return (
-      <AuthCard title={`Join ${labelName} as an artist`}>
+      <AuthCard theme="artist-studio" title={`Join ${labelName} as an artist`}>
         <Skeleton className="h-40 w-full" />
       </AuthCard>
     );
   }
   if (mine.status === "error") {
     return (
-      <AuthCard title={`Join ${labelName} as an artist`}>
+      <AuthCard theme="artist-studio" title={`Join ${labelName} as an artist`}>
         <ErrorState title="Could not load your application" message={friendlyError(mine.error, "Please try again.")} />
       </AuthCard>
     );
@@ -100,7 +100,7 @@ function SignedIn({ code, labelName }: { code: string; labelName: string }) {
   const apps: ApplicationRecord[] = mine.data;
   if (!canApplyAgain(apps)) {
     return (
-      <AuthCard title="Your artist application">
+      <AuthCard theme="artist-studio" title="Your artist application">
         <ApplicationStatus app={apps[0]} labelName={labelName} bare />
       </AuthCard>
     );
@@ -116,14 +116,14 @@ function Join() {
 
   if (link.status === "loading" || status === "loading") {
     return (
-      <AuthCard title="Join as an artist">
+      <AuthCard theme="artist-studio" title="Join as an artist">
         <Skeleton className="h-40 w-full" />
       </AuthCard>
     );
   }
   if (link.status === "error") {
     return (
-      <AuthCard title="This join link isn't active">
+      <AuthCard theme="artist-studio" title="This join link isn't active">
         <p className="text-fg">It may have been switched off, reached its limit or ended. Ask the label for a new link.</p>
         <p className="mt-4 text-sm text-fg-muted">
           Already an artist here?{" "}
@@ -138,6 +138,7 @@ function Join() {
   if (status === "authenticated") return <SignedIn code={code} labelName={labelName} />;
   return (
     <SignUpForm
+      theme="artist-studio"
       title={`Join ${labelName} as an artist`}
       intro={<>Create your Corner Room account first. After you verify it and sign in, you come back here to apply.</>}
       next={here}

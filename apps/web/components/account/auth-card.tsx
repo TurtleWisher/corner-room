@@ -7,7 +7,10 @@ import { TAGLINE, TAGLINE_BN } from "@/components/shell/site-footer";
  * Sign-in and registration frame (account.md composition 1): one card on the lit corner, the
  * logo above, the provisional tagline beneath. Full width on phones.
  */
-/** `theme`: Ember for fans and artists; "staff" (black, D-THEME-01) for the staff sign-in and join pages. */
+/** Worlds an auth page can take: Ember for fans, staff (black, D-THEME-01), Artist Studio (mint, D-THEME-02). */
+export type AuthWorld = "ember" | "staff" | "artist-studio";
+
+/** `theme`: Ember for fans; "staff" for the staff sign-in and join pages; "artist-studio" for Studio's. */
 export function AuthCard({
   title,
   children,
@@ -17,13 +20,20 @@ export function AuthCard({
   title: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  theme?: "ember" | "staff";
+  theme?: AuthWorld;
 }) {
   return (
     <main id="main" data-theme={theme} className="cr-scope">
       <LitSurface as="section" theme={theme} aria-labelledby="auth-title" className="min-h-[80dvh]">
         <div className="mx-auto flex max-w-md flex-col items-center px-4 py-12 md:py-20">
-          <Logo height={72} alt="Corner Room" />
+          {theme === "artist-studio" ? (
+            // The mint colourway only ever sits on its Signal Mint field (D-THEME-02).
+            <span className="cr-cut inline-flex px-6 py-4 [--cut-fill:var(--cr-brand)]">
+              <Logo variant="artist-mint" height={72} alt="Corner Room Artist Studio" />
+            </span>
+          ) : (
+            <Logo height={72} alt="Corner Room" />
+          )}
           <Card className="mt-8 w-full p-6 md:p-8">
             <h1 id="auth-title" className="text-2xl font-bold text-fg">
               {title}

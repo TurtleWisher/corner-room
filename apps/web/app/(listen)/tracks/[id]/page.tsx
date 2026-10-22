@@ -7,6 +7,7 @@ import { ChartLine, ShoppingBag } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
+import { CoverArt } from "@/components/brand/cover-art";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ButtonLink, Card, ErrorState, Field, Input, Money, Skeleton, StatusChip } from "@/components/ds";
@@ -24,6 +25,7 @@ import {
   transitionTrack,
   type TrackRecord,
 } from "@/lib/api";
+import { coverUrl } from "@/lib/cover-view";
 import { humanizeStatus } from "@/lib/format/status";
 import { creditHref, creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
 import { catalogOffer, hasCatalogAccess, ownsTrack, trackBuyState } from "@/lib/ownership";
@@ -161,7 +163,11 @@ export default function TrackPage() {
     <main id="main" data-theme="sky" className="cr-scope">
       <LitSurface as="section" theme="sky" aria-labelledby="track-title">
         <div className="mx-auto grid max-w-[90rem] items-center gap-10 px-4 py-12 md:grid-cols-[minmax(0,22rem)_1fr] md:px-6 md:py-16">
-          <RoomCube front={track.title} side={artist ?? track.title} tone="sky" label="" animate className="w-full" />
+          <CoverArt
+            src={coverUrl({ track: track.id }, 1200)}
+            fallback={<RoomCube front={track.title} side={artist ?? track.title} tone="sky" label="" animate className="w-full" />}
+            className="w-full"
+          />
           <div>
             <Eyebrow>{["Track", artist, duration].filter(Boolean).join(" · ")}</Eyebrow>
             <Display as="h1" id="track-title" size="lg" className="mt-4">

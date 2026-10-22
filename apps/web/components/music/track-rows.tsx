@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 
+import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
 import { TrackBuyControl, type CustomerCommerce } from "@/components/music/commerce";
 import { usePlayer } from "@/components/music/player";
 import type { ArtistRecord, BandRecord, PlayableTrackRecord } from "@/lib/api";
+import { coverUrl } from "@/lib/cover-view";
 import { creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
 import { ownsTrack } from "@/lib/ownership";
 import { cn } from "@/lib/utils";
@@ -65,7 +67,11 @@ export function TrackRows({
             )}
           >
             <div className="size-12 bg-cr-sky">
-              <RoomCube front={title} side={artist ?? title} tone="sky" size="front" label="" className="size-full" />
+              <CoverArt
+                src={coverUrl({ track: item.trackId }, 160)}
+                fallback={<RoomCube front={title} side={artist ?? title} tone="sky" size="front" label="" className="size-full" />}
+                className="size-full"
+              />
             </div>
             <div className="min-w-0">
               <Link href={`/tracks/${item.trackId}`} className="cr-focus block truncate font-semibold text-fg hover:text-highlight">

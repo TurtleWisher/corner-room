@@ -35,8 +35,9 @@ function SignInGate({ what, audience }: { what: string; audience: PageAudience }
 }
 
 /**
- * Rebuilt account pages: Ember with the quiet Front Door light (account.css), a plain heading,
- * and a sign-in gate instead of the legacy Protected card. The API still decides access.
+ * Rebuilt account pages: Ember with the quiet Front Door light (account.css), or the Artist Studio
+ * world for artists, a plain heading, and a sign-in gate instead of the legacy Protected card. The
+ * API still decides access.
  */
 export function AccountPage({
   eyebrow,
@@ -56,9 +57,11 @@ export function AccountPage({
   children: React.ReactNode;
 }) {
   const { status } = useAuth();
+  // Artist pages sit in the Artist Studio's mint world (D-THEME-02); fan pages stay Ember.
+  const world = audience === "artist" ? "artist-studio" : "ember";
   return (
-    <main id="main" data-theme="ember" className="cr-scope">
-      <LitSurface as="section" theme="ember" aria-labelledby="account-page-title" className="min-h-[70dvh]">
+    <main id="main" data-theme={world} className="cr-scope">
+      <LitSurface as="section" theme={world} aria-labelledby="account-page-title" className="min-h-[70dvh]">
         <div className="mx-auto max-w-[72rem] px-4 py-12 md:px-6 md:py-14">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>

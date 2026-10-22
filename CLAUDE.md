@@ -46,7 +46,7 @@ Corner Room is a Bangladesh-first "unified entertainment operating system": live
 
 Modules: identity, authorization, audit, documents, events (with venues), ticketing, artists (with bands), music, streaming, commerce, entitlements, subscriptions, royalties, finance, campaigns, notifications, search, analytics, administration.
 
-Migrations: `apps/api/alembic/versions/0001` to `0027`, a linear chain with head `0027_order_item_product` (0017 to 0022 are the audio platform; 0023 artist join links; 0024 per-ticket refunds; 0025 delivery addresses; 0026 Bangla QR staff verification; 0027 order lines record their product). Additive only: **never rewrite an existing revision**, and never use `create_all` on a migrated database.
+Migrations: `apps/api/alembic/versions/0001` to `0028`, a linear chain with head `0028_event_cover` (0017 to 0022 are the audio platform; 0023 artist join links; 0024 per-ticket refunds; 0025 delivery addresses; 0026 Bangla QR staff verification; 0027 order lines record their product; 0028 event posters). Additive only: **never rewrite an existing revision**, and never use `create_all` on a migrated database.
 
 ### Frontend layout (`apps/web/`)
 
@@ -57,12 +57,13 @@ Migrations: `apps/api/alembic/versions/0001` to `0027`, a linear chain with head
 - Navigation lives in `lib/nav-view.ts` (tested). Visibility is UX only.
 - Shell details and the URL changes awaiting approval (URL-01 to URL-04): `docs/frontend/APP_SHELL.md`. **Don't change URLs without approval.**
 - `lib/*-view.ts`: pure view-model helpers, each with a `.test.ts`. **Keep this pattern.**
+- **Artist Studio (D-THEME-02):** signed-in artist pages (`app/(artist)`, including `/studio/sign-in` and `/studio/join`) use the green/mint `artist-studio` world and `components/shell/studio-shell.tsx`, following `docs/frontend/ARTIST_STUDIO_DESIGN_GUIDE.md`. `/artists/apply` is for fans and lives in `(account)` (Ember). Public artist profiles stay Ember.
 - Design system (Phase 16): tokens in `app/styles/tokens.css`, fonts in `app/brand-fonts.ts` (the single place to swap the display face), primitives in `components/ds/`, brand pieces in `components/brand/` (including the `cube-logo/` letter cube), formatting in `lib/format/` (money, date, status), contrast-tested palette in `lib/theme/`. Developer pages: `/theme-kit`, `/theme-kit/modules`, `/theme-kit/cube` (enabled with `CR_THEME_KIT=1`).
 - `components/ui/` holds the legacy shadcn primitives. Legacy pages still use them and must stay pixel-identical until their module stage.
 
 ## Commands
 
-Quickest local start (Windows): `.\scripts\dev-stack.ps1` (add `-Seed` once to load demo data). Demo accounts and secrets live in the gitignored `.env.seed.local`; the email validator rejects `.test` domains, so demo users use `example.com`.
+Quickest local start (Windows): `.\scripts\dev-stack.ps1` (add `-Seed` once to load demo data). It builds and serves the web app in production mode (fast clicks); add `-Dev` for live reload while editing (every page compiles on demand, so clicks take seconds). After web changes in production mode, rebuild (`npm run build`) and restart `npm run start`. Demo accounts and secrets live in the gitignored `.env.seed.local`; the email validator rejects `.test` domains, so demo users use `example.com`.
 
 Requires Docker Desktop, Python 3.12+ (the local venv is 3.11.9, which pyproject allows) and Node 22+.
 
@@ -105,7 +106,7 @@ npx playwright install chromium; npm run test:e2e   # browser checks on the them
 - **Errors:** problem+json envelope (`infra/errors.py`, `docs/ERROR_HANDLING.md`).
 - **Python:** ruff (line length 100, rules E4/E7/E9/F), async SQLAlchemy 2, Pydantic v2, services take an auth context `ctx`.
 - **Tests:** backend files are named `test_phaseNN_*.py` per phase, and DB-backed tests are marked `@pytest.mark.postgres`. Frontend tests sit beside the code as `*.test.ts(x)`; DOM tests are `*.dom.test.tsx`.
-- **Brand (frontend):** read `docs/frontend/BRAND_GUIDELINE.md` and `tooling/agent-skills/corner-room-brand/SKILL.md` before any visual work. Never redraw or recolour the logo (`brand/logo/`). Sikat is for display words only, never numerals. Archivo is for UI and numbers. Anek Bangla is for Bangla and ৳. Danger is crimson (`#FF6B81` text, `#C81E4F` fill), never Signal Red, and always comes with an icon and a label.
+- **Brand (frontend):** read `docs/frontend/BRAND_GUIDELINE.md` and `tooling/agent-skills/corner-room-brand/SKILL.md` before any visual work. Never redraw or recolour the logo (`brand/logo/`); there are seven official variants, the seventh being the artist mint colourway for the Artist Studio only (D-THEME-02, owner 2026-10-22). Sikat is for display words only, never numerals. Archivo is for UI and numbers. Anek Bangla is for Bangla and ৳. Danger is crimson (`#FF6B81` text, `#C81E4F` fill), never Signal Red, and always comes with an icon and a label.
 
 ## Gotchas and things not to break
 

@@ -1,17 +1,9 @@
-import { MobileTabBar } from "@/components/shell/mobile-tab-bar";
-import { SiteFooter } from "@/components/shell/site-footer";
-import { SiteHeader, SkipLink } from "@/components/shell/site-header";
-import { ARTIST_NAV } from "@/lib/nav-view";
+import { StudioShell } from "@/components/shell/studio-shell";
 
-/* Artist shell: Ember, with the artist's own second row. */
+/*
+ * Artist Studio shell (D-THEME-02, ARTIST_STUDIO_DESIGN_GUIDE): the mint world for signed-in
+ * artists and band admins. "Apply as an artist" is for fans and lives in the account group.
+ */
 export default function ArtistLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div data-module="artists" className="flex min-h-dvh flex-col [&>main]:flex-1">
-      <SkipLink />
-      <SiteHeader subnav={ARTIST_NAV} subnavLabel="Artist" />
-      {children}
-      <SiteFooter />
-      <MobileTabBar />
-    </div>
-  );
+  return <StudioShell>{children}</StudioShell>;
 }

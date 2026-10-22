@@ -91,7 +91,7 @@ async def complete(
 
 class IntentIn(BaseModel):
     purpose: str = Field(pattern="^(AUDIO_MASTER|COVER_ART)$")
-    target_type: str = Field(pattern="^(track_version|release_cover)$")
+    target_type: str = Field(pattern="^(track_version|release_cover|event_cover)$")
     target_id: UUID
     filename: str = Field(min_length=1, max_length=255)
     byte_size: int = Field(gt=0)
@@ -156,7 +156,7 @@ async def find_open_intent(
     ctx: Annotated[AuthContext, Depends(get_auth_context)],
     session: Annotated[AsyncSession, Depends(db_session)],
     settings: Annotated[Settings, Depends(settings_dep)],
-    target_type: str = Query(pattern="^(track_version|release_cover)$"),
+    target_type: str = Query(pattern="^(track_version|release_cover|event_cover)$"),
     target_id: UUID = Query(),
 ) -> IntentOut | None:
     found = await UploadService(session, settings).find_open(ctx, target_type, target_id)

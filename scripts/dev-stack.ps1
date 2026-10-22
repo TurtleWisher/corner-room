@@ -2,11 +2,15 @@
 #
 #   .\scripts\dev-stack.ps1          start everything
 #   .\scripts\dev-stack.ps1 -Seed    also load the demo data (events, releases, store, demo users)
+#   .\scripts\dev-stack.ps1 -Dev     web app in development mode (live reload while editing code)
+#
+# By default the web app is built and served in production mode: pages open at once. Development
+# mode compiles every page on demand, so each click can take several seconds (2026-10-22).
 #
 # Needs Docker Desktop, the API venv (apps\api\.venv) and node_modules in apps\web.
 # Env comes from .env, plus .env.seed.local for the local demo accounts (gitignored; see the
 # header of apps\api\scripts\dev_seed.py). Opens the API, worker and web app in their own windows.
-param([switch]$Seed)
+param([switch]$Seed, [switch]$Dev)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -48,10 +52,11 @@ try {
 $dotenv = "& '$py' -m dotenv $($envFiles -join ' ') run --no-override --"
 Start-Process powershell -WorkingDirectory $api -ArgumentList "-NoExit", "-Command", "$dotenv '$api\.venv\Scripts\uvicorn.exe' cornerroom.main:app --app-dir src --port 8000 --reload"
 Start-Process powershell -WorkingDirectory $api -ArgumentList "-NoExit", "-Command", "$dotenv '$api\.venv\Scripts\arq.exe' cornerroom.worker.WorkerSettings"
-Start-Process powershell -WorkingDirectory $web -ArgumentList "-NoExit", "-Command", "npm run dev"
+$webCommand = if ($Dev) { "npm run dev" } else { "npm run build; if (`$LASTEXITCODE -eq 0) { npm run start }" }
+Start-Process powershell -WorkingDirectory $web -ArgumentList "-NoExit", "-Command", $webCommand
 
 Write-Host ""
 Write-Host "Corner Room is starting:" -ForegroundColor Green
-Write-Host "  Web  http://localhost:3000"
+Write-Host "  Web  http://localhost:3000$(if ($Dev) { ' (development mode)' } else { ' (production build; ready after the build finishes, about 2 to 4 minutes)' })"
 Write-Host "  API  http://localhost:8000/docs"
 if (Test-Path $seedEnv) { Write-Host "  Demo sign-ins: ops.demo@example.com (staff), fan.demo@example.com (fan); passwords in .env.seed.local" }

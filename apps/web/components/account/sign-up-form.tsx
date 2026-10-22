@@ -9,7 +9,7 @@
 import { FormEvent, useRef, useState } from "react";
 import { CircleCheck } from "lucide-react";
 
-import { AuthCard } from "@/components/account/auth-card";
+import { AuthCard, type AuthWorld } from "@/components/account/auth-card";
 import { GoogleSignInOption } from "@/components/account/google-button";
 import { PasswordStrengthMeter } from "@/components/account/password-strength-meter";
 import { Button, ButtonLink, ErrorState, Field, Input } from "@/components/ds";
@@ -35,7 +35,7 @@ export function SignUpForm({
   footer?: React.ReactNode;
   google?: boolean;
   /** Ember for fans and artists; "staff" (black, D-THEME-01) on the staff pages. */
-  theme?: "ember" | "staff";
+  theme?: AuthWorld;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");

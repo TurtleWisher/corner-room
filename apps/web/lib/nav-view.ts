@@ -49,6 +49,31 @@ export const ARTIST_NAV: NavItem[] = [
   { href: "/artists/apply", label: "Apply as an artist" },
 ];
 
+/**
+ * Artist Studio navigation (ARTIST_STUDIO_DESIGN_GUIDE section 6): only real routes. Plays are per
+ * artist profile (bands have no play page yet). UX only: every page still asks the API.
+ */
+export function studioNavSections(profiles: { kind: string; id: string; display_name: string }[]): NavSection[] {
+  const sections: NavSection[] = [
+    {
+      label: "Studio",
+      items: [
+        { href: "/studio", label: "Your music" },
+        { href: "/studio/sales", label: "Sales" },
+        { href: "/royalties", label: "Royalties" },
+      ],
+    },
+  ];
+  const plays = profiles.filter((p) => p.kind === "artist").map((p) => ({ href: `/artists/${p.id}/analytics`, label: p.display_name }));
+  if (plays.length > 0) sections.push({ label: "Plays", items: plays });
+  return sections;
+}
+
+/** Studio's sign-in and join pages sit in the Studio shell but are not one of its sections. */
+export function isStudioAuthPath(pathname: string | null | undefined): boolean {
+  return isActivePath(pathname, "/studio/sign-in") || isActivePath(pathname, "/studio/join");
+}
+
 export type NavFlags = { isArtist?: boolean; hasWorkspace?: boolean };
 
 /** The user's own flags from /me (missing means no). */
@@ -170,6 +195,14 @@ export function staffBreadcrumb(pathname: string | null | undefined, sections: N
  */
 export function showStaffEntry(permissions: string[] | undefined, organizationCount: number): boolean {
   return (permissions ?? []).length > 0 || organizationCount > 0;
+}
+
+/**
+ * The small "Staff only" sign-in link under the menu's Artist section (owner, 2026-10-23): for
+ * signed-in people who don't already get the Staff console button. UX only; staff sign-in decides.
+ */
+export function showStaffSignInLink(signedIn: boolean, permissions: string[] | undefined, organizationCount: number): boolean {
+  return signedIn && !showStaffEntry(permissions, organizationCount);
 }
 
 /** Two letters for the avatar button: "Tanvir Ops" -> "TO", "nadia@x.test" -> "NA". */

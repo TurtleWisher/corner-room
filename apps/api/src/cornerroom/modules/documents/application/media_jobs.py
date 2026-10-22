@@ -609,8 +609,22 @@ class MediaJobService:
                 select(UploadIntent).where(UploadIntent.media_asset_id == asset.id)
             )
         ).scalar_one_or_none()
-        if intent is not None and intent.target_type == "release_cover":
-            await MusicService(self.session, settings=self.settings).system_attach_cover(intent.target_id, asset.id)
+        if intent is not None and intent.target_type in {"release_cover", "event_cover"}:
+            if intent.target_type == "release_cover":
+                await MusicService(self.session, settings=self.settings).system_attach_cover(intent.target_id, asset.id)
+            else:
+                from cornerroom.modules.events.application.service import EventService
+
+                await EventService(self.session).system_attach_cover(intent.target_id, asset.id)
+            # Make the web sizes now, so the first visitor doesn't wait for them (OD-05, OD-06).
+            from cornerroom.modules.documents.application.covers import COVER_SIZES, CoverService
+
+            covers = CoverService(self.session, self.settings, self.storage)
+            for size in COVER_SIZES:
+                try:
+                    await covers.image(asset.id, size)
+                except Exception:  # noqa: BLE001 - the cover route makes any missing size on demand
+                    break
 
 
 def _mime(codec: str) -> str:

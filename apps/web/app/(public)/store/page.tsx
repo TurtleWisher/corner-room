@@ -5,11 +5,13 @@ import { Check } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
+import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
 import { ButtonLink, Card, EmptyState, ErrorState, Money, Skeleton } from "@/components/ds";
 import { PageIntro, RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import { fetchMySubscriptions, fetchOffers, fetchSubscriptionPlans, type OfferRecord, type PlanRecord } from "@/lib/api";
+import { maybeCoverUrl, offerCoverSource } from "@/lib/cover-view";
 import { groupOffers, intervalLabel, offerTitle, planName, productKind, trialLabel } from "@/lib/store-view";
 
 function BuyLink({ href, children, label }: { href: string; children: React.ReactNode; label: string }) {
@@ -68,7 +70,11 @@ function OfferCard({ offer }: { offer: OfferRecord }) {
   const title = offerTitle(offer);
   return (
     <Card as="article" className="flex h-full flex-col p-4">
-      <RoomCube front={title} side={title} tone="sky" label="" className="w-full" />
+      <CoverArt
+        src={maybeCoverUrl(offerCoverSource(offer.product_type, offer.subject_id), 480)}
+        fallback={<RoomCube front={title} side={title} tone="sky" label="" className="w-full" />}
+        className="w-full"
+      />
       <h3 className="mt-4 truncate text-base font-bold text-fg">{title}</h3>
       {productKind(offer.product_type) !== title ? <p className="text-xs text-fg-muted">{productKind(offer.product_type)}</p> : null}
       <p className="mt-3 flex-1">

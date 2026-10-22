@@ -28,6 +28,8 @@ const COPY: Record<string, string> = {
   INVITATION_EXPIRED: "This invitation has expired.",
   INVITATION_CONSUMED: "This invitation has already been used.",
   WORKSPACE_REQUIRED: "Choose a workspace first.",
+  // A step that no longer fits (it moved on since the page loaded, e.g. approved meanwhile).
+  INVALID_TRANSITION: "That can't be done at this stage. Refresh the page to see where things stand.",
   RATE_LIMITED: "Too many attempts. Please wait a moment and try again.",
   NETWORK_ERROR: "We could not reach Corner Room. Check your connection and try again.",
 };

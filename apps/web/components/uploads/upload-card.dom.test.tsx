@@ -100,4 +100,14 @@ describe("UploadCard", () => {
     pick(audioFile());
     await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/storage is set up/));
   });
+
+  it("takes a dropped file the same way as a chosen one", async () => {
+    createUploadIntent.mockResolvedValue(intent());
+    const done = vi.fn();
+    render(<UploadCard purpose="AUDIO_MASTER" targetType="track_version" targetId="v-1" onCompleted={done} />);
+    const card = screen.getByRole("region", { name: "Upload master" });
+    fireEvent.drop(card, { dataTransfer: { files: [audioFile()], types: ["Files"] } });
+    await waitFor(() => expect(done).toHaveBeenCalled());
+    expect(createUploadIntent).toHaveBeenCalledWith(expect.objectContaining({ filename: "song.flac" }));
+  });
 });

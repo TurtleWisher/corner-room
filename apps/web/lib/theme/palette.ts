@@ -19,7 +19,12 @@ export const palette = {
   ink: "#1C0607",
   redGlow: "#FF5A4E",
   indigoInk: "#2E2860",
+  // Artist Studio world (D-THEME-02): the mint logo's three colours and the derived base.
+  signalMint: "#2CBB76",
+  forest: "#326000",
+  paleMint: "#D3ECC9",
+  studioNight: "#0B1710",
 } as const;
 
-export type ThemeName = "ember" | "sky" | "staff" | "paper";
-export const THEMES: readonly ThemeName[] = ["ember", "sky", "staff", "paper"];
+export type ThemeName = "ember" | "sky" | "staff" | "paper" | "artist-studio";
+export const THEMES: readonly ThemeName[] = ["ember", "sky", "staff", "paper", "artist-studio"];

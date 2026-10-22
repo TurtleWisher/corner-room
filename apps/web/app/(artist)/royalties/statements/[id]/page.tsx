@@ -34,7 +34,7 @@ export default function StatementPage() {
   }, [id, status]);
 
   return (
-    <main id="main" data-theme="ember" className="cr-scope">
+    <main id="main" data-theme="artist-studio" className="cr-scope">
       <div className="mx-auto max-w-4xl px-4 py-12 md:px-6">
         <Link href="/royalties" className="cr-focus text-sm font-semibold text-link underline">
           All statements

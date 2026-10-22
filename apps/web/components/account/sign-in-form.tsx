@@ -9,7 +9,7 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
-import { AuthCard } from "@/components/account/auth-card";
+import { AuthCard, type AuthWorld } from "@/components/account/auth-card";
 import { GoogleSignInOption } from "@/components/account/google-button";
 import { useAuth } from "@/components/auth-provider";
 import { Button, ButtonLink, ErrorState, Field, Input } from "@/components/ds";
@@ -33,10 +33,10 @@ export function SignInForm({
   footer?: (next: string | null) => React.ReactNode;
   google?: boolean;
   /** Ember for fans and artists; "staff" (black, D-THEME-01) on the staff pages. */
-  theme?: "ember" | "staff";
+  theme?: AuthWorld;
 }) {
   const router = useRouter();
-  const { status, user, login } = useAuth();
+  const { status, user, login, logout } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +111,10 @@ export function SignInForm({
         <ButtonLink href={nextPath()} className="mt-6" block>
           Continue
         </ButtonLink>
+        {/* Someone signed in as a fan may need their staff or artist account instead. */}
+        <Button variant="ghost" className="mt-2" block onClick={() => void logout()}>
+          Sign in with a different account
+        </Button>
       </AuthCard>
     );
   }

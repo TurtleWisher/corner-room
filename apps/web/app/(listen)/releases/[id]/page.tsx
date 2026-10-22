@@ -7,6 +7,7 @@ import { Check, Headphones, LogIn, Play, Plus, ShoppingBag } from "lucide-react"
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
+import { CoverArt } from "@/components/brand/cover-art";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ButtonLink, DateTime, EmptyState, ErrorState, Field, Input, Money, Skeleton, StatusChip } from "@/components/ds";
@@ -28,6 +29,7 @@ import {
   type ReleaseRecord,
   type TrackRecord,
 } from "@/lib/api";
+import { coverUrl } from "@/lib/cover-view";
 import { creditHref, creditName, formatDuration, playQueue, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
 import { catalogOffer, hasCatalogAccess, ownsTrack, releaseBuyLabel, releaseBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
@@ -262,7 +264,11 @@ export default function ReleasePage() {
     <main id="main" data-theme="sky" className="cr-scope">
       <LitSurface as="section" theme="sky" aria-labelledby="release-title">
         <div className="mx-auto grid max-w-[90rem] items-center gap-10 px-4 py-12 md:grid-cols-[minmax(0,26rem)_1fr] md:px-6 md:py-16">
-          <RoomCube front={release.title} side={artist ?? release.title} tone="sky" label="" animate className="w-full" />
+          <CoverArt
+            src={coverUrl({ release: release.id, hasCover: !!release.cover_asset_id }, 1200)}
+            fallback={<RoomCube front={release.title} side={artist ?? release.title} tone="sky" label="" animate className="w-full" />}
+            className="w-full"
+          />
           <div>
             <Eyebrow>{releaseEyebrow(release, artist, rows.length)}</Eyebrow>
             <Display as="h1" id="release-title" size="lg" className="mt-4">

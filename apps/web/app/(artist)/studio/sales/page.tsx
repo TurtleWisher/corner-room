@@ -25,7 +25,9 @@ function Totals({ total }: { total: SalesTotal }) {
   ];
   return (
     <Card className="p-5">
-      <p className="text-sm text-fg-muted">{salesCountText(total.sold_count, total.refunded_count)}</p>
+      <p className="text-sm text-fg-muted">
+        All time · {total.currency_code} · {salesCountText(total.sold_count, total.refunded_count)}
+      </p>
       <dl className="mt-3 grid gap-4 sm:grid-cols-3">
         {figures.map((f) => (
           <div key={f.label}>
@@ -199,7 +201,8 @@ function Sales() {
   return (
     <div>
       <p className="max-w-2xl text-sm text-fg">
-        What fans paid for your music, and what was refunded. These are sales, not your earnings: your share is worked out in your royalty statements.
+        What fans paid for your music, and what was refunded, since your first sale. A sale counts once its payment is confirmed. These are
+        sales, not your earnings: your share is worked out in your royalty statements.
       </p>
       <div className="mt-8">
         {profiles.data.map((p) => (

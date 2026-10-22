@@ -8,11 +8,14 @@ import {
   activeHref,
   initials,
   isActivePath,
+  isStudioAuthPath,
   filterNavForUser,
   menuSections,
   navFlagsFor,
   showStaffEntry,
+  showStaffSignInLink,
   staffBreadcrumb,
+  studioNavSections,
   staffNavSections,
 } from "@/lib/nav-view";
 
@@ -108,5 +111,31 @@ describe("filterNavForUser", () => {
     expect(filterNavForUser([{ href: "/studio/sales", label: "Sales" }], {})).toEqual([]);
     expect(activeHref("/studio/sales", ARTIST_NAV)).toBe("/studio/sales");
     expect(activeHref("/studio/releases/x", ARTIST_NAV)).toBe("/studio");
+  });
+});
+
+describe("studioNavSections", () => {
+  it("lists only real Studio places, with plays for artist profiles", () => {
+    expect(studioNavSections([]).map((s) => s.items.map((i) => i.href))).toEqual([["/studio", "/studio/sales", "/royalties"]]);
+    const both = studioNavSections([
+      { kind: "artist", id: "a1", display_name: "Rumi" },
+      { kind: "band", id: "b1", display_name: "Kaal Bela" },
+    ]);
+    expect(both[1]).toEqual({ label: "Plays", items: [{ href: "/artists/a1/analytics", label: "Rumi" }] });
+    expect(staffBreadcrumb("/studio/sales", both)).toEqual(["Studio", "Sales"]);
+    expect(staffBreadcrumb("/studio/releases/x", both)).toEqual(["Studio", "Your music"]);
+    expect(isStudioAuthPath("/studio/sign-in")).toBe(true);
+    expect(isStudioAuthPath("/studio/join")).toBe(true);
+    expect(isStudioAuthPath("/studio")).toBe(false);
+    expect(isStudioAuthPath("/studio/sales")).toBe(false);
+  });
+});
+
+describe("showStaffSignInLink", () => {
+  it("offers staff sign-in to signed-in people who aren't already staff", () => {
+    expect(showStaffSignInLink(true, [], 0)).toBe(true);
+    expect(showStaffSignInLink(false, [], 0)).toBe(false);
+    expect(showStaffSignInLink(true, ["event.read"], 0)).toBe(false);
+    expect(showStaffSignInLink(true, [], 1)).toBe(false);
   });
 });

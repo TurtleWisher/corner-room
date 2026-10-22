@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 
+import { CoverArt } from "@/components/brand/cover-art";
 import { Logo } from "@/components/brand/logo";
 import { PointerLightLayer } from "@/components/brand/pointer-light";
 import { RoomCube } from "@/components/brand/room-cube";
@@ -35,6 +36,7 @@ import {
   queuePositionLabel,
   swipeDirection,
 } from "@/lib/listening-room-view";
+import { coverUrl } from "@/lib/cover-view";
 import { clock, durationLabel } from "@/lib/player-model";
 import { cn } from "@/lib/utils";
 
@@ -56,8 +58,13 @@ const BACKDROP_PX = 40;
 type Mode = "carousel" | "focus";
 
 // Covers only redraw when their words change; turning the carousel never redraws them.
-const Cover = memo(function Cover({ title, artist }: { title: string; artist: string }) {
+const Cube = memo(function Cube({ title, artist }: { title: string; artist: string }) {
   return <RoomCube front={title} side={artist} tone="sky" label="" className="size-full" />;
+});
+
+// The official cover when the song has one (OD-05), the cube otherwise.
+const Cover = memo(function Cover({ id, title, artist }: { id: string; title: string; artist: string }) {
+  return <CoverArt src={coverUrl({ track: id }, 480)} fallback={<Cube title={title} artist={artist} />} className="size-full" />;
 });
 
 function titleOf(t: PlayerTrack): string {
@@ -72,6 +79,9 @@ function titleOf(t: PlayerTrack): string {
  */
 function Backdrop({ track }: { track: PlayerTrack | null }) {
   const source = useRef<HTMLDivElement>(null);
+  // The song the next backdrop layer belongs to (read when its canvas mounts).
+  const trackId = useRef<string | null>(null);
+  trackId.current = track?.id ?? null;
   const [layers, setLayers] = useState<{ key: string; leaving: boolean }[]>([]);
   const key = track ? `${track.id}|${titleOf(track)}|${track.artist ?? ""}` : "";
 
@@ -87,7 +97,8 @@ function Backdrop({ track }: { track: PlayerTrack | null }) {
   const draw = useCallback((canvas: HTMLCanvasElement | null) => {
     if (!canvas || canvas.dataset.drawn) return;
     const svg = source.current?.querySelector("svg");
-    if (!svg) return;
+    const id = trackId.current;
+    if (!svg && !id) return;
     canvas.dataset.drawn = "1";
     let ctx: CanvasRenderingContext2D | null = null;
     try {
@@ -96,21 +107,31 @@ function Backdrop({ track }: { track: PlayerTrack | null }) {
       ctx = null;
     }
     if (!ctx) return;
-    const img = new Image();
-    img.onload = () => {
+    const paint = (img: HTMLImageElement) => {
       ctx.clearRect(0, 0, BACKDROP_PX, BACKDROP_PX);
       ctx.filter = "blur(2px)";
       ctx.drawImage(img, -3, -3, BACKDROP_PX + 6, BACKDROP_PX + 6);
       canvas.dataset.ready = "";
     };
-    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`;
+    const cube = () => {
+      if (!svg) return;
+      const img = new Image();
+      img.onload = () => paint(img);
+      img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`;
+    };
+    // The official cover blurred behind the room (OD-05); the cube's when there is none.
+    if (!id) return cube();
+    const photo = new Image();
+    photo.onload = () => paint(photo);
+    photo.onerror = cube;
+    photo.src = coverUrl({ track: id }, 160) ?? "";
   }, []);
 
   return (
     <div aria-hidden="true" className="lr-backdrop">
       {/* The cover the canvas copies: drawn once, never shown. */}
       <div ref={source} className="lr-backdrop-source">
-        {track ? <Cover title={titleOf(track)} artist={track.artist || titleOf(track)} /> : null}
+        {track ? <Cube title={titleOf(track)} artist={track.artist || titleOf(track)} /> : null}
       </div>
       <div className="lr-drift">
         {layers.map((l) => (
@@ -373,7 +394,7 @@ function Carousel({ onFocus, frontRef }: { onFocus: () => void; frontRef: React.
               className={cn("lr-card cr-cut cr-glass-card cr-focus", front && p.status === "loading" && "lr-card-loading")}
             >
               <span className="lr-cover">
-                <Cover title={title} artist={item.artist || title} />
+                <Cover id={item.id} title={title} artist={item.artist || title} />
               </span>
               <span className="lr-caption">
                 <span className="block truncate text-sm font-bold text-fg">{title}</span>
@@ -396,7 +417,11 @@ function ControlBar({ track, onFocus }: { track: PlayerTrack; onFocus: () => voi
       <Transport label={label} />
       <div className="lr-now">
         <div className="lr-now-cube" aria-hidden="true">
-          <RoomCube front={label} side={track.artist || label} tone="sky" size="front" label="" className="size-full" />
+          <CoverArt
+            src={coverUrl({ track: track.id }, 160)}
+            fallback={<RoomCube front={label} side={track.artist || label} tone="sky" size="front" label="" className="size-full" />}
+            className="size-full"
+          />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-3">
@@ -445,7 +470,7 @@ function EdgePeek({ side, item, shown }: { side: "left" | "right"; item: PlayerT
       className="lr-peek cr-cut cr-glass-card"
     >
       <span className="lr-cover">
-        <Cover title={title} artist={item.artist || title} />
+        <Cover id={item.id} title={title} artist={item.artist || title} />
       </span>
       <span className="lr-caption">
         <span className="block text-[0.625rem] font-semibold uppercase tracking-[0.18em] text-highlight">{side === "left" ? "Previous" : "Next"}</span>
@@ -479,7 +504,7 @@ function FocusView({ track, edge, keyRef }: { track: PlayerTrack; edge: "left" |
       <div key={track.id} className="lr-focus-cover">
         <div className="lr-halo" aria-hidden="true" />
         <div className="lr-focus-art">
-          <Cover title={label} artist={track.artist || label} />
+          <Cover id={track.id} title={label} artist={track.artist || label} />
         </div>
       </div>
       <div className="lr-focus-info">

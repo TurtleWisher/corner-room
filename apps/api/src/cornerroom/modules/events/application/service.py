@@ -276,6 +276,46 @@ class EventService:
         except StaleDataError as exc:
             raise ConflictError("The resource was updated concurrently") from exc
 
+    # --- official poster (OD-06; owner 2026-10-23: square, same rules as music covers) ------------
+
+    async def authorize_cover_upload(self, ctx: AuthContext, event_id: UUID) -> Event:
+        """Staff who may edit the event may upload its poster; others see nothing (404)."""
+        event = await self.get_event_row(event_id)
+        await self._assert_event_perm(ctx, event, "event.write", mutate=True)
+        await self._require_active_org(event.organization_id)
+        if event.status in {"ARCHIVED", "SETTLED"}:
+            raise AppError("INVALID_TRANSITION", "This event no longer accepts artwork", 409)
+        return event
+
+    async def system_attach_cover(self, event_id: UUID, asset_id: UUID) -> None:
+        """The worker attaches a poster that passed its checks."""
+        event = await self.get_event_row(event_id)
+        previous = event.cover_asset_id
+        event.cover_asset_id = asset_id
+        await self._flush_versioned()
+        await self.audit.record(
+            action="event.cover_attached", entity_type="Event", entity_id=event.id,
+            actor_id="system:media", actor_type="system",
+            previous_state={"cover_asset_id": str(previous) if previous else None},
+            new_state={"cover_asset_id": str(asset_id)},
+        )
+
+    async def cover_report(self, ctx: AuthContext, event_id: UUID) -> dict | None:
+        """The latest poster upload and its check results, plus a signed link to the poster in use."""
+        from cornerroom.modules.documents.application.covers import CoverService, latest_artwork_report
+
+        event = await self.get_event_row(event_id)
+        await self._assert_event_perm(ctx, event, "event.read", mutate=False)
+        report = await latest_artwork_report(
+            self.session, target_type="event_cover", target_id=event.id, current_asset_id=event.cover_asset_id
+        )
+        if report is None:
+            return None
+        report["cover_url"] = (
+            CoverService(self.session).signed_path(event.cover_asset_id, 480) if event.cover_asset_id else None
+        )
+        return report
+
     def _is_public(self, event: Event) -> bool:
         return event.published_at is not None and event.status in PUBLIC_EVENT_STATUSES
 
