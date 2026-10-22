@@ -34,6 +34,7 @@ from cornerroom.kernel.events import (
 from cornerroom.modules.artists.domain.models import Artist, Band, BandMember
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.commerce.application.sales import CatalogSales
+from cornerroom.modules.documents.application.covers import CoverService, latest_artwork_report
 from cornerroom.modules.commerce.domain.models import OfferProposal
 from cornerroom.modules.documents.domain.models import MediaAsset
 from cornerroom.modules.music.application.languages import LANGUAGES, is_language
@@ -253,6 +254,12 @@ class StudioService:
         ).scalars().all()
         return [await self._release_card(r) for r in rows]
 
+    def _cover_url(self, release: Release, size: int = 480) -> str | None:
+        """A signed link to the release's accepted cover (unreleased covers have no public route)."""
+        if release.cover_asset_id is None:
+            return None
+        return CoverService(self.session, self.settings).signed_path(release.cover_asset_id, size)
+
     async def _release_card(self, release: Release) -> dict[str, Any]:
         tracks = await self._tracks_of(release.id)
         return {
@@ -263,6 +270,7 @@ class StudioService:
             "display_state": await self.display_state(release, tracks),
             "track_count": len(tracks),
             "cover_asset_id": release.cover_asset_id,
+            "cover_url": self._cover_url(release),
             "updated_at": release.updated_at,
             "version": release.version,
         }
@@ -319,6 +327,7 @@ class StudioService:
         ).scalar_one_or_none()
         return {
             "release": self._release_fields(release),
+            "cover_url": self._cover_url(release, 1200),
             "profile": {"kind": _kind, "id": _pid, "display_name": profile_name},
             "viewer_role": role,
             "display_state": await self.display_state(release, tracks),
@@ -810,6 +819,16 @@ class StudioService:
             organization_id=release.primary_org_id,
         )
         return proposal
+
+    # --- cover checks -----------------------------------------------------------------------------
+
+    async def cover_report(self, ctx: AuthContext, release_id: UUID) -> dict[str, Any] | None:
+        """What the checks found for the latest cover uploaded to this release (2026-10-22: rejected
+        covers used to say only "Checking your artwork next"). None until a cover upload finished."""
+        release, _role = await self._release(ctx, release_id)
+        return await latest_artwork_report(
+            self.session, target_type="release_cover", target_id=release.id, current_asset_id=release.cover_asset_id
+        )
 
     # --- sales (HANDOFF 0.2 step 2) -------------------------------------------------------------------
 

@@ -1,5 +1,6 @@
 /* Artist Studio API client (AUDIO_PHASE_1_DESIGN 10.1). Catalog fields only. */
 
+import type { ArtworkReport } from "@/features/uploads/api";
 import { apiFetch } from "@/lib/api/client";
 
 export type ProfileKind = "artist" | "band";
@@ -28,6 +29,8 @@ export type ReleaseCard = {
   display_state: string;
   track_count: number;
   cover_asset_id?: string | null;
+  /** Signed link to the accepted cover (OD-05); null without one. */
+  cover_url?: string | null;
   updated_at: string;
   version: number;
 };
@@ -105,6 +108,8 @@ export type PriceProposal = {
 
 export type StudioReleaseDetail = {
   release: StudioRelease;
+  /** Signed link to the accepted cover at 1200 px (OD-05); null without one. */
+  cover_url?: string | null;
   profile: { kind: ProfileKind; id: string; display_name: string };
   viewer_role: "owner" | "staff";
   display_state: string;
@@ -287,4 +292,12 @@ export function fetchProfileSales(kind: ProfileKind, id: string): Promise<Profil
 export function fetchProfileSaleLines(kind: ProfileKind, id: string, cursor?: string | null): Promise<{ items: SaleLine[]; next_cursor: string | null }> {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
   return apiFetch<{ items: SaleLine[]; next_cursor: string | null }>(`/api/v1/studio/profiles/${kind}/${id}/sales/lines${query}`);
+}
+
+/* Cover checks: the latest cover upload for a release and what the checks found (null before any). */
+
+export type CoverReport = ArtworkReport;
+
+export function fetchCoverReport(releaseId: string): Promise<CoverReport | null> {
+  return apiFetch<CoverReport | null>(`/api/v1/studio/releases/${releaseId}/cover-report`);
 }

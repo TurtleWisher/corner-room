@@ -11,6 +11,7 @@ import { SignInForm } from "@/components/account/sign-in-form";
 export default function ArtistSignInPage() {
   return (
     <SignInForm
+      theme="artist-studio"
       title="Artist sign-in"
       intro="Sign in to Studio to publish your music and see how it is doing."
       defaultNext="/studio"

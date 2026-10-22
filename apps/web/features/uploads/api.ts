@@ -3,7 +3,7 @@
 import { apiFetch } from "@/lib/api/client";
 
 export type UploadPurpose = "AUDIO_MASTER" | "COVER_ART";
-export type UploadTargetType = "track_version" | "release_cover";
+export type UploadTargetType = "track_version" | "release_cover" | "event_cover";
 
 export type UploadIntentRecord = {
   id: string;
@@ -76,3 +76,17 @@ export async function completeUpload(intentId: string): Promise<UploadCompleteRe
 export async function cancelUpload(intentId: string): Promise<UploadIntentRecord> {
   return apiFetch<UploadIntentRecord>(`/api/v1/uploads/intents/${intentId}`, { method: "DELETE", retry: false });
 }
+
+/** What the checks found for the latest artwork upload to a release or event (null before any). */
+export type ArtworkReport = {
+  filename: string;
+  uploaded_at: string | null;
+  asset_status: string | null;
+  outcome: string | null;
+  width_px: number | null;
+  height_px: number | null;
+  findings: { code: string; severity: string; measured?: string | null; limit?: string | null }[];
+  is_current: boolean;
+  /** Events: signed link to the poster in use. */
+  cover_url?: string | null;
+};

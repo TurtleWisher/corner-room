@@ -88,6 +88,7 @@ export function UploadCard({
   const [open, setOpen] = useState<UploadIntentRecord | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const cancelled = useRef(false);
+  const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -155,12 +156,31 @@ export function UploadCard({
   const resumePercent = open ? percent(bytesReceived(planParts(open.byte_size, open.part_size), open.parts_received), open.byte_size) : 0;
 
   return (
-    <section className="cr-glass-card rounded-none p-5" aria-label={title ?? (purpose === "AUDIO_MASTER" ? "Upload master" : "Upload cover art")}>
+    <section
+      className={`cr-glass-card rounded-none p-5 ${dragging ? "outline-2 outline-offset-2 outline-dashed outline-[var(--cr-accent)]" : ""}`}
+      aria-label={title ?? (purpose === "AUDIO_MASTER" ? "Upload master" : "Upload cover art")}
+      // Drop a file anywhere on the card; the file picker below does the same by keyboard or touch.
+      onDragOver={(e) => {
+        if (busy || !e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file && !busy) void start(file);
+      }}
+    >
       <div className="flex items-start gap-3">
         <Icon aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-highlight" />
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-fg">{title ?? (purpose === "AUDIO_MASTER" ? "Master audio" : "Cover art")}</p>
           <p className="mt-1 text-sm text-fg-muted">{GUIDANCE[purpose]}</p>
+          <p className="mt-1 text-sm text-fg-muted">Drop the file on this card, or choose it below.</p>
 
           {open && phase.kind === "idle" ? (
             <p className="mt-3 text-sm text-fg" role="status">
@@ -170,8 +190,19 @@ export function UploadCard({
           ) : null}
 
           {phase.kind === "sending" ? (
-            <div className="mt-4" role="status" aria-live="polite">
-              <div className="h-2 w-full bg-line" aria-hidden="true">
+            <div className="mt-4">
+              {/* Announced once; the byte counter below is not live, so screen readers don't read every tick. */}
+              <p className="sr-only" role="status">
+                Sending your file.
+              </p>
+              <div
+                className="h-2 w-full bg-line"
+                role="progressbar"
+                aria-label="Upload progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={percent(phase.sent, phase.total)}
+              >
                 <div className="h-2 bg-highlight transition-[width]" style={{ width: `${percent(phase.sent, phase.total)}%` }} />
               </div>
               <p className="mt-2 text-sm text-fg-muted">
@@ -199,7 +230,7 @@ export function UploadCard({
               id={inputId}
               type="file"
               accept={ACCEPT[purpose]}
-              className="sr-only"
+              className="peer sr-only"
               disabled={busy}
               onChange={(e) => {
                 const file = e.target.files?.[0];
@@ -209,7 +240,8 @@ export function UploadCard({
             />
             <label
               htmlFor={inputId}
-              className={`cr-focus inline-flex cursor-pointer items-center gap-2 border border-line px-4 py-2 text-sm font-semibold text-fg hover:border-highlight ${busy ? "pointer-events-none opacity-50" : ""}`}
+              // Focus sits on the hidden input, so its ring is drawn on this label (keyboard users see it).
+              className={`inline-flex cursor-pointer items-center gap-2 border border-line px-4 py-2 text-sm font-semibold text-fg hover:border-highlight peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-solid peer-focus-visible:outline-[var(--cr-focus)] ${busy ? "pointer-events-none opacity-50" : ""}`}
             >
               {open && phase.kind !== "done" ? <RotateCcw aria-hidden="true" className="size-4" /> : <CloudUpload aria-hidden="true" className="size-4" />}
               {open && phase.kind !== "done" ? "Choose the file to continue" : phase.kind === "done" ? "Upload a different file" : "Choose a file"}

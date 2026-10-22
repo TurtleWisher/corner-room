@@ -18,7 +18,7 @@ export function EventRow({ event, price }: { event: EventRecord; price?: { amoun
     <li className="ev-row cr-row grid grid-cols-[3.5rem_4rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2 border-b border-line py-5 md:grid-cols-[6rem_4.5rem_minmax(0,1fr)_auto] md:gap-x-6">
       <DateBlock value={event.starts_at} timeZone={event.timezone} />
       <Link href={href} className="ev-cube cr-focus block" tabIndex={-1} aria-hidden="true">
-        <EventMedia title={event.title} side={city ?? event.title} size="front" />
+        <EventMedia title={event.title} side={city ?? event.title} eventId={event.id} hasCover={event.has_cover} size="front" />
       </Link>
       <div className="min-w-0">
         <h3 className="truncate text-lg font-bold text-fg">

@@ -7,6 +7,7 @@ import { Search as SearchIcon } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
+import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Avatar, Button, EmptyState, ErrorState, Input, Skeleton } from "@/components/ds";
 import { EventMedia } from "@/components/events/event-media";
@@ -14,6 +15,7 @@ import { PageIntro, RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import { useWorkspace } from "@/components/workspace-provider";
 import { fetchSearch, type SearchHitRecord } from "@/lib/api";
+import { coverUrl } from "@/lib/cover-view";
 import { humanizeStatus } from "@/lib/format/status";
 import { allowedSearchEntityTypes, buildSearchHref, isGuestLikeSearch, sanitizeSearchEntityType, searchResultHref } from "@/lib/search-view";
 import { cn } from "@/lib/utils";
@@ -21,11 +23,15 @@ import { cn } from "@/lib/utils";
 const TYPE_LABEL: Record<string, string> = { EVENT: "Events", ARTIST: "Artists", BAND: "Bands", RELEASE: "Releases", TRACK: "Tracks", VENUE: "Venues", CAMPAIGN: "Campaigns", USER: "Users", ORGANIZATION: "Organizations" };
 
 function Thumb({ hit }: { hit: SearchHitRecord }) {
-  if (hit.entity_type === "EVENT") return <EventMedia title={hit.title} size="front" />;
+  if (hit.entity_type === "EVENT") return <EventMedia title={hit.title} eventId={hit.entity_id} size="front" />;
   if (hit.entity_type === "RELEASE" || hit.entity_type === "TRACK") {
     return (
       <div className="aspect-square w-full bg-cr-sky">
-        <RoomCube front={hit.title} side={hit.subtitle || hit.title} tone="sky" size="front" label="" className="size-full" />
+        <CoverArt
+          src={coverUrl(hit.entity_type === "RELEASE" ? { release: hit.entity_id } : { track: hit.entity_id }, 160)}
+          fallback={<RoomCube front={hit.title} side={hit.subtitle || hit.title} tone="sky" size="front" label="" className="size-full" />}
+          className="size-full"
+        />
       </div>
     );
   }

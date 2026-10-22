@@ -7,6 +7,7 @@ import { CircleCheck, LogIn } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
+import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
 import { DeliveryAddressStep } from "@/components/checkout/delivery-address-step";
 import { PaymentPanel } from "@/components/checkout/payment-panel";
@@ -16,6 +17,7 @@ import { useOrderStatus } from "@/components/checkout/use-order-status";
 import { Button, ButtonLink, Card, ErrorState, Field, Input, Money, Skeleton } from "@/components/ds";
 import { useCredits } from "@/components/music/credits";
 import { RetryButton } from "@/components/shell/staff-panel";
+import { maybeCoverUrl, offerCoverSource } from "@/lib/cover-view";
 import { friendlyError } from "@/lib/error-copy";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import {
@@ -373,7 +375,11 @@ function NewCheckout() {
         </Card>
       ) : (
         <Card className="grid gap-6 p-6 sm:grid-cols-[8rem_1fr] sm:items-center">
-          <RoomCube front={summary.data.title} side={summary.data.side ?? summary.data.title} tone={summary.data.tone} label="" className="w-32" />
+          <CoverArt
+            src={maybeCoverUrl(summary.data.offer ? offerCoverSource(summary.data.offer.product_type, summary.data.offer.subject_id) : null, 160)}
+            fallback={<RoomCube front={summary.data.title} side={summary.data.side ?? summary.data.title} tone={summary.data.tone} label="" className="w-32" />}
+            className="w-32"
+          />
           <div>
             <p className="text-xs text-fg-muted">{summary.data.kind}</p>
             <h2 className="mt-1 text-xl font-bold text-fg">{summary.data.title}</h2>

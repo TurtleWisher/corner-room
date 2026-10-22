@@ -18,9 +18,13 @@ vi.mock("@/components/auth-provider", () => ({ useAuth: () => auth }));
 vi.mock("@/components/workspace-provider", () => ({ useWorkspace: () => workspace }));
 vi.mock("@/components/notifications-provider", () => ({ useNotifications: () => ({ items: [] }) }));
 vi.mock("next/navigation", () => ({ usePathname: () => pathname, useSearchParams: () => new URLSearchParams() }));
+const fetchMyProfiles = vi.fn(async () => [] as { kind: string; id: string; display_name: string; status: string; can_publish: boolean }[]);
+vi.mock("@/features/studio/api", () => ({ fetchMyProfiles: () => fetchMyProfiles() }));
 
+import { AccountMenu } from "./account-menu";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { StaffShell } from "./staff-shell";
+import { StudioShell } from "./studio-shell";
 import { WorkspaceChip } from "./workspace-chip";
 
 beforeAll(() => {
@@ -106,5 +110,57 @@ describe("MobileTabBar", () => {
     auth.user = { permissions: [] };
     rerender(<MobileTabBar />);
     expect(screen.getByRole("button", { name: "You" })).toBeTruthy();
+  });
+});
+
+describe("StudioShell", () => {
+  it("is the mint world with the artist's real profiles, Studio places and a way back", async () => {
+    pathname = "/studio/sales";
+    fetchMyProfiles.mockResolvedValueOnce([
+      { kind: "artist", id: "a1", display_name: "Rumi", status: "ACTIVE", can_publish: true },
+      { kind: "band", id: "b1", display_name: "Kaal Bela", status: "ACTIVE", can_publish: true },
+    ]);
+    const { container } = render(
+      <StudioShell>
+        <main id="main">page</main>
+      </StudioShell>,
+    );
+    expect(container.querySelector("aside")?.getAttribute("data-theme")).toBe("artist-studio");
+    expect(container.querySelector('img[src$="corner-room-logo-artist-mint.svg"]')).toBeTruthy();
+    const nav = screen.getAllByRole("navigation", { name: "Studio" })[0];
+    expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe("Sales");
+    expect(await screen.findAllByText("Kaal Bela")).toBeTruthy();
+    // Plays exist for artist profiles only.
+    expect(nav.querySelector('a[href="/artists/a1/analytics"]')).toBeTruthy();
+    expect(nav.querySelector('a[href="/artists/b1/analytics"]')).toBeNull();
+    expect(screen.getAllByRole("link", { name: /Back to Corner Room/ }).length).toBeGreaterThan(0);
+  });
+
+  it("sends signed-out visitors to the artist sign-in", () => {
+    auth.status = "anonymous";
+    render(
+      <StudioShell>
+        <main id="main">page</main>
+      </StudioShell>,
+    );
+    expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/studio/sign-in");
+  });
+});
+
+describe("AccountMenu", () => {
+  it("offers a small Staff only sign-in under the Artist section, except to staff", () => {
+    auth.user = { permissions: [], display_name: "Fan" };
+    const { unmount } = render(<AccountMenu open onClose={() => {}} />);
+    const link = screen.getByRole("link", { name: "Staff only" });
+    expect(link.getAttribute("href")).toBe("/staff/sign-in");
+    // It sits after "Apply as an artist", in the same section.
+    const apply = screen.getByRole("link", { name: /Apply as an artist/ });
+    expect(apply.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    unmount();
+
+    auth.user = { permissions: ["event.read"], display_name: "Ops" };
+    render(<AccountMenu open onClose={() => {}} />);
+    expect(screen.queryByRole("link", { name: "Staff only" })).toBeNull();
+    expect(screen.getByRole("link", { name: /Staff console/ })).toBeTruthy();
   });
 });

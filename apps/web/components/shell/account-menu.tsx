@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, LogIn, LogOut } from "lucide-react";
+import { LayoutGrid, LogIn, LogOut, ShieldCheck } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { ButtonLink } from "@/components/ds";
 import { Drawer } from "@/components/ds/dialog";
 import { NavIcon } from "@/components/shell/nav-icons";
 import { useWorkspace } from "@/components/workspace-provider";
-import { activeHref, initials, menuSections, navFlagsFor, showStaffEntry, staffHomeHref } from "@/lib/nav-view";
+import { activeHref, initials, menuSections, navFlagsFor, showStaffEntry, showStaffSignInLink, staffHomeHref } from "@/lib/nav-view";
 import { cn } from "@/lib/utils";
 
 /** The red initials square that opens the account menu. */
@@ -73,6 +73,12 @@ export function AccountMenu({ open, onClose }: { open: boolean; onClose: () => v
                 </li>
               ))}
             </ul>
+            {/* Small, under "Apply as an artist": staff sign in on their own page (owner, 2026-10-23). */}
+            {section.label === "Artist" && signedIn && showStaffSignInLink(signedIn, user.permissions, organizations.length) ? (
+              <Link href="/staff/sign-in" className="cr-focus mt-1 inline-flex h-9 items-center gap-2 text-xs font-semibold text-fg-muted hover:text-fg">
+                <ShieldCheck aria-hidden="true" className="size-3.5" /> Staff only
+              </Link>
+            ) : null}
           </div>
         ))}
       </nav>

@@ -62,7 +62,12 @@ function Tickets() {
       {data.data.map(({ event, tickets }) => (
         <li key={event?.id ?? "unknown"}>
           <Card className="grid gap-6 p-5 md:grid-cols-[10rem_minmax(0,1fr)]">
-            <EventMedia title={event?.title ?? "Event"} side={event ? (cityFromTimeZone(event.timezone) ?? event.title) : "Corner Room"} />
+            <EventMedia
+              title={event?.title ?? "Event"}
+              side={event ? (cityFromTimeZone(event.timezone) ?? event.title) : "Corner Room"}
+              eventId={event?.id}
+              hasCover={event?.has_cover}
+            />
             <div className="min-w-0">
               <h2 className="text-xl font-bold text-fg">
                 {event ? (

@@ -2,12 +2,14 @@
 
 import { CalendarDays, CircleCheck, Library, Music, Ticket } from "lucide-react";
 
+import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
 import { DownloadButton } from "@/components/music/download-button";
 import { ButtonLink, Card, DateTime, Money } from "@/components/ds";
 import { EventMedia } from "@/components/events/event-media";
 import type { EventRecord, OrderItemRecord, OrderRecord, TrackRecord } from "@/lib/api";
 import { orderReference } from "@/lib/checkout-view";
+import { maybeCoverUrl } from "@/lib/cover-view";
 import { cityFromTimeZone } from "@/lib/home-view";
 
 /*
@@ -50,7 +52,13 @@ export function TicketSummary({ order, event }: { order: OrderRecord; event: Eve
   const title = event?.title ?? "Event tickets";
   return (
     <Card as="section" aria-labelledby="summary-title" className="p-6">
-      <EventMedia title={title} side={event ? cityFromTimeZone(event.timezone) ?? event.title : title} className="max-w-[16rem]" />
+      <EventMedia
+        title={title}
+        side={event ? cityFromTimeZone(event.timezone) ?? event.title : title}
+        eventId={event?.id}
+        hasCover={event?.has_cover}
+        className="max-w-[16rem]"
+      />
       <p className="cr-eyebrow mt-5 text-highlight">Tickets</p>
       <h2 id="summary-title" className="mt-2 text-2xl font-bold text-fg">
         {title}
@@ -83,9 +91,11 @@ export function TrackSummary({
   const title = release?.title ?? track?.title ?? "Track";
   return (
     <Card as="section" aria-labelledby="summary-title" className="p-6">
-      <div className="max-w-[16rem] bg-cr-sky">
-        <RoomCube front={title} side={artist ?? title} tone="sky" label="" />
-      </div>
+      <CoverArt
+        src={maybeCoverUrl(release ? { release: release.id } : track ? { track: track.id } : null, 480)}
+        fallback={<RoomCube front={title} side={artist ?? title} tone="sky" label="" />}
+        className="max-w-[16rem] bg-cr-sky"
+      />
       <p className="cr-eyebrow mt-5">{release ? "Release" : "Track"}</p>
       <h2 id="summary-title" className="mt-2 text-2xl font-bold text-fg">
         {title}
@@ -116,7 +126,7 @@ export function TicketConfirmation({ order, event }: { order: OrderRecord; event
   return (
     <Card as="section" aria-labelledby="done-title" className="overflow-hidden p-0">
       <div className="grid gap-0 sm:grid-cols-[14rem_1fr]">
-        <EventMedia title={title} side={event ? cityFromTimeZone(event.timezone) ?? event.title : title} />
+        <EventMedia title={title} side={event ? cityFromTimeZone(event.timezone) ?? event.title : title} eventId={event?.id} hasCover={event?.has_cover} />
         <div className="p-6">
           <p className="flex items-center gap-2 text-sm font-semibold text-success">
             <CircleCheck aria-hidden="true" className="size-4" /> Tickets issued
@@ -178,9 +188,11 @@ export function MusicReceipt({
   return (
     <Card as="section" aria-labelledby="done-title" className="overflow-hidden p-0">
       <div className="grid gap-0 sm:grid-cols-[14rem_1fr]">
-        <div className="bg-cr-sky">
-          <RoomCube front={title} side={artist ?? title} tone="sky" label="" />
-        </div>
+        <CoverArt
+          src={maybeCoverUrl(release ? { release: release.id } : track ? { track: track.id } : null, 480)}
+          fallback={<RoomCube front={title} side={artist ?? title} tone="sky" label="" />}
+          className="bg-cr-sky"
+        />
         <div className="p-6">
           <p className="flex items-center gap-2 text-sm font-semibold text-success">
             <CircleCheck aria-hidden="true" className="size-4" /> In your library

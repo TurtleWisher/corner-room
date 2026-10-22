@@ -27,6 +27,21 @@ export function displayStateTone(state: string): "neutral" | "progress" | "good"
   return "neutral";
 }
 
+/** Display states that wait on the artist (not on Corner Room or the audio checks). */
+const ARTIST_TURN = new Set(["DRAFT", "NEEDS_ATTENTION"]);
+
+/**
+ * The release to pick up next on Studio home: the most recently changed one that waits on the
+ * artist. None when nothing does, so the page never invents a next step (design guide 7.1).
+ */
+export function releaseToContinue<T extends { display_state: string; updated_at: string }>(releases: T[]): T | null {
+  let best: T | null = null;
+  for (const r of releases) {
+    if (ARTIST_TURN.has(r.display_state) && (!best || r.updated_at > best.updated_at)) best = r;
+  }
+  return best;
+}
+
 export const RELEASE_TYPE_LABEL: Record<string, string> = {
   SINGLE: "Single",
   EP: "EP",
@@ -48,7 +63,7 @@ const READINESS_TEXT: Record<string, string> = {
   P_LINE: "Sound recording copyright (℗ line)",
   C_LINE: "Copyright (© line)",
   COVER: "Cover art that passed its checks",
-  TRACKS: "At least one track",
+  TRACKS: "At least one song (add it under Tracks)",
   TRACK_ORDER: "Track order",
   PRICE: "A proposed price for the release",
   TRACK_TITLE: "Track title",
@@ -109,6 +124,16 @@ const REVIEW_TEXT: Record<string, string> = {
 };
 
 /** Words for one review event; the reviewer's identity is never part of it. */
+/**
+ * What the Review and submit panel offers (2026-10-23: an approved release still showed "Submit for
+ * review", and pressing it failed). Submitting only while the release is still being prepared;
+ * in review, a withdraw; after that, only the state the API reports.
+ */
+export function submitPanelMode(status: string): "submit" | "in_review" | "past_review" {
+  if (status === "METADATA_REVIEW") return "in_review";
+  return EDITABLE_STATUSES.has(status) ? "submit" : "past_review";
+}
+
 export function reviewEventText(action: string): string {
   return REVIEW_TEXT[action] ?? action;
 }
@@ -119,4 +144,23 @@ export function proposalWords(p: { subject_type: string; subject_title?: string 
     subject: p.subject_type === "RELEASE" ? "Whole release" : `Track: ${p.subject_title?.trim() || "untitled"}`,
     audience: p.audience === "OWNS_PART_OF_RELEASE" ? "Fans who already own some of its songs" : "Everyone",
   };
+}
+/** Asset states after a cover upload: still being checked, usable, or turned down. */
+const COVER_ACCEPTED = new Set(["ACCEPTED", "READY"]);
+
+/**
+ * How a cover upload stands, from the cover report (2026-10-22: a rejected cover used to show only
+ * "Checking your artwork next"). Words only; the server decides.
+ */
+export function coverReportState(
+  r: { asset_status: string | null } | null | undefined,
+  noun: "cover" | "poster" = "cover",
+): {
+  state: "none" | "checking" | "accepted" | "rejected";
+  text: string;
+} {
+  if (!r) return { state: "none", text: `No ${noun} uploaded yet.` };
+  if (r.asset_status === "REJECTED") return { state: "rejected", text: `This ${noun} wasn't accepted. Fix what's listed below, then upload it again.` };
+  if (r.asset_status && COVER_ACCEPTED.has(r.asset_status)) return { state: "accepted", text: `${noun === "cover" ? "Cover" : "Poster"} accepted.` };
+  return { state: "checking", text: "Checking your artwork…" };
 }

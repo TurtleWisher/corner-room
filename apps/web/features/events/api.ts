@@ -1,6 +1,7 @@
 /* Events, venues and milestones. Split from lib/api.ts (Phase 16, Stage 5). */
 
 import { type Page } from "@/features/identity/api";
+import type { ArtworkReport } from "@/features/uploads/api";
 import { apiFetch } from "@/lib/api/client";
 
 export type EventRecord = {
@@ -21,6 +22,8 @@ export type EventRecord = {
   previous_starts_at?: string | null;
   previous_ends_at?: string | null;
   version?: number;
+  /** An accepted official poster is attached (OD-06); the image comes from /covers. */
+  has_cover?: boolean;
   /** Public responses only: the venue's name and city when the event has an active venue (D-EV-03). */
   venue?: { name: string; city: string | null } | null;
 };
@@ -168,4 +171,9 @@ export async function transitionVenue(id: string, action: string, version?: numb
     body: JSON.stringify({ action, version }),
     retry: false,
   });
+}
+
+/** Staff: the latest poster upload and its check results, with a signed link to the poster in use (OD-06). */
+export function fetchEventCoverReport(eventId: string): Promise<ArtworkReport | null> {
+  return apiFetch<ArtworkReport | null>(`/api/v1/events/${eventId}/cover-report`);
 }

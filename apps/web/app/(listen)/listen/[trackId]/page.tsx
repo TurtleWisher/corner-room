@@ -4,6 +4,7 @@ import { useParams, usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { ButtonLink, Skeleton } from "@/components/ds";
@@ -13,6 +14,7 @@ import { ListeningRoom } from "@/components/music/listening-room";
 import { usePlayer } from "@/components/music/player";
 import { useAsync } from "@/components/use-async";
 import { fetchTrack } from "@/lib/api";
+import { coverUrl } from "@/lib/cover-view";
 import { creditName, playQueue } from "@/lib/music-view";
 import { ownsTrack } from "@/lib/ownership";
 
@@ -88,7 +90,11 @@ export default function ListeningRoomPage() {
               </div>
             ) : (
               <div className="grid w-full max-w-4xl items-center gap-10 md:grid-cols-[minmax(0,20rem)_1fr]">
-                <RoomCube front={title || "Track"} side={artist ?? (title || "Track")} tone="sky" label="" className="w-full" />
+                <CoverArt
+                  src={coverUrl({ track: trackId }, 1200)}
+                  fallback={<RoomCube front={title || "Track"} side={artist ?? (title || "Track")} tone="sky" label="" className="w-full" />}
+                  className="w-full"
+                />
                 <div>
                   <Eyebrow>{artist ?? "Artist not available"}</Eyebrow>
                   <Display as="h1" id="room-title" size="md" className="mt-3">

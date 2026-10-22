@@ -201,7 +201,7 @@ export default function EventPage() {
             </div>
           </div>
           <div className="order-1 lg:order-2">
-            <EventMedia title={event.title} side={city ?? event.title} animate />
+            <EventMedia title={event.title} side={city ?? event.title} eventId={event.id} hasCover={event.has_cover} animate />
           </div>
         </div>
       </LitSurface>

@@ -14,6 +14,7 @@ import {
 } from "react";
 import { LogIn, Maximize2, Pause, Play, Repeat, Repeat1, ShoppingBag, Shuffle, SkipBack, SkipForward } from "lucide-react";
 
+import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
 import { ButtonLink } from "@/components/ds";
 import {
@@ -48,6 +49,7 @@ import {
   type PlayProblem,
   type RepeatMode,
 } from "@/lib/player-model";
+import { coverUrl } from "@/lib/cover-view";
 import { cn } from "@/lib/utils";
 
 export type PlayerTrack = { id: string; title: string; artist?: string | null };
@@ -801,7 +803,11 @@ export function PlayerBar() {
       >
         <div className="cr-glass mx-auto flex h-20 max-w-[90rem] items-center gap-3 px-3 md:gap-5 md:px-6">
           <Link href={`/listen/${p.track.id}`} aria-label={`Open the listening room for ${label}`} className="cr-focus size-12 shrink-0 bg-cr-sky">
-            <RoomCube front={label} side={p.track.artist || label} tone="sky" size="front" label="" className="size-full" />
+            <CoverArt
+              src={coverUrl({ track: p.track.id }, 160)}
+              fallback={<RoomCube front={label} side={p.track.artist || label} tone="sky" size="front" label="" className="size-full" />}
+              className="size-full"
+            />
           </Link>
           <div className="min-w-0 flex-1 md:flex-none md:basis-56">
             <p className="truncate text-sm font-bold text-fg">{label}</p>

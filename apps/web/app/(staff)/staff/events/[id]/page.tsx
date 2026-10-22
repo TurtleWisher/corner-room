@@ -26,6 +26,7 @@ import {
   type TicketTypeRecord,
   type VenueRecord,
 } from "@/lib/api";
+import { EventPoster } from "@/components/staff/event-poster";
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected, selectClasses } from "@/components/staff/kit";
 import { Money, StatusChip } from "@/components/ds";
 
@@ -164,6 +165,14 @@ function EventDetailBody() {
             Save
           </Button>
         </form>
+      </Card>
+      <Card>
+        <h2 className="text-sm font-medium">Poster</h2>
+        <p className="mt-1 text-sm text-fg-muted">
+          The official artwork fans see on the event page, in What&apos;s On and on tickets once the event is published. Without one,
+          the letter cube shows.
+        </p>
+        <EventPoster eventId={event.id} onChanged={() => void reload()} />
       </Card>
       <Card>
         <h2 className="text-sm font-medium">Lifecycle</h2>

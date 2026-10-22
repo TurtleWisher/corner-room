@@ -34,6 +34,8 @@ class EventOut(BaseModel):
     postponement_reason: str | None = None
     previous_starts_at: datetime | None = None
     previous_ends_at: datetime | None = None
+    # An accepted official poster is attached (OD-06); the image itself comes from /covers.
+    has_cover: bool = False
     version: int
 
 
@@ -59,6 +61,7 @@ class PublicEventOut(BaseModel):
     previous_ends_at: datetime | None = None
     postponement_reason: str | None = None
     cancellation_reason: str | None = None
+    has_cover: bool = False
 
 
 class EventPage(BaseModel):
@@ -164,6 +167,7 @@ def _event_out(row: Event) -> EventOut:
         postponement_reason=row.postponement_reason,
         previous_starts_at=row.previous_starts_at,
         previous_ends_at=row.previous_ends_at,
+        has_cover=row.cover_asset_id is not None,
         version=row.version,
     )
 
@@ -184,6 +188,7 @@ def _public_out(row: Event, places: dict[UUID, tuple[str, str | None]] | None = 
         starts_at=row.starts_at,
         ends_at=row.ends_at,
         venue_id=row.venue_id,
+        has_cover=row.cover_asset_id is not None,
     )
 
 
@@ -396,3 +401,34 @@ async def lineup_lifecycle(
         contract_id=row.contract_id,
         version=row.version,
     )
+
+
+class CoverFindingOut(BaseModel):
+    code: str
+    severity: str
+    measured: str | None
+    limit: str | None
+
+
+class EventCoverReportOut(BaseModel):
+    filename: str
+    uploaded_at: datetime | None
+    asset_status: str | None
+    outcome: str | None
+    width_px: int | None
+    height_px: int | None
+    findings: list[CoverFindingOut]
+    is_current: bool
+    cover_url: str | None
+
+
+@router.get("/{event_id}/cover-report", response_model=EventCoverReportOut | None)
+async def event_cover_report(
+    event_id: UUID,
+    svc: Annotated[EventService, Depends(event_service)],
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+) -> EventCoverReportOut | None:
+    """Staff: the latest poster upload and its check results (OD-06)."""
+    report = await svc.cover_report(ctx, event_id)
+    return EventCoverReportOut(**report) if report is not None else None
+

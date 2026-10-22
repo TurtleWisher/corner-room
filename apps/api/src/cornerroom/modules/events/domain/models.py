@@ -94,6 +94,8 @@ class Event(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ba
     previous_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resume_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     extra_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
+    # The accepted official poster (OD-06, migration 0028); the letter cube shows without one.
+    cover_asset_id: Mapped[UUID | None] = mapped_column(ForeignKey("documents.media_assets.id"), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     __mapper_args__ = {"version_id_col": version}
 

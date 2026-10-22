@@ -8,7 +8,10 @@ import {
   moveItem,
   parsePriceToMinor,
   profileReasonText,
+  coverReportState,
   readinessRows,
+  submitPanelMode,
+  releaseToContinue,
   proposalWords,
   reviewEventText,
 } from "./studio-view";
@@ -75,5 +78,43 @@ describe("price proposals", () => {
     expect(proposalWords({ subject_type: "RELEASE", subject_title: "Monsoon", audience: "EVERYONE" })).toEqual({ subject: "Whole release", audience: "Everyone" });
     expect(proposalWords({ subject_type: "TRACK", subject_title: " Tin Roof ", audience: "EVERYONE" }).subject).toBe("Track: Tin Roof");
     expect(proposalWords({ subject_type: "RELEASE", audience: "OWNS_PART_OF_RELEASE" }).audience).toBe("Fans who already own some of its songs");
+  });
+});
+
+describe("releaseToContinue", () => {
+  const r = (id: string, display_state: string, updated_at: string) => ({ id, display_state, updated_at });
+  it("picks the newest release that waits on the artist, or nothing", () => {
+    expect(releaseToContinue([])).toBeNull();
+    expect(releaseToContinue([r("a", "IN_REVIEW", "2026-10-20T10:00:00Z"), r("b", "RELEASED", "2026-10-21T10:00:00Z")])).toBeNull();
+    const pick = releaseToContinue([
+      r("old", "DRAFT", "2026-10-01T10:00:00Z"),
+      r("fix", "NEEDS_ATTENTION", "2026-10-20T10:00:00Z"),
+      r("busy", "CHECKING_AUDIO", "2026-10-22T10:00:00Z"),
+    ]);
+    expect(pick?.id).toBe("fix");
+  });
+});
+
+describe("coverReportState", () => {
+  it("says how the latest cover stands, from the server's status", () => {
+    expect(coverReportState(null).state).toBe("none");
+    expect(coverReportState({ asset_status: "QUARANTINED" }).state).toBe("checking");
+    expect(coverReportState({ asset_status: "PENDING" }).state).toBe("checking");
+    expect(coverReportState({ asset_status: "ACCEPTED" })).toEqual({ state: "accepted", text: "Cover accepted." });
+    expect(coverReportState({ asset_status: "READY" }).state).toBe("accepted");
+    expect(coverReportState({ asset_status: "REJECTED" }).text).toMatch(/wasn't accepted/);
+    expect(coverReportState({ asset_status: "ACCEPTED" }, "poster").text).toBe("Poster accepted.");
+    expect(coverReportState(null, "poster").text).toBe("No poster uploaded yet.");
+  });
+});
+
+describe("submitPanelMode", () => {
+  it("offers submit only while the release is being prepared", () => {
+    expect(submitPanelMode("IDEA")).toBe("submit");
+    expect(submitPanelMode("IN_PRODUCTION")).toBe("submit");
+    expect(submitPanelMode("METADATA_REVIEW")).toBe("in_review");
+    expect(submitPanelMode("APPROVED")).toBe("past_review");
+    expect(submitPanelMode("RELEASED")).toBe("past_review");
+    expect(submitPanelMode("SOMETHING_NEW")).toBe("past_review");
   });
 });

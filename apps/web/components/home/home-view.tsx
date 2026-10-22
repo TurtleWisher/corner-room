@@ -55,7 +55,14 @@ function FeaturedEvent({ state }: { state: ReturnType<typeof useAsync<EventRecor
           {state.status === "loading" ? (
             <div className="aspect-square w-full animate-pulse bg-cr-signal/40 motion-reduce:animate-none" />
           ) : (
-            <EventMedia title={event?.title ?? "Corner Room"} side={event ? cityOrTitle(event) : "Corner Room"} animate className="w-full" />
+            <EventMedia
+              title={event?.title ?? "Corner Room"}
+              side={event ? cityOrTitle(event) : "Corner Room"}
+              eventId={event?.id}
+              hasCover={event?.has_cover}
+              animate
+              className="w-full"
+            />
           )}
         </Link>
       </PosterTilt>

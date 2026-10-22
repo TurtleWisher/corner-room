@@ -77,6 +77,7 @@ class ReleaseCardOut(BaseModel):
     display_state: str
     track_count: int
     cover_asset_id: UUID | None
+    cover_url: str | None = None
     updated_at: datetime
     version: int
 
@@ -184,6 +185,7 @@ class ReviewEventOut(BaseModel):
 
 class ReleaseDetailOut(BaseModel):
     release: ReleaseFieldsOut
+    cover_url: str | None = None
     profile: ProfileRefOut
     viewer_role: Literal["owner", "staff"]
     display_state: str
@@ -373,6 +375,33 @@ async def propose(release_id: UUID, body: ProposalIn, ctx: Ctx, svc: StudioDep) 
     return ProposalOut(**svc._proposal_view(p))
 
 
+# --- Cover checks ------------------------------------------------------------------------------
+
+
+class CoverFindingOut(BaseModel):
+    code: str
+    severity: str
+    measured: str | None
+    limit: str | None
+
+
+class CoverReportOut(BaseModel):
+    filename: str
+    uploaded_at: datetime | None
+    asset_status: str | None
+    outcome: str | None
+    width_px: int | None
+    height_px: int | None
+    findings: list[CoverFindingOut]
+    is_current: bool
+
+
+@router.get("/studio/releases/{release_id}/cover-report", response_model=CoverReportOut | None)
+async def cover_report(release_id: UUID, ctx: Ctx, svc: StudioDep) -> CoverReportOut | None:
+    report = await svc.cover_report(ctx, release_id)
+    return CoverReportOut(**report) if report is not None else None
+
+
 # --- Sales (owners and finance staff; no buyer identity) ---------------------------------------
 
 
@@ -454,6 +483,7 @@ class IntakeQueueItemOut(BaseModel):
     display_state: str
     track_count: int
     cover_asset_id: UUID | None
+    cover_url: str | None = None
     updated_at: datetime
     version: int
     profile_name: str
