@@ -241,3 +241,50 @@ export function reviewRelease(
     retry: false,
   });
 }
+/* Sales (owners and finance staff). Money is what fans paid, before any share; the API sums it. */
+
+export type SalesTotal = {
+  currency_code: string;
+  sold_count: number;
+  refunded_count: number;
+  gross_amount_minor: number;
+  refunded_amount_minor: number;
+  net_amount_minor: number;
+};
+
+export type SalesItem = SalesTotal & {
+  subject_type: "TRACK" | "RELEASE";
+  subject_id: string;
+  title: string;
+  release_type: string | null;
+  last_sold_at: string;
+};
+
+export type ProfileSales = {
+  profile: { kind: ProfileKind; id: string; display_name: string };
+  totals: SalesTotal[];
+  items: SalesItem[];
+};
+
+export type SaleLine = {
+  id: string;
+  subject_type: "TRACK" | "RELEASE";
+  subject_id: string;
+  title: string;
+  release_type: string | null;
+  quantity: number;
+  amount_minor: number;
+  refunded_amount_minor: number;
+  currency_code: string;
+  order_status: string;
+  ordered_at: string;
+};
+
+export function fetchProfileSales(kind: ProfileKind, id: string): Promise<ProfileSales> {
+  return apiFetch<ProfileSales>(`/api/v1/studio/profiles/${kind}/${id}/sales`);
+}
+
+export function fetchProfileSaleLines(kind: ProfileKind, id: string, cursor?: string | null): Promise<{ items: SaleLine[]; next_cursor: string | null }> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  return apiFetch<{ items: SaleLine[]; next_cursor: string | null }>(`/api/v1/studio/profiles/${kind}/${id}/sales/lines${query}`);
+}

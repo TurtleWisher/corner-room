@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -371,6 +371,68 @@ async def propose(release_id: UUID, body: ProposalIn, ctx: Ctx, svc: StudioDep) 
         amount_minor=body.amount_minor, currency_code=body.currency_code, note=body.note,
     )
     return ProposalOut(**svc._proposal_view(p))
+
+
+# --- Sales (owners and finance staff; no buyer identity) ---------------------------------------
+
+
+class SalesTotalOut(BaseModel):
+    currency_code: str
+    sold_count: int
+    refunded_count: int
+    gross_amount_minor: int
+    refunded_amount_minor: int
+    net_amount_minor: int
+
+
+class SalesItemOut(SalesTotalOut):
+    subject_type: Literal["TRACK", "RELEASE"]
+    subject_id: UUID
+    title: str
+    release_type: str | None
+    last_sold_at: datetime
+
+
+class SalesOut(BaseModel):
+    profile: ProfileRefOut
+    totals: list[SalesTotalOut]
+    items: list[SalesItemOut]
+
+
+class SaleLineOut(BaseModel):
+    id: UUID
+    subject_type: Literal["TRACK", "RELEASE"]
+    subject_id: UUID
+    title: str
+    release_type: str | None
+    quantity: int
+    amount_minor: int
+    refunded_amount_minor: int
+    currency_code: str
+    order_status: str
+    ordered_at: datetime
+
+
+class SaleLinePage(BaseModel):
+    items: list[SaleLineOut]
+    next_cursor: str | None
+
+
+@router.get("/studio/profiles/{kind}/{profile_id}/sales", response_model=SalesOut)
+async def profile_sales(kind: Literal["artist", "band"], profile_id: UUID, ctx: Ctx, svc: StudioDep) -> SalesOut:
+    return SalesOut(**await svc.sales(ctx, kind, profile_id))
+
+
+@router.get("/studio/profiles/{kind}/{profile_id}/sales/lines", response_model=SaleLinePage)
+async def profile_sale_lines(
+    kind: Literal["artist", "band"],
+    profile_id: UUID,
+    ctx: Ctx,
+    svc: StudioDep,
+    cursor: str | None = None,
+    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+) -> SaleLinePage:
+    return SaleLinePage(**await svc.sales_lines(ctx, kind, profile_id, cursor=cursor, limit=limit))
 
 
 # --- Staff catalog intake (music.intake_assist / music.intake_manage) ---------------------------

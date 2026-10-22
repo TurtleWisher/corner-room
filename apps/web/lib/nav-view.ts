@@ -44,6 +44,7 @@ export const ACCOUNT_NAV: NavItem[] = [
 /** Second row for artist pages. */
 export const ARTIST_NAV: NavItem[] = [
   { href: "/studio", label: "Studio" },
+  { href: "/studio/sales", label: "Sales" },
   { href: "/royalties", label: "Royalties" },
   { href: "/artists/apply", label: "Apply as an artist" },
 ];
@@ -56,14 +57,14 @@ export function navFlagsFor(user: { is_artist?: boolean; has_workspace?: boolean
 }
 
 /**
- * Owner, 2026-10-17: fan accounts do not see artist-only or staff-only places. Studio and royalties
+ * Owner, 2026-10-17: fan accounts do not see artist-only or staff-only places. Studio, sales and royalties
  * are for artists, Workspaces for people who belong to one, and "Apply as an artist" only for
  * people who are not artists yet. Menus only: every page still asks the API.
  */
 export function filterNavForUser(items: NavItem[], flags: NavFlags): NavItem[] {
   return items.filter((item) => {
     if (item.href === "/organizations") return flags.hasWorkspace === true;
-    if (item.href === "/studio" || item.href === "/royalties") return flags.isArtist === true;
+    if (item.href === "/studio" || item.href === "/studio/sales" || item.href === "/royalties") return flags.isArtist === true;
     if (item.href === "/artists/apply") return flags.isArtist !== true;
     return true;
   });
