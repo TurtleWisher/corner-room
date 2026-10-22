@@ -112,6 +112,50 @@ describe("PaymentPanel", () => {
     expect(img.getAttribute("src")).toBe("/brand/payment/bangla-qr.png");
     expect(img.closest(".cr-qr-tile")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Complete test payment/ })).toBeNull();
+    const save = screen.getByRole("link", { name: "Save code" });
+    expect(save.getAttribute("href")).toBe("/brand/payment/bangla-qr.png");
+    expect(save.hasAttribute("download")).toBe(true);
+    expect(screen.getByText(/If your app asks for a reference/).textContent).toContain("CR-618EE0BC");
+    // Nothing configured: no merchant name and no pay-by-number box.
+    expect(screen.queryByText(/merchant number/)).toBeNull();
+    expect(screen.queryByText(/temporarily supported by a friend/)).toBeNull();
+  });
+
+  it("drops the friend note once the merchant name is Corner Room's own", () => {
+    const base = order({ qr: "/brand/payment/bangla-qr.png", selfConfirm: false });
+    const own = { ...base, payment: { ...base.payment!, qr_merchant_name: "CORNER ROOM" } };
+    render(<PaymentPanel order={own} stage="awaiting_payment" now={NOW} onOrder={() => {}} onRefresh={noop} restartHref="/" />);
+    expect(screen.getByText("CORNER ROOM")).toBeTruthy();
+    expect(screen.queryByText(/temporarily supported by a friend/)).toBeNull();
+  });
+
+  it("names the merchant the app shows and lets a phone buyer copy the merchant number", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const base = order({ qr: "/brand/payment/bangla-qr.png", selfConfirm: false });
+    const withDetails = { ...base, payment: { ...base.payment!, qr_merchant_name: "SAMPLE MERCHANT", qr_merchant_number: "01700000000", qr_number_app: "bKash" } };
+    render(<PaymentPanel order={withDetails} stage="awaiting_payment" now={NOW} onOrder={() => {}} onRefresh={noop} restartHref="/" />);
+    expect(screen.getByText("SAMPLE MERCHANT")).toBeTruthy();
+    expect(screen.getByText("Corner Room Payment Procedure is temporarily supported by a friend, SAMPLE MERCHANT.")).toBeTruthy();
+    expect(screen.getByText(/or pay the bKash merchant number/)).toBeTruthy();
+    expect(screen.getByText("01700000000")).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy bKash merchant number" }));
+    });
+    expect(writeText).toHaveBeenCalledWith("01700000000");
+    expect(screen.getByText("Copied")).toBeTruthy();
+  });
+
+  it("selects the merchant number to copy by hand when the clipboard is blocked", async () => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) }, configurable: true });
+    const base = order({ qr: "/brand/payment/bangla-qr.png", selfConfirm: false });
+    const withDetails = { ...base, payment: { ...base.payment!, qr_merchant_number: "01700000000", qr_number_app: "bKash" } };
+    render(<PaymentPanel order={withDetails} stage="awaiting_payment" now={NOW} onOrder={() => {}} onRefresh={noop} restartHref="/" />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy bKash merchant number" }));
+    });
+    expect(window.getSelection()?.toString()).toBe("01700000000");
+    expect(screen.queryByText("Copied")).toBeNull();
   });
 
   it("hides the code once the reservation has run out and offers a fresh start", () => {

@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
-import { CircleAlert, CircleCheck, Clock, FlaskConical, LoaderCircle, RefreshCw } from "lucide-react";
+import { FormEvent, useRef, useState } from "react";
+import { Check, CircleAlert, CircleCheck, Clock, Copy, Download, FlaskConical, LoaderCircle, RefreshCw } from "lucide-react";
 
-import { Button, ButtonLink, Card, Field, Input, Money, Select } from "@/components/ds";
+import { Button, ButtonLink, buttonVariants, Card, Field, Input, Money, Select } from "@/components/ds";
 import { ApiError, sandboxConfirmPayment, submitPayment, type OrderRecord } from "@/lib/api";
 import {
   formatCountdown,
@@ -37,6 +37,38 @@ function SampleCode() {
         <p className="cr-eyebrow text-highlight">Sample</p>
         <p className="mt-2 text-sm font-semibold text-fg">The Bangla QR code goes here</p>
         <p className="mt-1 text-xs text-fg-muted">Not a payment code. Nothing to scan yet.</p>
+      </div>
+    </div>
+  );
+}
+
+/** The merchant number to pay by hand when the code is on the phone the buyer pays with. */
+function PayByNumber({ number, app }: { number: string; app: string }) {
+  const [copied, setCopied] = useState(false);
+  const numberRef = useRef<HTMLSpanElement>(null);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(number);
+      setCopied(true);
+    } catch {
+      // No clipboard access: select the number so the buyer can copy it by hand.
+      const selection = window.getSelection();
+      if (numberRef.current && selection) selection.selectAllChildren(numberRef.current);
+    }
+  }
+
+  return (
+    <div className="mt-3 border border-line p-3">
+      <p className="text-xs text-fg-muted">{app} merchant number</p>
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <span ref={numberRef} className="cr-num text-base text-fg">
+          {number}
+        </span>
+        <Button variant="ghost" size="sm" onClick={() => void copy()} aria-label={`Copy ${app} merchant number`}>
+          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+          {copied ? "Copied" : "Copy"}
+        </Button>
       </div>
     </div>
   );
@@ -229,10 +261,16 @@ export function PaymentPanel({
         <div className="mt-6 grid gap-6 sm:grid-cols-[minmax(0,13rem)_1fr] sm:items-start">
           <div className="mx-auto w-full max-w-[13rem]">
             {presentation.kind === "qr" ? (
-              <div className="cr-qr-tile">
-                {/* eslint-disable-next-line @next/next/no-img-element -- the QR must be served exactly as supplied */}
-                <img src={presentation.src} alt={`${METHOD_NAME} payment code`} />
-              </div>
+              <>
+                <div className="cr-qr-tile">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- the QR must be served exactly as supplied */}
+                  <img src={presentation.src} alt={`${METHOD_NAME} payment code`} />
+                </div>
+                <a href={presentation.src} download className={buttonVariants({ variant: "secondary", size: "sm", block: true, className: "mt-3" })}>
+                  <Download aria-hidden="true" /> Save code
+                </a>
+                {presentation.payByNumber ? <PayByNumber {...presentation.payByNumber} /> : null}
+              </>
             ) : presentation.kind === "sample" ? (
               <SampleCode />
             ) : (
@@ -240,9 +278,34 @@ export function PaymentPanel({
             )}
           </div>
           <ol className="list-decimal space-y-2 pl-5 text-sm text-fg marker:text-fg-muted">
-            <li>Open your mobile banking or wallet app and scan the code.</li>
             <li>
-              Pay exactly <Money value={total} minorDigits="always" />.
+              Open your mobile banking or wallet app and scan the code.
+              {presentation.kind === "qr" ? (
+                <span className="block text-fg-muted">
+                  Code on the phone you pay with? Save it first{presentation.payByNumber ? `, or pay the ${presentation.payByNumber.app} merchant number` : ""}.
+                </span>
+              ) : null}
+            </li>
+            <li>
+              Pay exactly <Money value={total} minorDigits="always" />
+              {presentation.kind === "qr" && presentation.merchantName ? (
+                <>
+                  {" "}
+                  to <strong className="font-semibold">{presentation.merchantName}</strong>
+                  {/* Owner's wording (2026-10-23) while payments go to a friend's bKash merchant account;
+                      it drops out once the merchant name is Corner Room's own. */}
+                  {/corner\s*room/i.test(presentation.merchantName) ? null : (
+                    <span className="block text-xs text-fg-muted">
+                      Corner Room Payment Procedure is temporarily supported by a friend, {presentation.merchantName}.
+                    </span>
+                  )}
+                </>
+              ) : (
+                "."
+              )}
+            </li>
+            <li>
+              If your app asks for a reference, enter <span className="cr-num">{orderReference(order.id)}</span>.
             </li>
             <li>Send us the app, transaction ID and number below. This page updates by itself when the payment is confirmed.</li>
           </ol>

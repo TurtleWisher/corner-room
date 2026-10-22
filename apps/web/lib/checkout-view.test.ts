@@ -109,9 +109,23 @@ describe("the success moment", () => {
 
 describe("payment presentation", () => {
   it("shows a configured QR, a marked sample on test servers, or nothing on live without one", () => {
-    expect(paymentPresentation(order({ qr: "/brand/payment/bangla-qr.png" }))).toEqual({ kind: "qr", src: "/brand/payment/bangla-qr.png" });
+    expect(paymentPresentation(order({ qr: "/brand/payment/bangla-qr.png" }))).toEqual({
+      kind: "qr",
+      src: "/brand/payment/bangla-qr.png",
+      merchantName: null,
+      payByNumber: null,
+    });
     expect(paymentPresentation(order())).toEqual({ kind: "sample" });
     expect(paymentPresentation(order({ mode: "live" }))).toEqual({ kind: "unavailable" });
+  });
+  it("carries the merchant details, and pays by number only when the number has its app", () => {
+    const base = order({ qr: "/q.png" });
+    const withDetails = (extra: Record<string, string | null>) => ({ ...base, payment: { ...base.payment!, ...extra } });
+    expect(
+      paymentPresentation(withDetails({ qr_merchant_name: "SAMPLE MERCHANT", qr_merchant_number: "01700000000", qr_number_app: "bKash" })),
+    ).toEqual({ kind: "qr", src: "/q.png", merchantName: "SAMPLE MERCHANT", payByNumber: { number: "01700000000", app: "bKash" } });
+    expect(paymentPresentation(withDetails({ qr_merchant_number: "01700000000", qr_number_app: null }))).toMatchObject({ payByNumber: null });
+    expect(paymentPresentation(withDetails({ qr_merchant_number: null, qr_number_app: "bKash" }))).toMatchObject({ payByNumber: null });
   });
   it("gives a short order reference", () => {
     expect(orderReference("01a12c0a-5420-7cdf-8446-cc15618ee0bc")).toBe("CR-618EE0BC");

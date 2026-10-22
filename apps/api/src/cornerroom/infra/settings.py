@@ -119,6 +119,12 @@ class Settings(BaseSettings):
     # Bangla QR payment image (owner supplies it later). A web path or URL to the image only; it
     # proves nothing about payment. Empty = no image yet: test servers show a marked placeholder.
     bangla_qr_image_url: str = ""
+    # Shown under the QR, copied exactly from the code the wallet issued: the merchant name the
+    # buyer's app will show, and the merchant number with its app, so a buyer whose phone is
+    # showing the code can pay by number instead of scanning. Empty = not shown.
+    bangla_qr_merchant_name: str = ""
+    bangla_qr_merchant_number: str = ""
+    bangla_qr_number_app: str = ""
     # How new payments are taken (Q-PAY-01): "sandbox" (test payments, the default) or
     # "bangla_qr" (real Bangla QR payments confirmed by finance staff). The owner switches it.
     payment_provider: str = "sandbox"

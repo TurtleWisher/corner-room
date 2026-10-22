@@ -102,8 +102,8 @@ export function orderReference(orderId: string): string {
 }
 
 export type PaymentPresentation =
-  /** A real QR image is configured. */
-  | { kind: "qr"; src: string }
+  /** A real QR image is configured, with the merchant details copied from it, if set. */
+  | { kind: "qr"; src: string; merchantName: string | null; payByNumber: { number: string; app: string } | null }
   /** No image yet, and this is a test server: a clearly marked sample, never scannable. */
   | { kind: "sample" }
   /** No image and not a test server: the method is not available. */
@@ -111,7 +111,11 @@ export type PaymentPresentation =
 
 export function paymentPresentation(order: OrderRecord): PaymentPresentation {
   const p = order.payment;
-  if (p?.qr_image_url) return { kind: "qr", src: p.qr_image_url };
+  if (p?.qr_image_url) {
+    // Paying by number needs both halves: a number without its app would send buyers guessing.
+    const payByNumber = p.qr_merchant_number && p.qr_number_app ? { number: p.qr_merchant_number, app: p.qr_number_app } : null;
+    return { kind: "qr", src: p.qr_image_url, merchantName: p.qr_merchant_name ?? null, payByNumber };
+  }
   if (p?.mode !== "live") return { kind: "sample" };
   return { kind: "unavailable" };
 }

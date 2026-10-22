@@ -38,6 +38,10 @@ export type PaymentRecord = {
   self_confirm_available?: boolean;
   /** Bangla QR image to show. Showing it proves nothing; only the server confirms payment. */
   qr_image_url?: string | null;
+  /** Copied from the QR by the owner. Display only. */
+  qr_merchant_name?: string | null;
+  qr_merchant_number?: string | null;
+  qr_number_app?: string | null;
 };
 
 /** One priced line, exactly as the server priced it. Never recomputed in the browser. */
