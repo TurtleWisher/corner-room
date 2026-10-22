@@ -51,10 +51,10 @@ describe("menuSections", () => {
     expect(fan.find((x) => x.label === "You")?.items.map((i) => i.href)).not.toContain("/organizations");
     expect(fan.find((x) => x.label === "You")?.items.map((i) => i.href)).not.toContain("/royalties");
     expect(fan.at(-1)?.items.map((i) => i.href)).toEqual(["/artists/apply"]);
-    // An artist who is also staff: Studio and royalties, workspaces, no apply.
+    // An artist who is also staff: Studio, sales and royalties, workspaces, no apply.
     const both = menuSections(true, { isArtist: true, hasWorkspace: true });
     expect(both.find((x) => x.label === "You")?.items.map((i) => i.href)).toContain("/organizations");
-    expect(both.at(-1)?.items.map((i) => i.href)).toEqual(["/studio", "/royalties"]);
+    expect(both.at(-1)?.items.map((i) => i.href)).toEqual(["/studio", "/studio/sales", "/royalties"]);
   });
 });
 
@@ -105,5 +105,8 @@ describe("filterNavForUser", () => {
     expect(navFlagsFor(null)).toEqual({ isArtist: false, hasWorkspace: false });
     expect(navFlagsFor({ is_artist: true })).toEqual({ isArtist: true, hasWorkspace: false });
     expect(filterNavForUser([{ href: "/studio", label: "Studio" }, { href: "/account", label: "Account" }], {})).toEqual([{ href: "/account", label: "Account" }]);
+    expect(filterNavForUser([{ href: "/studio/sales", label: "Sales" }], {})).toEqual([]);
+    expect(activeHref("/studio/sales", ARTIST_NAV)).toBe("/studio/sales");
+    expect(activeHref("/studio/releases/x", ARTIST_NAV)).toBe("/studio");
   });
 });

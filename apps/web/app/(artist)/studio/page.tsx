@@ -5,7 +5,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CircleAlert, Disc3, Plus } from "lucide-react";
+import { ChartNoAxesColumn, CircleAlert, Disc3, Plus } from "lucide-react";
 
 import { ButtonLink, Card, EmptyState, ErrorState, Skeleton } from "@/components/ds";
 import { AccountPage } from "@/components/shell/account-page";
@@ -118,7 +118,17 @@ function Studio() {
 
 export default function StudioPage() {
   return (
-    <AccountPage audience="artist" eyebrow="Studio" title="Your music" what="your Studio">
+    <AccountPage
+      audience="artist"
+      eyebrow="Studio"
+      title="Your music"
+      what="your Studio"
+      actions={
+        <ButtonLink href="/studio/sales" variant="secondary">
+          <ChartNoAxesColumn aria-hidden="true" /> Sales
+        </ButtonLink>
+      }
+    >
       <Studio />
     </AccountPage>
   );

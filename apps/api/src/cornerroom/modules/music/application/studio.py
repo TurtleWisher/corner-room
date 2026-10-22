@@ -2,7 +2,8 @@
 
 One catalog-only surface for profile owners (claimed solo artist, band admins) and Corner Room
 staff who help them. Every answer is built from catalog fields only: no legal names, account
-details, member user ids, payout or contract data ever leave this service (design 3.5).
+details, member user ids, payout or contract data ever leave this service (design 3.5). The one
+exception is sales money, shown only to the profile's owners and to finance staff of its workspace.
 
 Ownership and org always come from the server: the profile decides the organization, never the
 client. Staff who touch a release are recorded as preparers; they cannot submit an artist's
@@ -32,6 +33,7 @@ from cornerroom.kernel.events import (
 )
 from cornerroom.modules.artists.domain.models import Artist, Band, BandMember
 from cornerroom.modules.audit.application.service import AuditService
+from cornerroom.modules.commerce.application.sales import CatalogSales
 from cornerroom.modules.commerce.domain.models import OfferProposal
 from cornerroom.modules.documents.domain.models import MediaAsset
 from cornerroom.modules.music.application.languages import LANGUAGES, is_language
@@ -808,6 +810,66 @@ class StudioService:
             organization_id=release.primary_org_id,
         )
         return proposal
+
+    # --- sales (HANDOFF 0.2 step 2) -------------------------------------------------------------------
+
+    async def _sales_scope(self, ctx: AuthContext, kind: str, pid: UUID) -> tuple[str, dict[UUID, Track], dict[UUID, Release]]:
+        """The profile's songs and releases, for its owners or finance staff of its workspace.
+
+        Catalog staff alone may not see money (design 3.5), so staff need finance.read in the
+        profile's organization on top of the active workspace check. Anyone else gets 404.
+        """
+        _row, org, name = await self._profile(kind, pid)
+        owners = await self.music.catalog_owner_ids(pid if kind == "artist" else None, pid if kind == "band" else None)
+        if ctx.user_id not in owners:
+            in_workspace = org is not None and ctx.organization_id == org
+            if not in_workspace or not await self.music._is_allowed(
+                ctx.user_id, "finance.read", resource_type="organization", resource_id=org, organization_id=org
+            ):
+                raise NotFoundError("Profile not found")
+        track_col = Track.primary_artist_id if kind == "artist" else Track.primary_band_id
+        release_col = Release.primary_artist_id if kind == "artist" else Release.primary_band_id
+        # Deleted songs and releases stay in: what sold before still counts.
+        tracks = (await self.session.execute(select(Track).where(track_col == pid))).scalars().all()
+        releases = (await self.session.execute(select(Release).where(release_col == pid))).scalars().all()
+        return name, {t.id: t for t in tracks}, {r.id: r for r in releases}
+
+    @staticmethod
+    def _sale_subject(subject_type: str, subject_id: UUID, tracks: dict[UUID, Track], releases: dict[UUID, Release]) -> dict[str, Any]:
+        if subject_type == "RELEASE":
+            release = releases[subject_id]
+            return {"title": release.title, "release_type": release.release_type}
+        return {"title": tracks[subject_id].title, "release_type": None}
+
+    async def sales(self, ctx: AuthContext, kind: str, pid: UUID) -> dict[str, Any]:
+        """Totals per currency and per song or release. Money is what fans paid, before any share."""
+        name, tracks, releases = await self._sales_scope(ctx, kind, pid)
+        rows = await CatalogSales(self.session).by_subject(tracks.keys(), releases.keys())
+        totals: dict[str, dict[str, Any]] = {}
+        for r in rows:
+            r.update(self._sale_subject(r["subject_type"], r["subject_id"], tracks, releases))
+            t = totals.setdefault(
+                r["currency_code"],
+                {"currency_code": r["currency_code"], "sold_count": 0, "refunded_count": 0,
+                 "gross_amount_minor": 0, "refunded_amount_minor": 0, "net_amount_minor": 0},
+            )
+            for key in ("sold_count", "refunded_count", "gross_amount_minor", "refunded_amount_minor", "net_amount_minor"):
+                t[key] += r[key]
+        rows.sort(key=lambda r: (-r["net_amount_minor"], r["title"].lower()))
+        return {
+            "profile": {"kind": kind, "id": pid, "display_name": name},
+            "totals": sorted(totals.values(), key=lambda t: t["currency_code"]),
+            "items": rows,
+        }
+
+    async def sales_lines(
+        self, ctx: AuthContext, kind: str, pid: UUID, *, cursor: str | None, limit: int | None
+    ) -> dict[str, Any]:
+        _name, tracks, releases = await self._sales_scope(ctx, kind, pid)
+        lines, next_cursor = await CatalogSales(self.session).lines(tracks.keys(), releases.keys(), cursor=cursor, limit=limit)
+        for line in lines:
+            line.update(self._sale_subject(line["subject_type"], line["subject_id"], tracks, releases))
+        return {"items": lines, "next_cursor": next_cursor}
 
     # --- staff intake (design 3.5, 10.3; D-AUDIO-09) ------------------------------------------------
 
