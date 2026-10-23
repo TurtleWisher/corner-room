@@ -1,0 +1,13 @@
+node_modules
+.next
+.next-staging
+test-results
+playwright-report
+e2e-results
+coverage
+*.log
+.env
+.env.*
+tsconfig.tsbuildinfo
+tsconfig.verify.json
+tsconfig.src-check.json

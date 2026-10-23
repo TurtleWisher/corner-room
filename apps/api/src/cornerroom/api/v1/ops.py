@@ -50,7 +50,7 @@ async def ops_overview(
         organization_id=ctx.organization_id,
         database_ok=db_ok,
         redis_ok=redis_ok,
-        treat_email_stub_as_degraded=settings.is_production,
+        treat_email_stub_as_degraded=settings.is_production and not settings.smtp_configured,
     )
 
 

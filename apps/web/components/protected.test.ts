@@ -17,7 +17,15 @@ describe("protected route primitives", () => {
     expect(resolveProtectedView("expired", { permissions: ["audit.read"] }).kind).toBe(
       "unauthenticated",
     );
+    // A fan or artist (no workspace, no staff permissions) is told the console is for staff.
     expect(resolveProtectedView("authenticated", { permissions: [] }, "audit.read").kind).toBe(
+      "not_staff",
+    );
+    // Staff without this page's permission are refused it.
+    expect(resolveProtectedView("authenticated", { permissions: ["event.read"] }, "audit.read").kind).toBe(
+      "forbidden",
+    );
+    expect(resolveProtectedView("authenticated", { permissions: [], has_workspace: true }, "audit.read").kind).toBe(
       "forbidden",
     );
     expect(resolveProtectedView("authenticated", { permissions: ["audit.read"] }, "audit.read").kind).toBe(

@@ -65,6 +65,8 @@ Migrations: `apps/api/alembic/versions/0001` to `0028`, a linear chain with head
 
 Quickest local start (Windows): `.\scripts\dev-stack.ps1` (add `-Seed` once to load demo data). It builds and serves the web app in production mode (fast clicks); add `-Dev` for live reload while editing (every page compiles on demand, so clicks take seconds). After web changes in production mode, rebuild (`npm run build`) and restart `npm run start`. Demo accounts and secrets live in the gitignored `.env.seed.local`; the email validator rejects `.test` domains, so demo users use `example.com`.
 
+Production (www.cornerroom.live): the runbook is private, `docs/operations/DEPLOYMENT_RUNBOOK.md` (never put server details, paths, user names or bucket names in this public repo). `deploy/scripts/deploy.sh` on the server builds, backs up, migrates and starts `deploy/compose.prod.yml` (nginx in front, settings in the server-only `.env.production` from `deploy/env.production.example`). CI: `.github/workflows/ci.yml`. Never put demo data on production.
+
 Requires Docker Desktop, Python 3.12+ (the local venv is 3.11.9, which pyproject allows) and Node 22+.
 
 ```powershell

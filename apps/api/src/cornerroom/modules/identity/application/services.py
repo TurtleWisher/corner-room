@@ -14,7 +14,7 @@ from cornerroom.infra.outbox import enqueue_outbox
 from cornerroom.infra.security import create_access_token
 from cornerroom.infra.settings import Settings
 from cornerroom.modules.notifications.application.ports import EmailSender
-from cornerroom.modules.notifications.infra.stubs import DevMailboxEmailSender
+from cornerroom.modules.notifications.infra.email import email_sender_for
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import (
@@ -74,11 +74,9 @@ def _search_token(query: str | None) -> str:
 
 
 def verification_email_sender(settings: Settings) -> EmailSender | None:
-    """The email port for verification. Outside production: the local dev mailbox. In production
-    there is no provider yet (OD-08), so nothing is sent and delivery reports "not_configured"."""
-    if settings.uses_dev_mailbox:
-        return DevMailboxEmailSender(settings.dev_mailbox_path)
-    return None
+    """The email port for verification: the local dev mailbox on this machine, SMTP (Brevo) when
+    configured, otherwise none, so delivery reports "not_configured" (OD-08)."""
+    return email_sender_for(settings)
 
 
 class IdentityService:
@@ -159,7 +157,7 @@ class IdentityService:
             raise ConflictError("An account with this email already exists")
         return await self._create_account(
             email=email_n,
-            password_hash=hash_user_password(password),
+            password_hash=await hash_user_password(password),
             display_name=display_name,
             email_verified_at=None,
             request_id=request_id,
@@ -264,7 +262,7 @@ class IdentityService:
         email_n = _normalize_email(email)
         user = await self._get_user_by_email(email_n)
         # Check the password first, every time: an unknown email costs the same Argon2 work.
-        matched = password_matches(user.password_hash if user is not None else None, password)
+        matched = await password_matches(user.password_hash if user is not None else None, password)
         invalid = user is None or user.deleted_at is not None or not matched
         if invalid:
             await self._audit_login_failed(
@@ -280,7 +278,7 @@ class IdentityService:
         await self._deny_unless_can_sign_in(user, request_id=request_id, ip=ip, user_agent=user_agent)
         if password_hash_outdated(user.password_hash):
             # The password was just proven, so upgrade the stored hash to the current parameters.
-            user.password_hash = hash_user_password(password)
+            user.password_hash = await hash_user_password(password)
         profile, access, refresh, expires = await self._start_session(
             user, request_id=request_id, ip=ip, user_agent=user_agent
         )
@@ -637,9 +635,9 @@ class IdentityService:
         user = await self.session.get(User, ctx.user_id)
         if user is None or user.deleted_at is not None:
             raise NotFoundError("User not found")
-        if not password_matches(user.password_hash, current_password):
+        if not await password_matches(user.password_hash, current_password):
             raise UnauthorizedError("Invalid email or password")
-        user.password_hash = hash_user_password(new_password)
+        user.password_hash = await hash_user_password(new_password)
         await self._revoke_user_sessions(user.id, reason="password_changed")
         refresh, session_row = await self._issue_refresh(
             user.id,
@@ -722,7 +720,7 @@ class IdentityService:
         user = await self.session.get(User, challenge.user_id)
         if user is None or user.deleted_at is not None:
             raise UnauthorizedError("Recovery token is invalid")
-        user.password_hash = hash_user_password(new_password)
+        user.password_hash = await hash_user_password(new_password)
         await self._revoke_user_sessions(user.id, reason="password_reset")
         event = DomainEvent(
             event_type=PASSWORD_RESET,

@@ -2,6 +2,10 @@
 .env
 .env.local
 .env.*.local
+# Server secrets (deploy/compose.prod.yml reads them; never commit)
+.env.production
+.env.staging
+.playwright-mcp/
 
 # Python
 __pycache__/
@@ -61,3 +65,4 @@ coverage.xml
 /.claude/
 /.mcp.json
 graphify-out/
+.playwright-mcp/

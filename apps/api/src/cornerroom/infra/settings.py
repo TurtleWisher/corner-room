@@ -130,6 +130,15 @@ class Settings(BaseSettings):
     payment_provider: str = "sandbox"
     # Local/dev/test only: where the dev mailbox writes outgoing email (no real provider, OD-08).
     dev_mailbox_path: str = "./var/dev-mailbox"
+    # Real email over SMTP (OD-08: Brevo chosen 2026-10-22, e.g. smtp-relay.brevo.com:587 with the
+    # Brevo SMTP login and key). Empty host = no email outside local/dev/test.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str | None = None
+    smtp_timeout_seconds: int = 20
+    # The From line, e.g. "Corner Room <no-reply@cornerroom.live>" (a domain verified in Brevo).
+    email_from: str = "Corner Room <no-reply@cornerroom.live>"
     password_recovery_ttl_seconds: int = 0
     # 0 = no expiry. Do not treat a default as product invite policy.
     organization_invitation_ttl_seconds: int = 0
@@ -262,6 +271,10 @@ class Settings(BaseSettings):
     @property
     def is_test(self) -> bool:
         return self.app_env == "test"
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host.strip())
 
     @property
     def uses_dev_mailbox(self) -> bool:

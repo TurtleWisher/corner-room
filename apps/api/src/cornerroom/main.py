@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
+from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -50,6 +51,9 @@ from cornerroom.infra.settings import Settings, get_settings
 from cornerroom.modules.finance.application.handlers import register_finance_handlers
 from cornerroom.modules.streaming.application.service import register_streaming_handlers
 
+# Advisory lock id for the startup seed (any fixed number unique to this purpose).
+SEED_LOCK_KEY = 7_046_221_001
+
 log = structlog.get_logger("app")
 
 
@@ -81,6 +85,10 @@ def create_app(settings: Settings | None = None, *, enable_lifespan: bool = True
         try:
             factory = get_session_factory()
             async with factory() as session:
+                # Several API worker processes start together; one seeds at a time (the others wait,
+                # then find the rows already there). The lock ends with the transaction.
+                if session.bind.dialect.name == "postgresql":
+                    await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": SEED_LOCK_KEY})
                 await seed_foundation(session, cfg)
                 await session.commit()
         except Exception:

@@ -19,6 +19,13 @@ COPY apps/api/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN pip install --no-cache-dir -e . \
     && chmod +x /app/docker-entrypoint.sh
 
+# Run as an unprivileged user (deploy readiness, 2026-10-23). The storage folder belongs to it, so
+# a named volume mounted there starts with the right owner.
+RUN useradd --system --uid 10001 --home /app cornerroom \
+    && mkdir -p /app/var/storage /app/var/dev-mailbox \
+    && chown -R cornerroom:cornerroom /app/var
+USER cornerroom
+
 EXPOSE 8000
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

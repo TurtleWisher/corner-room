@@ -1,0 +1,4 @@
+# Scripts and container files run on Linux: always LF, even when edited on Windows.
+*.sh text eol=lf
+Dockerfile* text eol=lf
+deploy/** text eol=lf
