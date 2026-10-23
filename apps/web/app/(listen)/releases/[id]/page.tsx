@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { Check, Headphones, LogIn, Play, Plus, ShoppingBag } from "lucide-react";
+import { Check, Lock, LogIn, Play, Plus } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
@@ -31,7 +31,7 @@ import {
 } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
 import { creditHref, creditName, formatDuration, playQueue, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
-import { catalogOffer, hasCatalogAccess, ownsTrack, releaseBuyLabel, releaseBuyState } from "@/lib/ownership";
+import { ownsTrack, releaseBuyLabel, releaseBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 import { cn } from "@/lib/utils";
 
@@ -177,8 +177,8 @@ function TrackList({
             <div className="flex items-center gap-2">
               {duration ? <span className="cr-num text-sm text-fg-muted">{duration}</span> : null}
               {signedIn ? <SaveButton trackId={trackId} title={title} /> : null}
-              {signedIn && state.kind !== "unavailable" ? (
-                <TrackBuyControl track={{ id: trackId, title, artist }} commerce={commerce} showPlan={false} playFrom={playFrom} releaseIds={[releaseId]} />
+              {state.kind !== "unavailable" ? (
+                <TrackBuyControl track={{ id: trackId, title, artist }} commerce={commerce} playFrom={playFrom} releaseIds={[releaseId]} />
               ) : null}
             </div>
           </li>
@@ -204,11 +204,10 @@ export default function ReleasePage() {
     const ordered = [...composed.items].sort((a, b) => a.position - b.position);
     const tracks = await Promise.all(ordered.map((r) => fetchTrack(r.track_id, opts).catch(() => null)));
     const rows: Row[] = ordered.map((r, i) => ({ position: r.position, trackId: r.track_id, track: tracks[i] }));
+    // Lengths and playability are public (owner, 2026-10-24), so visitors see them too.
     const playable = new Map<string, PlayableTrackRecord>();
-    if (signedIn) {
-      const catalog = await fetchPlayableCatalog().catch(() => null);
-      for (const item of catalog?.items ?? []) playable.set(item.id, item);
-    }
+    const catalog = await fetchPlayableCatalog(opts).catch(() => null);
+    for (const item of catalog?.items ?? []) playable.set(item.id, item);
     return { release, rows, playable };
   }, [id, status]);
 
@@ -242,14 +241,11 @@ export default function ReleasePage() {
   const artistHref = creditHref(release);
   const durations = rows.map((r) => playable.get(r.trackId)?.duration_ms);
   const canStaff = signedIn && typeof release.version === "number";
-  const catalogAccess = hasCatalogAccess(commerce.entitlements);
   const owns = (trackId: string) => ownsTrack(commerce.entitlements, trackId, [release.id]);
   const firstOwned = rows.find((r) => playState(playable.get(r.trackId)).kind === "playable" && owns(r.trackId));
   // A whole-release price (D-AUDIO-10, -11). Shown only once the customer's ownership is known.
-  const releaseBuy =
-    signedIn && commerce.ready ? releaseBuyState(commerce.entitlements, commerce.offers, release.id, rows.map((r) => r.trackId)) : null;
+  const releaseBuy = commerce.ready ? releaseBuyState(signedIn ? commerce.entitlements : [], commerce.offers, release.id, rows.map((r) => r.trackId)) : null;
   const buyRelease = releaseBuy?.kind === "buy" ? releaseBuy.offer : null;
-  const pass = catalogAccess ? null : catalogOffer(commerce.offers);
   // Up next: this release's tracks in order, the ones the customer can play.
   const playFrom: PlayOptions = {
     queue: playQueue(
@@ -299,9 +295,18 @@ export default function ReleasePage() {
             ) : null}
             <div className="mt-8 flex flex-wrap gap-3">
               {!signedIn ? (
-                <ButtonLink href={`/login?next=${encodeURIComponent(`/releases/${release.id}`)}`} size="lg">
-                  <LogIn aria-hidden="true" /> Sign in to listen
-                </ButtonLink>
+                // Visitors: "Sign in" on the play button, and the price when it is on sale (owner, 2026-10-24).
+                <>
+                  <ButtonLink href={`/login?next=${encodeURIComponent(`/releases/${release.id}`)}`} size="lg" aria-label={`Sign in to play ${release.title}`}>
+                    <LogIn aria-hidden="true" /> Sign in
+                  </ButtonLink>
+                  {buyRelease ? (
+                    <p className="self-center text-sm text-fg">
+                      {releaseBuyLabel(release.release_type, buyRelease)}{" "}
+                      <Money value={{ amount_minor: buyRelease.amount_minor, currency_code: buyRelease.currency_code }} className="font-semibold" />
+                    </p>
+                  ) : null}
+                </>
               ) : firstOwned || buyRelease ? (
                 <>
                   {firstOwned ? (
@@ -310,23 +315,15 @@ export default function ReleasePage() {
                     </Button>
                   ) : null}
                   {buyRelease ? (
-                    <ButtonLink href={`/checkout?offer=${buyRelease.id}`} size="lg" variant={firstOwned ? "secondary" : undefined}>
-                      <ShoppingBag aria-hidden="true" /> {releaseBuyLabel(release.release_type, buyRelease)}{" "}
+                    <ButtonLink href={`/checkout?offer=${buyRelease.id}`} size="lg" variant={firstOwned ? "secondary" : undefined} title="Buy to play">
+                      <Lock aria-hidden="true" /> {releaseBuyLabel(release.release_type, buyRelease)}{" "}
                       <Money value={{ amount_minor: buyRelease.amount_minor, currency_code: buyRelease.currency_code }} />
                     </ButtonLink>
                   ) : null}
                 </>
-              ) : pass ? (
-                <ButtonLink href={`/checkout?offer=${pass.id}`} size="lg">
-                  <ShoppingBag aria-hidden="true" /> Get the full catalog{" "}
-                  <Money value={{ amount_minor: pass.amount_minor, currency_code: pass.currency_code }} />
-                </ButtonLink>
-              ) : null}
-              {signedIn && !catalogAccess ? (
-                <ButtonLink href="/store" variant="secondary" size="lg">
-                  <Headphones aria-hidden="true" /> See plans
-                </ButtonLink>
-              ) : null}
+              ) : (
+                <p className="self-center text-sm text-fg-muted">Not on sale yet.</p>
+              )}
             </div>
           </div>
         </div>

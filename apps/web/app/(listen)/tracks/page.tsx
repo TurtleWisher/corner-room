@@ -123,7 +123,7 @@ export default function TracksPage() {
       <LitSurface as="section" theme="sky" aria-labelledby="tracks-title">
         <div className="mx-auto max-w-[90rem] px-4 pb-10 pt-12 md:px-6 md:pt-16">
           <div id="tracks-title">
-            <PageIntro eyebrow="Listening room" title="Tracks" lede="Every released track. Buy one to keep it, or listen to all of them with a plan." />
+            <PageIntro eyebrow="Listening room" title="Tracks" lede="Every released song. Buy the ones you love to keep them." />
           </div>
         </div>
       </LitSurface>
@@ -161,7 +161,7 @@ export default function TracksPage() {
                       {duration ? ` · ${duration}` : ""}
                     </p>
                   </div>
-                  <TrackBuyControl track={{ id: t.id, title: t.title, artist }} commerce={commerce} showPlan={false} playFrom={tracksQueue} />
+                  <TrackBuyControl track={{ id: t.id, title: t.title, artist }} commerce={commerce} playFrom={tracksQueue} />
                 </li>
               );
             })}

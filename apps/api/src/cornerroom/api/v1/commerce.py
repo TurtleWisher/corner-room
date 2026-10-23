@@ -374,6 +374,7 @@ async def request_refund(
         return _refund_out(row)
     if body.payment_id is None or body.amount_minor is None:
         raise AppError("VALIDATION_ERROR", "payment_id and amount_minor are required", 422)
+    await checkout.assert_payment_refund_access(ctx, body.payment_id)
     row = await svc.request_refund(
         ctx,
         payment_id=body.payment_id,
@@ -397,7 +398,10 @@ async def complete_manual_refund(
     checkout: Annotated[CheckoutService, Depends(checkout_service)],
 ) -> RefundOut:
     """Bangla QR: finance paid the money back by hand and records the transfer reference."""
-    row = await payments.complete_manual_refund(ctx, refund_id, payout_reference=body.payout_reference)
+    label = await checkout.staff_refund(ctx, refund_id)
+    row = await payments.complete_manual_refund(
+        ctx, refund_id, payout_reference=body.payout_reference, organization_id=label
+    )
     await checkout.apply_completed_refund(ctx, row)
     return _refund_out(row)
 
@@ -516,8 +520,10 @@ async def approve_refund(
     refund_id: UUID,
     ctx: Annotated[AuthContext, Depends(get_auth_context)],
     svc: Annotated[PaymentService, Depends(payment_service)],
+    checkout: Annotated[CheckoutService, Depends(checkout_service)],
 ) -> RefundOut:
-    row = await svc.approve_refund(ctx, refund_id)
+    label = await checkout.staff_refund(ctx, refund_id)
+    row = await svc.approve_refund(ctx, refund_id, organization_id=label)
     return _refund_out(row)
 
 
@@ -528,7 +534,8 @@ async def sandbox_complete_refund(
     payments: Annotated[PaymentService, Depends(payment_service)],
     checkout: Annotated[CheckoutService, Depends(checkout_service)],
 ) -> RefundOut:
-    row = await payments.complete_sandbox_refund(ctx, refund_id)
+    label = await checkout.staff_refund(ctx, refund_id)
+    row = await payments.complete_sandbox_refund(ctx, refund_id, organization_id=label)
     await checkout.apply_completed_refund(ctx, row)
     return _refund_out(row)
 

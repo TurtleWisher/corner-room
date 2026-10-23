@@ -24,15 +24,12 @@ import {
   createCatalogOrder,
   createHold,
   createOrder,
-  createSubscriptionOrder,
   fetchEvent,
   fetchEventTicketTypes,
   fetchMyEntitlements,
-  fetchMySubscriptions,
   fetchOffers,
   fetchOrder,
   fetchRelease,
-  fetchSubscriptionPlans,
   fetchTrack,
   type EntitlementRecord,
   type EventRecord,
@@ -46,11 +43,8 @@ import { hasCatalogAccess, ownsRelease, ownsTrack } from "@/lib/ownership";
 import {
   afterPurchaseHref,
   checkoutItemFromParams,
-  intervalLabel,
   offerTitle,
-  planName,
   productKind,
-  trialLabel,
   type CheckoutItem,
 } from "@/lib/store-view";
 
@@ -88,17 +82,6 @@ async function loadSummary(item: CheckoutItem): Promise<Summary | null> {
       note: null,
       tone: "sky",
       offer: { product_type: offer.product_type, subject_id: offer.subject_id },
-    };
-  }
-  if (item.kind === "plan") {
-    const plan = (await fetchSubscriptionPlans()).items.find((p) => p.id === item.id);
-    if (!plan) return null;
-    return {
-      title: planName(plan.key),
-      kind: ["Subscription", intervalLabel(plan)?.replace("/ ", "every ")].filter(Boolean).join(", "),
-      price: { amount_minor: plan.price_amount_minor, currency_code: plan.currency_code },
-      note: trialLabel(plan),
-      tone: "sky",
     };
   }
   // Ticket types are read through their event; without the event the order total still comes from the API.
@@ -300,13 +283,6 @@ function NewCheckout() {
       item?.kind === "offer" && status === "authenticated" ? fetchMyEntitlements().then((p) => p.items).catch(() => []) : Promise.resolve([]),
     [item?.kind, item?.id, status],
   );
-  const existingPlan = useAsync(
-    () =>
-      item?.kind === "plan" && status === "authenticated"
-        ? fetchMySubscriptions().then((p) => p.items.some((s) => ["TRIALING", "ACTIVE", "PAST_DUE"].includes(s.status)))
-        : Promise.resolve(false),
-    [item?.kind, status],
-  );
 
   if (!item) {
     return (
@@ -345,7 +321,6 @@ function NewCheckout() {
     try {
       let order: OrderRecord;
       if (item.kind === "offer") order = await createCatalogOrder(item.id, key, addressConfirmed);
-      else if (item.kind === "plan") order = await createSubscriptionOrder(item.id, key, addressConfirmed);
       else {
         const hold = await createHold(item.id, Number.parseInt(quantity, 10));
         order = await createOrder(hold.id, key, addressConfirmed);
@@ -415,14 +390,6 @@ function NewCheckout() {
             Listen now
           </ButtonLink>
         </Card>
-      ) : existingPlan.status === "ok" && existingPlan.data ? (
-        <Card className="p-6">
-          <p className="font-semibold text-fg">You already have an active subscription.</p>
-          <p className="mt-1 text-sm text-fg-muted">One plan covers the whole catalog.</p>
-          <ButtonLink href="/subscriptions" variant="secondary" className="mt-4">
-            View your subscription
-          </ButtonLink>
-        </Card>
       ) : summary.status === "ok" && summary.data ? (
         <>
           <DeliveryAddressStep confirmed={addressConfirmed} onConfirmedChange={setAddressConfirmed} />
@@ -465,8 +432,8 @@ function CheckoutBody() {
 
 function CheckoutFrame() {
   const params = useSearchParams();
-  // Music offers, plans and music orders sit in the Sky world; tickets in Ember.
-  const sky = Boolean(params.get("offer") || params.get("plan") || params.get("world") === "sky");
+  // Music offers and music orders sit in the Sky world; tickets in Ember.
+  const sky = Boolean(params.get("offer") || params.get("world") === "sky");
   return (
     <Shell theme={sky ? "sky" : "ember"}>
       <CheckoutBody />

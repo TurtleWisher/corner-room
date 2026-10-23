@@ -2,8 +2,8 @@
 
 Builds a small, clearly fictional graph so every public and staff page has something real to show:
 a venue and three events (on sale, announced, postponed) with ticket types, artists and a band,
-released releases and tracks with durations, track and catalog offers, a subscription plan, a staff
-user and a fan. Rows are inserted through the backend's own models, the same fixture shortcut the
+released releases and tracks with durations, track offers (no plans or whole-catalog pass:
+D-COMMERCE-01), a staff user and a fan. Rows are inserted through the backend's own models, the same fixture shortcut the
 Phase 13 test graph uses (tests/integration/phase13/graph.py); nothing here is a business rule.
 Prices are demo values only.
 
@@ -51,10 +51,6 @@ from cornerroom.modules.identity.domain.models import (  # noqa: E402
     User,
 )
 from cornerroom.modules.music.domain.models import Release, ReleaseTrack, Track, TrackVersion  # noqa: E402
-from cornerroom.modules.subscriptions.domain.models import (  # noqa: E402
-    SubscriptionPlan,
-    SubscriptionPlanVersion,
-)
 from cornerroom.modules.ticketing.domain.models import TicketType, TicketTypeInventory  # noqa: E402
 
 STAFF_EMAIL = "ops.demo@example.com"
@@ -264,28 +260,16 @@ async def main() -> None:
                 first_track = first_track or tr
                 tracks_by_title.setdefault(ttitle, tr)
 
-        # ---- Store: offers and a plan (demo prices) ----
+        # ---- Store: song offers (demo prices). No plans or whole-catalog pass (D-COMMERCE-01). ----
         for ptype, subject, name, amount in (
             ("TRACK", first_track.id, "Last Stop", 5000),
             ("TRACK", tracks_by_title["Low Tide"].id, "Low Tide", 5000),
-            # CATALOG_ACCESS grants the whole catalog (entitlement scope CATALOG), so name it that.
-            ("CATALOG_ACCESS", releases[2].id, "Full catalog", 45000),
         ):
             product = Product(organization_id=label.id, product_type=ptype, subject_id=subject, name=name, status="ACTIVE")
             session.add(product)
             await session.flush()
             session.add(Offer(organization_id=label.id, product_id=product.id, amount_minor=amount, currency_code=BDT, status="ACTIVE"))
 
-        plan = SubscriptionPlan(organization_id=label.id, key="listener_monthly", status="ACTIVE",
-                                price_amount_minor=19900, currency_code=BDT, interval="month", interval_count=1)
-        session.add(plan)
-        await session.flush()
-        pv = SubscriptionPlanVersion(plan_id=plan.id, version_number=1, price_amount_minor=19900, currency_code=BDT,
-                                     interval="month", interval_count=1, trial_days=7)
-        session.add(pv)
-        await session.flush()
-        plan.current_version_id = pv.id
-        await session.flush()
         await _ensure_demo_audio(session, settings)
         # Rows above were inserted directly (no domain events), so rebuild the search projection.
         await SearchIndexer(session).rebuild()

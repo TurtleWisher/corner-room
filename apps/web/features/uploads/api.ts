@@ -3,7 +3,7 @@
 import { apiFetch } from "@/lib/api/client";
 
 export type UploadPurpose = "AUDIO_MASTER" | "COVER_ART";
-export type UploadTargetType = "track_version" | "release_cover" | "event_cover";
+export type UploadTargetType = "track_version" | "release_cover" | "event_cover" | "user_avatar" | "artist_portrait" | "band_portrait";
 
 export type UploadIntentRecord = {
   id: string;

@@ -27,7 +27,13 @@ from cornerroom.kernel.events import MEDIA_INSPECTED, MEDIA_REJECTED, RENDITION_
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.documents.application import media_tools as tools
 from cornerroom.modules.documents.domain.audio_probe import probe
-from cornerroom.modules.documents.domain.models import MediaAsset, MediaFinding, MediaInspection, MediaJob
+from cornerroom.modules.documents.domain.models import (
+    PROFILE_PICTURE_TARGETS,
+    MediaAsset,
+    MediaFinding,
+    MediaInspection,
+    MediaJob,
+)
 from cornerroom.modules.documents.domain.qc import (
     Finding,
     Loudness,
@@ -590,10 +596,18 @@ class MediaJobService:
         except (UnidentifiedImageError, OSError, SyntaxError, ValueError):
             fmt = fmt or None
             width = height = None
+        intent = (
+            await self.session.execute(
+                select(UploadIntent).where(UploadIntent.media_asset_id == asset.id)
+            )
+        ).scalar_one_or_none()
+        picture = intent is not None and intent.target_type in PROFILE_PICTURE_TARGETS
         findings = cover_findings(
             fmt=fmt, width=width, height=height, mode=mode, byte_size=size,
             max_bytes=self.settings.media_cover_max_bytes,
-            min_px=self.settings.media_cover_min_px, max_px=self.settings.media_cover_max_px,
+            min_px=self.settings.media_portrait_min_px if picture else self.settings.media_cover_min_px,
+            max_px=self.settings.media_cover_max_px,
+            recommended_px=None if picture else 3000,
         )
         import PIL
 
@@ -604,18 +618,25 @@ class MediaJobService:
         if inspection.outcome == "REJECTED":
             return
         asset.mime = "image/jpeg" if fmt == "JPEG" else "image/png"
-        intent = (
-            await self.session.execute(
-                select(UploadIntent).where(UploadIntent.media_asset_id == asset.id)
-            )
-        ).scalar_one_or_none()
-        if intent is not None and intent.target_type in {"release_cover", "event_cover"}:
+        if intent is not None and intent.target_type in {"release_cover", "event_cover", *PROFILE_PICTURE_TARGETS}:
             if intent.target_type == "release_cover":
                 await MusicService(self.session, settings=self.settings).system_attach_cover(intent.target_id, asset.id)
-            else:
+            elif intent.target_type == "event_cover":
                 from cornerroom.modules.events.application.service import EventService
 
                 await EventService(self.session).system_attach_cover(intent.target_id, asset.id)
+            elif intent.target_type == "user_avatar":
+                from cornerroom.modules.identity.application.services import IdentityService
+
+                await IdentityService(self.session, self.settings).system_attach_avatar(intent.target_id, asset.id)
+            else:
+                # An artist's or band's new picture waits for staff (owner, 2026-10-23).
+                from cornerroom.modules.artists.application.profile_changes import ProfileChangeService
+
+                kind = "artist" if intent.target_type == "artist_portrait" else "band"
+                await ProfileChangeService(self.session, self.settings).attach_uploaded_portrait(
+                    kind, intent.target_id, asset.id, intent.owner_user_id
+                )
             # Make the web sizes now, so the first visitor doesn't wait for them (OD-05, OD-06).
             from cornerroom.modules.documents.application.covers import COVER_SIZES, CoverService
 

@@ -270,7 +270,8 @@ def _availability_out(row: Playability, *, entitled: bool) -> AvailabilityOut:
     return AvailabilityOut(
         track_id=row.track_id,
         track_version_id=row.track_version_id,
-        media_asset_id=row.media_asset_id,
+        # The stored file's id is internal; listeners never need it (security audit 2026-10-23).
+        media_asset_id=None,
         catalog_playable=row.catalog_playable,
         audio_deliverable=row.audio_deliverable,
         entitled=entitled,
@@ -478,7 +479,8 @@ async def playback_media(
 
 @router.get("/playback/catalog")
 async def playable_catalog(
-    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    # Public (owner, 2026-10-24): visitors see every song's details; playing still needs access.
+    ctx: Annotated[AuthContext | None, Depends(get_optional_auth_context)],
     svc: Annotated[StreamingService, Depends(streaming_service)],
     limit: int | None = Query(default=None),
     cursor: str | None = Query(default=None),
@@ -494,7 +496,7 @@ async def playable_catalog(
                 primary_band_id=track.primary_band_id,
                 catalog_playable=playability.catalog_playable,
                 audio_deliverable=playability.audio_deliverable,
-                track_version_id=playability.track_version_id,
+                track_version_id=playability.track_version_id if ctx else None,
                 duration_ms=playability.duration_ms,
                 reason=playability.reason,
             )
@@ -507,7 +509,7 @@ async def playable_catalog(
 @router.get("/playback/releases/{release_id}/tracks")
 async def release_playability(
     release_id: UUID,
-    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    ctx: Annotated[AuthContext | None, Depends(get_optional_auth_context)],
     svc: Annotated[StreamingService, Depends(streaming_service)],
 ) -> list[ReleasePlayabilityOut]:
     rows = await svc.release_track_playability(ctx, release_id)
@@ -519,7 +521,7 @@ async def release_playability(
             catalog_playable=playability.catalog_playable,
             audio_deliverable=playability.audio_deliverable,
             reason=playability.reason,
-            track_version_id=playability.track_version_id,
+            track_version_id=playability.track_version_id if ctx else None,
         )
         for item, playability in rows
     ]

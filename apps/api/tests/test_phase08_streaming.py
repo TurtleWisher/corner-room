@@ -11,7 +11,8 @@ from tests.auth_helpers import admin_token, bearer, register_and_login
 from tests.test_phase07_catalog import _ready_version, _release_track, _workspace
 
 
-async def _grant_catalog(client: AsyncClient, staff_token: str, user_token: str, ref_id: str) -> None:
+async def _grant_track(client: AsyncClient, staff_token: str, user_token: str, ref_id: str) -> None:
+    """Staff give this song (D-COMMERCE-01: no whole-catalog grants any more)."""
     me = await client.get("/api/v1/me", headers=bearer(user_token))
     assert me.status_code == 200, me.text
     granted = await client.post(
@@ -21,7 +22,7 @@ async def _grant_catalog(client: AsyncClient, staff_token: str, user_token: str,
             "user_id": me.json()["id"],
             "entitlement_type": "ADMIN_GRANT",
             "ref_id": ref_id,
-            "scope": "CATALOG",
+            "scope": "TRACK",
         },
     )
     assert granted.status_code == 201, granted.text
@@ -51,7 +52,7 @@ async def test_phase08_authz_sessions_events_idor(client: AsyncClient) -> None:
     fan_token = fan["access_token"]
     other = await register_and_login(client, "fan-b@example.com")
     other_token = other["access_token"]
-    await _grant_catalog(client, admin_p, fan_token, track_id)
+    await _grant_track(client, admin_p, fan_token, track_id)
 
     opened = await client.post(
         "/api/v1/playback/sessions",
@@ -269,7 +270,7 @@ async def test_phase08_library_playlist_aggregates_idor(client: AsyncClient) -> 
 
     fan = await register_and_login(client, "like-fan@example.com")
     other = await register_and_login(client, "other-fan@example.com")
-    await _grant_catalog(client, admin_p, fan["access_token"], released["id"])
+    await _grant_track(client, admin_p, fan["access_token"], released["id"])
     opened = await client.post(
         "/api/v1/playback/sessions",
         headers=bearer(fan["access_token"]),

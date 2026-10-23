@@ -5,7 +5,7 @@ import type { OrderRecord } from "@/lib/api";
 import { humanizeStatus } from "@/lib/format/status";
 import { ORDER_STATUS, PAYMENT_STATUS } from "@/lib/status-maps";
 
-/** commerce order purposes: TICKET, TRACK (music, including the catalog pass), SUBSCRIPTION. */
+/** commerce order purposes: TICKET, TRACK, RELEASE; SUBSCRIPTION only on old orders (D-COMMERCE-01). */
 const PURPOSE: Record<string, string> = { TICKET: "Tickets", TRACK: "Music", SUBSCRIPTION: "Subscription" };
 
 /** The customer's orders: what for, order and payment state, and the full-precision total. */

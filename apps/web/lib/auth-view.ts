@@ -59,10 +59,16 @@ export function staffNavFlags(permissions: string[] | undefined): {
 }
 
 /**
+ * Where fans land after signing in when nothing asked for another page: the welcome section of
+ * the home page ("Welcome back, name"). Owner, 2026-10-23: not the profile page.
+ */
+export const HOME_WELCOME = "/#welcome";
+
+/**
  * Where to go after signing in. Only same-site paths are accepted ("/checkout?offer=1"), so a
  * crafted link cannot send someone to another site (no "//host", no scheme, no backslashes).
  */
-export function safeNextPath(next: string | null | undefined, fallback = "/account"): string {
+export function safeNextPath(next: string | null | undefined, fallback = HOME_WELCOME): string {
   if (!next || !next.startsWith("/") || next.startsWith("//") || next.includes("\\") || /^\/[^/]*:/.test(next)) {
     return fallback;
   }

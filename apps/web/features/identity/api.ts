@@ -1,6 +1,7 @@
 /* Health, auth, current user and organizations (workspace). Split from lib/api.ts (Phase 16, Stage 5). */
 
 import { apiFetch, clearAccessToken, getApiBaseUrl, refreshAccessToken, setAccessToken } from "@/lib/api/client";
+import type { ArtworkReport } from "@/features/uploads/api";
 import { safeNextPath } from "@/lib/auth-view";
 
 export type HealthCheck = {
@@ -27,6 +28,8 @@ export type AuthUser = {
   is_artist?: boolean;
   /** Menus only: belongs to a workspace (staff). */
   has_workspace?: boolean;
+  /** The fan's own picture: a signed link that lasts an hour (owner, 2026-10-23). */
+  avatar_url?: string | null;
 };
 
 export type Organization = {
@@ -244,6 +247,21 @@ export async function logout(): Promise<void> {
 
 export async function fetchMe(): Promise<AuthUser> {
   return apiFetch<AuthUser>("/api/v1/me", { retry: false });
+}
+
+/** Change your own name, or remove your picture (a new picture goes through an upload). */
+export async function updateMe(body: { display_name?: string; remove_avatar?: boolean }): Promise<AuthUser> {
+  return apiFetch<AuthUser>("/api/v1/me", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    retry: false,
+  });
+}
+
+/** What the checks found for your latest picture upload (null before any). */
+export async function fetchAvatarReport(): Promise<ArtworkReport | null> {
+  return apiFetch<ArtworkReport | null>("/api/v1/me/avatar-report", { retry: false });
 }
 
 export async function restoreSession(): Promise<AuthUser | null> {

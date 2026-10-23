@@ -15,10 +15,8 @@ import {
   afterPurchaseHref,
   checkoutItemFromParams,
   groupOffers,
-  intervalLabel,
   offerTitle,
   planName,
-  trialLabel,
 } from "@/lib/store-view";
 
 const params = (q: string) => new URLSearchParams(q);
@@ -86,15 +84,6 @@ describe("store view", () => {
     expect(planName("premium_monthly")).toBe("Premium monthly");
   });
 
-  it("labels intervals and trials only from API fields", () => {
-    expect(intervalLabel({ interval: "month", interval_count: 1 })).toBe("/ month");
-    expect(intervalLabel({ interval: "MONTH", interval_count: 3 })).toBe("/ 3 months");
-    expect(intervalLabel({ interval: "fortnight", interval_count: 1 })).toBeNull();
-    expect(trialLabel({ trial_days: 14 })).toBe("14-day trial");
-    expect(trialLabel({ trial_days: null })).toBeNull();
-    expect(trialLabel({ trial_days: 0 })).toBeNull();
-  });
-
   it("groups offers by product type, tracks first", () => {
     const offer = (id: string, product_type: string | null) =>
       ({ id, product_type, name: id, amount_minor: 100, currency_code: "BDT" }) as OfferRecord;
@@ -118,12 +107,12 @@ describe("store view", () => {
 
   it("reads the checkout item and the next step", () => {
     expect(checkoutItemFromParams(params("offer=o1"))).toEqual({ kind: "offer", id: "o1" });
-    expect(checkoutItemFromParams(params("plan=p1"))).toEqual({ kind: "plan", id: "p1" });
+    // No plans any more (D-COMMERCE-01): an old ?plan= link checks out nothing.
+    expect(checkoutItemFromParams(params("plan=p1"))).toBeNull();
     expect(checkoutItemFromParams(params("ticketTypeId=t1"))).toEqual({ kind: "tickets", id: "t1" });
     expect(checkoutItemFromParams(params(""))).toBeNull();
     expect(afterPurchaseHref({ kind: "offer", id: "o1" }).href).toBe("/purchases");
     expect(afterPurchaseHref({ kind: "offer", id: "o1" }, { product_type: "TRACK", subject_id: "t1" }).href).toBe("/tracks/t1");
-    expect(afterPurchaseHref({ kind: "plan", id: "p" }).label).toBe("Start listening");
     expect(afterPurchaseHref({ kind: "tickets", id: "t" }).href).toBe("/tickets");
   });
 });

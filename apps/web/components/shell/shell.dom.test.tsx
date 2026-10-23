@@ -17,7 +17,8 @@ let pathname = "/staff/ops";
 vi.mock("@/components/auth-provider", () => ({ useAuth: () => auth }));
 vi.mock("@/components/workspace-provider", () => ({ useWorkspace: () => workspace }));
 vi.mock("@/components/notifications-provider", () => ({ useNotifications: () => ({ items: [] }) }));
-vi.mock("next/navigation", () => ({ usePathname: () => pathname, useSearchParams: () => new URLSearchParams() }));
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ usePathname: () => pathname, useSearchParams: () => new URLSearchParams(), useRouter: () => ({ push }) }));
 const fetchMyProfiles = vi.fn(async () => [] as { kind: string; id: string; display_name: string; status: string; can_publish: boolean }[]);
 vi.mock("@/features/studio/api", () => ({ fetchMyProfiles: () => fetchMyProfiles() }));
 
@@ -133,7 +134,13 @@ describe("StudioShell", () => {
     // Plays exist for artist profiles only.
     expect(nav.querySelector('a[href="/artists/a1/analytics"]')).toBeTruthy();
     expect(nav.querySelector('a[href="/artists/b1/analytics"]')).toBeNull();
-    expect(screen.getAllByRole("link", { name: /Back to Corner Room/ }).length).toBeGreaterThan(0);
+    // The way back to the fan site is a clear switch (owner, 2026-10-24): header and side menu.
+    const switches = screen.getAllByRole("button", { name: /Switch to fan view/ });
+    expect(switches.length).toBeGreaterThan(1);
+    await userEvent.setup().click(switches[0]);
+    expect(window.localStorage.getItem("cr-fan-view")).toBe("1");
+    expect(push).toHaveBeenCalledWith("/#welcome");
+    window.localStorage.removeItem("cr-fan-view");
   });
 
   it("sends signed-out visitors to the artist sign-in", () => {

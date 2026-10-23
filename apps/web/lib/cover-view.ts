@@ -13,6 +13,10 @@ export type CoverSource =
   | { track: string }
   /** An event's official poster (OD-06), public once the event is published. */
   | { event: string; hasCover?: boolean }
+  /** An artist's or band's approved picture (owner, 2026-10-23); `picture` is its id, which also
+   * makes a newly approved picture show at once (the public address is cached for an hour). */
+  | { artist: string; picture: string | null | undefined }
+  | { band: string; picture: string | null | undefined }
   /** A signed link from a Studio or staff response (unreleased covers have no public address). */
   | { signed: string | null | undefined };
 
@@ -20,6 +24,8 @@ export type CoverSource =
 export function coverUrl(source: CoverSource, size: CoverSize = 480, base: string = getApiBaseUrl()): string | null {
   if ("signed" in source) return source.signed ? `${base}${source.signed}` : null;
   if ("release" in source) return source.hasCover === false ? null : `${base}/api/v1/covers/releases/${source.release}/${size}`;
+  if ("artist" in source) return source.picture ? `${base}/api/v1/covers/artists/${source.artist}/${size}?v=${source.picture}` : null;
+  if ("band" in source) return source.picture ? `${base}/api/v1/covers/bands/${source.band}/${size}?v=${source.picture}` : null;
   if ("event" in source) return source.hasCover === false ? null : `${base}/api/v1/covers/events/${source.event}/${size}`;
   return `${base}/api/v1/covers/tracks/${source.track}/${size}`;
 }

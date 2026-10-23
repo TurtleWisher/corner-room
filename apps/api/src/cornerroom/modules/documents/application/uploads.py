@@ -33,10 +33,15 @@ from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import MEDIA_UPLOAD_COMPLETED, DomainEvent
 from cornerroom.modules.audit.application.service import AuditService
-from cornerroom.modules.documents.domain.models import MediaAsset, UploadIntent, UploadPart
+from cornerroom.modules.documents.domain.models import PROFILE_PICTURE_TARGETS, MediaAsset, UploadIntent, UploadPart
 
 # Artwork may also go to an event (OD-06): same checks, attached to the event when accepted.
-PURPOSE_TARGETS = {"AUDIO_MASTER": {"track_version"}, "COVER_ART": {"release_cover", "event_cover"}}
+# Profile pictures are artwork too (owner, 2026-10-23): a fan's own, or an artist's or band's,
+# which then waits for staff review. They follow the picture rules in qc.cover_findings.
+PURPOSE_TARGETS = {
+    "AUDIO_MASTER": {"track_version"},
+    "COVER_ART": {"release_cover", "event_cover", *PROFILE_PICTURE_TARGETS},
+}
 PURPOSE_CLASS = {"AUDIO_MASTER": "catalog_audio", "COVER_ART": "catalog_art"}
 SHA256_HEX = frozenset("0123456789abcdef")
 
@@ -56,6 +61,12 @@ def _clean_filename(name: str) -> str:
 
 def _valid_sha(value: str | None) -> bool:
     return value is not None and len(value) == 64 and set(value) <= SHA256_HEX
+
+
+def _object_folder(purpose: str, target_type: str) -> str:
+    if purpose == "AUDIO_MASTER":
+        return "masters"
+    return "portraits" if target_type in PROFILE_PICTURE_TARGETS else "covers"
 
 
 def part_key(intent_id: UUID, number: int) -> str:
@@ -96,6 +107,18 @@ class UploadService:
 
             event = await EventService(self.session, clock=self.clock).authorize_cover_upload(ctx, target_id)
             return TargetInfo(event.organization_id, None, None)
+        if target_type == "user_avatar":
+            if target_id != ctx.user_id:
+                raise NotFoundError("Account not found")
+            return TargetInfo(None, None, None)
+        if target_type in {"artist_portrait", "band_portrait"}:
+            from cornerroom.modules.artists.application.profile_changes import ProfileChangeService
+
+            kind = "artist" if target_type == "artist_portrait" else "band"
+            row = await ProfileChangeService(self.session, self.settings, self.clock).assert_portrait_upload(
+                ctx, kind, target_id
+            )
+            return TargetInfo(row.primary_org_id, kind, row.id)
         raise AppError("VALIDATION_ERROR", "Unknown upload target", 422)
 
     def _max_bytes(self, purpose: str) -> int:
@@ -181,7 +204,7 @@ class UploadService:
             id=asset_id,
             storage_class=storage_class,
             bucket=self.storage.bucket,
-            object_key=f"{storage_class}/{'masters' if purpose == 'AUDIO_MASTER' else 'covers'}/{asset_id}/original",
+            object_key=f"{storage_class}/{_object_folder(purpose, target_type)}/{asset_id}/original",
             mime="application/octet-stream",
             byte_size=byte_size,
             sha256="",

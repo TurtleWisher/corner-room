@@ -8,7 +8,8 @@ import { ApiError } from "@/lib/api";
 
 const COPY: Record<string, string> = {
   SUBSCRIPTION_EXISTS: "You already have an active subscription.",
-  ENTITLEMENT_REQUIRED: "You need a plan or a purchase to play this.",
+  ENTITLEMENT_REQUIRED: "Buy this song, or the release it is on, to play it.",
+  NOT_SOLD: "Corner Room sells songs and releases, not subscriptions or the whole catalog.",
   TRACK_AUDIO_UNAVAILABLE: "This track is not available to play right now.",
   TICKET_TYPE_NOT_ON_SALE: "These tickets are not on sale right now.",
   SALES_WINDOW_CLOSED: "Ticket sales for this event have closed.",
@@ -30,6 +31,10 @@ const COPY: Record<string, string> = {
   WORKSPACE_REQUIRED: "Choose a workspace first.",
   // A step that no longer fits (it moved on since the page loaded, e.g. approved meanwhile).
   INVALID_TRANSITION: "That can't be done at this stage. Refresh the page to see where things stand.",
+  // Profile editing (owner, 2026-10-23).
+  NOTHING_TO_CHANGE: "Nothing has changed yet. Edit the name, bio or picture first.",
+  PROFILE_REVIEW_REQUIRED: "Profile changes go to staff for approval. Send them from Studio, Profile.",
+  SAME_PERSON_REVIEW: "Someone else must approve this: you can't approve your own changes.",
   RATE_LIMITED: "Too many attempts. Please wait a moment and try again.",
   NETWORK_ERROR: "We could not reach Corner Room. Check your connection and try again.",
 };

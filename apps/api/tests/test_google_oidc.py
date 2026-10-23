@@ -132,14 +132,14 @@ def test_pkce_pair_is_s256() -> None:
     ("raw", "expected"),
     [
         ("/checkout?offer=1", "/checkout?offer=1"),
-        (None, "/account"),
-        ("", "/account"),
-        ("//evil.example", "/account"),
-        ("/\\evil.example", "/account"),
-        ("https://evil.example", "/account"),
-        ("javascript:alert(1)", "/account"),
-        ("/ok\r\nSet-Cookie: x=1", "/account"),
-        ("/" + "a" * 600, "/account"),
+        (None, "/#welcome"),
+        ("", "/#welcome"),
+        ("//evil.example", "/#welcome"),
+        ("/\\evil.example", "/#welcome"),
+        ("https://evil.example", "/#welcome"),
+        ("javascript:alert(1)", "/#welcome"),
+        ("/ok\r\nSet-Cookie: x=1", "/#welcome"),
+        ("/" + "a" * 600, "/#welcome"),
     ],
 )
 def test_next_path_never_leaves_the_site(raw: str | None, expected: str) -> None:

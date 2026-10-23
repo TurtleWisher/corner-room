@@ -3,12 +3,14 @@
 import { RotateCw, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ds";
+import { useFanView } from "@/components/use-fan-view";
 
 import { cn } from "@/lib/utils";
 
 /**
  * Staff tools placed on a public page (until staff management moves to its own URL, URL-04).
- * Graphite world, plain type, clearly labelled so fans never mistake it for content.
+ * Graphite world, plain type, clearly labelled so fans never mistake it for content. Hidden in fan
+ * view (lib/fan-view.ts).
  */
 export function StaffPanel({
   title = "Staff tools",
@@ -21,6 +23,9 @@ export function StaffPanel({
   children: React.ReactNode;
   className?: string;
 }) {
+  // Fan view (owner, 2026-10-24): the page shows exactly what fans see. UX only.
+  const [fanView] = useFanView();
+  if (fanView) return null;
   return (
     <section data-theme="staff" aria-label={title} className={cn("cr-scope border border-line-strong", className)}>
       <div className="flex items-center gap-2 border-b border-line px-5 py-3">

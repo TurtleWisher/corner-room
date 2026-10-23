@@ -1,4 +1,4 @@
-import type { OfferRecord, PlanRecord } from "@/lib/api";
+import type { OfferRecord } from "@/lib/api";
 
 /*
  * Pure helpers for the Store and checkout (store.md). No prices are computed: amounts are shown
@@ -9,26 +9,6 @@ import type { OfferRecord, PlanRecord } from "@/lib/api";
 export function planName(key: string): string {
   const words = key.replace(/[_\-.]+/g, " ").trim().toLowerCase();
   return words ? words[0].toUpperCase() + words.slice(1) : "Plan";
-}
-
-const UNIT: Record<string, [string, string]> = {
-  DAY: ["day", "days"],
-  WEEK: ["week", "weeks"],
-  MONTH: ["month", "months"],
-  YEAR: ["year", "years"],
-};
-
-/** "/ month", "/ 3 months". Null when the interval is unknown, so nothing is guessed. */
-export function intervalLabel(plan: Pick<PlanRecord, "interval" | "interval_count">): string | null {
-  const unit = UNIT[(plan.interval ?? "").toUpperCase()];
-  if (!unit) return null;
-  const n = plan.interval_count ?? 1;
-  return n === 1 ? `/ ${unit[0]}` : `/ ${n} ${unit[1]}`;
-}
-
-/** "14-day trial" only when the API sets trial_days. */
-export function trialLabel(plan: Pick<PlanRecord, "trial_days">): string | null {
-  return plan.trial_days && plan.trial_days > 0 ? `${plan.trial_days}-day trial` : null;
 }
 
 export const PRODUCT_TYPE_LABEL: Record<string, string> = {
@@ -79,15 +59,13 @@ export function offerTitle(offer: Pick<OfferRecord, "name" | "product_type">): s
 
 export type CheckoutItem =
   | { kind: "offer"; id: string }
-  | { kind: "plan"; id: string }
   | { kind: "tickets"; id: string; eventId?: string };
 
-/** Reads the checkout query: ?offer=, ?plan= or ?ticketTypeId= (the existing ticket link). */
+/** Reads the checkout query: ?offer= or ?ticketTypeId= (the existing ticket link). Corner Room has no
+ * plans (D-COMMERCE-01), so an old ?plan= link checks out nothing. */
 export function checkoutItemFromParams(params: { get(name: string): string | null }): CheckoutItem | null {
   const offer = params.get("offer");
   if (offer) return { kind: "offer", id: offer };
-  const plan = params.get("plan");
-  if (plan) return { kind: "plan", id: plan };
   const ticket = params.get("ticketTypeId");
   if (ticket) {
     const eventId = params.get("event");
@@ -102,7 +80,6 @@ export function afterPurchaseHref(
   offer?: { product_type: string | null; subject_id?: string | null } | null,
 ): { href: string; label: string } {
   if (item.kind === "tickets") return { href: "/tickets", label: "View your tickets" };
-  if (item.kind === "plan") return { href: "/releases", label: "Start listening" };
   if (offer?.product_type === "TRACK" && offer.subject_id) return { href: `/tracks/${offer.subject_id}`, label: "Listen now" };
   if (offer?.product_type === "RELEASE" && offer.subject_id) return { href: `/releases/${offer.subject_id}`, label: "Listen now" };
   if (offer?.product_type === "CATALOG_ACCESS") return { href: "/releases", label: "Start listening" };

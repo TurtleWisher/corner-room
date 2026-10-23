@@ -1,34 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { ShoppingBag } from "lucide-react";
+import { Disc3 } from "lucide-react";
 
-import { Button, ButtonLink, EmptyState, ErrorState, Money, Skeleton, StatusChip } from "@/components/ds";
+import { Button, ButtonLink, EmptyState, ErrorState, Skeleton, StatusChip } from "@/components/ds";
 import { DateTime } from "@/components/ds/date-time";
 import { Dialog } from "@/components/ds/dialog";
 import { AccountPage } from "@/components/shell/account-page";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { friendlyError } from "@/lib/error-copy";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
-import { cancelSubscription, fetchMySubscriptions, fetchSubscriptionPlans, type PlanRecord, type SubscriptionRecord } from "@/lib/api";
+import { cancelSubscription, fetchMySubscriptions, type SubscriptionRecord } from "@/lib/api";
 import { SUBSCRIPTION_STATUS } from "@/lib/status-maps";
-import { intervalLabel, planName } from "@/lib/store-view";
 
 const ENDED = new Set(["CANCELLED", "EXPIRED"]);
 
-function SubscriptionRow({ row, plan, onCancel }: { row: SubscriptionRecord; plan: PlanRecord | undefined; onCancel: () => void }) {
+function SubscriptionRow({ row, onCancel }: { row: SubscriptionRecord; onCancel: () => void }) {
   return (
     <li className="cr-cut flex flex-col gap-4 p-5 cr-glass-card sm:flex-row sm:items-center sm:justify-between">
       <div>
         <div className="flex flex-wrap items-center gap-3">
-          <p className="text-lg font-bold text-fg">{plan ? planName(plan.key) : "Plan"}</p>
+          <p className="text-lg font-bold text-fg">Subscription</p>
           <StatusChip value={row.status} map={SUBSCRIPTION_STATUS} />
         </div>
-        {plan ? (
-          <p className="mt-1 text-sm text-fg">
-            <Money value={{ amount_minor: plan.price_amount_minor, currency_code: plan.currency_code }} /> {intervalLabel(plan) ?? ""}
-          </p>
-        ) : null}
         <p className="mt-1 text-sm text-fg-muted">
           {row.period_ends_at ? (
             <>
@@ -49,11 +43,12 @@ function SubscriptionRow({ row, plan, onCancel }: { row: SubscriptionRecord; pla
   );
 }
 
+/*
+ * Owner, 2026-10-23 (D-COMMERCE-01): Corner Room has no subscriptions. This page stays, out of the
+ * menus, for people who subscribed before: they see what they have and can cancel it.
+ */
 function Subscriptions() {
-  const data = useAsync(
-    () => Promise.all([fetchMySubscriptions(), fetchSubscriptionPlans().catch(() => ({ items: [] as PlanRecord[] }))]).then(([s, p]) => ({ subs: s.items, plans: p.items })),
-    [],
-  );
+  const data = useAsync(() => fetchMySubscriptions().then((s) => ({ subs: s.items })), []);
   const [confirming, setConfirming] = useState<SubscriptionRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,15 +72,19 @@ function Subscriptions() {
   if (data.status === "error") {
     return <ErrorState title="Subscriptions unavailable" message={loadErrorMessage(data.error, "your subscriptions")} action={<RetryButton onClick={data.reload} />} />;
   }
-  const { subs, plans } = data.data;
+  const { subs } = data.data;
   return (
     <>
       {subs.length === 0 ? (
-        <EmptyState title="No subscription yet" body="A plan lets you listen across the catalog." action={<ButtonLink href="/store" size="sm">See plans</ButtonLink>} />
+        <EmptyState
+          title="No subscriptions"
+          body="Corner Room has no subscriptions: you buy the songs and releases you love, straight from the artists."
+          action={<ButtonLink href="/store" size="sm">Go to the Store</ButtonLink>}
+        />
       ) : (
         <ul className="grid gap-3">
           {subs.map((row) => (
-            <SubscriptionRow key={row.id} row={row} plan={plans.find((p) => p.id === row.plan_id)} onCancel={() => setConfirming(row)} />
+            <SubscriptionRow key={row.id} row={row} onCancel={() => setConfirming(row)} />
           ))}
         </ul>
       )}
@@ -122,8 +121,8 @@ export default function SubscriptionsPage() {
       title="Subscriptions"
       what="your subscriptions"
       actions={
-        <ButtonLink href="/store" variant="secondary" size="sm">
-          <ShoppingBag aria-hidden="true" /> Plans
+        <ButtonLink href="/releases" variant="secondary" size="sm">
+          <Disc3 aria-hidden="true" /> Releases
         </ButtonLink>
       }
     >

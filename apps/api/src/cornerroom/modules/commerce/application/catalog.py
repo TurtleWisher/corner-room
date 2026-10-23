@@ -19,6 +19,7 @@ from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_befo
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.commerce.domain.lifecycle import (
+    assert_sellable_type,
     OFFER_AUDIENCES,
     PRODUCT_TYPES,
     offer_transition_action,
@@ -115,17 +116,26 @@ class CatalogCommerceService:
         )
         if product_type not in PRODUCT_TYPES:
             raise AppError("VALIDATION_ERROR", "Unknown product type", 422)
+        assert_sellable_type(product_type)
+        # A label sells only its own music and plans: another label's subject reads as not found
+        # (security audit 2026-10-23; before, any label could put any label's song on sale).
         if product_type == "TRACK":
             track = await self.session.get(Track, subject_id)
-            if track is None or track.deleted_at is not None:
+            if track is None or track.deleted_at is not None or track.primary_org_id != org_id:
                 raise NotFoundError("Track not found")
             await self.assert_track_sold_separately(subject_id)
         if product_type == "RELEASE":
             from cornerroom.modules.music.domain.models import Release
 
             release = await self.session.get(Release, subject_id)
-            if release is None or release.deleted_at is not None:
+            if release is None or release.deleted_at is not None or release.primary_org_id != org_id:
                 raise NotFoundError("Release not found")
+        if product_type == "SUBSCRIPTION_PLAN":
+            from cornerroom.modules.subscriptions.domain.models import SubscriptionPlan
+
+            plan = await self.session.get(SubscriptionPlan, subject_id)
+            if plan is None or plan.organization_id != org_id:
+                raise NotFoundError("Plan not found")
         row = Product(
             organization_id=org_id,
             product_type=product_type,
@@ -169,6 +179,8 @@ class CatalogCommerceService:
         if target is None:
             raise AppError("VALIDATION_ERROR", "Unknown product action", 422)
         product_transition_action(row.status, target)
+        if target == "ACTIVE":
+            assert_sellable_type(row.product_type)
         row.status = target
         row.updated_by = ctx.user_id
         await self._flush_versioned()
@@ -203,6 +215,7 @@ class CatalogCommerceService:
         product = await self.session.get(Product, product_id)
         if product is None or product.deleted_at is not None:
             raise NotFoundError("Product not found")
+        assert_sellable_type(product.product_type)
         if audience not in OFFER_AUDIENCES or (audience != "EVERYONE" and product.product_type != "RELEASE"):
             raise AppError("VALIDATION_ERROR", "This price audience only applies to releases", 422)
         await self._assert_write(
@@ -263,6 +276,8 @@ class CatalogCommerceService:
         target = {"activate": "ACTIVE", "retire": "RETIRED"}.get(action)
         if target is None:
             raise AppError("VALIDATION_ERROR", "Unknown offer action", 422)
+        if target == "ACTIVE":
+            assert_sellable_type(product.product_type)
         if target == "ACTIVE" and product.status != "ACTIVE":
             raise AppError(
                 "PRODUCT_NOT_ACTIVE",
@@ -496,7 +511,7 @@ class CatalogCommerceService:
                 Offer.deleted_at.is_(None),
                 Product.status == "ACTIVE",
                 Product.deleted_at.is_(None),
-                Product.product_type.in_(("TRACK", "RELEASE", "CATALOG_ACCESS")),
+                Product.product_type.in_(("TRACK", "RELEASE")),
             )
             .order_by(Offer.created_at.desc(), Offer.id.desc())
         )

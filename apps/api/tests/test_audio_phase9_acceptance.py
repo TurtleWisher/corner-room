@@ -17,7 +17,7 @@ from tests.test_audio_phase7_release_commerce import _released
 
 
 async def _release_offer(client: AsyncClient, tag: str) -> tuple[str, str, str, str]:
-    """A released single with an accepted price: (release_id, track_id, offer_id, admin_token)."""
+    """A released single with an accepted price: (release_id, track_id, offer_id, label finance token)."""
     admin, orgs = await _orgs(client)
     label = orgs["LABEL"]
     release_id, track_id, _owner, _artist = await _released(client, admin, label, f"acc-{tag}@example.com", f"Act {tag}")
@@ -26,7 +26,7 @@ async def _release_offer(client: AsyncClient, tag: str) -> tuple[str, str, str, 
     proposal = next(p for p in queue if p["release_id"] == release_id)
     assert (await client.post(f"/api/v1/offer-proposals/{proposal['id']}/decision", headers=bearer(ops), json={"decision": "accept"})).status_code == 200
     offer = next(o for o in (await client.get("/api/v1/offers")).json()["items"] if o.get("subject_id") == release_id)
-    return release_id, track_id, offer["id"], admin
+    return release_id, track_id, offer["id"], ops
 
 
 async def _order(client: AsyncClient, token: str, offer_id: str) -> dict:
@@ -103,8 +103,7 @@ async def test_release_refund_revokes_and_other_accounts_never_see_it(client: As
     from cornerroom.infra.db import get_session_factory
     from cornerroom.modules.ticketing.domain.models import RefundPolicy
 
-    # Refund approval needs an unscoped finance.post grant today (finance module; see the Finance
-    # module pass), so the platform admin approves here.
+    # The label's finance manager approves and completes (refunds are scoped to the order's label, D-PAY-01).
     release_id, track_id, offer_id, finance = await _release_offer(client, "refund")
     fan = await register_and_login(client, "acc-refund-fan@example.com")
     other = await register_and_login(client, "acc-refund-other@example.com")

@@ -3,10 +3,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const offers = vi.fn();
-const plans = vi.fn();
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
-  return { ...actual, fetchOffers: () => offers(), fetchSubscriptionPlans: () => plans() };
+  return { ...actual, fetchOffers: () => offers() };
 });
 vi.mock("@/components/auth-provider", () => ({ useAuth: () => ({ status: "anonymous", user: null }) }));
 
@@ -37,7 +36,6 @@ class IO {
 beforeEach(() => {
   media();
   offers.mockReset();
-  plans.mockReset();
   (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver = IO;
 });
 afterEach(cleanup);
@@ -111,19 +109,23 @@ describe("Reveal", () => {
 });
 
 describe("MissionBand", () => {
-  it("leads to the Store and shows only real store items", async () => {
-    offers.mockResolvedValue({ items: [{ id: "pass", product_type: "CATALOG_ACCESS", status: "ACTIVE", name: "Full catalog pass", amount_minor: 90000, currency_code: "BDT" }] });
-    plans.mockResolvedValue({ items: [{ id: "p", key: "monthly", status: "ACTIVE", price_amount_minor: 29900, currency_code: "BDT", interval: "MONTH", interval_count: 1 }] });
+  it("leads to the Store and shows only real songs and releases on sale", async () => {
+    offers.mockResolvedValue({
+      items: [
+        { id: "pass", product_type: "CATALOG_ACCESS", status: "ACTIVE", name: "Full catalog pass", amount_minor: 90000, currency_code: "BDT" },
+        { id: "t", product_type: "TRACK", status: "ACTIVE", name: "Low Tide", amount_minor: 5000, currency_code: "BDT" },
+      ],
+    });
     render(<MissionBand />);
     expect(screen.getByRole("heading", { name: MISSION_LINE })).toBeTruthy();
     expect(screen.getByRole("link", { name: /Visit the Store/ }).getAttribute("href")).toBe("/store");
-    expect(await screen.findByText("Full catalog pass")).toBeTruthy();
-    expect(screen.getByText("Monthly")).toBeTruthy();
+    expect(await screen.findByText("Low Tide")).toBeTruthy();
+    // No plans or whole-catalog pass (D-COMMERCE-01).
+    expect(screen.queryByText("Full catalog pass")).toBeNull();
   });
 
   it("shows no product tiles when the store has nothing on sale", async () => {
     offers.mockResolvedValue({ items: [] });
-    plans.mockResolvedValue({ items: [] });
     render(<MissionBand />);
     await waitFor(() => expect(offers).toHaveBeenCalled());
     expect(screen.queryByRole("list", { name: "In the Store now" })).toBeNull();

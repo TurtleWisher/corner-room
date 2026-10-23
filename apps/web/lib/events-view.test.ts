@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { EventRecord } from "@/lib/api";
-import { actsLabel, eventCity, eventEyebrow, fromPrice, groupByMonth, splitPast, ticketState, whatsOnOrder } from "@/lib/events-view";
+import { actsLabel, eventCity, eventEyebrow, eventTicketAction, fromPrice, groupByMonth, heldTicketEvents, splitPast, ticketState, whatsOnOrder } from "@/lib/events-view";
 
 const ev = (id: string, starts_at: string | null, status = "TICKETING_OPEN"): EventRecord => ({
   id,
@@ -109,5 +109,26 @@ describe("splitPast", () => {
     );
     expect(current.map((e) => e.id)).toEqual(["soon", "live", "moved", "tbc"]);
     expect(past.map((e) => e.id)).toEqual(["lapsed", "done"]);
+  });
+});
+
+describe("event row ticket button (owner, 2026-10-24)", () => {
+  it("asks visitors to sign in and shows signed-in people a lock while tickets are on sale", () => {
+    expect(eventTicketAction(false, true, false)).toBe("sign_in");
+    expect(eventTicketAction(true, true, false)).toBe("locked");
+    expect(eventTicketAction(true, true, true)).toBe("held");
+    expect(eventTicketAction(true, false, true)).toBe("held");
+    expect(eventTicketAction(false, false, false)).toBeNull();
+    expect(eventTicketAction(true, false, false)).toBeNull();
+  });
+  it("counts only paid, valid or used tickets", () => {
+    const held = heldTicketEvents([
+      { event_id: "e1", status: "ISSUED" },
+      { event_id: "e2", status: "REFUNDED" },
+      { event_id: "e3", status: "PAYMENT_PENDING" },
+      { event_id: "e4", status: "CHECKED_IN" },
+      { event_id: null, status: "ISSUED" },
+    ]);
+    expect([...held].sort()).toEqual(["e1", "e4"]);
   });
 });

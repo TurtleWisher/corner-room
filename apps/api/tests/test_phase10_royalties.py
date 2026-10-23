@@ -190,7 +190,7 @@ async def test_phase10_rights_pool_calc_idor_idempotency(client: AsyncClient) ->
             "user_id": await _user_id(client, fan["access_token"]),
             "entitlement_type": "ADMIN_GRANT",
             "ref_id": track["id"],
-            "scope": "CATALOG",
+            "scope": "TRACK",
         },
     )
     assert grant.status_code == 201, grant.text

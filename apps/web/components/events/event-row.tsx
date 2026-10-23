@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { Lock, LogIn, Ticket } from "lucide-react";
 
-import { DateBlock, DateTime, Money, StatusChip } from "@/components/ds";
+import { ButtonLink, DateBlock, DateTime, Money, StatusChip } from "@/components/ds";
 import { EventMedia } from "@/components/events/event-media";
 import type { EventRecord } from "@/lib/api";
-import { eventCity } from "@/lib/events-view";
+import { eventCity, type EventTicketAction } from "@/lib/events-view";
 import { EVENT_STATUS } from "@/lib/status-maps";
 
 /**
@@ -11,8 +12,18 @@ import { EVENT_STATUS } from "@/lib/status-maps";
  * place, the lowest on-sale price when the list has it, and the status. `ev-row` and `ev-cube`
  * join the What's On focus effect (events.css): the row under the pointer stays sharp.
  */
-export function EventRow({ event, price }: { event: EventRecord; price?: { amount_minor: number; currency_code: string } | null }) {
+export function EventRow({
+  event,
+  price,
+  ticket = null,
+}: {
+  event: EventRecord;
+  price?: { amount_minor: number; currency_code: string } | null;
+  /** The ticket button (lib/events-view eventTicketAction); none when null. */
+  ticket?: EventTicketAction;
+}) {
   const href = `/events/${event.id}`;
+  const tickets = `${href}#tickets`;
   const city = eventCity(event);
   return (
     <li className="ev-row cr-row grid grid-cols-[3.5rem_4rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2 border-b border-line py-5 md:grid-cols-[6rem_4.5rem_minmax(0,1fr)_auto] md:gap-x-6">
@@ -38,6 +49,19 @@ export function EventRow({ event, price }: { event: EventRecord; price?: { amoun
           </span>
         ) : null}
         <StatusChip value={event.status} map={EVENT_STATUS} />
+        {ticket === "sign_in" ? (
+          <ButtonLink href={`/login?next=${encodeURIComponent(tickets)}`} variant="secondary" size="sm" aria-label={`Sign in to get tickets for ${event.title}`}>
+            <LogIn aria-hidden="true" /> Sign in
+          </ButtonLink>
+        ) : ticket === "locked" ? (
+          <ButtonLink href={tickets} size="sm" aria-label={`Locked. Get tickets for ${event.title}`}>
+            <Lock aria-hidden="true" /> Tickets
+          </ButtonLink>
+        ) : ticket === "held" ? (
+          <ButtonLink href="/tickets" variant="secondary" size="sm" aria-label={`Your tickets for ${event.title}`}>
+            <Ticket aria-hidden="true" /> Your tickets
+          </ButtonLink>
+        ) : null}
       </div>
     </li>
   );

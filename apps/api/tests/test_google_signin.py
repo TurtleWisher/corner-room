@@ -296,7 +296,7 @@ async def test_next_cannot_redirect_off_site(client: AsyncClient, google: FakeGo
         response, _, _ = await _google_sign_in(client, google, sub="redir", email="redir@example.com", next_path=evil)
         where, query = _where(response)
         assert where == f"{WEB}/auth/continue"
-        assert query["next"] == "/account"
+        assert query["next"] == "/#welcome"
 
 
 @pytest.mark.postgres

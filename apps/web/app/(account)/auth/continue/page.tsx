@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { AuthCard } from "@/components/account/auth-card";
 import { useAuth } from "@/components/auth-provider";
 import { ButtonLink, ErrorState, Skeleton } from "@/components/ds";
-import { safeNextPath } from "@/lib/auth-view";
+import { HOME_WELCOME, safeNextPath } from "@/lib/auth-view";
 
 /*
  * Landing spot after "Continue with Google". The API has already set the usual refresh cookie;
@@ -16,7 +16,7 @@ import { safeNextPath } from "@/lib/auth-view";
 export default function ContinuePage() {
   const router = useRouter();
   const { status } = useAuth();
-  const [next, setNext] = useState("/account");
+  const [next, setNext] = useState(HOME_WELCOME);
 
   useEffect(() => {
     setNext(safeNextPath(new URLSearchParams(window.location.search).get("next")));

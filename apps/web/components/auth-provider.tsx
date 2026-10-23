@@ -28,6 +28,19 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const AUTH_CHANNEL = "cr-auth";
+const SIGNED_OUT = "signed-out";
+
+/** Tell this browser's other tabs that the account signed out, so they stop showing it. */
+function announceSignedOut() {
+  if (typeof BroadcastChannel === "undefined") {
+    return;
+  }
+  const channel = new BroadcastChannel(AUTH_CHANNEL);
+  channel.postMessage(SIGNED_OUT);
+  channel.close();
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -50,6 +63,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  // A page brought back from the browser's back/forward cache still holds the old sign-in in
+  // memory, and other tabs don't see a sign-out: hide the account at once and ask the API again.
+  useEffect(() => {
+    const recheck = async () => {
+      clearAccessToken();
+      setUser(null);
+      setStatus("loading");
+      const restored = await restoreSession();
+      setUser(restored);
+      setStatus(restored ? "authenticated" : "anonymous");
+    };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        void recheck();
+      }
+    };
+    window.addEventListener("pageshow", onPageShow);
+    const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(AUTH_CHANNEL);
+    if (channel) {
+      channel.onmessage = (event: MessageEvent) => {
+        if (event.data === SIGNED_OUT) {
+          clearAccessToken();
+          setUser(null);
+          setStatus("anonymous");
+        }
+      };
+    }
+    return () => {
+      window.removeEventListener("pageshow", onPageShow);
+      channel?.close();
     };
   }, []);
 
@@ -85,9 +131,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
       async logout() {
-        await apiLogout();
-        setUser(null);
-        setStatus("anonymous");
+        try {
+          await apiLogout();
+        } finally {
+          setUser(null);
+          setStatus("anonymous");
+          announceSignedOut();
+        }
       },
       async refreshUser() {
         try {

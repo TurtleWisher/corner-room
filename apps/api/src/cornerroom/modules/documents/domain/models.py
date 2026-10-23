@@ -54,7 +54,11 @@ class MediaAsset(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixi
 
 
 UPLOAD_PURPOSES = frozenset({"AUDIO_MASTER", "COVER_ART"})
-UPLOAD_TARGET_TYPES = frozenset({"track_version", "release_cover", "event_cover"})
+# Profile pictures (owner, 2026-10-23): a fan's own, or an artist's or band's (reviewed by staff).
+PROFILE_PICTURE_TARGETS = frozenset({"user_avatar", "artist_portrait", "band_portrait"})
+UPLOAD_TARGET_TYPES = frozenset(
+    {"track_version", "release_cover", "event_cover", "user_avatar", "artist_portrait", "band_portrait"}
+)
 UPLOAD_INTENT_STATUSES = frozenset({"OPEN", "COMPLETING", "COMPLETED", "CANCELLED", "EXPIRED"})
 
 
@@ -64,7 +68,10 @@ class UploadIntent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "upload_intents"
     __table_args__ = (
         CheckConstraint("purpose IN ('AUDIO_MASTER','COVER_ART')", name="purpose"),
-        CheckConstraint("target_type IN ('track_version','release_cover','event_cover')", name="target_type"),
+        CheckConstraint(
+            "target_type IN ('track_version','release_cover','event_cover','user_avatar','artist_portrait','band_portrait')",
+            name="target_type",
+        ),
         CheckConstraint(
             "status IN ('OPEN','COMPLETING','COMPLETED','CANCELLED','EXPIRED')", name="status"
         ),

@@ -5,6 +5,18 @@ from __future__ import annotations
 from cornerroom.infra.errors import AppError
 
 PRODUCT_TYPES = frozenset({"TRACK", "CATALOG_ACCESS", "SUBSCRIPTION_PLAN", "RELEASE"})
+# Owner, 2026-10-23 (D-COMMERCE-01): no subscriptions and no whole-catalog pass. Old rows stay; new
+# products, offers, activations and checkouts of these kinds are refused.
+RETIRED_PRODUCT_TYPES = frozenset({"CATALOG_ACCESS", "SUBSCRIPTION_PLAN"})
+
+
+def assert_sellable_type(product_type: str) -> None:
+    if product_type in RETIRED_PRODUCT_TYPES:
+        raise AppError(
+            "NOT_SOLD",
+            "Corner Room sells songs and releases, not subscriptions or the whole catalog",
+            422,
+        )
 OFFER_AUDIENCES = frozenset({"EVERYONE", "OWNS_PART_OF_RELEASE"})
 CATALOG_STATUSES = frozenset({"DRAFT", "ACTIVE", "RETIRED"})
 

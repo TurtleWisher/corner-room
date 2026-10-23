@@ -16,7 +16,7 @@ function Orders() {
     return <ErrorState title="Orders unavailable" message={loadErrorMessage(data.error, "your orders")} action={<RetryButton onClick={data.reload} />} />;
   }
   if (data.data.length === 0) {
-    return <EmptyState title="No orders yet" body="Tickets, music and plans you buy appear here." action={<ButtonLink href="/store" size="sm">Go to the Store</ButtonLink>} />;
+    return <EmptyState title="No orders yet" body="Tickets and music you buy appear here." action={<ButtonLink href="/store" size="sm">Go to the Store</ButtonLink>} />;
   }
   return <OrdersTable orders={data.data} />;
 }

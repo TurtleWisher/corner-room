@@ -1,4 +1,5 @@
 import {
+  UserRoundPen,
   Activity,
   BadgeCheck,
   Bell,
@@ -58,6 +59,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/organizations": Building2,
   "/royalties": Coins,
   "/studio": LayoutDashboard,
+  "/studio/profile": UserRoundPen,
   "/studio/sales": ChartNoAxesColumn,
   "/staff/commerce": Store,
   "/staff/finance": Landmark,

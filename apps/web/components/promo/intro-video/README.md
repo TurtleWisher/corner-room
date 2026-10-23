@@ -60,7 +60,7 @@ The listening room scene is the longest by design and reuses the exact numbers i
 | Audience | Music fans who go to Corner Room shows and listen to its artists ("Your tickets, library and playlists in one place"), plus artists who want to join the label ("Are you an artist? Apply") | `/`, `/artists` |
 | Problem | Not stated on the site. Implied only: tickets, music and playlists in one place, and a way to support artists | `/` |
 | Feature 1: Events | "What's on. Live shows from Corner Room. Times are shown in each event's own city." | `/discover` |
-| Feature 2: Listening room | "Play what you own. Buy a track to keep it, or unlock everything with a plan." Library ("Everything you bought or saved."), Playlists ("Your own running orders."), History ("What you listened to, newest first.") | `/listen`, `/library`, `/playlists`, `/history` |
+| Feature 2: Listening room | "Play what you own. Buy songs and releases from the artists to keep them." Library ("Everything you bought or saved."), Playlists ("Your own running orders."), History ("What you listened to, newest first.") | `/listen`, `/library`, `/playlists`, `/history` |
 | Feature 3: Store | "Music to keep. Subscribe to listen across the catalog, or buy music to keep." | `/store`, `/` |
 | Motto | "The city's corner. The music's room." / "শহরের কোণে, গানের ঘরে" | `/`, `/login`, `/register`, footer |
 | Purpose | "Find the music you love. Help the artists who make it." | `/` |

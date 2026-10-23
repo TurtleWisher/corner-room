@@ -14,13 +14,13 @@ import { GoogleSignInOption } from "@/components/account/google-button";
 import { useAuth } from "@/components/auth-provider";
 import { Button, ButtonLink, ErrorState, Field, Input } from "@/components/ds";
 import { ApiError, requestVerification, verifyPathFromLink } from "@/lib/api";
-import { safeNextPath, verifyLinkFor } from "@/lib/auth-view";
+import { HOME_WELCOME, safeNextPath, verifyLinkFor } from "@/lib/auth-view";
 import { friendlyError, googleSignInError, signInError } from "@/lib/error-copy";
 
 export function SignInForm({
   title = "Sign in",
   intro,
-  defaultNext = "/account",
+  defaultNext = HOME_WELCOME,
   footer,
   google = true,
   theme = "ember",

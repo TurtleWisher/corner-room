@@ -82,11 +82,11 @@ describe("DownloadButton", () => {
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 
-  it("explains why someone listening through a plan cannot download", async () => {
+  it("explains that downloads come with buying (older whole-catalog access only plays)", async () => {
     api.fetchDownloadOptions.mockRejectedValueOnce(new ApiError({ status: 403, code: "DOWNLOAD_NOT_OWNED" }));
     render(<DownloadButton trackId="t1" title="Low Tide" />);
     await act(async () => screen.getByRole("button", { name: "Download Low Tide" }).click());
-    expect(screen.getByRole("alert").textContent).toContain("A plan lets you listen only");
+    expect(screen.getByRole("alert").textContent).toContain("Downloads come with buying the song or its release");
   });
 
   it("closes the format list with Escape", async () => {

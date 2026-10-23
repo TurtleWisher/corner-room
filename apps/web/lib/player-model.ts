@@ -29,7 +29,7 @@ export function problemMessage(p: PlayProblem): string {
     case "signed_out":
       return "Sign in to listen.";
     case "needs_access":
-      return "Subscription required. Buy this track or choose a plan to play it.";
+      return "Buy this song, or the release it is on, to play it.";
     case "taken_down":
       return "This track is no longer available.";
     case "unavailable":

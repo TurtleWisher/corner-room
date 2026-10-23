@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { Logo } from "@/components/brand/logo";
 import { ButtonLink } from "@/components/ds";
 import { Drawer } from "@/components/ds/dialog";
 import { AccountMenu, AvatarButton } from "@/components/shell/account-menu";
+import { FanViewButton, FanViewLink, useLeaveFanView } from "@/components/shell/fan-view-switch";
 import { NavIcon } from "@/components/shell/nav-icons";
 import { SkipLink } from "@/components/shell/site-header";
 import { ShellBell } from "@/components/shell/shell-bell";
@@ -61,17 +62,9 @@ function ConsoleMark() {
   );
 }
 
-function BackLink({ onClick }: { onClick?: () => void }) {
-  return (
-    <Link href="/" onClick={onClick} className="cr-focus flex h-11 items-center gap-2 px-5 text-sm font-semibold text-fg-muted hover:text-fg">
-      <ArrowLeft aria-hidden="true" className="size-4" /> Back to Corner Room
-    </Link>
-  );
-}
-
 /**
  * Staff console (graphite world): logo and console label, the "Acting in" workspace chip, grouped
- * navigation with icons, and "Back to Corner Room". Under 1024 px the side panel becomes a drawer.
+ * navigation with icons, and "Switch to fan view". Under 1024 px the side panel becomes a drawer.
  * Never reuses the public header.
  */
 export function StaffShell({ children }: { children: React.ReactNode }) {
@@ -79,6 +72,7 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  useLeaveFanView();
   const sections = staffNavSections(user?.permissions);
   const crumb = staffBreadcrumb(pathname, sections);
 
@@ -97,7 +91,7 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
             <StaffNav sections={sections} />
           </div>
           <div className="border-t border-line py-2">
-            <BackLink />
+            <FanViewLink />
           </div>
         </div>
       </aside>
@@ -124,6 +118,7 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
             <div className="ml-auto flex items-center gap-1">
               {status === "authenticated" ? (
                 <>
+                  <FanViewButton className="mr-1" />
                   <ShellBell />
                   <AvatarButton onClick={() => setMenuOpen(true)} className="ml-1" />
                 </>
@@ -145,7 +140,7 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
           </div>
           <StaffNav sections={sections} onNavigate={() => setNavOpen(false)} />
           <div className="border-t border-line pt-2">
-            <BackLink onClick={() => setNavOpen(false)} />
+            <FanViewLink onClick={() => setNavOpen(false)} />
           </div>
         </div>
       </Drawer>

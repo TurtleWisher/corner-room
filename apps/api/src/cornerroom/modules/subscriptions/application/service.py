@@ -107,6 +107,8 @@ class SubscriptionService:
         features: dict | None = None,
         organization_id: UUID | None = None,
     ) -> SubscriptionPlan:
+        # Owner, 2026-10-23 (D-COMMERCE-01): Corner Room has no subscriptions.
+        raise AppError("NOT_SOLD", "Corner Room has no subscriptions", 422)
         org_id = organization_id or ctx.organization_id
         if org_id is None:
             raise AppError("WORKSPACE_REQUIRED", "An active organization is required", 409)
@@ -182,6 +184,8 @@ class SubscriptionService:
         trial_days: int | None = None,
         features: dict | None = None,
     ) -> SubscriptionPlanVersion:
+        # Owner, 2026-10-23 (D-COMMERCE-01): Corner Room has no subscriptions.
+        raise AppError("NOT_SOLD", "Corner Room has no subscriptions", 422)
         plan = await self.session.get(SubscriptionPlan, plan_id)
         if plan is None or plan.deleted_at is not None:
             raise NotFoundError("Plan not found")
@@ -238,6 +242,8 @@ class SubscriptionService:
         target = {"activate": "ACTIVE", "retire": "RETIRED"}.get(action)
         if target is None:
             raise AppError("VALIDATION_ERROR", "Unknown plan action", 422)
+        if target == "ACTIVE":
+            raise AppError("NOT_SOLD", "Corner Room has no subscriptions", 422)
         if target == "ACTIVE" and plan.current_version_id is None:
             raise AppError("PLAN_VERSION_REQUIRED", "A plan version is required before activation", 409)
         plan_transition_action(plan.status, target)

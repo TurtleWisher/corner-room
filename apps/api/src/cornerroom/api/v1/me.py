@@ -10,9 +10,11 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from cornerroom.api.deps import get_auth_context, get_current_user, identity_service
+from cornerroom.api.v1.studio import CoverReportOut as ArtworkReportOut
+from cornerroom.infra.errors import AppError
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.identity.application.services import IdentityService
-from cornerroom.modules.identity.domain.models import User
+from cornerroom.modules.identity.domain.models import CustomerProfile, User
 
 router = APIRouter(tags=["me"])
 
@@ -66,11 +68,22 @@ class MeOut(BaseModel):
     # artist profile or runs a band; a workspace member belongs to an organization.
     is_artist: bool = False
     has_workspace: bool = False
+    # The fan's own picture (owner, 2026-10-23): a short-lived signed link, shown only to them.
+    avatar_url: str | None = None
 
 
 class MePatch(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=200)
     locale: str | None = Field(default=None, pattern="^(en|bn)$")
+    remove_avatar: bool = False
+
+
+def _avatar_url(svc: IdentityService, profile: CustomerProfile | None) -> str | None:
+    if profile is None or profile.avatar_asset_id is None:
+        return None
+    from cornerroom.modules.documents.application.covers import CoverService
+
+    return CoverService(svc.session, svc.settings).signed_path(profile.avatar_asset_id, 480)
 
 
 class SessionOut(BaseModel):
@@ -101,6 +114,7 @@ async def get_me(
         email_verified=user.email_verified_at is not None,
         security_locked=user.security_locked_at is not None,
         organization_id=ctx.organization_id,
+        avatar_url=_avatar_url(svc, profile),
         **await _roles_for_menu(svc, user.id, ctx.permission_keys),
     )
 
@@ -112,7 +126,11 @@ async def patch_me(
     ctx: Annotated[AuthContext, Depends(get_auth_context)],
     svc: Annotated[IdentityService, Depends(identity_service)],
 ) -> MeOut:
+    if body.display_name is not None and not body.display_name.strip():
+        raise AppError("VALIDATION_ERROR", "Your name can't be empty", 422)
     profile = await svc.update_me(ctx, display_name=body.display_name, locale=body.locale)
+    if body.remove_avatar:
+        profile = await svc.remove_avatar(ctx)
     return MeOut(
         id=user.id,
         email=user.email,
@@ -123,8 +141,25 @@ async def patch_me(
         email_verified=user.email_verified_at is not None,
         security_locked=user.security_locked_at is not None,
         organization_id=ctx.organization_id,
+        avatar_url=_avatar_url(svc, profile),
         **await _roles_for_menu(svc, user.id, ctx.permission_keys),
     )
+
+
+@router.get("/me/avatar-report", response_model=ArtworkReportOut | None)
+async def my_avatar_report(
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[IdentityService, Depends(identity_service)],
+) -> ArtworkReportOut | None:
+    """What the checks found for the fan's latest picture upload (None before any)."""
+    from cornerroom.modules.documents.application.covers import latest_artwork_report
+
+    _, profile = await svc.get_me(ctx.user_id)
+    report = await latest_artwork_report(
+        svc.session, target_type="user_avatar", target_id=ctx.user_id,
+        current_asset_id=profile.avatar_asset_id if profile else None,
+    )
+    return ArtworkReportOut(**report) if report else None
 
 
 @router.get("/me/sessions", response_model=list[SessionOut])

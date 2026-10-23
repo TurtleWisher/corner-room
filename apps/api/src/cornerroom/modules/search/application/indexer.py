@@ -11,6 +11,7 @@ from cornerroom.infra.errors import NotFoundError
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import (
     ARTIST_ACTIVATED,
+    ARTIST_PROFILE_CHANGED,
     ARTIST_SUSPENDED,
     BAND_MEMBER_CHANGED,
     DomainEvent,
@@ -44,6 +45,7 @@ from cornerroom.modules.search.domain.visibility import (
 SEARCH_EVENT_TYPES = frozenset(
     {
         ARTIST_ACTIVATED,
+        ARTIST_PROFILE_CHANGED,
         ARTIST_SUSPENDED,
         BAND_MEMBER_CHANGED,
         EVENT_PUBLISHED,
@@ -116,6 +118,11 @@ class SearchIndexer:
         if event.event_type not in SEARCH_EVENT_TYPES:
             return None
         if event.event_type in {ARTIST_ACTIVATED, ARTIST_SUSPENDED}:
+            return await self.index_artist(event.aggregate_id)
+        if event.event_type == ARTIST_PROFILE_CHANGED:
+            # An approved name or bio change (artist or band).
+            if event.aggregate_type == "Band":
+                return await self.index_band(event.aggregate_id)
             return await self.index_artist(event.aggregate_id)
         if event.event_type == BAND_MEMBER_CHANGED:
             return await self.index_band(event.aggregate_id)

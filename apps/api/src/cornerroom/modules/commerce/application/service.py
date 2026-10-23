@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 from uuid import UUID
 
@@ -18,7 +19,7 @@ from cornerroom.kernel.events import DomainEvent, ORDER_PAID, ORDER_PLACED, TRAC
 from cornerroom.kernel.money import Money
 from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
 from cornerroom.modules.audit.application.service import AuditService
-from cornerroom.modules.commerce.domain.lifecycle import order_transition_action
+from cornerroom.modules.commerce.domain.lifecycle import assert_sellable_type, order_transition_action
 from cornerroom.modules.commerce.domain.models import (
     Offer,
     Order,
@@ -42,6 +43,11 @@ ORDER_PAID_EVENT = ORDER_PAID
 
 
 log = structlog.get_logger("commerce")
+
+def _no_subscriptions() -> None:
+    """Owner, 2026-10-23 (D-COMMERCE-01): Corner Room has no subscriptions."""
+    raise AppError("NOT_SOLD", "Corner Room has no subscriptions", 422)
+
 
 class CheckoutService:
     def __init__(
@@ -237,12 +243,8 @@ class CheckoutService:
         product = await self.session.get(Product, offer.product_id)
         if product is None or product.deleted_at is not None or product.status != "ACTIVE":
             raise NotFoundError("Offer not found")
-        if product.product_type == "SUBSCRIPTION_PLAN":
-            raise AppError(
-                "USE_SUBSCRIPTION_CHECKOUT",
-                "Subscribe through POST /subscriptions",
-                409,
-            )
+        # D-COMMERCE-01: old plan and whole-catalog offers can't be bought any more.
+        assert_sellable_type(product.product_type)
         await self._check_music_offer(ctx, offer, product)
         money = Money(amount_minor=offer.amount_minor, currency_code=offer.currency_code)
         if product.product_type == "RELEASE":
@@ -341,6 +343,7 @@ class CheckoutService:
         renew_subscription_id: UUID | None = None,
         delivery_confirmed: bool = False,
     ) -> tuple[Order, Payment]:
+        _no_subscriptions()
         found = await self._existing_order(ctx, idempotency_key)
         if found is not None:
             return found
@@ -971,11 +974,18 @@ class CheckoutService:
             version = await self.session.get(SubscriptionPlanVersion, item.ref_id)
             plan = await self.session.get(SubscriptionPlan, version.plan_id) if version else None
             return plan.organization_id if plan else None
-        product = (
-            await self.session.execute(
-                select(Product).where(Product.subject_id == item.ref_id, Product.deleted_at.is_(None)).limit(1)
-            )
-        ).scalar_one_or_none()
+        if item.product_id is not None:
+            product = await self.session.get(Product, item.product_id)
+        else:
+            # Older lines (before 0027): find the product by subject and type, live ones first.
+            types = ("RELEASE",) if item.item_type == "RELEASE" else ("TRACK", "CATALOG_ACCESS")
+            product = (
+                await self.session.execute(
+                    select(Product)
+                    .where(Product.subject_id == item.ref_id, Product.product_type.in_(types))
+                    .order_by(Product.deleted_at.is_(None).desc(), (Product.status == "ACTIVE").desc(), Product.created_at)
+                )
+            ).scalars().first()
         return product.organization_id if product else None
 
     async def _assert_order_staff(self, ctx: AuthContext, order: Order) -> UUID | None:
@@ -1179,28 +1189,71 @@ class CheckoutService:
 
     async def staff_open_refunds(self, ctx: AuthContext, *, limit: int = 100) -> list[dict[str, Any]]:
         """Refunds waiting for approval or completion, in labels this staff member may act for."""
-        rows = (
-            await self.session.execute(
-                select(Refund, Order, Payment.provider)
-                .join(Payment, Payment.id == Refund.payment_id)
-                .join(Order, Order.id == Payment.order_id)
-                .where(Refund.status.in_(("REQUESTED", "APPROVED", "PROCESSING")))
-                .order_by(Refund.created_at)
-                .limit(clamp_limit(limit))
-            )
-        ).all()
+        stmt = (
+            select(Refund, Order, Payment.provider)
+            .join(Payment, Payment.id == Refund.payment_id)
+            .join(Order, Order.id == Payment.order_id)
+            .where(Refund.status.in_(("REQUESTED", "APPROVED", "PROCESSING")))
+            .order_by(Refund.created_at, Refund.id)
+        )
         out: list[dict[str, Any]] = []
         allowed: dict[UUID, bool] = {}
-        for refund, order, provider in rows:
+        async for refund, order, provider in self._rows_in_batches(stmt):
             if order.id not in allowed:
-                try:
-                    await self._assert_order_staff(ctx, order)
-                    allowed[order.id] = True
-                except NotFoundError:
-                    allowed[order.id] = False
+                allowed[order.id] = await self._may_act_on_order(ctx, order)
             if allowed[order.id]:
                 out.append(self._refund_row(refund, order, provider))
+                if len(out) == clamp_limit(limit):
+                    break
         return out
+
+    async def _rows_in_batches(self, stmt: Any, batch: int = 200) -> AsyncIterator[Any]:
+        """Walk an ordered query in batches. Staff queues filter rows by label after reading, so one
+        label's rows must not hide behind a page full of other labels' rows."""
+        offset = 0
+        while True:
+            rows = (await self.session.execute(stmt.offset(offset).limit(batch))).all()
+            for row in rows:
+                yield row
+            if len(rows) < batch:
+                return
+            offset += batch
+
+    async def _may_act_on_order(self, ctx: AuthContext, order: Order) -> bool:
+        try:
+            await self._assert_order_staff(ctx, order)
+        except NotFoundError:
+            return False
+        return True
+
+    async def staff_refund(self, ctx: AuthContext, refund_id: UUID) -> UUID | None:
+        """The label of a refund staff may approve or complete: only with finance.post in its order's
+        label. Any other label, or a refund without an order, reads as 404."""
+        refund = await self.session.get(Refund, refund_id)
+        payment = await self.session.get(Payment, refund.payment_id) if refund else None
+        order = await self.session.get(Order, payment.order_id) if payment and payment.order_id else None
+        if refund is None or order is None:
+            raise NotFoundError("Refund not found")
+        try:
+            return await self._assert_order_staff(ctx, order)
+        except NotFoundError as exc:
+            raise NotFoundError("Refund not found") from exc
+
+    async def assert_payment_refund_access(self, ctx: AuthContext, payment_id: UUID) -> None:
+        """A refund by payment id: the buyer for their own payment, otherwise finance staff of the
+        order's label only (other labels read as 404, like the per-ticket path)."""
+        payment = await self.session.get(Payment, payment_id)
+        if payment is None:
+            raise NotFoundError("Payment not found")
+        if payment.user_id == ctx.user_id:
+            return
+        order = await self.session.get(Order, payment.order_id) if payment.order_id else None
+        if order is None:
+            raise NotFoundError("Payment not found")
+        try:
+            await self._assert_order_staff(ctx, order)
+        except NotFoundError as exc:
+            raise NotFoundError("Payment not found") from exc
 
     # --- Bangla QR staff verification (Q-PAY-01, Q-PAY-05) ------------------------------------
 
@@ -1396,23 +1449,19 @@ class CheckoutService:
             .join(Order, Order.id == PaymentSubmission.order_id)
             .join(Payment, Payment.id == PaymentSubmission.payment_id)
             .join(User, User.id == PaymentSubmission.user_id)
-            .order_by(PaymentSubmission.created_at)
-            .limit(clamp_limit(limit))
+            .order_by(PaymentSubmission.created_at, PaymentSubmission.id)
         )
         if status is not None:
             stmt = stmt.where(PaymentSubmission.status == status)
         if submission_id is not None:
             stmt = stmt.where(PaymentSubmission.id == submission_id)
-        rows = (await self.session.execute(stmt)).all()
         allowed: dict[UUID, bool] = {}
         out: list[dict[str, Any]] = []
-        for sub, order, payment, email in rows:
+        async for sub, order, payment, email in self._rows_in_batches(stmt):
+            if len(out) == clamp_limit(limit):
+                break
             if order.id not in allowed:
-                try:
-                    await self._assert_order_staff(ctx, order)
-                    allowed[order.id] = True
-                except NotFoundError:
-                    allowed[order.id] = False
+                allowed[order.id] = await self._may_act_on_order(ctx, order)
             if not allowed[order.id]:
                 continue
             out.append(
@@ -1444,6 +1493,9 @@ class CheckoutService:
         expires_at,
         organization_id: UUID | None = None,
     ):
+        if scope == "CATALOG":
+            # D-COMMERCE-01, closes Q-SEC-01: nothing grants the whole catalog any more.
+            raise AppError("NOT_SOLD", "Grant a song or a release, not the whole catalog", 422)
         org_id = organization_id or ctx.organization_id
         if org_id is None:
             raise AppError("WORKSPACE_REQUIRED", "An active organization is required", 409)
@@ -1459,6 +1511,13 @@ class CheckoutService:
         )
         if entitlement_type not in {"ADMIN_GRANT", "PROMOTIONAL_GRANT"}:
             raise AppError("VALIDATION_ERROR", "Staff may only issue ADMIN_GRANT or PROMOTIONAL_GRANT", 422)
+        # A label gives away only its own songs and releases (security audit 2026-10-23).
+        if scope in {"TRACK", "RELEASE"}:
+            from cornerroom.modules.music.domain.models import Release, Track
+
+            subject = await self.session.get(Track if scope == "TRACK" else Release, ref_id)
+            if subject is None or subject.deleted_at is not None or subject.primary_org_id != org_id:
+                raise NotFoundError("Track not found" if scope == "TRACK" else "Release not found")
         row, _created = await self.entitlements.grant(
             ctx,
             user_id=user_id,
@@ -1479,6 +1538,7 @@ class CheckoutService:
         subscription_id: UUID,
         idempotency_key: str,
     ) -> tuple[Order, Payment]:
+        _no_subscriptions()
         from cornerroom.modules.subscriptions.domain.lifecycle import NON_TERMINAL_SUBSCRIPTION
 
         sub = await self.subscriptions.get_own(ctx, subscription_id)

@@ -1,18 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { LogOut, MonitorSmartphone, Pencil } from "lucide-react";
+import { FormEvent, useState } from "react";
+import { CircleAlert, CircleCheck, LogOut, MonitorSmartphone, Pencil, Trash2 } from "lucide-react";
 
 import { DeliveryAddressForm } from "@/components/account/delivery-address-form";
 import { useAuth } from "@/components/auth-provider";
-import { Avatar, Button, Card, DateTime, ErrorState, Skeleton, StatusChip } from "@/components/ds";
+import { Avatar, Button, Card, DateTime, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
 import { Dialog } from "@/components/ds/dialog";
+import { PhotoPicker } from "@/components/profile/photo-picker";
 import { AccountPage } from "@/components/shell/account-page";
 import { RetryButton } from "@/components/shell/staff-panel";
+import { ArtworkReport } from "@/components/uploads/artwork-report";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
-import { fetchMyDeliveryAddress, type DeliveryAddress } from "@/features/identity/api";
+import { fetchAvatarReport, fetchMyDeliveryAddress, updateMe, type DeliveryAddress } from "@/features/identity/api";
 import { addressLines } from "@/lib/address-view";
 import { fetchMySessions, revokeAllSessions, revokeSession } from "@/lib/api";
+import { coverUrl } from "@/lib/cover-view";
+import { friendlyError } from "@/lib/error-copy";
 import { defineStatusMap } from "@/lib/format/status";
 
 const USER_STATUS = defineStatusMap({
@@ -182,6 +186,77 @@ function DeliveryAddressPanel() {
   );
 }
 
+/** Your name and picture (owner, 2026-10-23). The picture is yours at once and only you see it. */
+function ProfileEditor() {
+  const { user, refreshUser } = useAuth();
+  const [name, setName] = useState(user?.display_name ?? "");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
+  const [uploads, setUploads] = useState(0);
+  const [removing, setRemoving] = useState(false);
+  if (!user) return null;
+
+  async function saveName(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setMessage(null);
+    try {
+      await updateMe({ display_name: name.trim() });
+      await refreshUser();
+      setMessage({ tone: "good", text: "Your name is saved." });
+    } catch (err) {
+      setMessage({ tone: "bad", text: friendlyError(err, "Your name couldn't be saved. Please try again.") });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removePicture() {
+    setRemoving(true);
+    setMessage(null);
+    try {
+      await updateMe({ remove_avatar: true });
+      await refreshUser();
+      setUploads(0);
+    } catch (err) {
+      setMessage({ tone: "bad", text: friendlyError(err, "Your picture couldn't be removed. Please try again.") });
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="font-semibold text-fg">Picture</p>
+        <div className="mt-3 space-y-3">
+          <PhotoPicker targetType="user_avatar" targetId={user.id} label={user.avatar_url ? "Change picture" : "Add a picture"} onUploaded={() => setUploads((n) => n + 1)} />
+          {user.avatar_url ? (
+            <Button variant="ghost" size="sm" busy={removing} onClick={() => void removePicture()}>
+              <Trash2 aria-hidden="true" /> Remove picture
+            </Button>
+          ) : null}
+          {uploads > 0 ? <ArtworkReport load={fetchAvatarReport} noun="picture" refresh={uploads} onSettled={() => void refreshUser()} /> : null}
+        </div>
+      </div>
+      <form onSubmit={saveName} className="space-y-3">
+        <Field label="Your name" hint="How Corner Room greets you, for example on the home page.">
+          {(c) => <Input {...c} value={name} onChange={(e) => setName(e.target.value)} maxLength={200} required autoComplete="name" />}
+        </Field>
+        <Button type="submit" size="sm" busy={saving} disabled={!name.trim() || name.trim() === user.display_name}>
+          Save name
+        </Button>
+      </form>
+      {message ? (
+        <p role="status" className={`flex items-start gap-2 text-sm ${message.tone === "bad" ? "text-danger" : "text-fg"}`}>
+          {message.tone === "bad" ? <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" />}
+          {message.text}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function Profile() {
   const { user, logout } = useAuth();
   if (!user) return null;
@@ -190,7 +265,7 @@ function Profile() {
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:gap-8">
       <Card className="p-6 lg:sticky lg:top-28">
         <div className="flex items-center gap-4">
-          <Avatar name={name} size={64} />
+          <Avatar name={name} src={coverUrl({ signed: user.avatar_url })} size={64} />
           <div className="min-w-0">
             <p className="truncate text-xl font-bold text-fg">{name}</p>
             <p className="truncate text-sm text-fg-muted">{user.email}</p>
@@ -209,6 +284,12 @@ function Profile() {
         </Button>
       </Card>
       <div className="space-y-6">
+        <Card as="section" aria-labelledby="profile-details" className="p-6">
+          <h2 id="profile-details" className="mb-4 text-xl font-bold text-fg">
+            Your profile
+          </h2>
+          <ProfileEditor />
+        </Card>
         <Card as="section" aria-labelledby="delivery" className="p-6">
           <h2 id="delivery" className="mb-2 text-xl font-bold text-fg">
             Delivery address

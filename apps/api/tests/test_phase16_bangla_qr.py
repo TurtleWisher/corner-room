@@ -242,3 +242,46 @@ async def test_phase16_manual_refund_completion(client: AsyncClient) -> None:
     async with factory() as session:
         count = await session.scalar(select(func.count()).select_from(Payment).where(Payment.provider == "bangla_qr"))
     assert count == 1
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_phase16_bangla_qr_pays_for_songs(client: AsyncClient, monkeypatch) -> None:
+    """With the live setting PAYMENT_PROVIDER=bangla_qr, songs are paid like tickets: no self-confirm,
+    the buyer sends the transaction ID, the label's finance staff confirm. (No subscriptions any
+    more, D-COMMERCE-01.)"""
+    from cornerroom.infra.settings import get_settings
+    from tests.test_phase09_purchases import _active_offer, _released_track
+
+    staff, _org = await _platform_admin(client)
+    track = await _released_track(client, staff, "QR Song")
+    offer = await _active_offer(client, staff, track["id"], 700)
+    monkeypatch.setenv("PAYMENT_PROVIDER", "bangla_qr")
+    get_settings.cache_clear()
+    try:
+        buyer = (await register_and_login(client, "qr-music@example.com"))["access_token"]
+        order = await client.post(
+            "/api/v1/orders",
+            headers={**bearer(buyer), "Idempotency-Key": "qr-song"},
+            json={"offer_id": offer["id"], "delivery_address_confirmed": True},
+        )
+        assert order.status_code == 201, order.text
+        song_payment = order.json()["payment"]
+        assert song_payment["mode"] == "live" and song_payment["self_confirm_available"] is False
+        own = await client.post(f"/api/v1/payments/{song_payment['id']}/sandbox-confirm", headers=bearer(buyer))
+        assert own.status_code >= 400
+
+        assert (await _submit(client, buyer, song_payment["id"], "QRSONG0001")).status_code == 201
+        queue = (await client.get("/api/v1/staff/payment-submissions", headers=bearer(staff))).json()
+        rows = {r["transaction_ref"]: r for r in queue}
+        assert rows["QRSONG0001"]["purpose"] == "TRACK" and rows["QRSONG0001"]["amount_minor"] == 700
+        confirmed = await client.post(f"/api/v1/staff/payment-submissions/{rows['QRSONG0001']['id']}/confirm", headers=bearer(staff))
+        assert confirmed.status_code == 200, confirmed.text
+
+        done = (await client.get(f"/api/v1/orders/{order.json()['id']}", headers=bearer(buyer))).json()
+        assert done["status"] == "FULFILLED" and done["payment"]["status"] == "CAPTURED"
+        played = await client.post("/api/v1/playback/sessions", headers=bearer(buyer), json={"track_id": track["id"]})
+        assert played.status_code == 201, played.text
+    finally:
+        monkeypatch.undo()
+        get_settings.cache_clear()

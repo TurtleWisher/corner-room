@@ -252,7 +252,7 @@ describe("Up next", () => {
     renderQueue();
     await act(async () => screen.getByText("start t1").click());
     await act(async () => screen.getByRole("button", { name: "Next track" }).click());
-    expect(screen.getByText(/Subscription required/)).toBeTruthy();
+    expect(screen.getByText(/Buy this song, or the release it is on/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Pause/ })).toBeNull();
   });
 });

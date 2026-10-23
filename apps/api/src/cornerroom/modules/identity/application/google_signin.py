@@ -26,7 +26,8 @@ from cornerroom.modules.identity.infra.google import (
 
 STATE_COOKIE = "cr_google_state"
 STATE_COOKIE_PATH = "/api/v1/auth/google"
-DEFAULT_NEXT = "/account"
+# The home page's welcome section (owner, 2026-10-23); the web uses the same HOME_WELCOME.
+DEFAULT_NEXT = "/#welcome"
 
 # Reasons the web app knows how to explain. Anything else becomes "failed".
 ERROR_CODES = frozenset(

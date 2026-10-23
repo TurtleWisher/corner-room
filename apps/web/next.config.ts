@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Don't announce the framework in every response (security audit 2026-10-23).
+  poweredByHeader: false,
   // A second build (the private staging copy, scripts/staging.ps1) can live beside the normal one.
   distDir: process.env.NEXT_DIST_DIR || ".next",
   // Stage 6 addresses (owner decision D-EV-01, URL-01 and URL-02): the public events live at

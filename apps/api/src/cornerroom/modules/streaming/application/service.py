@@ -216,7 +216,7 @@ class StreamingService:
 
     async def availability(
         self,
-        ctx: AuthContext,
+        ctx: AuthContext | None,
         track_id: UUID,
         *,
         release_id: UUID | None = None,
@@ -233,6 +233,7 @@ class StreamingService:
             playability.reason == "TRACK_TAKEN_DOWN"
             and track is not None
             and track.takedown_kind != "LEGAL"
+            and ctx is not None
             and await self.entitlements.owns_by_purchase(ctx.user_id, track_id)
         ):
             playability = evaluate_playability(replace(snapshot, track_status=PLAYABLE_TRACK_STATUS))
@@ -581,7 +582,7 @@ class StreamingService:
 
     async def list_playable_tracks(
         self,
-        ctx: AuthContext,
+        ctx: AuthContext | None,
         *,
         limit: int | None = None,
         cursor: str | None = None,
@@ -608,9 +609,15 @@ class StreamingService:
 
     async def release_track_playability(
         self,
-        ctx: AuthContext,
+        ctx: AuthContext | None,
         release_id: UUID,
     ) -> list[tuple[ReleaseTrack, Playability]]:
+        """Each track's playability on a release. Visitors (no ctx, owner 2026-10-24: music details
+        are public) only see released releases; playing still needs an account and access."""
+        if ctx is None:
+            release = await self.session.get(Release, release_id)
+            if release is None or release.deleted_at is not None or release.status != "RELEASED":
+                raise NotFoundError("Release not found")
         stmt = (
             select(ReleaseTrack)
             .where(ReleaseTrack.release_id == release_id)

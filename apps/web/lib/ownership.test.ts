@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import type { EntitlementRecord, OfferRecord } from "@/lib/api";
 import {
-  catalogOffer,
   hasCatalogAccess,
   offerForRelease,
   offerForTrack,
@@ -43,11 +42,10 @@ describe("ownership", () => {
     expect(hasCatalogAccess([ent("CATALOG", "x", "EXPIRED")])).toBe(false);
   });
 
-  it("finds the offer that sells a track, and the catalog pass", () => {
+  it("finds the offer that sells a track", () => {
     const offers = [offer("a", "TRACK", "t1"), offer("b", "CATALOG_ACCESS", "r1"), offer("c", "TRACK", null)];
     expect(offerForTrack(offers, "t1")?.id).toBe("a");
     expect(offerForTrack(offers, "t9")).toBeNull();
-    expect(catalogOffer(offers)?.id).toBe("b");
   });
 
   it("says owned, buy or not for sale", () => {

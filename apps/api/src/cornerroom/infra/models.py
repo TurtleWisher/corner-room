@@ -9,6 +9,7 @@ from cornerroom.modules.artists.domain.models import (
     Band,
     BandMember,
     Follow,
+    ProfileChangeRequest,
 )
 from cornerroom.modules.music.domain.models import (
     Credit,
@@ -147,6 +148,7 @@ __all__ = [
     "Artist",
     "ArtistApplication",
     "ArtistJoinLink",
+    "ProfileChangeRequest",
     "AuditLog",
     "Band",
     "BandMember",

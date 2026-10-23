@@ -74,6 +74,27 @@ async def event_cover(event_id: UUID, size: int, svc: CoverDep) -> Response:
         return NO_COVER
 
 
+@router.get("/covers/artists/{artist_id}/{size}", response_class=Response)
+async def artist_picture(artist_id: UUID, size: int, svc: CoverDep) -> Response:
+    return await _profile_picture(svc, "artist", artist_id, size)
+
+
+@router.get("/covers/bands/{band_id}/{size}", response_class=Response)
+async def band_picture(band_id: UUID, size: int, svc: CoverDep) -> Response:
+    return await _profile_picture(svc, "band", band_id, size)
+
+
+async def _profile_picture(svc: CoverService, kind: str, profile_id: UUID, size: int) -> Response:
+    """Approved artist and band pictures (owner, 2026-10-23). Pages add ?v= so a new one shows."""
+    asset_id = await svc.public_profile_picture(kind, profile_id)
+    if asset_id is None:
+        return NO_COVER
+    try:
+        return _jpeg(await svc.image(asset_id, size), PUBLIC_CACHE)
+    except NotFoundError:
+        return NO_COVER
+
+
 @router.get("/covers/signed/{token}/{size}", response_class=Response)
 async def signed_cover(token: str, size: int, svc: CoverDep) -> Response:
     return _jpeg(await svc.image(svc.asset_from_token(token), size), SIGNED_CACHE)

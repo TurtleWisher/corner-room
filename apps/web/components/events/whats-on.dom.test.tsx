@@ -6,6 +6,10 @@ import type { EventRecord } from "@/lib/api";
 
 const api = vi.hoisted(() => ({ fetchPublicEvents: vi.fn(), fetchEventTicketTypes: vi.fn() }));
 vi.mock("@/lib/api", async (orig) => ({ ...(await orig<typeof import("@/lib/api")>()), ...api }));
+// A visitor: rows on sale offer "Sign in" (owner, 2026-10-24).
+const auth = { status: "anonymous" as string };
+vi.mock("@/components/auth-provider", () => ({ useAuth: () => auth }));
+vi.mock("@/features/ticketing/api", () => ({ fetchMyTickets: vi.fn(async () => ({ items: [], next_cursor: null })) }));
 
 import WhatsOnPage from "@/app/(public)/events/page";
 
@@ -66,6 +70,10 @@ describe("What's On", () => {
     // Announced, not on sale: no price even though a type exists.
     const rowB = within(october).getByText("Show b").closest("li") as HTMLElement;
     expect(rowB.textContent).not.toContain("From");
+    // On sale: a visitor gets "Sign in", which returns to the event's tickets; not on sale: no button.
+    const signIn = within(rowA).getByRole("link", { name: /Sign in to get tickets/ });
+    expect(signIn.getAttribute("href")).toBe(`/login?next=${encodeURIComponent("/events/a#tickets")}`);
+    expect(within(rowB).queryByRole("link", { name: /Sign in to get tickets/ })).toBeNull();
     const past = screen.getByRole("list", { name: "Past events" });
     expect(within(past).getByText("Show old")).toBeTruthy();
     expect(within(october).queryByText("Show old")).toBeNull();

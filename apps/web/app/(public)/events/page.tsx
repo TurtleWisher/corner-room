@@ -2,22 +2,44 @@
 
 import { useEffect, useState } from "react";
 
+import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { Button, EmptyState, ErrorState, Reveal, Skeleton } from "@/components/ds";
 import { EventRow } from "@/components/events/event-row";
 import { PageIntro, RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import { fetchEventTicketTypes, fetchPublicEvents, type EventRecord } from "@/lib/api";
-import { fromPrice, groupByMonth, splitPast, whatsOnOrder } from "@/lib/events-view";
+import { fetchMyTickets } from "@/features/ticketing/api";
+import { eventTicketAction, fromPrice, groupByMonth, heldTicketEvents, splitPast, whatsOnOrder } from "@/lib/events-view";
 
 type Price = { amount_minor: number; currency_code: string } | null;
 
 /** One list of rows. */
-function EventList({ events, prices, label }: { events: EventRecord[]; prices: Record<string, Price>; label: string }) {
+/** Who is looking: null while sign-in is still being checked; `held` = events they have tickets for. */
+type Viewer = { signedIn: boolean; held: Set<string> } | null;
+
+function useViewer(): Viewer {
+  const { status } = useAuth();
+  const signedIn = status === "authenticated";
+  // Which events this customer already holds a ticket for (their own list only).
+  const mine = useAsync(
+    () => (signedIn ? fetchMyTickets().then((p) => heldTicketEvents(p.items)).catch(() => new Set<string>()) : Promise.resolve(new Set<string>())),
+    [signedIn],
+  );
+  if (status === "loading") return null;
+  return { signedIn, held: mine.status === "ok" ? mine.data : new Set<string>() };
+}
+
+function EventList({ events, prices, label, viewer }: { events: EventRecord[]; prices: Record<string, Price>; label: string; viewer: Viewer }) {
   return (
     <ul aria-label={label}>
       {events.map((event) => (
-        <EventRow key={event.id} event={event} price={prices[event.id]} />
+        <EventRow
+          key={event.id}
+          event={event}
+          price={prices[event.id]}
+          ticket={viewer ? eventTicketAction(viewer.signedIn, Boolean(prices[event.id]), viewer.held.has(event.id)) : null}
+        />
       ))}
     </ul>
   );
@@ -34,6 +56,7 @@ export default function WhatsOnPage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [more, setMore] = useState<"idle" | "loading" | "error">("idle");
   const [prices, setPrices] = useState<Record<string, Price>>({});
+  const viewer = useViewer();
 
   // A fresh first page (load or retry) starts the list again. Keyed to the page itself: the
   // useAsync result is a new object on every render.
@@ -112,7 +135,7 @@ export default function WhatsOnPage() {
                 <h2 id={`m-${group.label}`} className="cr-eyebrow border-b border-line pb-3 text-[0.75rem] text-highlight">
                   {group.label}
                 </h2>
-                <EventList events={group.events} prices={prices} label={`Events in ${group.label}`} />
+                <EventList events={group.events} prices={prices} label={`Events in ${group.label}`} viewer={viewer} />
               </Reveal>
             ))}
             {cursor ? (
@@ -132,7 +155,7 @@ export default function WhatsOnPage() {
                 <h2 id="whats-on-past" className="cr-eyebrow border-b border-line pb-3 text-[0.75rem] text-fg-muted">
                   Past
                 </h2>
-                <EventList events={past} prices={{}} label="Past events" />
+                <EventList events={past} prices={{}} label="Past events" viewer={viewer} />
               </Reveal>
             ) : null}
           </div>

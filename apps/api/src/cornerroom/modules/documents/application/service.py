@@ -27,6 +27,29 @@ class DocumentService:
         self.storage = get_storage(settings)
         self.audit = AuditService(session)
 
+    async def _assert_media_staff(self, ctx: AuthContext) -> None:
+        """Simple uploads are for staff who make media in their workspace (campaign, catalog or
+        event write). Fans and artists upload only through checked intents for a named target."""
+        from cornerroom.infra.errors import ForbiddenError
+        from cornerroom.modules.authorization.application.service import AuthorizationService
+
+        if ctx.organization_id is None:
+            raise AppError("WORKSPACE_REQUIRED", "An active organization is required", 409)
+        authz = AuthorizationService(self.session)
+        for permission in ("campaign.write", "music.write", "event.write"):
+            try:
+                await authz.authorize(
+                    ctx.user_id,
+                    permission,
+                    resource_type="organization",
+                    resource_id=ctx.organization_id,
+                    scope_organization_id=ctx.organization_id,
+                )
+                return
+            except ForbiddenError:
+                continue
+        raise ForbiddenError("Missing permission to upload media")
+
     async def create_upload_session(
         self,
         ctx: AuthContext,
@@ -45,6 +68,7 @@ class DocumentService:
                 f"Phase 0 accepts: {sorted(ALLOWED_UPLOAD_CLASSES)}",
             )
         assert_storage_class_allowed(storage_class, self.settings)
+        await self._assert_media_staff(ctx)
         asset_id = new_asset_id()
         object_key = build_object_key(storage_class, asset_id, filename)
         asset = MediaAsset(

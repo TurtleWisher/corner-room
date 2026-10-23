@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
@@ -17,9 +19,11 @@ export function monogram(name: string): string {
  */
 export function Avatar({ name, src, size = 40, className }: { name: string; src?: string | null; size?: number; className?: string }) {
   const style = { width: size, height: size, fontSize: Math.round(size * 0.38) };
-  if (src) {
+  // A picture that fails (none yet, or an expired signed link) falls back to the monogram.
+  const [failed, setFailed] = React.useState<string | null>(null);
+  if (src && failed !== src) {
     // eslint-disable-next-line @next/next/no-img-element -- remote media host not decided (OD-05)
-    return <img src={src} alt={name} width={size} height={size} className={cn("object-cover", className)} style={style} />;
+    return <img src={src} alt={name} width={size} height={size} className={cn("shrink-0 object-cover", className)} style={style} onError={() => setFailed(src)} />;
   }
   return (
     <span

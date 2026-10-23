@@ -115,3 +115,24 @@ export function splitPast(events: EventRecord[], now: Date = new Date()): { curr
   past.sort((a, b) => Date.parse(b.starts_at ?? "") - Date.parse(a.starts_at ?? ""));
   return { current, past };
 }
+
+/** Tickets that count as "you have a ticket" for an event: paid, valid or already used. */
+const HELD_TICKET = new Set(["PAID", "ISSUED", "CHECKED_IN"]);
+
+/** The events this customer holds a ticket for (from GET /me/tickets). */
+export function heldTicketEvents(tickets: { event_id?: string | null; status: string }[]): Set<string> {
+  return new Set(tickets.filter((t) => t.event_id && HELD_TICKET.has(t.status)).map((t) => t.event_id as string));
+}
+
+export type EventTicketAction = "sign_in" | "locked" | "held" | null;
+
+/**
+ * The button on an event row (owner, 2026-10-24): visitors see "Sign in"; signed-in people
+ * without a ticket see a lock that opens the event's tickets; people with a ticket see theirs.
+ * Only while tickets are on sale (a known lowest price); otherwise the row has no button.
+ */
+export function eventTicketAction(signedIn: boolean, onSale: boolean, holdsTicket: boolean): EventTicketAction {
+  if (signedIn && holdsTicket) return "held";
+  if (!onSale) return null;
+  return signedIn ? "locked" : "sign_in";
+}

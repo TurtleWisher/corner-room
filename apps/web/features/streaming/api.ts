@@ -86,8 +86,10 @@ export type ArtistPlayAggregates = {
   }>;
 };
 
-export async function fetchPlayableCatalog(): Promise<Page<PlayableTrackRecord>> {
-  return apiFetch<Page<PlayableTrackRecord>>("/api/v1/playback/catalog", { retry: false });
+/** Every released song with its length and playability. Public (owner, 2026-10-24); playing
+ * still needs an account and access. */
+export async function fetchPlayableCatalog(opts?: { skipAuth?: boolean }): Promise<Page<PlayableTrackRecord>> {
+  return apiFetch<Page<PlayableTrackRecord>>("/api/v1/playback/catalog", { retry: false, skipAuth: opts?.skipAuth });
 }
 
 export async function openListeningSession(track_id: string): Promise<ListeningSessionRecord> {

@@ -35,7 +35,7 @@ export function percent(received: number, total: number | null | undefined): num
 export const IN_PAGE_LIMIT_BYTES = 300_000_000;
 
 const ERRORS: Record<string, string> = {
-  DOWNLOAD_NOT_OWNED: "Downloads come with buying the song or its release. A plan lets you listen only.",
+  DOWNLOAD_NOT_OWNED: "Downloads come with buying the song or its release.",
   DOWNLOAD_PREPARING: "This download is still being prepared. Try again in a few minutes.",
   DOWNLOAD_SUPERSEDED: "This song was just updated. Start the download again.",
   TRACK_TAKEN_DOWN: "This song was removed and can no longer be downloaded.",

@@ -8,10 +8,9 @@ import { DateTime } from "@/components/ds/date-time";
 import { AccountPage } from "@/components/shell/account-page";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
-import { fetchMyEntitlements, fetchMyOrders, fetchMySubscriptions, fetchSubscriptionPlans, fetchTrack, type EntitlementRecord } from "@/lib/api";
+import { fetchMyEntitlements, fetchMyOrders, fetchRelease, fetchTrack, type EntitlementRecord } from "@/lib/api";
 import { humanizeStatus } from "@/lib/format/status";
 import { ENTITLEMENT_STATUS } from "@/lib/status-maps";
-import { planName } from "@/lib/store-view";
 
 const ENTITLEMENT_TYPE: Record<string, string> = {
   PURCHASE: "Bought",
@@ -23,26 +22,25 @@ const ENTITLEMENT_TYPE: Record<string, string> = {
 type Owned = { ent: EntitlementRecord; title: string; href: string | null; action: string | null };
 
 /**
- * Name each entitlement from what the API links it to: TRACK scope points at the track (its title);
- * a catalog purchase is the full catalog; a subscription points at the subscription (its plan).
+ * Name each entitlement from what the API links it to: TRACK scope points at the song, RELEASE at
+ * the release. Subscriptions and the whole-catalog pass are no longer sold (D-COMMERCE-01), but
+ * access bought before still shows here.
  */
 async function nameEntitlements(ents: EntitlementRecord[]): Promise<Owned[]> {
-  const subs = ents.some((e) => e.entitlement_type === "SUBSCRIPTION")
-    ? await Promise.all([fetchMySubscriptions().then((p) => p.items), fetchSubscriptionPlans().then((p) => p.items)]).catch(() => [[], []] as const)
-    : ([[], []] as const);
-  const [mySubs, plans] = subs;
   return Promise.all(
     ents.map(async (ent): Promise<Owned> => {
       if (ent.scope === "TRACK") {
         const track = await fetchTrack(ent.ref_id, { skipAuth: true }).catch(() => null);
         return { ent, title: track?.title ?? "Track", href: `/tracks/${ent.ref_id}`, action: "Listen" };
       }
-      if (ent.entitlement_type === "SUBSCRIPTION") {
-        const sub = mySubs.find((s) => s.id === ent.ref_id);
-        const plan = sub ? plans.find((p) => p.id === sub.plan_id) : undefined;
-        return { ent, title: plan ? planName(plan.key) : "Subscription", href: "/releases", action: "Listen" };
+      if (ent.scope === "RELEASE") {
+        const release = await fetchRelease(ent.ref_id, { skipAuth: true }).catch(() => null);
+        return { ent, title: release?.title ?? "Release", href: `/releases/${ent.ref_id}`, action: "Listen" };
       }
-      return { ent, title: "Full catalog", href: "/releases", action: "Listen" };
+      if (ent.entitlement_type === "SUBSCRIPTION") {
+        return { ent, title: "Subscription (no longer sold)", href: "/subscriptions", action: "See it" };
+      }
+      return { ent, title: "Full catalog (no longer sold)", href: "/releases", action: "Listen" };
     }),
   );
 }
@@ -64,7 +62,7 @@ function Purchases() {
           What you own
         </h2>
         {owned.length === 0 ? (
-          <EmptyState title="Nothing here yet" body="Music you buy or unlock with a plan shows up here." action={<ButtonLink href="/store" size="sm">Go to the Store</ButtonLink>} />
+          <EmptyState title="Nothing here yet" body="Songs and releases you buy show up here." action={<ButtonLink href="/store" size="sm">Go to the Store</ButtonLink>} />
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {owned.map(({ ent, title, href, action }) => (

@@ -29,7 +29,7 @@ describe("GoogleButton (DOM)", () => {
   it("drops an off-site next path", () => {
     render(<GoogleButton next="//evil.example" />);
     const href = screen.getByRole("link").getAttribute("href")!;
-    expect(new URL(href).searchParams.get("next")).toBe("/account");
+    expect(new URL(href).searchParams.get("next")).toBe("/#welcome");
   });
 
   it("shows progress after the first click and ignores a second one", async () => {

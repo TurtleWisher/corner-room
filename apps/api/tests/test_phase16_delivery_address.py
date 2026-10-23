@@ -92,14 +92,3 @@ async def test_phase16_no_payment_without_a_confirmed_address(client: AsyncClien
     assert (await client.put("/api/v1/me/delivery-address", headers=bearer(buyer), json=moved)).status_code == 200
     again = (await client.get(f"/api/v1/orders/{placed.json()['id']}", headers=bearer(buyer))).json()
     assert again["delivery_address"]["area"] == "Kalabagan" and again["delivery_address"]["district"] == "Dhaka"
-
-    # Subscriptions follow the same rule.
-    other = (await register_and_login(client, "address-sub@example.com", delivery_address=False))["access_token"]
-    plans = (await client.get("/api/v1/subscription-plans")).json()
-    if plans.get("items"):
-        refused = await client.post(
-            "/api/v1/subscriptions",
-            headers={**bearer(other), "Idempotency-Key": "addr-sub"},
-            json={"plan_id": plans["items"][0]["id"], "delivery_address_confirmed": True},
-        )
-        assert refused.status_code == 409 and refused.json()["code"] == "DELIVERY_ADDRESS_REQUIRED"

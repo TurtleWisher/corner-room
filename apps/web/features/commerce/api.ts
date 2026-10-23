@@ -1,7 +1,6 @@
-/* Offers, products, plans, subscriptions and entitlements. Split from lib/api.ts (Phase 16, Stage 5). */
+/* Offers, products, old subscriptions and entitlements (no plans or whole-catalog pass, D-COMMERCE-01). Split from lib/api.ts (Phase 16, Stage 5). */
 
 import { type Page } from "@/features/identity/api";
-import { type OrderRecord } from "@/features/ticketing/api";
 import { apiFetch } from "@/lib/api/client";
 
 export type OfferRecord = {
@@ -30,18 +29,6 @@ export type ProductRecord = {
   version: number;
 };
 
-export type PlanRecord = {
-  id: string;
-  key: string;
-  status: string;
-  price_amount_minor: number;
-  currency_code: string;
-  interval: string;
-  interval_count: number;
-  trial_days: number | null;
-  version_number: number | null;
-};
-
 export type SubscriptionRecord = {
   id: string;
   plan_id: string;
@@ -62,23 +49,6 @@ export type EntitlementRecord = {
 
 export async function fetchOffers(): Promise<Page<OfferRecord>> {
   return apiFetch<Page<OfferRecord>>("/api/v1/offers", { retry: false, skipAuth: true, skipRefresh: true });
-}
-
-export async function fetchSubscriptionPlans(): Promise<Page<PlanRecord>> {
-  return apiFetch<Page<PlanRecord>>("/api/v1/subscription-plans", {
-    retry: false,
-    skipAuth: true,
-    skipRefresh: true,
-  });
-}
-
-export async function createSubscriptionOrder(plan_id: string, idempotencyKey: string, deliveryConfirmed = false): Promise<OrderRecord> {
-  return apiFetch<OrderRecord>("/api/v1/subscriptions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-    body: JSON.stringify({ plan_id, delivery_address_confirmed: deliveryConfirmed }),
-    retry: false,
-  });
 }
 
 export async function fetchMySubscription(): Promise<SubscriptionRecord> {
@@ -137,10 +107,6 @@ export async function decideOfferProposal(id: string, decision: "accept" | "coun
   });
 }
 
-export async function fetchStaffPlans(): Promise<Page<PlanRecord>> {
-  return apiFetch<Page<PlanRecord>>("/api/v1/staff/subscription-plans", { retry: false });
-}
-
 export async function createProduct(body: {
   product_type: string;
   subject_id: string;
@@ -181,31 +147,6 @@ export async function transitionOffer(id: string, action: string, version?: numb
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, version }),
-    retry: false,
-  });
-}
-
-export async function createPlan(body: {
-  key: string;
-  price_amount_minor: number;
-  currency_code: string;
-  interval: string;
-  interval_count: number;
-  trial_days?: number | null;
-}): Promise<PlanRecord> {
-  return apiFetch<PlanRecord>("/api/v1/subscription-plans", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    retry: false,
-  });
-}
-
-export async function transitionPlan(id: string, action: string): Promise<PlanRecord> {
-  return apiFetch<PlanRecord>(`/api/v1/subscription-plans/${id}/lifecycle`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action }),
     retry: false,
   });
 }

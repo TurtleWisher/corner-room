@@ -231,3 +231,44 @@ class Follow(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, B
     target_type: Mapped[str] = mapped_column(String(16), nullable=False)
     target_id: Mapped[UUID] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="ACTIVE")
+
+
+class ProfileChangeRequest(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
+    """What an artist or band admin asked to change on their public profile (owner, 2026-10-23:
+    staff approve a new name, bio or picture before the public sees it).
+
+    One PENDING request per profile; saving again updates it. A field left as None/False means
+    "keep what is there". Staff approve (the change is applied) or reject (with a note the artist
+    sees); the asker may withdraw. Rows are kept as history.
+    """
+
+    __tablename__ = "profile_change_requests"
+    __table_args__ = (
+        CheckConstraint("profile_type IN ('artist','band')", name="profile_type"),
+        CheckConstraint("status IN ('PENDING','APPROVED','REJECTED','WITHDRAWN')", name="status"),
+        Index("ix_profile_change_requests_profile", "profile_type", "profile_id"),
+        Index("ix_profile_change_requests_status", "status"),
+        Index(
+            "uq_profile_change_requests_open",
+            "profile_type",
+            "profile_id",
+            unique=True,
+            postgresql_where=text("status = 'PENDING'"),
+        ),
+        {"schema": "artists"},
+    )
+
+    profile_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    profile_id: Mapped[UUID] = mapped_column(nullable=False)
+    organization_id: Mapped[UUID | None] = mapped_column(ForeignKey("identity.organizations.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
+    stage_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bio_changed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+    portrait_asset_id: Mapped[UUID | None] = mapped_column(ForeignKey("documents.media_assets.id"), nullable=True)
+    remove_portrait: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+    requested_by: Mapped[UUID] = mapped_column(ForeignKey("identity.users.id"), nullable=False)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reviewed_by: Mapped[UUID | None] = mapped_column(ForeignKey("identity.users.id"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)

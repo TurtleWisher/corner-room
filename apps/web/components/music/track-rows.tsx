@@ -86,7 +86,7 @@ export function TrackRows({
             </div>
             <div className="flex items-center gap-2">
               {item.extra}
-              {state.kind !== "unavailable" ? <TrackBuyControl track={{ id: item.trackId, title, artist }} commerce={commerce} showPlan={false} playFrom={{ queue, source: label }} /> : null}
+              {state.kind !== "unavailable" ? <TrackBuyControl track={{ id: item.trackId, title, artist }} commerce={commerce} playFrom={{ queue, source: label }} /> : null}
             </div>
           </li>
         );

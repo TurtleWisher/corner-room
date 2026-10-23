@@ -19,6 +19,9 @@ say() { printf '\n== %s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 [ -f "$ENV_FILE" ] || die "$ENV_FILE is missing (copy deploy/env.production.example and fill it in)."
+if grep -nE '^[A-Z_]+=.*CHANGE_ME' "$ENV_FILE" | cut -d= -f1; then
+  die "$ENV_FILE still has CHANGE_ME values (listed above). Fill them in first."
+fi
 [ -z "$(git status --porcelain --untracked-files=no)" ] || die "The server copy has local edits. Changes go through GitHub, not the server."
 
 PREVIOUS_RELEASE="$(cat "$STATE_FILE" 2>/dev/null || true)"

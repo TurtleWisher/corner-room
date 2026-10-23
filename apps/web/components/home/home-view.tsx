@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { ArrowRight, LayoutGrid, Library, ListMusic, Receipt, Ticket, type LucideIcon } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -285,6 +286,13 @@ function ServiceStatus() {
 
 export function HomeView() {
   const events = useAsync(() => fetchPublicEvents().then((p) => p.items), []);
+  // Arriving at "/#welcome" after sign-in: Next's own hash scroll leaves the panel under the
+  // sticky header (measured 2026-10-23), so line it up again once the page has its content.
+  useEffect(() => {
+    if (events.status !== "loading" && window.location.hash === "#welcome") {
+      document.getElementById("welcome")?.scrollIntoView();
+    }
+  }, [events.status]);
   return (
     <main id="main" data-theme="ember" data-module="home" className="cr-scope">
       <LitSurface as="section" theme="ember" aria-labelledby="home-title">
@@ -320,7 +328,10 @@ export function HomeView() {
       </LitSurface>
 
       <div className="mx-auto max-w-[90rem] space-y-16 px-4 py-14 md:px-6">
-        <YouPanel />
+        {/* Sign-in lands here ("/#welcome", HOME_WELCOME). The wrapper exists while the panel loads. */}
+        <div id="welcome" className="scroll-mt-24">
+          <YouPanel />
+        </div>
         <Upcoming state={events} />
       </div>
 

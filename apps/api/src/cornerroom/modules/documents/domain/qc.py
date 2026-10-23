@@ -107,8 +107,10 @@ def playback_gain_db(integrated_lufs: float | None, true_peak_dbtp: float | None
 
 def cover_findings(
     *, fmt: str | None, width: int | None, height: int | None, mode: str | None, byte_size: int,
-    max_bytes: int, min_px: int, max_px: int,
+    max_bytes: int, min_px: int, max_px: int, recommended_px: int | None = 3000,
 ) -> list[Finding]:
+    """Artwork checks. Covers and posters recommend 3000 px; profile pictures pass
+    `recommended_px=None` (no recommendation) and their own `min_px`."""
     out: list[Finding] = []
     if byte_size > max_bytes:
         out.append(Finding("FILE_TOO_LARGE", BLOCK, str(byte_size), str(max_bytes)))
@@ -126,8 +128,8 @@ def cover_findings(
         out.append(Finding("COVER_TOO_LARGE", BLOCK, f"{width}x{height}", f"{max_px} px"))
     if mode not in {"RGB", "RGBA", "L", "P"}:
         out.append(Finding("COVER_COLOR_MODE", BLOCK, mode or "unknown", "RGB"))
-    elif width < 3000:
-        out.append(Finding("COVER_BELOW_RECOMMENDED", WARN, f"{width} px", "3000 px"))
+    elif recommended_px is not None and width < recommended_px:
+        out.append(Finding("COVER_BELOW_RECOMMENDED", WARN, f"{width} px", f"{recommended_px} px"))
     return out
 
 

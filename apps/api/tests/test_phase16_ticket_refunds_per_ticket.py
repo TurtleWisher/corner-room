@@ -161,5 +161,29 @@ async def test_phase16_refund_screen_is_hidden_from_another_label(client: AsyncC
         json={"order_id": order["id"], "ticket_ids": [ticket_id], "reason_code": "CUSTOMER_REQUEST"},
     )
     assert refused.status_code == 404
+    by_payment = await client.post(
+        "/api/v1/refunds",
+        headers={**bearer(other_token), "Idempotency-Key": "hid-p"},
+        json={"payment_id": order["payment"]["id"], "amount_minor": 100, "reason_code": "CUSTOMER_REQUEST"},
+    )
+    assert by_payment.status_code == 404
+
+    # A refund the order's own label asked for can't be approved or completed from another label.
+    asked = await client.post(
+        "/api/v1/refunds",
+        headers={**bearer(staff), "Idempotency-Key": "hid-own"},
+        json={"order_id": order["id"], "ticket_ids": [ticket_id], "reason_code": "CUSTOMER_REQUEST"},
+    )
+    assert asked.status_code == 201, asked.text
+    refund_id = asked.json()["id"]
+    assert (await client.get("/api/v1/staff/refunds", headers=bearer(other_token))).json() == []
+    assert (await client.post(f"/api/v1/refunds/{refund_id}/approve", headers=bearer(other_token))).status_code == 404
+    assert (await client.post(f"/api/v1/refunds/{refund_id}/approve", headers=bearer(staff))).status_code == 200
+    assert (await client.post(f"/api/v1/refunds/{refund_id}/sandbox-complete", headers=bearer(other_token))).status_code == 404
+    manual = await client.post(
+        f"/api/v1/refunds/{refund_id}/complete-manual", headers=bearer(other_token), json={"payout_reference": "TRX-123456"}
+    )
+    assert manual.status_code == 404
+    assert (await client.post(f"/api/v1/refunds/{refund_id}/sandbox-complete", headers=bearer(staff))).status_code == 200
     bad = await client.get("/api/v1/staff/orders/lookup", params={"reference": "CR-NOTHEX!"}, headers=bearer(staff))
     assert bad.status_code == 422

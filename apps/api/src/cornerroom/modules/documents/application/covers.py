@@ -86,6 +86,17 @@ class CoverService:
             return None
         return event.cover_asset_id
 
+    async def public_profile_picture(self, kind: str, profile_id: UUID) -> UUID | None:
+        """An active artist's or band's approved picture (same visibility as the public profile)."""
+        from cornerroom.modules.artists.domain.lifecycle import PUBLIC_ARTIST_STATUSES, PUBLIC_BAND_STATUSES
+        from cornerroom.modules.artists.domain.models import Artist, Band
+
+        row = await self.session.get(Artist if kind == "artist" else Band, profile_id)
+        public = PUBLIC_ARTIST_STATUSES if kind == "artist" else PUBLIC_BAND_STATUSES
+        if row is None or row.deleted_at is not None or row.status not in public:
+            return None
+        return row.portrait_asset_id
+
     # --- signed links for unreleased covers ----------------------------------------------------
 
     def signed_path(self, asset_id: UUID, size: int = 480, *, now: datetime | None = None) -> str:

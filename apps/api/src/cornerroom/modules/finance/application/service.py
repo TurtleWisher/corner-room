@@ -368,11 +368,25 @@ class PaymentService:
         )
         return row
 
-    async def approve_refund(self, ctx: AuthContext, refund_id: UUID) -> Refund:
+    async def _authorize_refund_staff(self, ctx: AuthContext, organization_id: UUID | None) -> None:
+        """finance.post in the order's label (the caller resolved it, D-PAY-01); without a label only
+        an unscoped grant passes."""
         from cornerroom.modules.authorization.application.service import AuthorizationService
 
         authz = AuthorizationService(self.session, clock=self.clock)
-        await authz.authorize(ctx.user_id, "finance.post")
+        if organization_id is None:
+            await authz.authorize(ctx.user_id, "finance.post")
+            return
+        await authz.authorize(
+            ctx.user_id,
+            "finance.post",
+            resource_type="organization",
+            resource_id=organization_id,
+            scope_organization_id=organization_id,
+        )
+
+    async def approve_refund(self, ctx: AuthContext, refund_id: UUID, *, organization_id: UUID | None = None) -> Refund:
+        await self._authorize_refund_staff(ctx, organization_id)
         row = await self.session.get(Refund, refund_id)
         if row is None:
             raise NotFoundError("Refund not found")
@@ -393,12 +407,11 @@ class PaymentService:
         )
         return row
 
-    async def complete_sandbox_refund(self, ctx: AuthContext, refund_id: UUID) -> Refund:
+    async def complete_sandbox_refund(
+        self, ctx: AuthContext, refund_id: UUID, *, organization_id: UUID | None = None
+    ) -> Refund:
         """Marks COMPLETED in-process. Not a production PSP payout."""
-        from cornerroom.modules.authorization.application.service import AuthorizationService
-
-        authz = AuthorizationService(self.session, clock=self.clock)
-        await authz.authorize(ctx.user_id, "finance.post")
+        await self._authorize_refund_staff(ctx, organization_id)
         row = await self.session.get(Refund, refund_id)
         if row is None:
             raise NotFoundError("Refund not found")
@@ -443,13 +456,13 @@ class PaymentService:
         await RecognitionService(self.session, clock=self.clock).reverse_refund(ctx, row)
         return row
 
-    async def complete_manual_refund(self, ctx: AuthContext, refund_id: UUID, *, payout_reference: str) -> Refund:
+    async def complete_manual_refund(
+        self, ctx: AuthContext, refund_id: UUID, *, payout_reference: str, organization_id: UUID | None = None
+    ) -> Refund:
         """Bangla QR (Q-PAY-01): money is paid back by hand from the merchant account. Finance marks
         the approved refund complete with the reference of that transfer; the same reversal and
         RefundCompleted follow as for any refund. Sandbox payments use `complete_sandbox_refund`."""
-        from cornerroom.modules.authorization.application.service import AuthorizationService
-
-        await AuthorizationService(self.session, clock=self.clock).authorize(ctx.user_id, "finance.post")
+        await self._authorize_refund_staff(ctx, organization_id)
         reference = " ".join((payout_reference or "").split())
         if not 4 <= len(reference) <= 80:
             raise AppError("VALIDATION_ERROR", "Enter the reference of the transfer you sent back", 422, extras={"field": "payout_reference"})

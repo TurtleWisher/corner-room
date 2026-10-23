@@ -625,6 +625,37 @@ class IdentityService:
         )
         return profile
 
+    async def remove_avatar(self, ctx: AuthContext) -> CustomerProfile:
+        profile = await self._get_profile(ctx.user_id)
+        if profile is None:
+            raise NotFoundError("Customer profile not found")
+        if profile.avatar_asset_id is not None:
+            previous = str(profile.avatar_asset_id)
+            profile.avatar_asset_id = None
+            profile.updated_by = ctx.user_id
+            await self.session.flush()
+            await self.audit.record_from_auth(
+                ctx, action="customer_profile.avatar_removed", entity_type="CustomerProfile",
+                entity_id=profile.id, previous_state={"avatar_asset_id": previous}, new_state={"avatar_asset_id": None},
+            )
+        return profile
+
+    async def system_attach_avatar(self, user_id: UUID, asset_id: UUID) -> None:
+        """Worker: the fan's new picture passed the checks; it is theirs at once (owner,
+        2026-10-23). Only they see it, through a signed link."""
+        profile = await self._get_profile(user_id)
+        if profile is None:
+            return
+        previous = str(profile.avatar_asset_id) if profile.avatar_asset_id else None
+        profile.avatar_asset_id = asset_id
+        profile.updated_by = user_id
+        await self.session.flush()
+        await self.audit.record(
+            action="customer_profile.avatar_changed", entity_type="CustomerProfile", entity_id=profile.id,
+            actor_id=str(user_id), previous_state={"avatar_asset_id": previous},
+            new_state={"avatar_asset_id": str(asset_id)},
+        )
+
     async def change_password(
         self,
         ctx: AuthContext,

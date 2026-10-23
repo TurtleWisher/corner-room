@@ -12,26 +12,16 @@ import { CircleAlert, CloudUpload, FileAudio, ImageIcon, RotateCcw, X } from "lu
 
 import { Button } from "@/components/ds";
 import { ApiError } from "@/lib/api/client";
+import { sendUpload } from "@/features/uploads/send";
 import {
   cancelUpload,
-  completeUpload,
-  createUploadIntent,
   findOpenUpload,
-  putUploadPart,
   type UploadCompleteRecord,
   type UploadIntentRecord,
   type UploadPurpose,
   type UploadTargetType,
 } from "@/features/uploads/api";
-import {
-  bytesReceived,
-  formatBytes,
-  partsToSend,
-  percent,
-  planParts,
-  preCheckFile,
-  uploadErrorText,
-} from "@/lib/upload-view";
+import { bytesReceived, formatBytes, percent, planParts, preCheckFile, uploadErrorText } from "@/lib/upload-view";
 
 const MAX_BYTES: Record<UploadPurpose, number> = {
   AUDIO_MASTER: 2 * 1024 * 1024 * 1024,
@@ -54,22 +44,6 @@ type Phase =
   | { kind: "finishing" }
   | { kind: "done"; result: UploadCompleteRecord }
   | { kind: "error"; message: string };
-
-/** Blob.arrayBuffer() where available; FileReader on older browsers (Safari before 14). */
-function readSlice(blob: Blob): Promise<ArrayBuffer> {
-  if (typeof blob.arrayBuffer === "function") return blob.arrayBuffer();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as ArrayBuffer);
-    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
-    reader.readAsArrayBuffer(blob);
-  });
-}
-
-async function sha256Hex(data: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
-}
 
 export function UploadCard({
   purpose,
@@ -108,26 +82,17 @@ export function UploadCard({
     }
     cancelled.current = false;
     try {
-      const intent = await createUploadIntent({
+      const result = await sendUpload({
+        file,
         purpose,
-        target_type: targetType,
-        target_id: targetId,
-        filename: file.name,
-        byte_size: file.size,
+        targetType,
+        targetId,
+        onOpened: setOpen,
+        onProgress: (sent, total) => setPhase({ kind: "sending", sent, total }),
+        onFinishing: () => setPhase({ kind: "finishing" }),
+        isCancelled: () => cancelled.current,
       });
-      setOpen(intent);
-      const plan = planParts(file.size, intent.part_size);
-      let sent = bytesReceived(plan, intent.parts_received);
-      setPhase({ kind: "sending", sent, total: file.size });
-      for (const part of partsToSend(plan, intent.parts_received)) {
-        if (cancelled.current) return;
-        const data = await readSlice(file.slice(part.start, part.end));
-        await putUploadPart(intent.id, part.number, data, await sha256Hex(data));
-        sent += part.end - part.start;
-        setPhase({ kind: "sending", sent, total: file.size });
-      }
-      setPhase({ kind: "finishing" });
-      const result = await completeUpload(intent.id);
+      if (!result) return;
       setOpen(null);
       setPhase({ kind: "done", result });
       onCompleted?.(result);

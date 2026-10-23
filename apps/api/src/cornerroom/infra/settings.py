@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     media_cover_max_bytes: int = 20 * 1024 * 1024
     media_cover_min_px: int = 1400
     media_cover_max_px: int = 6000
+    # Profile pictures (owner, 2026-10-23): square JPEG or PNG, at least 400 px, same file size cap.
+    media_portrait_min_px: int = 400
     upload_part_size_bytes: int = 8 * 1024 * 1024
     upload_intent_ttl_seconds: int = 86400
     upload_max_open_intents: int = 20

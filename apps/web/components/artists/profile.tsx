@@ -25,12 +25,13 @@ import {
   unfollowArtist,
   type BandMemberRecord,
 } from "@/lib/api";
+import { coverUrl } from "@/lib/cover-view";
 import { friendlyError } from "@/lib/error-copy";
 import { humanizeStatus } from "@/lib/format/status";
 import { sortReleases } from "@/lib/music-view";
 
 type Kind = "artist" | "band";
-type Entity = { id: string; name: string; bio: string | null; status: string; version?: number };
+type Entity = { id: string; name: string; bio: string | null; status: string; version?: number; picture?: string | null };
 
 const ACTIONS: Record<Kind, string[]> = {
   artist: ["start_review", "approve", "activate", "begin_contract", "mark_signed", "suspend", "terminate"],
@@ -157,7 +158,8 @@ function FollowButton({ artistId }: { artistId: string }) {
 /**
  * Artist and band profiles (artists.md "Liner Notes"): stage-name masthead on Ember, the bio as a
  * Paper reading band, and their releases (the public release list filtered to them; OD-24 asks
- * for a dedicated endpoint). Portraits are monograms until media can be served (OD-05).
+ * for a dedicated endpoint). The approved picture shows when there is one (owner, 2026-10-23), else
+ * the monogram.
  */
 export function ProfilePage({ kind, id }: { kind: Kind; id: string }) {
   const { status } = useAuth();
@@ -167,8 +169,8 @@ export function ProfilePage({ kind, id }: { kind: Kind; id: string }) {
     const opts = { skipAuth: !signedIn };
     const entity: Entity =
       kind === "artist"
-        ? await fetchArtist(id, opts).then((a) => ({ id: a.id, name: a.stage_name, bio: a.bio, status: a.status, version: a.version }))
-        : await fetchBand(id, opts).then((b) => ({ id: b.id, name: b.name, bio: b.bio, status: b.status, version: b.version }));
+        ? await fetchArtist(id, opts).then((a) => ({ id: a.id, name: a.stage_name, bio: a.bio, status: a.status, version: a.version, picture: a.portrait_asset_id }))
+        : await fetchBand(id, opts).then((b) => ({ id: b.id, name: b.name, bio: b.bio, status: b.status, version: b.version, picture: b.portrait_asset_id }));
     const releases = await fetchReleases({ skipAuth: true })
       .then((p) => sortReleases(p.items.filter((r) => (kind === "artist" ? r.primary_artist_id === id : r.primary_band_id === id))))
       .catch(() => []);
@@ -202,7 +204,11 @@ export function ProfilePage({ kind, id }: { kind: Kind; id: string }) {
     <main id="main" data-theme="ember" data-module="artists" className="cr-scope">
       <LitSurface as="section" theme="ember" aria-labelledby="profile-title">
         <div className="mx-auto flex max-w-[90rem] flex-col gap-8 px-4 py-12 md:flex-row md:items-end md:px-6 md:py-20">
-          <Avatar name={entity.name} size={160} />
+          <Avatar
+            name={entity.name}
+            src={coverUrl(kind === "artist" ? { artist: entity.id, picture: entity.picture } : { band: entity.id, picture: entity.picture })}
+            size={160}
+          />
           <div>
             <Eyebrow>{kind === "artist" ? "Artist" : "Band"} · Corner Room label</Eyebrow>
             <Display as="h1" id="profile-title" size="xl" className="mt-4">

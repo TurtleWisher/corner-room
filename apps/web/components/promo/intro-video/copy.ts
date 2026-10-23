@@ -27,7 +27,7 @@ export const INTRO_COPY = {
     number: s("02", "/"),
     eyebrow: s("Listening room", "/listen"),
     title: s("Listen", "/listen"),
-    lede: s("Play what you own. Buy a track to keep it, or unlock everything with a plan.", "/listen"),
+    lede: s("Play what you own. Buy songs and releases from the artists to keep them.", "/listen"),
   },
 
   yours: {

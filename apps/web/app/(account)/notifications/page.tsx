@@ -26,7 +26,7 @@ function Feed() {
   const [failed, setFailed] = useState<string | null>(null);
   if (loading && items.length === 0) return <Skeleton className="h-40 w-full" />;
   if (error) return <ErrorState title="Notifications unavailable" message={error} action={<RetryButton onClick={() => void reload()} />} />;
-  if (items.length === 0) return <EmptyState title="No notifications yet" body="Updates about your tickets, purchases and plan appear here." />;
+  if (items.length === 0) return <EmptyState title="No notifications yet" body="Updates about your tickets and purchases appear here." />;
   return (
     <>
       {failed ? (

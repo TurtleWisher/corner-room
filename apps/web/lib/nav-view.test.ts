@@ -57,7 +57,7 @@ describe("menuSections", () => {
     // An artist who is also staff: Studio, sales and royalties, workspaces, no apply.
     const both = menuSections(true, { isArtist: true, hasWorkspace: true });
     expect(both.find((x) => x.label === "You")?.items.map((i) => i.href)).toContain("/organizations");
-    expect(both.at(-1)?.items.map((i) => i.href)).toEqual(["/studio", "/studio/sales", "/royalties"]);
+    expect(both.at(-1)?.items.map((i) => i.href)).toEqual(["/studio", "/studio/profile", "/studio/sales", "/royalties"]);
   });
 });
 
@@ -95,11 +95,13 @@ describe("every pre-Stage 5 destination is still linked", () => {
     );
     const old = [
       "/search", "/organizations", "/events", "/staff/events", "/staff/venues", "/artists", "/bands", "/releases", "/tracks", "/listen",
-      "/store", "/purchases", "/subscriptions", "/library", "/playlists", "/history", "/tickets", "/orders",
+      "/store", "/purchases", "/library", "/playlists", "/history", "/tickets", "/orders",
       "/staff/commerce", "/royalties", "/staff/royalties", "/staff/finance", "/staff/campaigns", "/staff/analytics",
       "/staff/ops", "/staff/audit", "/staff/users", "/staff/organizations", "/account",
     ];
     for (const href of old) expect(linked).toContain(href);
+    // No subscriptions (D-COMMERCE-01): the old page stays for past subscribers, out of the menus.
+    expect(linked).not.toContain("/subscriptions");
   });
 });
 
@@ -109,6 +111,7 @@ describe("filterNavForUser", () => {
     expect(navFlagsFor({ is_artist: true })).toEqual({ isArtist: true, hasWorkspace: false });
     expect(filterNavForUser([{ href: "/studio", label: "Studio" }, { href: "/account", label: "Account" }], {})).toEqual([{ href: "/account", label: "Account" }]);
     expect(filterNavForUser([{ href: "/studio/sales", label: "Sales" }], {})).toEqual([]);
+    expect(filterNavForUser([{ href: "/studio/profile", label: "Profile" }], {})).toEqual([]);
     expect(activeHref("/studio/sales", ARTIST_NAV)).toBe("/studio/sales");
     expect(activeHref("/studio/releases/x", ARTIST_NAV)).toBe("/studio");
   });
@@ -116,7 +119,7 @@ describe("filterNavForUser", () => {
 
 describe("studioNavSections", () => {
   it("lists only real Studio places, with plays for artist profiles", () => {
-    expect(studioNavSections([]).map((s) => s.items.map((i) => i.href))).toEqual([["/studio", "/studio/sales", "/royalties"]]);
+    expect(studioNavSections([]).map((s) => s.items.map((i) => i.href))).toEqual([["/studio", "/studio/profile", "/studio/sales", "/royalties"]]);
     const both = studioNavSections([
       { kind: "artist", id: "a1", display_name: "Rumi" },
       { kind: "band", id: "b1", display_name: "Kaal Bela" },

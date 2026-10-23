@@ -66,19 +66,12 @@ describe("pickFeaturedEvent", () => {
 });
 
 describe("storeHighlights", () => {
-  const offer = (id: string, product_type: string, amount_minor: number, status = "ACTIVE", currency_code = "BDT") => ({ id, product_type, status, amount_minor, currency_code });
-  const plan = (id: string, price_amount_minor: number, status = "ACTIVE", currency_code = "BDT") => ({ id, status, price_amount_minor, currency_code });
+  const offer = (id: string, product_type: string, status = "ACTIVE") => ({ id, product_type, status, amount_minor: 50, currency_code: "BDT" });
 
-  it("shows the active catalog pass and the cheapest plan in the same currency", () => {
-    const out = storeHighlights([offer("t", "TRACK", 50), offer("pass", "CATALOG_ACCESS", 900)], [plan("big", 499), plan("small", 299), plan("usd", 1, "ACTIVE", "USD")]);
-    expect(out.pass?.id).toBe("pass");
-    expect(out.plan?.id).toBe("small");
-  });
-  it("never shows retired items, and shows nothing when the store is empty", () => {
-    expect(storeHighlights([offer("pass", "CATALOG_ACCESS", 900, "RETIRED")], [plan("p", 299, "RETIRED")])).toEqual({ pass: null, plan: null });
-    expect(storeHighlights([], [])).toEqual({ pass: null, plan: null });
-  });
-  it("still shows a plan when there is no pass", () => {
-    expect(storeHighlights([], [plan("p", 299)]).plan?.id).toBe("p");
+  it("shows up to two songs or releases on sale, never a pass or plan (D-COMMERCE-01)", () => {
+    const out = storeHighlights([offer("pass", "CATALOG_ACCESS"), offer("t1", "TRACK"), offer("old", "TRACK", "RETIRED"), offer("r1", "RELEASE"), offer("t2", "TRACK")]);
+    expect(out.map((o) => o.id)).toEqual(["t1", "r1"]);
+    expect(storeHighlights([offer("plan", "SUBSCRIPTION_PLAN")])).toEqual([]);
+    expect(storeHighlights([])).toEqual([]);
   });
 });

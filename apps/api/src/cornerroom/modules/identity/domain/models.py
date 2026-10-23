@@ -83,6 +83,8 @@ class CustomerProfile(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDelet
     display_name: Mapped[str] = mapped_column(String(200), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="ACTIVE")
     locale: Mapped[str] = mapped_column(String(8), nullable=False, default="en")
+    # The fan's own picture (owner, 2026-10-23); shown only to them, through a signed link.
+    avatar_asset_id: Mapped[UUID | None] = mapped_column(ForeignKey("documents.media_assets.id"), nullable=True)
 
 
 class Organization(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Base):

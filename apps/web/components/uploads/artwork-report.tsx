@@ -24,7 +24,7 @@ export function ArtworkReport({
 }: {
   /** The report endpoint for this release or event. */
   load: () => Promise<Report | null>;
-  noun?: "cover" | "poster";
+  noun?: "cover" | "poster" | "picture";
   refresh: number;
   onSettled?: () => void;
 }) {

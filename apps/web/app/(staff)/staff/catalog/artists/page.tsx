@@ -13,6 +13,7 @@ import { Check, CircleAlert, Copy } from "lucide-react";
 
 import { DateTime, StatusChip } from "@/components/ds";
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
+import { ProfileReviews } from "@/components/staff/profile-reviews";
 import { useWorkspace } from "@/components/workspace-provider";
 import {
   createJoinLink,
@@ -263,11 +264,12 @@ function Applications() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-semibold">Artist applications</h1>
+        <h1 className="text-xl font-semibold">Artists and profiles</h1>
         <p className="mt-1 text-sm text-fg-muted">
           People apply from the Artists page. Start a review, approve or reject, then activate the artist so they can publish from Studio.
         </p>
       </div>
+      <ProfileReviews />
       <JoinLinks />
       <h2 className="pt-2 text-lg font-semibold">Applications</h2>
       <div role="group" aria-label="Show" className="flex flex-wrap gap-2">

@@ -89,7 +89,7 @@ describe("safeNextPath", () => {
   });
   it("rejects anything that could leave the site", () => {
     for (const bad of ["//evil.test", "https://evil.test", "/\\evil.test", "javascript:alert(1)", "evil.test", "", null, undefined]) {
-      expect(safeNextPath(bad)).toBe("/account");
+      expect(safeNextPath(bad)).toBe("/#welcome");
     }
   });
 });

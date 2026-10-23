@@ -154,13 +154,13 @@ const COVER_ACCEPTED = new Set(["ACCEPTED", "READY"]);
  */
 export function coverReportState(
   r: { asset_status: string | null } | null | undefined,
-  noun: "cover" | "poster" = "cover",
+  noun: "cover" | "poster" | "picture" = "cover",
 ): {
   state: "none" | "checking" | "accepted" | "rejected";
   text: string;
 } {
   if (!r) return { state: "none", text: `No ${noun} uploaded yet.` };
   if (r.asset_status === "REJECTED") return { state: "rejected", text: `This ${noun} wasn't accepted. Fix what's listed below, then upload it again.` };
-  if (r.asset_status && COVER_ACCEPTED.has(r.asset_status)) return { state: "accepted", text: `${noun === "cover" ? "Cover" : "Poster"} accepted.` };
+  if (r.asset_status && COVER_ACCEPTED.has(r.asset_status)) return { state: "accepted", text: `${noun.charAt(0).toUpperCase()}${noun.slice(1)} accepted.` };
   return { state: "checking", text: "Checking your artwork…" };
 }

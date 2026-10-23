@@ -56,8 +56,9 @@ const FINDING_TEXT: Record<string, string> = {
   DUPLICATE_AUDIO: "This audio matches another track on Corner Room. A reviewer will check it.",
   COVER_FORMAT: "Use a JPEG or PNG image.",
   COVER_UNREADABLE: "The image couldn't be read. Export it again.",
-  COVER_NOT_SQUARE: "Cover art must be square.",
-  COVER_TOO_SMALL: "The image is smaller than 1400 × 1400 px.",
+  COVER_NOT_SQUARE: "The image must be square.",
+  // Covers and posters need 1400 px, profile pictures 400 px; the detail line shows the limit.
+  COVER_TOO_SMALL: "The image is too small.",
   COVER_TOO_LARGE: "The image is larger than 6000 × 6000 px.",
   COVER_COLOR_MODE: "Use an RGB image (not CMYK).",
   COVER_BELOW_RECOMMENDED: "Below the recommended 3000 × 3000 px; it may look soft on large screens.",

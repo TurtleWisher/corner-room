@@ -94,7 +94,7 @@ describe("player model", () => {
     expect(playProblem(new ApiError({ status: 403, code: "ENTITLEMENT_REQUIRED" }))).toEqual({ kind: "needs_access" });
     expect(playProblem(new ApiError({ status: 409, code: "TRACK_TAKEN_DOWN" }))).toEqual({ kind: "taken_down" });
     expect(playProblem(new Error("x"))).toEqual({ kind: "stopped" });
-    expect(problemMessage({ kind: "needs_access" })).toMatch(/Subscription required/);
+    expect(problemMessage({ kind: "needs_access" })).toMatch(/Buy this song/);
   });
 
   it("formats time and caps listened time at the media length", () => {

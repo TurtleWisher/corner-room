@@ -69,28 +69,6 @@ async def _active_offer(client: AsyncClient, token: str, track_id: str, amount: 
     return live.json()
 
 
-async def _active_plan(client: AsyncClient, token: str, key: str, amount: int = 900) -> dict:
-    created = await client.post(
-        "/api/v1/subscription-plans",
-        headers=bearer(token),
-        json={
-            "key": key,
-            "price_amount_minor": amount,
-            "currency_code": "USD",
-            "interval": "MONTH",
-            "interval_count": 1,
-        },
-    )
-    assert created.status_code == 201, created.text
-    live = await client.post(
-        f"/api/v1/subscription-plans/{created.json()['id']}/lifecycle",
-        headers=bearer(token),
-        json={"action": "activate"},
-    )
-    assert live.status_code == 200, live.text
-    return live.json()
-
-
 @pytest.mark.postgres
 @pytest.mark.asyncio
 async def test_phase09_order_payment_fulfillment_entitlement_idor(client: AsyncClient) -> None:
@@ -196,107 +174,72 @@ async def test_phase09_order_payment_fulfillment_entitlement_idor(client: AsyncC
     assert blocked.json()["code"] == "TRACK_TAKEN_DOWN"
 
 
+async def _old_catalog_offer(org_id: str, amount: int = 450) -> str:
+    """A whole-catalog pass on sale from before D-COMMERCE-01 (old rows stay in the database)."""
+    from uuid import UUID
+
+    from cornerroom.infra.db import get_session_factory
+    from cornerroom.modules.commerce.domain.models import Offer, Product
+
+    async with get_session_factory()() as session:
+        product = Product(
+            organization_id=UUID(org_id), product_type="CATALOG_ACCESS", subject_id=uuid4(), name="Full catalog", status="ACTIVE"
+        )
+        session.add(product)
+        await session.flush()
+        offer = Offer(
+            organization_id=UUID(org_id), product_id=product.id, amount_minor=amount, currency_code="BDT", status="ACTIVE", audience="EVERYONE"
+        )
+        session.add(offer)
+        await session.commit()
+        return str(offer.id)
+
+
 @pytest.mark.postgres
 @pytest.mark.asyncio
-async def test_phase09_subscription_lifecycle_renewal_fail_and_authz(client: AsyncClient, settings) -> None:
-    staff, _org = await _platform_admin(client)
-    plan = await _active_plan(client, staff, "p9-monthly")
-    fan = await register_and_login(client, "sub-fan@example.com")
-    other = await register_and_login(client, "sub-other@example.com")
+async def test_phase16_no_subscriptions_and_no_whole_catalog(client: AsyncClient) -> None:
+    """Owner, 2026-10-23 (D-COMMERCE-01): Corner Room sells songs and releases, never a subscription
+    or the whole catalog. New ones are refused; old rows stay but can't be bought."""
+    staff, org = await _platform_admin(client)
+    fan = await register_and_login(client, "no-subs@example.com")
     token = fan["access_token"]
 
-    created = await client.post(
-        "/api/v1/subscriptions",
-        headers={**bearer(token), "Idempotency-Key": "sub-1"},
-        json={"plan_id": plan["id"], "delivery_address_confirmed": True},
+    # Plans and subscribing are gone from the API.
+    assert (await client.get("/api/v1/subscription-plans")).status_code in {404, 405}
+    plan = {"key": "monthly", "price_amount_minor": 900, "currency_code": "BDT", "interval": "MONTH", "interval_count": 1}
+    assert (await client.post("/api/v1/subscription-plans", headers=bearer(staff), json=plan)).status_code in {404, 405}
+    assert (await client.get("/api/v1/staff/subscription-plans", headers=bearer(staff))).status_code in {404, 405}
+    subscribe = await client.post(
+        "/api/v1/subscriptions", headers={**bearer(token), "Idempotency-Key": "s1"}, json={"plan_id": str(uuid4())}
     )
-    assert created.status_code == 201, created.text
-    replay = await client.post(
-        "/api/v1/subscriptions",
-        headers={**bearer(token), "Idempotency-Key": "sub-1"},
-        json={"plan_id": plan["id"], "delivery_address_confirmed": True},
-    )
-    assert replay.json()["id"] == created.json()["id"]
+    assert subscribe.status_code in {404, 405}
+    # People who subscribed before can still see (and cancel) their own subscriptions.
+    assert (await client.get("/api/v1/me/subscriptions", headers=bearer(token))).status_code == 200
 
-    paid = await client.post(
-        f"/api/v1/payments/{created.json()['payment']['id']}/sandbox-confirm",
-        headers=bearer(token),
+    # No new whole-catalog passes or plan products, and no whole-catalog grants.
+    for product_type in ("CATALOG_ACCESS", "SUBSCRIPTION_PLAN"):
+        made = await client.post(
+            "/api/v1/products", headers=bearer(staff), json={"product_type": product_type, "subject_id": str(uuid4()), "name": "x"}
+        )
+        assert made.status_code == 422 and made.json()["code"] == "NOT_SOLD", made.text
+    fan_id = await _user_id(client, token)
+    grant = await client.post(
+        "/api/v1/entitlements/grants",
+        headers=bearer(staff),
+        json={"user_id": fan_id, "entitlement_type": "ADMIN_GRANT", "ref_id": str(uuid4()), "scope": "CATALOG"},
     )
-    assert paid.status_code == 200
-    assert paid.json()["status"] == "FULFILLED"
+    assert grant.status_code == 422 and grant.json()["code"] == "NOT_SOLD"
 
-    mine = await client.get("/api/v1/me/subscription", headers=bearer(token))
-    assert mine.status_code == 200, mine.text
-    assert mine.json()["status"] == "ACTIVE"
-    sub_id = mine.json()["id"]
-
-    stolen = await client.get(
-        f"/api/v1/subscriptions/{sub_id}",
-        headers=bearer(other["access_token"]),
+    # An old pass still in the database is hidden from the store and can't be bought.
+    offer_id = await _old_catalog_offer(org)
+    listed = (await client.get("/api/v1/offers")).json()["items"]
+    assert all(row["id"] != offer_id for row in listed)
+    bought = await client.post(
+        "/api/v1/orders",
+        headers={**bearer(token), "Idempotency-Key": "pass-1"},
+        json={"offer_id": offer_id, "delivery_address_confirmed": True},
     )
-    assert stolen.status_code == 404
-
-    second = await client.post(
-        "/api/v1/subscriptions",
-        headers={**bearer(token), "Idempotency-Key": "sub-2"},
-        json={"plan_id": plan["id"], "delivery_address_confirmed": True},
-    )
-    assert second.status_code == 409
-    assert second.json()["code"] == "SUBSCRIPTION_EXISTS"
-
-    cancelled = await client.post(
-        f"/api/v1/subscriptions/{sub_id}/cancel",
-        headers=bearer(token),
-    )
-    assert cancelled.status_code == 200
-    assert cancelled.json()["status"] == "CANCELLED"
-    assert cancelled.json()["cancel_at_period_end"] is True
-    ents = await client.get("/api/v1/me/entitlements", headers=bearer(token))
-    assert any(row["entitlement_type"] == "SUBSCRIPTION" and row["status"] == "ACTIVE" for row in ents.json()["items"])
-
-    fan2 = await register_and_login(client, "sub-fan2@example.com")
-    start2 = await client.post(
-        "/api/v1/subscriptions",
-        headers={**bearer(fan2["access_token"]), "Idempotency-Key": "sub-b"},
-        json={"plan_id": plan["id"], "delivery_address_confirmed": True},
-    )
-    assert start2.status_code == 201
-    paid2 = await client.post(
-        f"/api/v1/payments/{start2.json()['payment']['id']}/sandbox-confirm",
-        headers=bearer(fan2["access_token"]),
-    )
-    assert paid2.status_code == 200
-    live = await client.get("/api/v1/me/subscription", headers=bearer(fan2["access_token"]))
-    renew = await client.post(
-        f"/api/v1/subscriptions/{live.json()['id']}/sandbox-renew",
-        headers={**bearer(fan2["access_token"]), "Idempotency-Key": "renew-1"},
-        json={},
-    )
-    assert renew.status_code == 200, renew.text
-    renew_replay = await client.post(
-        f"/api/v1/subscriptions/{live.json()['id']}/sandbox-renew",
-        headers={**bearer(fan2["access_token"]), "Idempotency-Key": "renew-1"},
-        json={},
-    )
-    assert renew_replay.json()["id"] == renew.json()["id"]
-
-    fail_payload = {
-        "payment_id": renew.json()["payment"]["id"],
-        "amount_minor": renew.json()["payment"]["amount_minor"],
-        "currency_code": "USD",
-        "provider_event_id": "evt-fail-renew",
-        "status": "FAILED",
-    }
-    secret = settings.sandbox_payment_secret or settings.jwt_secret
-    signature = sign_sandbox_payload(fail_payload, secret)
-    failed = await client.post(
-        "/api/v1/payments/callbacks",
-        headers={"X-CornerRoom-Payment-Signature": signature},
-        json=fail_payload,
-    )
-    assert failed.status_code == 409
-    past = await client.get("/api/v1/me/subscription", headers=bearer(fan2["access_token"]))
-    assert past.json()["status"] == "PAST_DUE"
+    assert bought.status_code == 422 and bought.json()["code"] == "NOT_SOLD"
 
     stranger = await register_and_login(client, "no-write@example.com")
     blocked = await client.post(
@@ -415,14 +358,16 @@ async def test_phase09_refund_additive_duplicate_webhook_org_grant(client: Async
 
     fan = await register_and_login(client, "grant-fan@example.com")
     fan_id = await _user_id(client, fan["access_token"])
+    # A song is given away by its own label (security audit 2026-10-23), so act in the song's workspace again.
+    platform_token = await _workspace(client, staff, _org)
     grant = await client.post(
         "/api/v1/entitlements/grants",
-        headers=bearer(staff),
+        headers=bearer(platform_token),
         json={
             "user_id": fan_id,
             "entitlement_type": "ADMIN_GRANT",
             "ref_id": track["id"],
-            "scope": "CATALOG",
+            "scope": "TRACK",
         },
     )
     assert grant.status_code == 201, grant.text

@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { ChartLine, ShoppingBag } from "lucide-react";
+import { ChartLine } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { CoverArt } from "@/components/brand/cover-art";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
-import { Button, ButtonLink, Card, ErrorState, Field, Input, Money, Skeleton, StatusChip } from "@/components/ds";
+import { Button, Card, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
 import { TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
 import { useCredits } from "@/components/music/credits";
 import { TrackAudioPanel } from "@/components/music/track-audio-panel";
@@ -28,7 +28,7 @@ import {
 import { coverUrl } from "@/lib/cover-view";
 import { humanizeStatus } from "@/lib/format/status";
 import { creditHref, creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
-import { catalogOffer, hasCatalogAccess, ownsTrack, trackBuyState } from "@/lib/ownership";
+import { ownsTrack, trackBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 
 const ACTIONS = ["submit", "start_review", "approve", "reject", "schedule", "release", "takedown", "archive"];
@@ -122,7 +122,7 @@ export default function TrackPage() {
     const [track, credits, playable] = await Promise.all([
       fetchTrack(id, opts),
       fetchTrackCredits(id, opts).then((p) => p.items).catch(() => []),
-      signedIn ? fetchPlayableCatalog().then((p) => p.items.find((t) => t.id === id)).catch(() => undefined) : Promise.resolve(undefined),
+      fetchPlayableCatalog(opts).then((p) => p.items.find((t) => t.id === id)).catch(() => undefined),
     ]);
     return { track, credits, playable };
   }, [id, status]);
@@ -155,7 +155,6 @@ export default function TrackPage() {
   const play = playState(playable);
   // A song bought as part of its album or EP counts as owned here too (D-AUDIO-12).
   const buy = trackBuyState(commerce.entitlements, commerce.offers, track.id, track.release_ids ?? []);
-  const pass = hasCatalogAccess(commerce.entitlements) ? null : catalogOffer(commerce.offers);
   const duration = formatDuration(playable?.duration_ms);
   const canStaff = signedIn && typeof track.version === "number";
 
@@ -189,21 +188,10 @@ export default function TrackPage() {
                   track={{ id: track.id, title: track.title, artist }}
                   commerce={commerce}
                   size="lg"
-                  showPlan={false}
                   playFrom={yourMusic}
                   releaseIds={track.release_ids ?? []}
                 />
               )}
-              {signedIn && buy.kind !== "owned" && pass ? (
-                <ButtonLink href={`/checkout?offer=${pass.id}`} variant="secondary" size="lg">
-                  <ShoppingBag aria-hidden="true" /> Full catalog <Money value={{ amount_minor: pass.amount_minor, currency_code: pass.currency_code }} />
-                </ButtonLink>
-              ) : null}
-              {signedIn && buy.kind !== "owned" ? (
-                <ButtonLink href="/store" variant="ghost" size="lg">
-                  See plans
-                </ButtonLink>
-              ) : null}
             </div>
             {buy.kind === "owned" ? (
               <p className="mt-3 text-sm text-fg">
@@ -241,7 +229,7 @@ export default function TrackPage() {
         </section>
         <Card className="h-fit p-5 text-sm text-fg">
           <p className="font-semibold">How listening works</p>
-          <p className="mt-2 text-fg-muted">Buy a track to keep it, or choose a plan or the full catalog to listen to everything.</p>
+          <p className="mt-2 text-fg-muted">Buy a song, or the release it is on, to keep it. Sign in to listen to what you own.</p>
         </Card>
         {canStaff ? (
           <div className="lg:col-span-2">

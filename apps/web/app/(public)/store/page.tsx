@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Check } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
@@ -10,9 +9,9 @@ import { RoomCube } from "@/components/brand/room-cube";
 import { ButtonLink, Card, EmptyState, ErrorState, Money, Skeleton } from "@/components/ds";
 import { PageIntro, RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
-import { fetchMySubscriptions, fetchOffers, fetchSubscriptionPlans, type OfferRecord, type PlanRecord } from "@/lib/api";
+import { fetchOffers, type OfferRecord } from "@/lib/api";
 import { maybeCoverUrl, offerCoverSource } from "@/lib/cover-view";
-import { groupOffers, intervalLabel, offerTitle, planName, productKind, trialLabel } from "@/lib/store-view";
+import { groupOffers, offerTitle, productKind } from "@/lib/store-view";
 
 function BuyLink({ href, children, label }: { href: string; children: React.ReactNode; label: string }) {
   const { status } = useAuth();
@@ -27,42 +26,6 @@ function BuyLink({ href, children, label }: { href: string; children: React.Reac
     <ButtonLink href={href} block aria-label={label}>
       {children}
     </ButtonLink>
-  );
-}
-
-function PlanCard({ plan, subscribed }: { plan: PlanRecord; subscribed: boolean }) {
-  const name = planName(plan.key);
-  const interval = intervalLabel(plan);
-  const trial = trialLabel(plan);
-  return (
-    <Card as="article" className="flex h-full flex-col p-6">
-      <h3 className="text-lg font-bold text-fg">{name}</h3>
-      <p className="mt-4 flex items-baseline gap-2">
-        <Money value={{ amount_minor: plan.price_amount_minor, currency_code: plan.currency_code }} variant="display" className="text-[2.75rem] leading-none text-highlight" />
-        {interval ? <span className="text-sm text-fg-muted">{interval}</span> : null}
-      </p>
-      <ul className="mt-4 flex-1 space-y-1 text-sm text-fg">
-        <li className="flex items-center gap-2">
-          <Check aria-hidden="true" className="size-4 text-success" /> Listen across the catalog
-        </li>
-        {trial ? (
-          <li className="flex items-center gap-2">
-            <Check aria-hidden="true" className="size-4 text-success" /> {trial}
-          </li>
-        ) : null}
-      </ul>
-      <div className="mt-6">
-        {subscribed ? (
-          <ButtonLink href="/subscriptions" variant="secondary" block>
-            <Check aria-hidden="true" /> You are subscribed
-          </ButtonLink>
-        ) : (
-          <BuyLink href={`/checkout?plan=${plan.id}`} label={`Subscribe to ${name}`}>
-            Subscribe
-          </BuyLink>
-        )}
-      </div>
-    </Card>
   );
 }
 
@@ -90,22 +53,14 @@ function OfferCard({ offer }: { offer: OfferRecord }) {
 }
 
 export default function StorePage() {
-  const { status } = useAuth();
-  const mine = useAsync(
-    () => (status === "authenticated" ? fetchMySubscriptions().then((p) => p.items).catch(() => []) : Promise.resolve([])),
-    [status],
-  );
-  const subscribedPlans = new Set(
-    mine.status === "ok" ? mine.data.filter((s) => ["TRIALING", "ACTIVE", "PAST_DUE"].includes(s.status)).map((s) => s.plan_id) : [],
-  );
-  const data = useAsync(() => Promise.all([fetchOffers(), fetchSubscriptionPlans()]).then(([o, p]) => ({ offers: o.items, plans: p.items })), []);
+  const data = useAsync(() => fetchOffers().then((o) => ({ offers: o.items })), []);
 
   return (
     <main id="main" data-theme="ember" data-module="store" className="cr-scope">
       <LitSurface as="section" theme="ember" aria-labelledby="store-title">
         <div className="mx-auto max-w-[90rem] px-4 pb-10 pt-12 md:px-6 md:pt-16">
           <div id="store-title">
-            <PageIntro eyebrow="Store" title="Music to keep" lede="Subscribe to listen across the catalog, or buy music to keep." />
+            <PageIntro eyebrow="Store" title="Music to keep" lede="Buy songs and releases straight from the artists, and keep them." />
           </div>
         </div>
       </LitSurface>
@@ -119,24 +74,10 @@ export default function StorePage() {
           </div>
         ) : data.status === "error" ? (
           <ErrorState title="The Store is unavailable" message={loadErrorMessage(data.error, "the Store")} action={<RetryButton onClick={data.reload} />} />
-        ) : data.data.offers.length === 0 && data.data.plans.length === 0 ? (
-          <EmptyState title="Nothing on sale yet" body="Plans and music will appear here when they go on sale." />
+        ) : data.data.offers.length === 0 ? (
+          <EmptyState title="Nothing on sale yet" body="Music will appear here when it goes on sale." />
         ) : (
           <>
-            {data.data.plans.length ? (
-              <section aria-labelledby="store-plans">
-                <h2 id="store-plans" className="mb-5 text-xl font-bold text-fg md:text-2xl">
-                  Plans
-                </h2>
-                <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {data.data.plans.map((plan) => (
-                    <li key={plan.id}>
-                      <PlanCard plan={plan} subscribed={subscribedPlans.has(plan.id)} />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
             {groupOffers(data.data.offers).map((group) => (
               <section key={group.type} aria-labelledby={`store-${group.type}`}>
                 <h2 id={`store-${group.type}`} className="mb-5 text-xl font-bold text-fg md:text-2xl">

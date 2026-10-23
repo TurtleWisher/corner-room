@@ -36,11 +36,6 @@ export function offerForTrack(offers: OfferRecord[], trackId: string): OfferReco
   return offers.find((o) => o.product_type === "TRACK" && o.subject_id === trackId && o.status === "ACTIVE") ?? null;
 }
 
-/** The whole-catalog pass, if one is on sale. */
-export function catalogOffer(offers: OfferRecord[]): OfferRecord | null {
-  return offers.find((o) => o.product_type === "CATALOG_ACCESS" && o.status === "ACTIVE") ?? null;
-}
-
 /**
  * The on-sale price for a whole release. Fans who already own some of its songs get the
  * owners' price when ops set one (D-AUDIO-11); everyone else gets the everyone price. The API

@@ -4,7 +4,7 @@ Permanent instructions for every Claude session in this repository. Current stat
 
 ## What this is
 
-Corner Room is a Bangladesh-first "unified entertainment operating system": live events and ticketing, a record label with artist and band management, a music catalog, streaming, purchases and subscriptions, a royalty engine, finance and settlement (double-entry ledger, payouts), marketing campaigns, plus notifications, search, analytics, admin and audit. The MVP is ticketing-first. Default currency is BDT (schema is multi-currency); languages are English and Bangla. It is one product, not separate sites.
+Corner Room is a Bangladesh-first "unified entertainment operating system": live events and ticketing, a record label with artist and band management, a music catalog, streaming, purchases (subscriptions retired, D-COMMERCE-01), a royalty engine, finance and settlement (double-entry ledger, payouts), marketing campaigns, plus notifications, search, analytics, admin and audit. The MVP is ticketing-first. No subscriptions and no whole-catalog pass: music is sold per song and per release (owner, D-COMMERCE-01). Default currency is BDT (schema is multi-currency); languages are English and Bangla. It is one product, not separate sites.
 
 ## Rules that override everything else
 
@@ -46,7 +46,7 @@ Corner Room is a Bangladesh-first "unified entertainment operating system": live
 
 Modules: identity, authorization, audit, documents, events (with venues), ticketing, artists (with bands), music, streaming, commerce, entitlements, subscriptions, royalties, finance, campaigns, notifications, search, analytics, administration.
 
-Migrations: `apps/api/alembic/versions/0001` to `0028`, a linear chain with head `0028_event_cover` (0017 to 0022 are the audio platform; 0023 artist join links; 0024 per-ticket refunds; 0025 delivery addresses; 0026 Bangla QR staff verification; 0027 order lines record their product; 0028 event posters). Additive only: **never rewrite an existing revision**, and never use `create_all` on a migrated database.
+Migrations: `apps/api/alembic/versions/0001` to `0029`, a linear chain with head `0029_profile_pictures` (0017 to 0022 are the audio platform; 0023 artist join links; 0024 per-ticket refunds; 0025 delivery addresses; 0026 Bangla QR staff verification; 0027 order lines record their product; 0028 event posters; 0029 profile pictures and staff-reviewed artist profile changes). Additive only: **never rewrite an existing revision**, and never use `create_all` on a migrated database.
 
 ### Frontend layout (`apps/web/`)
 

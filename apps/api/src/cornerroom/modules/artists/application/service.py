@@ -310,9 +310,11 @@ class ArtistService:
                 "Audio and identity documents are not allowed on artist profiles",
                 403,
             )
-        if asset.storage_class != "public_media":
+        # A picture that passed the artwork checks (owner, 2026-10-23), or older public media.
+        checked_picture = asset.storage_class == "catalog_art" and asset.purpose == "COVER_ART"
+        if not checked_picture and asset.storage_class != "public_media":
             raise AppError("VALIDATION_ERROR", "Portrait must use public_media", 422)
-        if asset.status != "READY":
+        if asset.status not in ({"ACCEPTED", "READY"} if checked_picture else {"READY"}):
             raise AppError("VALIDATION_ERROR", "Portrait upload is not ready", 422)
         return asset.id
 
@@ -539,7 +541,19 @@ class ArtistService:
         expected_version: int | None = None,
     ) -> Artist:
         artist = await self.get_artist_row(artist_id)
-        await self._assert_artist_perm(ctx, artist, "artist.manage", mutate=True)
+        # Owner, 2026-10-23: an artist's own changes wait for staff (Studio, profile_changes.py);
+        # only label staff edit the public profile directly.
+        is_staff = await self._is_allowed(
+            ctx.user_id, "artist.manage", resource_type="artist", resource_id=artist.id,
+            organization_id=artist.primary_org_id,
+        )
+        if not is_staff:
+            if artist.claimed_user_id == ctx.user_id:
+                raise AppError(
+                    "PROFILE_REVIEW_REQUIRED", "Profile changes are reviewed by staff", 403,
+                    "Send your changes for review from Artist Studio",
+                )
+            raise NotFoundError("Artist not found")
         if artist.primary_org_id is not None:
             await self._require_active_org(artist.primary_org_id)
         if artist.status in {"TERMINATED", "REJECTED"}:

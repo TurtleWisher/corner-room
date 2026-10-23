@@ -35,7 +35,6 @@ export const ACCOUNT_NAV: NavItem[] = [
   { href: "/tickets", label: "Tickets" },
   { href: "/orders", label: "Orders" },
   { href: "/purchases", label: "Purchases" },
-  { href: "/subscriptions", label: "Subscriptions" },
   { href: "/notifications", label: "Notifications" },
   { href: "/organizations", label: "Workspaces" },
   { href: "/royalties", label: "Royalties" },
@@ -44,6 +43,7 @@ export const ACCOUNT_NAV: NavItem[] = [
 /** Second row for artist pages. */
 export const ARTIST_NAV: NavItem[] = [
   { href: "/studio", label: "Studio" },
+  { href: "/studio/profile", label: "Profile" },
   { href: "/studio/sales", label: "Sales" },
   { href: "/royalties", label: "Royalties" },
   { href: "/artists/apply", label: "Apply as an artist" },
@@ -59,6 +59,7 @@ export function studioNavSections(profiles: { kind: string; id: string; display_
       label: "Studio",
       items: [
         { href: "/studio", label: "Your music" },
+        { href: "/studio/profile", label: "Profile" },
         { href: "/studio/sales", label: "Sales" },
         { href: "/royalties", label: "Royalties" },
       ],
@@ -89,7 +90,9 @@ export function navFlagsFor(user: { is_artist?: boolean; has_workspace?: boolean
 export function filterNavForUser(items: NavItem[], flags: NavFlags): NavItem[] {
   return items.filter((item) => {
     if (item.href === "/organizations") return flags.hasWorkspace === true;
-    if (item.href === "/studio" || item.href === "/studio/sales" || item.href === "/royalties") return flags.isArtist === true;
+    if (item.href === "/studio" || item.href === "/studio/profile" || item.href === "/studio/sales" || item.href === "/royalties") {
+      return flags.isArtist === true;
+    }
     if (item.href === "/artists/apply") return flags.isArtist !== true;
     return true;
   });
@@ -151,7 +154,7 @@ export function staffNavSections(permissions: string[] | undefined): NavSection[
       label: "Catalog",
       items: [
         { href: "/staff/catalog", label: "Releases" },
-        { href: "/staff/catalog/artists", label: "Artist applications" },
+        { href: "/staff/catalog/artists", label: "Artists and profiles" },
         { href: "/staff/catalog/processing", label: "Audio processing" },
       ],
     },
