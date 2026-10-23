@@ -35,6 +35,8 @@ from cornerroom.modules.notifications.domain.policy import (
     render_template,
     title_for_event,
 )
+from cornerroom.infra.settings import get_settings
+from cornerroom.modules.notifications.infra.email import email_sender_for
 from cornerroom.modules.notifications.infra.stubs import StubEmailSender, StubPushSender, StubSmsSender
 
 
@@ -48,7 +50,8 @@ class NotificationService:
         clock: Clock | None = None,
     ) -> None:
         self.session = session
-        self.email = email or StubEmailSender()
+        # Real email when SMTP is configured (or the dev mailbox locally); otherwise log-only.
+        self.email = email or email_sender_for(get_settings()) or StubEmailSender()
         self.sms = sms or StubSmsSender()
         self.push = push or StubPushSender()
         self.clock = clock or SystemClock()

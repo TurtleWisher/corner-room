@@ -26,7 +26,7 @@ async def health() -> dict:
         "status": overall_status(
             database_ok=db_ok,
             redis_ok=redis_ok,
-            treat_email_stub_as_degraded=get_settings().is_production,
+            treat_email_stub_as_degraded=get_settings().is_production and not get_settings().smtp_configured,
         ),
         "checks": public_dependency_checks(database_ok=db_ok, redis_ok=redis_ok),
     }

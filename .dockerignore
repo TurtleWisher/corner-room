@@ -7,3 +7,19 @@
 .git
 .env
 var
+# Private and secret files never enter a build (deploy readiness, 2026-10-23)
+.env.*
+!.env.example
+!.env.seed.example
+docs
+.claude
+.cursor
+.mcp.json
+brand
+tooling
+HANDOFF.md
+Claude outputs
+.playwright-mcp
+graphify-out
+**/.next-staging
+apps/web

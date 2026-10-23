@@ -23,20 +23,22 @@ def test_hashes_are_argon2id_and_salted() -> None:
     assert not verify_password(first, "Correct horse")
 
 
-def test_missing_or_malformed_hash_is_a_mismatch_not_an_error() -> None:
+@pytest.mark.asyncio
+async def test_missing_or_malformed_hash_is_a_mismatch_not_an_error() -> None:
     for stored in (None, "", "not-a-hash", "$argon2id$garbage", "$2b$12$bcryptlookingvalue"):
-        assert not password_matches(stored, "anything")
+        assert not await password_matches(stored, "anything")
     # The dummy hash used for timing must never accept its own source phrase.
     assert not verify_password(None, "cornerroom-timing-equaliser")
 
 
-def test_unknown_account_costs_a_full_verification() -> None:
+@pytest.mark.asyncio
+async def test_unknown_account_costs_a_full_verification() -> None:
     real = hash_password("password12")
     start = time.perf_counter()
-    password_matches(real, "wrong-password")
+    await password_matches(real, "wrong-password")
     with_hash = time.perf_counter() - start
     start = time.perf_counter()
-    password_matches(None, "wrong-password")
+    await password_matches(None, "wrong-password")
     without_hash = time.perf_counter() - start
     # Same order of magnitude; a skipped check would be ~1000x faster.
     assert without_hash > with_hash / 5

@@ -493,11 +493,12 @@ async def test_rate_limit_zero_is_disabled() -> None:
     await enforce_auth_rate_limit(settings=settings, scope="login", key="127.0.0.1")
 
 
-def test_password_hash_is_not_plaintext() -> None:
+@pytest.mark.asyncio
+async def test_password_hash_is_not_plaintext() -> None:
     from cornerroom.modules.identity.application.credentials import hash_user_password, password_matches
 
-    hashed = hash_user_password("password12")
+    hashed = await hash_user_password("password12")
     assert hashed != "password12"
-    assert password_matches(hashed, "password12")
-    assert not password_matches(hashed, "nope")
-    assert not password_matches(None, "password12")
+    assert await password_matches(hashed, "password12")
+    assert not await password_matches(hashed, "nope")
+    assert not await password_matches(None, "password12")

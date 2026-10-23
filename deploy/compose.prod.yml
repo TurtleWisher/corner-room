@@ -1,0 +1,114 @@
+# Corner Room production stack (deploy readiness, 2026-10-23). Run on the server from the repo root:
+#   docker compose -f deploy/compose.prod.yml --env-file .env.production up -d
+# Usually through deploy/scripts/deploy.sh, which also backs up and migrates first.
+#
+# nginx on the host is the only way in: web and API listen on 127.0.0.1 only, Postgres and
+# Redis are not published at all. Secrets come from .env.production (never committed).
+
+name: cornerroom
+
+x-api-env: &api-env
+  APP_ENV: production
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  DATABASE_URL_SYNC: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  REDIS_URL: redis://redis:6379/0
+  STORAGE_BACKEND: local
+  STORAGE_LOCAL_PATH: /app/var/storage
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: cornerroom-api:${RELEASE:-latest}
+    command: ["api"]
+    restart: unless-stopped
+    env_file: ../.env.production
+    environment:
+      <<: *api-env
+      # Migrations run once in deploy.sh before the new version starts.
+      RUN_MIGRATIONS: "0"
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-3}
+      # Per process: 3 API processes x (8 + 4) + the worker stays far below Postgres' 100 connections.
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-8}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-4}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - storage:/app/var/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 30s
+      timeout: 6s
+      start_period: 40s
+      retries: 3
+
+  worker:
+    image: cornerroom-api:${RELEASE:-latest}
+    command: ["worker"]
+    restart: unless-stopped
+    env_file: ../.env.production
+    environment:
+      <<: *api-env
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-8}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-4}
+    # The worker checks and converts uploads: it must see the same files as the API.
+    volumes:
+      - storage:/app/var/storage
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+      args:
+        # Empty: the browser calls the API on the site's own address (nginx sends /api/ there).
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+    image: cornerroom-web:${RELEASE:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  storage:

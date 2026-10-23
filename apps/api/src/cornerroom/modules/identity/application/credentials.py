@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import secrets
 
@@ -16,13 +17,15 @@ def new_opaque_token() -> str:
     return secrets.token_urlsafe(48)
 
 
-def hash_user_password(password: str) -> str:
-    return hash_password(password)
+# Argon2id takes tens of milliseconds and 64 MiB per call; it runs in a worker thread so one sign-in
+# never stalls every other request on the event loop (deploy readiness, 2026-10-23).
+async def hash_user_password(password: str) -> str:
+    return await asyncio.to_thread(hash_password, password)
 
 
-def password_matches(password_hash: str | None, password: str) -> bool:
+async def password_matches(password_hash: str | None, password: str) -> bool:
     # Always runs one Argon2 verification, even with no stored hash (no timing hint).
-    return verify_password(password_hash, password)
+    return await asyncio.to_thread(verify_password, password_hash, password)
 
 
 def password_hash_outdated(password_hash: str | None) -> bool:
