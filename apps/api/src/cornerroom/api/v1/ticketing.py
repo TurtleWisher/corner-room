@@ -117,6 +117,10 @@ class PaymentOut(BaseModel):
     # Bangla QR image to show (owner supplies it). Showing it proves nothing; only the provider
     # confirms payment. None = no image configured yet.
     qr_image_url: str | None = None
+    # Copied from the QR by the owner (settings). Display only; None = not configured.
+    qr_merchant_name: str | None = None
+    qr_merchant_number: str | None = None
+    qr_number_app: str | None = None
 
 
 class OrderItemOut(BaseModel):
@@ -242,6 +246,9 @@ def _payment_out(row: Payment) -> PaymentOut:
         mode="test" if sandbox else "live",
         self_confirm_available=sandbox and settings.allows_sandbox_payment_confirm and row.status in SELF_CONFIRMABLE,
         qr_image_url=settings.bangla_qr_image_url.strip() or None,
+        qr_merchant_name=settings.bangla_qr_merchant_name.strip() or None,
+        qr_merchant_number=settings.bangla_qr_merchant_number.strip() or None,
+        qr_number_app=settings.bangla_qr_number_app.strip() or None,
     )
 
 

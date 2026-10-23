@@ -38,6 +38,31 @@ def test_phase16_bangla_qr_provider_is_staff_verified_only() -> None:
         provider.parse_callback({}, signature="x", secret="y")
     assert getattr(caught.value, "code", "") == "PAYMENT_CALLBACK_UNSUPPORTED"
     assert _provider_for(Settings()).name == "sandbox"
+
+
+def test_phase16_bangla_qr_payment_carries_merchant_details_from_settings(monkeypatch) -> None:
+    from uuid import uuid4
+
+    from cornerroom.api.v1.ticketing import _payment_out
+    from cornerroom.infra.settings import get_settings
+
+    row = Payment(id=uuid4(), order_id=None, status="REQUIRES_ACTION", amount_minor=100, currency_code="BDT", provider="bangla_qr")
+    get_settings.cache_clear()
+    try:
+        out = _payment_out(row)
+        assert (out.qr_merchant_name, out.qr_merchant_number, out.qr_number_app) == (None, None, None)
+        monkeypatch.setenv("BANGLA_QR_IMAGE_URL", "/brand/payment/bangla-qr.svg")
+        monkeypatch.setenv("BANGLA_QR_MERCHANT_NAME", " SAMPLE MERCHANT ")
+        monkeypatch.setenv("BANGLA_QR_MERCHANT_NUMBER", "01700000000")
+        monkeypatch.setenv("BANGLA_QR_NUMBER_APP", "bKash")
+        get_settings.cache_clear()
+        out = _payment_out(row)
+        assert out.mode == "live" and out.self_confirm_available is False
+        assert out.qr_image_url == "/brand/payment/bangla-qr.svg"
+        assert (out.qr_merchant_name, out.qr_merchant_number, out.qr_number_app) == ("SAMPLE MERCHANT", "01700000000", "bKash")
+    finally:
+        monkeypatch.undo()
+        get_settings.cache_clear()
     with pytest.raises(ValueError):
         Settings(payment_provider="paypal")
 
