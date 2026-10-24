@@ -26,8 +26,10 @@ dependencies = [
     "httpx>=0.28.0",
     # Media worker (D-AUDIO-04): pinned FFmpeg 7.1 binary for checks and playback copies; Pillow
     # reads cover art. Pinned so every machine produces the same measurements and files.
+    # Pillow 13.0.0 (2026-10-25): 11.3.0 had many published image-decoding vulnerabilities, and
+    # Pillow opens every uploaded cover, poster and profile picture.
     "imageio-ffmpeg==0.6.0",
-    "pillow==11.3.0",
+    "pillow==13.0.0",
 ]
 
 [project.optional-dependencies]

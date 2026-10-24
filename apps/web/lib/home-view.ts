@@ -1,4 +1,5 @@
-import type { EventRecord } from "@/lib/api";
+import type { EventRecord, ReleaseRecord } from "@/lib/api";
+import { sortReleases } from "@/lib/music-view";
 
 /*
  * Pure helpers for the Stage 5 home page. Display selection only: no business rule decides what
@@ -47,6 +48,23 @@ export function pickFeaturedEvent(events: EventRecord[], now: Date = new Date())
   if (live) return { event: live, label: "Live now" };
   const next = pickNextEvent(events, now);
   return next ? { event: next, label: "Next up" } : null;
+}
+
+export type HomeFeature =
+  | { kind: "event"; event: EventRecord; label: "Live now" | "Next up" }
+  | { kind: "release"; release: ReleaseRecord; label: "New release" };
+
+/**
+ * What the home hero features (owner, 2026-10-25: the newest real thing, never demo data): an event
+ * that is LIVE now, else the next upcoming event, else the newest released music. Null only when
+ * the public lists have none of these, and the hero then shows the Corner Room cube.
+ */
+export function pickHomeFeature(events: EventRecord[], releases: ReleaseRecord[], now: Date = new Date()): HomeFeature | null {
+  const featured = pickFeaturedEvent(events, now);
+  if (featured) return { kind: "event", ...featured };
+  const released = releases.filter((r) => r.status === "RELEASED");
+  const newest = sortReleases(released)[0];
+  return newest ? { kind: "release", release: newest, label: "New release" } : null;
 }
 
 /**

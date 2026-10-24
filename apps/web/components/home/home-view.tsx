@@ -18,8 +18,11 @@ import { ReleaseCard } from "@/components/music/release-card";
 import { TAGLINE_BN } from "@/components/shell/site-footer";
 import { useAsync } from "@/components/use-async";
 import { useWorkspace } from "@/components/workspace-provider";
-import { fetchHealth, fetchPublicEvents, fetchReleases, type EventRecord } from "@/lib/api";
-import { cityFromTimeZone, pickFeaturedEvent, upcomingEvents } from "@/lib/home-view";
+import { CoverArt } from "@/components/brand/cover-art";
+import { RoomCube } from "@/components/brand/room-cube";
+import { fetchHealth, fetchPublicEvents, fetchReleases, type EventRecord, type ReleaseRecord } from "@/lib/api";
+import { coverUrl } from "@/lib/cover-view";
+import { cityFromTimeZone, pickHomeFeature, upcomingEvents } from "@/lib/home-view";
 import { creditName, sortReleases } from "@/lib/music-view";
 import { showStaffEntry, staffHomeHref } from "@/lib/nav-view";
 import { checkLabel, healthLabel } from "@/lib/ops-view";
@@ -31,12 +34,66 @@ function cityOrTitle(event: EventRecord): string {
 /* ---------- Hero ---------- */
 
 /**
- * The featured event: always present. A LIVE event first, else the next upcoming one, shown in the
- * event media slot (cover later, the Ember letter cube now). With no event, or if events fail to
- * load, the same red frame holds the Corner Room cube so the hero never loses its poster.
+ * The newest released music, in the hero when there is no live or upcoming event (owner,
+ * 2026-10-25): its official cover (or the Sky letter cube), "New release", title and artist.
  */
-function FeaturedEvent({ state }: { state: ReturnType<typeof useAsync<EventRecord[]>> }) {
-  const featured = state.status === "ok" ? pickFeaturedEvent(state.data) : null;
+function FeaturedRelease({ release }: { release: ReleaseRecord }) {
+  const credits = useCredits();
+  const artist = creditName(release, credits.artists, credits.bands);
+  const href = `/releases/${release.id}`;
+  return (
+    <figure className="home-poster-in w-full max-w-[28rem]">
+      <PosterTilt>
+        <Link href={href} className="cr-focus block" aria-label={`New release: ${release.title}${artist ? ` by ${artist}` : ""}`}>
+          <CoverArt
+            src={coverUrl({ release: release.id, hasCover: !!release.cover_asset_id }, 1200)}
+            fallback={<RoomCube front={release.title} side={artist ?? release.title} tone="sky" label="" className="w-full" />}
+            className="w-full"
+          />
+        </Link>
+      </PosterTilt>
+      <figcaption className="mt-4 flex items-baseline justify-between gap-4">
+        <span className="cr-eyebrow text-[0.6875rem] text-fg-muted">New release</span>
+        <Link href={href} className="cr-focus truncate text-sm font-semibold text-fg hover:text-highlight">
+          {release.title}
+        </Link>
+      </figcaption>
+      {artist ? <p className="mt-1 text-right text-xs text-fg-muted">{artist}</p> : null}
+    </figure>
+  );
+}
+
+/**
+ * The hero's feature (lib/home-view.ts `pickHomeFeature`): a LIVE event, else the next upcoming
+ * one, else the newest released music. While either list loads, the frame waits; with nothing to
+ * feature, or if events fail to load, the same red frame holds the Corner Room cube.
+ */
+function Featured({
+  events,
+  releases,
+}: {
+  events: ReturnType<typeof useAsync<EventRecord[]>>;
+  releases: ReturnType<typeof useAsync<ReleaseRecord[]>>;
+}) {
+  const loading = events.status === "loading" || releases.status === "loading";
+  const feature = loading
+    ? null
+    : pickHomeFeature(events.status === "ok" ? events.data : [], releases.status === "ok" ? releases.data : []);
+  if (feature?.kind === "release") return <FeaturedRelease release={feature.release} />;
+  return <FeaturedEvent state={loading ? { status: "loading" } : events} featured={feature?.kind === "event" ? feature : null} />;
+}
+
+/**
+ * The featured event: a LIVE event first, else the next upcoming one, shown in the event media
+ * slot. With no event, or if events fail to load, the same red frame holds the Corner Room cube.
+ */
+function FeaturedEvent({
+  state,
+  featured,
+}: {
+  state: { status: "loading" } | ReturnType<typeof useAsync<EventRecord[]>>;
+  featured: { event: EventRecord; label: "Live now" | "Next up" } | null;
+}) {
   const event = featured?.event ?? null;
   const href = event ? `/events/${event.id}` : "/events";
   const label = featured?.label ?? "Next up";
@@ -47,7 +104,7 @@ function FeaturedEvent({ state }: { state: ReturnType<typeof useAsync<EventRecor
         ? event.title
         : state.status === "error"
           ? "Events could not be loaded"
-          : "No events announced yet";
+          : "Nothing announced yet";
 
   return (
     <figure className="home-poster-in w-full max-w-[28rem]" aria-busy={state.status === "loading" || undefined}>
@@ -286,6 +343,7 @@ function ServiceStatus() {
 
 export function HomeView() {
   const events = useAsync(() => fetchPublicEvents().then((p) => p.items), []);
+  const releases = useAsync(() => fetchReleases({ skipAuth: true }).then((p) => p.items), []);
   // Arriving at "/#welcome" after sign-in: Next's own hash scroll leaves the panel under the
   // sticky header (measured 2026-10-23), so line it up again once the page has its content.
   useEffect(() => {
@@ -322,7 +380,7 @@ export function HomeView() {
             </div>
           </div>
           <div className="home-depth-far flex justify-center lg:justify-end">
-            <FeaturedEvent state={events} />
+            <Featured events={events} releases={releases} />
           </div>
         </div>
       </LitSurface>
