@@ -4,7 +4,7 @@ import { CalendarDays, CircleCheck, Library, Music, Ticket } from "lucide-react"
 
 import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
-import { DownloadButton } from "@/components/music/download-button";
+import { SaveOfflineButton } from "@/components/music/save-offline-button";
 import { ButtonLink, Card, DateTime, Money } from "@/components/ds";
 import { EventMedia } from "@/components/events/event-media";
 import type { EventRecord, OrderItemRecord, OrderRecord, TrackRecord } from "@/lib/api";
@@ -226,9 +226,9 @@ export function MusicReceipt({
             <ButtonLink href="/library" variant="secondary">
               <Library aria-hidden="true" /> Your library
             </ButtonLink>
-            {track && !release ? <DownloadButton trackId={track.id} title={title} size="md" /> : null}
+            {track && !release ? <SaveOfflineButton trackId={track.id} title={title} size="md" /> : null}
           </div>
-          {release ? <p className="mt-3 text-sm text-fg-muted">Download each song from the release page, as often as you like.</p> : null}
+          {release ? <p className="mt-3 text-sm text-fg-muted">Save each song for offline listening from the release page.</p> : null}
         </div>
       </div>
     </Card>

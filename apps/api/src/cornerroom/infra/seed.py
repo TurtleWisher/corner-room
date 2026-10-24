@@ -77,8 +77,6 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
     "media_operator": ("Media Operator", ("media.ops",)),
 }
 
-# Playback copy recipes (D-AUDIO-03). CANDIDATE until the blind listening comparison sets the
-# final bitrates; seeded once, never overwritten here.
 # Credit vocabulary (D-AUDIO-16). Performer roles link to an Artist; the rest may be a typed name.
 CREDIT_ROLES = (
     ("primary_artist", "Primary artist", "প্রধান শিল্পী", True, False),
@@ -128,8 +126,10 @@ GENRES = (
 )
 
 RENDITION_PROFILES = (
-    {"key": "opus_hq", "codec": "opus", "container": "ogg", "bitrate_kbps": 160, "sample_rate_hz": 48000, "sort": 1},
-    {"key": "mp3_compat", "codec": "mp3", "container": "mp3", "bitrate_kbps": 320, "sample_rate_hz": 44100, "sort": 2},
+    # ACTIVE since 2026-10-25 (D-AUDIO-18, owner: switch on for the streaming launch without the
+    # listening test); migration 0030 does the same for databases seeded earlier.
+    {"key": "opus_hq", "codec": "opus", "container": "ogg", "bitrate_kbps": 160, "sample_rate_hz": 48000, "sort": 1, "status": "ACTIVE"},
+    {"key": "mp3_compat", "codec": "mp3", "container": "mp3", "bitrate_kbps": 320, "sample_rate_hz": 44100, "sort": 2, "status": "ACTIVE"},
     # D-AUDIO-06: the buyer's lossless download. Rate and bit depth stay as the master's (0 = as
     # master), so there is no bitrate to choose by listening test: ACTIVE from the start. The MP3
     # download is the mp3_compat playback copy above (MP3 320).

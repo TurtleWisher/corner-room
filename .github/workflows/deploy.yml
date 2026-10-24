@@ -1,0 +1,74 @@
+# Deploy to production after CI passes on main (2026-10-25; replaces a rsync-based draft that would
+# have deleted uploaded files and skipped CI, backups, migrations-once and rollback).
+#
+# The server does the work: deploy/scripts/deploy.sh fetches the commit, builds, backs up the
+# database, migrates once, starts, health-checks and rolls back on failure. This workflow only asks
+# it to run, over SSH, as a non-root user, after an approval in the "production" environment.
+#
+# One-time setup in GitHub (Settings):
+#   Environments > New environment "production" > Required reviewers: the owner.
+#   Environment secrets (never in this public file):
+#     DEPLOY_HOST         the server's host name or address
+#     DEPLOY_USER         the non-root admin user in the docker group (private runbook)
+#     DEPLOY_PATH         the repo clone on the server (private runbook)
+#     DEPLOY_SSH_KEY      a private key used only for deploys (its public half in that user's
+#                         ~/.ssh/authorized_keys)
+#     DEPLOY_KNOWN_HOSTS  output of `ssh-keyscan -t ed25519 <host>`, checked once by hand
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit, tag or branch to deploy (default: origin/main)"
+        required: false
+        default: ""
+
+# One deploy at a time; a newer one waits instead of cancelling one that is half done.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # Only after a successful CI run of a push to main (or a manual run).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 45
+    steps:
+      - name: Set up SSH with the pinned host key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Run deploy.sh on the server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          # The exact commit CI tested, or the manual choice.
+          REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && git fetch --tags --prune origin && deploy/scripts/deploy.sh ${REF:-origin/main}"
+
+      - name: Remove the key from the runner
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

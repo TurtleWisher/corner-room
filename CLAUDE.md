@@ -46,7 +46,7 @@ Corner Room is a Bangladesh-first "unified entertainment operating system": live
 
 Modules: identity, authorization, audit, documents, events (with venues), ticketing, artists (with bands), music, streaming, commerce, entitlements, subscriptions, royalties, finance, campaigns, notifications, search, analytics, administration.
 
-Migrations: `apps/api/alembic/versions/0001` to `0029`, a linear chain with head `0029_profile_pictures` (0017 to 0022 are the audio platform; 0023 artist join links; 0024 per-ticket refunds; 0025 delivery addresses; 0026 Bangla QR staff verification; 0027 order lines record their product; 0028 event posters; 0029 profile pictures and staff-reviewed artist profile changes). Additive only: **never rewrite an existing revision**, and never use `create_all` on a migrated database.
+Migrations: `apps/api/alembic/versions/0001` to `0030`, a linear chain with head `0030_activate_playback_profiles` (0017 to 0022 are the audio platform; 0023 artist join links; 0024 per-ticket refunds; 0025 delivery addresses; 0026 Bangla QR staff verification; 0027 order lines record their product; 0028 event posters; 0029 profile pictures and staff-reviewed artist profile changes; 0030 switches the Opus 160 / MP3 320 playback copies on, data only). Additive only: **never rewrite an existing revision**, and never use `create_all` on a migrated database.
 
 ### Frontend layout (`apps/web/`)
 
@@ -58,6 +58,7 @@ Migrations: `apps/api/alembic/versions/0001` to `0029`, a linear chain with head
 - Shell details and the URL changes awaiting approval (URL-01 to URL-04): `docs/frontend/APP_SHELL.md`. **Don't change URLs without approval.**
 - `lib/*-view.ts`: pure view-model helpers, each with a `.test.ts`. **Keep this pattern.**
 - **Artist Studio (D-THEME-02):** signed-in artist pages (`app/(artist)`, including `/studio/sign-in` and `/studio/join`) use the green/mint `artist-studio` world and `components/shell/studio-shell.tsx`, following `docs/frontend/ARTIST_STUDIO_DESIGN_GUIDE.md`. `/artists/apply` is for fans and lives in `(account)` (Ember). Public artist profiles stay Ember.
+- **In-app offline (D-AUDIO-18):** bought songs are saved in the browser (`lib/offline-store.ts`, IndexedDB) by `components/music/save-offline-button.tsx` and play with no connection on the static `public/offline.html` + `public/offline-player.js` (keep their database name, version and owner key in step with `offline-store.ts`). `public/sw.js` only shows that page when a navigation fails and caches nothing else; don't widen it into a general page cache, or new releases can be hidden behind old files.
 - Design system (Phase 16): tokens in `app/styles/tokens.css`, fonts in `app/brand-fonts.ts` (the single place to swap the display face), primitives in `components/ds/`, brand pieces in `components/brand/` (including the `cube-logo/` letter cube), formatting in `lib/format/` (money, date, status), contrast-tested palette in `lib/theme/`. Developer pages: `/theme-kit`, `/theme-kit/modules`, `/theme-kit/cube` (enabled with `CR_THEME_KIT=1`).
 - `components/ui/` holds the legacy shadcn primitives. Legacy pages still use them and must stay pixel-identical until their module stage.
 

@@ -3,6 +3,7 @@
 import { AuthProvider } from "@/components/auth-provider";
 import { PagePointerLight } from "@/components/brand/pointer-light";
 import { NotificationsProvider } from "@/components/notifications-provider";
+import { OfflineSync } from "@/components/offline-sync";
 import { WorkspaceProvider } from "@/components/workspace-provider";
 
 /**
@@ -17,6 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <NotificationsProvider>
           {children}
           <PagePointerLight />
+          <OfflineSync />
         </NotificationsProvider>
       </WorkspaceProvider>
     </AuthProvider>

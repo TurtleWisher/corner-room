@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { clearOfflineOwner } from "@/lib/offline-store";
+
 import {
   ApiError,
   clearAccessToken,
@@ -134,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           await apiLogout();
         } finally {
+          clearOfflineOwner();
           setUser(null);
           setStatus("anonymous");
           announceSignedOut();

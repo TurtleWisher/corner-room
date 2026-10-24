@@ -1,0 +1,13 @@
+{
+  "name": "Corner Room",
+  "short_name": "Corner Room",
+  "description": "Live events, artists and the listening room. Songs you save play offline.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#140707",
+  "theme_color": "#140707",
+  "icons": [
+    { "src": "/brand/logo/corner-room-logo-ember.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

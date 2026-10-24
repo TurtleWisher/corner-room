@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import { fontVariables } from "@/app/brand-fonts";
 import { AppShell } from "@/components/app-shell";
@@ -7,8 +7,12 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Corner Room",
-  description: "Identity and platform shell",
+  description: "Live events, artists and the listening room, from one corner of the city.",
+  // Installable app (D-AUDIO-18): saved songs play offline from /offline.html.
+  manifest: "/manifest.webmanifest",
 };
+
+export const viewport: Viewport = { themeColor: "#140707" };
 
 const READY_SCRIPT = [
   "(function(){var d=document.documentElement;d.classList.add('js');",

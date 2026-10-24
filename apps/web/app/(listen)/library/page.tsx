@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Disc3, X } from "lucide-react";
+import { CloudDownload, Disc3, X } from "lucide-react";
 
 import { ButtonLink, EmptyState, ErrorState, IconButton, Skeleton } from "@/components/ds";
 import { usePlayableCatalog, useCustomerCommerce } from "@/components/music/commerce";
@@ -102,7 +102,17 @@ function Library() {
 
 export default function LibraryPage() {
   return (
-    <ListenPage title="Library" lede="Everything you bought or saved." what="your library">
+    <ListenPage
+      title="Library"
+      lede="Everything you bought or saved."
+      what="your library"
+      actions={
+        // Plain link: /offline.html is a static page that also opens with no connection (D-AUDIO-18).
+        <a href="/offline.html" className="cr-focus inline-flex items-center gap-2 text-sm font-semibold text-highlight underline">
+          <CloudDownload aria-hidden="true" className="size-4" /> Songs saved for offline
+        </a>
+      }
+    >
       <Library />
     </ListenPage>
   );

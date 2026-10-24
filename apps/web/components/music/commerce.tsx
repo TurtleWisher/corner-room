@@ -5,7 +5,7 @@ import { Check, Lock, LogIn, Play } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { Button, ButtonLink, Money } from "@/components/ds";
-import { DownloadButton } from "@/components/music/download-button";
+import { SaveOfflineButton } from "@/components/music/save-offline-button";
 import { useOptionalPlayer, type PlayOptions, type PlayerTrack } from "@/components/music/player";
 import { useAsync } from "@/components/use-async";
 import { fetchMyEntitlements, fetchOffers, fetchPlayableCatalog, type EntitlementRecord, type OfferRecord, type PlayableTrackRecord } from "@/lib/api";
@@ -83,12 +83,13 @@ export function TrackBuyControl({
         <Check aria-hidden="true" /> Owned
       </ButtonLink>
     );
-    // Bought songs download (D-AUDIO-06); older whole-catalog access does not.
+    // Bought songs can be saved for offline listening in the app (D-AUDIO-18, replaces the file
+    // download of D-AUDIO-06); older whole-catalog access can't.
     if (state.via === "catalog") return main;
     return (
       <span className="inline-flex items-center gap-1">
         {main}
-        <DownloadButton trackId={track.id} title={track.title} size={size === "sm" ? "sm" : "md"} />
+        <SaveOfflineButton trackId={track.id} title={track.title} releaseIds={releaseIds} size={size === "sm" ? "sm" : "md"} />
       </span>
     );
   }
