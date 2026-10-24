@@ -7,6 +7,13 @@
 
 name: cornerroom
 
+# Container logs are rotated (3 x 20 MB each) so a busy server's disk never fills with logs.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
 x-api-env: &api-env
   APP_ENV: production
   DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -19,6 +26,23 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *logging
+    # Memory settings for a server with 8 GB or more (the defaults assume 128 MB). Raise with RAM:
+    # shared_buffers about a quarter of RAM, effective_cache_size about half (collaborator guide).
+    command:
+      - postgres
+      - -c
+      - max_connections=${PG_MAX_CONNECTIONS:-100}
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-1GB}
+      - -c
+      - effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-3GB}
+      - -c
+      - work_mem=${PG_WORK_MEM:-16MB}
+      - -c
+      - maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-256MB}
+      - -c
+      - log_min_duration_statement=${PG_SLOW_QUERY_MS:-1000}
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -34,6 +58,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging: *logging
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     volumes:
       - redisdata:/data
@@ -50,6 +75,7 @@ services:
     image: cornerroom-api:${RELEASE:-latest}
     command: ["api"]
     restart: unless-stopped
+    logging: *logging
     env_file: ../.env.production
     environment:
       <<: *api-env
@@ -79,6 +105,10 @@ services:
     image: cornerroom-api:${RELEASE:-latest}
     command: ["worker"]
     restart: unless-stopped
+    logging: *logging
+    # Audio conversion can use every core; two are enough for the worker and leave the rest for
+    # visitors (the API has 3 processes on the 6-core server).
+    cpus: ${WORKER_CPUS:-2.0}
     env_file: ../.env.production
     environment:
       <<: *api-env
@@ -100,6 +130,7 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     image: cornerroom-web:${RELEASE:-latest}
     restart: unless-stopped
+    logging: *logging
     environment:
       NODE_ENV: production
     ports:

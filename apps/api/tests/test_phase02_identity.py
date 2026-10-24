@@ -454,7 +454,7 @@ async def test_org_scoped_assignment_denies_other_org(client: AsyncClient) -> No
         f"/api/v1/organizations/{platform['id']}",
         headers=bearer(customer),
     )
-    assert denied.status_code == 403
+    assert denied.status_code == 404  # Q-SEC-03: not a member of the platform org, so "not found"
     create = await client.post(
         "/api/v1/organizations",
         headers=bearer(customer),

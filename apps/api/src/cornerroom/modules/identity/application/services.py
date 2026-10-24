@@ -134,6 +134,27 @@ class IdentityService:
         )
         return link if self.settings.exposes_dev_verification_link else None
 
+    async def _notify_existing_account(
+        self, user: User, *, request_id: str, ip: str | None, user_agent: str | None
+    ) -> None:
+        """Someone signed up with an address that already has an account (Q-SEC-04)."""
+        if user.status == "PENDING_VERIFICATION":
+            await self.deliver_verification(user, request_id=request_id, ip=ip, user_agent=user_agent)
+            return
+        if self.email_sender is None or user.email is None or user.status != "ACTIVE":
+            return
+        base = self.settings.web_base_url.rstrip("/")
+        await self.email_sender.send(
+            to=user.email,
+            subject="Someone tried to sign up with your email",
+            body=(
+                "Someone (maybe you) tried to create a Corner Room account with this email address, "
+                "which already has an account.\n\n"
+                f"If it was you, sign in here instead: {base}/login\n\n"
+                "If it wasn't you, you can ignore this email. Your account has not changed.\n"
+            ),
+        )
+
     async def get_user_row(self, user_id: UUID) -> User:
         user = await self.session.get(User, user_id)
         if user is None or user.deleted_at is not None:
@@ -149,15 +170,19 @@ class IdentityService:
         request_id: str,
         ip: str | None = None,
         user_agent: str | None = None,
-    ) -> tuple[User, CustomerProfile]:
+    ) -> tuple[User, CustomerProfile] | None:
         await enforce_auth_rate_limit(settings=self.settings, scope="register", key=ip or "unknown")
         email_n = _normalize_email(email)
+        password_hash = await hash_user_password(password)  # also for a taken address: same timing
         existing = await self._get_user_by_email(email_n)
         if existing:
-            raise ConflictError("An account with this email already exists")
+            # Owner, 2026-10-24 (Q-SEC-04): the page never says the address is taken. Its owner is
+            # told by email instead (or sent a fresh verification link if they never verified).
+            await self._notify_existing_account(existing, request_id=request_id, ip=ip, user_agent=user_agent)
+            return None
         return await self._create_account(
             email=email_n,
-            password_hash=await hash_user_password(password),
+            password_hash=password_hash,
             display_name=display_name,
             email_verified_at=None,
             request_id=request_id,

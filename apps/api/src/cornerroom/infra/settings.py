@@ -101,8 +101,15 @@ class Settings(BaseSettings):
     bootstrap_admin_password: str | None = None
 
     # Auth controls. 0 = disabled. Do not treat defaults as product lockout/OTP policy.
+    # Owner 2026-10-24 (D-RATE-01): sign-in, sign-up, Google, "forgot password" and "resend
+    # verification" share AUTH_RATE_LIMIT_* (10 per 900 s in the env templates).
     auth_rate_limit_max_attempts: int = 0
     auth_rate_limit_window_seconds: int = 0
+    # Token refresh has its own limit, off unless set: refreshes happen quietly every few minutes and
+    # many visitors share one address (mobile carriers), so the sign-in numbers would sign them out.
+    # Refresh tokens are single-use with replay detection, so they can't be guessed.
+    refresh_rate_limit_max_attempts: int = 0
+    refresh_rate_limit_window_seconds: int = 0
     # Buyer downloads (D-AUDIO-06): unlimited by policy; this only stops abuse. The numbers are not
     # decided: 0 means the limiter is off, like the other limits.
     download_rate_limit_max: int = 0

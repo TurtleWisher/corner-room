@@ -89,6 +89,13 @@ class OrganizationService:
             return True
         return await self._active_membership(user_id, org_id) is not None
 
+    async def assert_visible(self, user_id: UUID, org_id: UUID) -> None:
+        """Owner, 2026-10-24 (Q-SEC-03): to anyone who is not a member or admin of an organization,
+        it does not exist (404), so outsiders can't learn which labels are on Corner Room. Members
+        who lack a permission still get 403 from the checks that follow."""
+        if not await self.can_see_org(user_id, org_id):
+            raise NotFoundError("Organization not found")
+
     async def can_use_workspace(self, user_id: UUID, org_id: UUID) -> bool:
         org = await self.get_organization(org_id)
         if org.status != "ACTIVE":
@@ -193,6 +200,7 @@ class OrganizationService:
         name: str | None = None,
         share_bps: int | None = ...,  # type: ignore[assignment]
     ) -> Organization:
+        await self.assert_visible(ctx.user_id, org_id)
         org = await self.get_organization(org_id)
         await self.authz.authorize(
             ctx.user_id,
@@ -226,6 +234,7 @@ class OrganizationService:
         org_id: UUID,
         action: str,
     ) -> Organization:
+        await self.assert_visible(ctx.user_id, org_id)
         org = await self.get_organization(org_id)
         await self.authz.authorize(
             ctx.user_id,
@@ -269,6 +278,7 @@ class OrganizationService:
         *,
         org_id: UUID,
     ) -> tuple[Organization, str]:
+        await self.assert_visible(ctx.user_id, org_id)
         org = await self.get_organization(org_id)
         if not await self.can_use_workspace(ctx.user_id, org_id):
             raise ForbiddenError("Not permitted to use this organization workspace")
@@ -306,6 +316,7 @@ class OrganizationService:
         cursor: str | None = None,
         limit: int | None = None,
     ) -> tuple[list[OrganizationMembership], str | None]:
+        await self.assert_visible(user_id, org_id)
         await self.get_organization(org_id)
         if not await self.can_see_org(user_id, org_id):
             raise ForbiddenError("Not permitted")
@@ -361,6 +372,7 @@ class OrganizationService:
         role_id: UUID | None = None,
         status: str = "ACTIVE",
     ) -> OrganizationMembership:
+        await self.assert_visible(ctx.user_id, organization_id)
         org = await self.get_organization(organization_id)
         await self.authz.authorize(
             ctx.user_id,
@@ -418,6 +430,7 @@ class OrganizationService:
         status: str,
         role_id: UUID | None = ...,  # type: ignore[assignment]
     ) -> OrganizationMembership:
+        await self.assert_visible(ctx.user_id, organization_id)
         await self.get_organization(organization_id)
         await self.authz.authorize(
             ctx.user_id,
@@ -480,6 +493,7 @@ class OrganizationService:
         email: str,
         role_id: UUID | None = None,
     ) -> tuple[OrganizationInvitation, str]:
+        await self.assert_visible(ctx.user_id, organization_id)
         org = await self.get_organization(organization_id)
         await self.authz.authorize(
             ctx.user_id,
@@ -552,6 +566,7 @@ class OrganizationService:
         cursor: str | None = None,
         limit: int | None = None,
     ) -> tuple[list[OrganizationInvitation], str | None]:
+        await self.assert_visible(user_id, org_id)
         await self.get_organization(org_id)
         await self.authz.authorize(
             user_id,
@@ -586,6 +601,7 @@ class OrganizationService:
         organization_id: UUID,
         invitation_id: UUID,
     ) -> OrganizationInvitation:
+        await self.assert_visible(ctx.user_id, organization_id)
         await self.get_organization(organization_id)
         await self.authz.authorize(
             ctx.user_id,

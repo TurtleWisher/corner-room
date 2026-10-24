@@ -8,6 +8,7 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DBAPIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from cornerroom.infra.logging import redact_path
@@ -92,6 +93,18 @@ def _request_id(request: Request) -> str | None:
     )
 
 
+def _is_data_error(exc: BaseException) -> bool:
+    """True when the database driver rejected a value (asyncpg DataError and its kinds)."""
+    seen: BaseException | None = exc
+    for _ in range(5):
+        if seen is None:
+            return False
+        if any(cls.__name__ == "DataError" for cls in type(seen).__mro__):
+            return True
+        seen = getattr(seen, "orig", None) or seen.__cause__
+    return False
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
@@ -136,6 +149,27 @@ def register_exception_handlers(app: FastAPI) -> None:
                 request_id=_request_id(request),
                 instance=redact_path(str(request.url.path)),
                 extras={"errors": exc.errors()},
+            ),
+            media_type="application/problem+json",
+        )
+
+    @app.exception_handler(DBAPIError)
+    async def data_error_handler(request: Request, exc: DBAPIError) -> JSONResponse:
+        # The database refused a value (a number beyond its range, text longer than the column).
+        # That is bad input, not a crash (security stage 1, 2026-10-24). Any other database
+        # failure stays an internal error.
+        if not _is_data_error(exc):
+            return await unhandled_handler(request, exc)
+        log.warning("value_out_of_range", path=redact_path(str(request.url.path)))
+        return JSONResponse(
+            status_code=422,
+            content=problem(
+                status=422,
+                code="VALIDATION_ERROR",
+                title="Validation Error",
+                detail="A value is out of range",
+                request_id=_request_id(request),
+                instance=redact_path(str(request.url.path)),
             ),
             media_type="application/problem+json",
         )

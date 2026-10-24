@@ -20,6 +20,14 @@ async def _label(client: AsyncClient) -> tuple[str, str]:
     return switched, label
 
 
+async def _platform(client: AsyncClient) -> str:
+    """Super admin switched into Corner Room's platform workspace, where open applications are decided."""
+    admin = await admin_token(client)
+    orgs = (await client.get("/api/v1/organizations", headers=bearer(admin))).json()["items"]
+    platform = next(o["id"] for o in orgs if o["type"] == "PLATFORM")
+    return (await client.post(f"/api/v1/organizations/{platform}/switch", headers=bearer(admin))).json()["access_token"]
+
+
 async def _role_id(client: AsyncClient, token: str, key: str) -> str:
     return next(r["id"] for r in (await client.get("/api/v1/roles", headers=bearer(token))).json() if r["key"] == key)
 
@@ -110,15 +118,23 @@ async def test_artist_applies_is_approved_and_can_publish(client: AsyncClient) -
     pending = (await client.get("/api/v1/me/catalog-profiles", headers=bearer(token))).json()
     assert pending[0]["can_publish"] is False
 
-    staff_view = await client.get("/api/v1/artist-applications", headers=bearer(owner))
+    # Sent without a label's join link: a label's staff can't see or decide it (owner, Q-SEC-02).
+    label_view = await client.get("/api/v1/artist-applications", headers=bearer(owner))
+    assert all(a["id"] != app["id"] for a in label_view.json()["items"])
+    assert (await client.get(f"/api/v1/artist-applications/{app['id']}", headers=bearer(owner))).status_code == 404
+    refused = await client.post(f"/api/v1/artist-applications/{app['id']}/lifecycle", headers=bearer(owner), json={"action": "start_review"})
+    assert refused.status_code == 404
+
+    platform = await _platform(client)
+    staff_view = await client.get("/api/v1/artist-applications", headers=bearer(platform))
     row = next(a for a in staff_view.json()["items"] if a["id"] == app["id"])
     assert row["stage_name"] == "Rain Theory" and row["bio"] == "Dhaka shoegaze."
     assert "Private Person" not in staff_view.text  # the legal name is not part of the review
 
     for action in ("start_review", "approve"):
-        res = await client.post(f"/api/v1/artist-applications/{app['id']}/lifecycle", headers=bearer(owner), json={"action": action})
+        res = await client.post(f"/api/v1/artist-applications/{app['id']}/lifecycle", headers=bearer(platform), json={"action": action})
         assert res.status_code == 200, res.text
-    activated = await client.post(f"/api/v1/artists/{app['artist_id']}/lifecycle", headers=bearer(owner), json={"action": "activate"})
+    activated = await client.post(f"/api/v1/artists/{app['artist_id']}/lifecycle", headers=bearer(platform), json={"action": "activate"})
     assert activated.status_code == 200, activated.text
     ready = (await client.get("/api/v1/me/catalog-profiles", headers=bearer(token))).json()
     assert ready[0]["can_publish"] is True and ready[0]["display_name"] == "Rain Theory"
@@ -211,6 +227,7 @@ async def test_invitation_check_and_menu_flags(client: AsyncClient) -> None:
 
     applied = (await client.post("/api/v1/artist-applications", headers=bearer(fan["access_token"]), json={"stage_name": "Flag"})).json()
     assert (await client.get("/api/v1/me", headers=bearer(fan["access_token"]))).json()["is_artist"] is False  # applied, not approved
+    platform = await _platform(client)  # open applications are the platform team's (Q-SEC-02)
     for action in ("start_review", "approve"):
-        await client.post(f"/api/v1/artist-applications/{applied['id']}/lifecycle", headers=bearer(owner), json={"action": action})
+        await client.post(f"/api/v1/artist-applications/{applied['id']}/lifecycle", headers=bearer(platform), json={"action": action})
     assert (await client.get("/api/v1/me", headers=bearer(fan["access_token"]))).json()["is_artist"] is True

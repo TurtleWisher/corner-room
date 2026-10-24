@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -69,7 +69,16 @@ async def test_phase11_ledger_payout_dual_control_idor_idempotency(client: Async
     )
     assert cfg_sched.status_code == 200, cfg_sched.text
 
-    payee_id = uuid4()
+    # A real artist of this workspace: payees must exist and belong with the label (stage 1, 2026-10-24).
+    artist = await client.post("/api/v1/artists", headers=bearer(staff), json={"stage_name": "Payee Artist"})
+    assert artist.status_code == 201, artist.text
+    payee_id = UUID(artist.json()["id"])
+    stray = await client.post(
+        "/api/v1/payout-methods",
+        headers=bearer(staff),
+        json={"payee_type": "ARTIST", "payee_id": str(uuid4()), "token_ref": "SANDBOX-TOKEN"},
+    )
+    assert stray.status_code == 404
     compliance = await client.post(
         "/api/v1/payee-compliance",
         headers=bearer(staff),

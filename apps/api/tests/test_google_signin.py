@@ -228,7 +228,9 @@ async def test_links_an_existing_verified_account(client: AsyncClient, google: F
     )
     token = reg.json()["dev_verification_url"].split("#token=")[1]
     assert (await client.post("/api/v1/auth/verification/complete", json={"token": token})).status_code == 204
-    user_id = reg.json()["user"]["id"]
+    from tests.auth_helpers import user_by_email
+
+    user_id = (await user_by_email("linkme@example.com"))["id"]
 
     response, _, _ = await _google_sign_in(client, google, sub="link-sub", email="linkme@example.com")
     assert _where(response)[0] == f"{WEB}/auth/continue"

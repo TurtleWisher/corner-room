@@ -276,6 +276,9 @@ class TicketingService:
     ) -> TicketType:
         event = await self._event(event_id)
         await self._assert_event_perm(ctx, event, "event.write", mutate=True)
+        # No new ticket types for an event that is over or called off (security audit 2026-10-23, low).
+        if event.status in {"CANCELLED", "COMPLETED", "SETTLED", "ARCHIVED"}:
+            raise AppError("INVALID_TRANSITION", "This event no longer takes new ticket types", 409)
         money = Money(amount_minor=price_amount_minor, currency_code=currency_code)
         if quantity_total < 0:
             raise AppError("VALIDATION_ERROR", "quantity_total must be >= 0", 422)

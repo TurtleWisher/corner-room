@@ -233,13 +233,13 @@ async def test_phase03_scenarios_1_to_62(client: AsyncClient, settings: Settings
         headers=bearer(token_a),
         json={"name": "Hijack"},
     )
-    assert deny_platform_settings.status_code == 403  # 21
+    assert deny_platform_settings.status_code == 404  # 21 (Q-SEC-03: outsiders get "not found")
     deny_platform_invite = await client.post(
         f"/api/v1/organizations/{platform['id']}/invites",
         headers=bearer(token_a),
         json={"email": "x@example.com"},
     )
-    assert deny_platform_invite.status_code == 403  # 43
+    assert deny_platform_invite.status_code == 404  # 43 (Q-SEC-03)
     scoped_list = _items(await client.get("/api/v1/organizations", headers=bearer(token_a)))
     scoped_ids = {row["id"] for row in scoped_list}
     assert label["id"] in scoped_ids
@@ -249,13 +249,13 @@ async def test_phase03_scenarios_1_to_62(client: AsyncClient, settings: Settings
         f"/api/v1/organizations/{platform['id']}/switch",
         headers=bearer(fan),
     )
-    assert switch_denied.status_code == 403  # 51
+    assert switch_denied.status_code == 404  # 51 (Q-SEC-03)
 
     outsider_members = await client.get(
         f"/api/v1/organizations/{label['id']}/memberships",
         headers=bearer(fan),
     )
-    assert outsider_members.status_code == 403  # 35
+    assert outsider_members.status_code == 404  # 35 (Q-SEC-03)
 
     own_read = await client.get(
         f"/api/v1/organizations/{label['id']}",
@@ -343,7 +343,7 @@ async def test_phase03_scenarios_1_to_62(client: AsyncClient, settings: Settings
         f"/api/v1/organizations/{label['id']}",
         headers=bearer(staff_b["access_token"]),
     )
-    assert lost.status_code == 403  # 29
+    assert lost.status_code == 404  # 29 (Q-SEC-03: no longer a member)
 
     readd = await client.post(
         f"/api/v1/organizations/{label['id']}/memberships",
@@ -396,7 +396,7 @@ async def test_phase03_scenarios_1_to_62(client: AsyncClient, settings: Settings
         f"/api/v1/organizations/{label['id']}/switch",
         headers=bearer(staff_b["access_token"]),
     )
-    assert stale_switch.status_code == 403
+    assert stale_switch.status_code == 404  # Q-SEC-03
 
     # 55 API still denies without permission
     hidden = await client.post(

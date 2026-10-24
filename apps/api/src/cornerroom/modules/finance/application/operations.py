@@ -601,6 +601,26 @@ class FinanceOpsService:
         await self.session.flush()
         return row
 
+    async def _assert_payee(self, payee_type: str, payee_id: UUID, org_id: UUID) -> None:
+        """A payee must be real and belong with this label (security audit 2026-10-23, low): an
+        artist of the label, an existing account, or the label itself."""
+        from cornerroom.modules.artists.domain.models import Artist
+        from cornerroom.modules.identity.domain.models import User
+        from cornerroom.modules.royalties.domain.lifecycle import PAYEE_TYPES
+
+        if payee_type not in PAYEE_TYPES:
+            raise AppError("VALIDATION_ERROR", "Payee type must be ARTIST, USER or ORGANIZATION", 422)
+        if payee_type == "ARTIST":
+            artist = await self.session.get(Artist, payee_id)
+            ok = artist is not None and artist.deleted_at is None and artist.primary_org_id == org_id
+        elif payee_type == "USER":
+            user = await self.session.get(User, payee_id)
+            ok = user is not None and user.deleted_at is None
+        else:
+            ok = payee_id == org_id
+        if not ok:
+            raise NotFoundError("Payee not found")
+
     async def upsert_compliance(
         self,
         ctx: AuthContext,
@@ -612,6 +632,7 @@ class FinanceOpsService:
     ) -> PayeeCompliance:
         org_id = self._workspace(ctx)
         await self._staff(ctx, "finance.post", org_id)
+        await self._assert_payee(payee_type, payee_id, org_id)
         row = (
             await self.session.execute(
                 select(PayeeCompliance).where(
@@ -645,6 +666,7 @@ class FinanceOpsService:
     ) -> PayoutMethod:
         org_id = self._workspace(ctx)
         await self._staff(ctx, "finance.post", org_id)
+        await self._assert_payee(payee_type, payee_id, org_id)
         row = PayoutMethod(
             payee_type=payee_type,
             payee_id=payee_id,

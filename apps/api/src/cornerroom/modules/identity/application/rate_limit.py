@@ -32,9 +32,14 @@ class RateLimitUnavailableError(AppError):
 
 
 async def enforce_auth_rate_limit(*, settings: Settings, scope: str, key: str) -> None:
-    """Fail closed when the limiter is enabled and Redis cannot be reached."""
-    max_attempts = settings.auth_rate_limit_max_attempts
-    window = settings.auth_rate_limit_window_seconds
+    """Fail closed when the limiter is enabled and Redis cannot be reached. Token refresh uses its
+    own numbers (REFRESH_RATE_LIMIT_*); everything else the sign-in ones (AUTH_RATE_LIMIT_*)."""
+    if scope == "refresh":
+        max_attempts = settings.refresh_rate_limit_max_attempts
+        window = settings.refresh_rate_limit_window_seconds
+    else:
+        max_attempts = settings.auth_rate_limit_max_attempts
+        window = settings.auth_rate_limit_window_seconds
     if max_attempts <= 0 or window <= 0:
         return
     redis_key = namespaced_key("auth", "rl", scope, key, settings=settings)

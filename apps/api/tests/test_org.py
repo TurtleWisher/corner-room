@@ -29,7 +29,10 @@ async def test_admin_lists_seed_orgs_and_adds_membership(client: AsyncClient) ->
         "/api/v1/auth/register",
         json={"email": "member@example.com", "password": "password12", "display_name": "Member"},
     )
-    user_id = fan.json()["user"]["id"]
+    from tests.auth_helpers import user_by_email
+
+    assert fan.status_code == 201, fan.text
+    user_id = (await user_by_email("member@example.com"))["id"]
     platform = next(row for row in orgs.json()["items"] if row["type"] == "PLATFORM")
 
     membership = await client.post(

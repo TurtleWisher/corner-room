@@ -212,10 +212,7 @@ async def get_organization(
     user: Annotated[User, Depends(get_current_user)],
     svc: Annotated[OrganizationService, Depends(organization_service)],
 ) -> OrganizationOut:
-    if not await svc.can_see_org(user.id, org_id):
-        from cornerroom.infra.errors import ForbiddenError
-
-        raise ForbiddenError("Not permitted")
+    await svc.assert_visible(user.id, org_id)
     org = await svc.get_organization(org_id)
     return _org_out(org)
 

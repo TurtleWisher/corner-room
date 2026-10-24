@@ -3,7 +3,11 @@
 //
 //   k6 run -e BASE_URL=<staging address> tests/load/launch.k6.js
 //
-// Listening needs accounts that may play the song (a plan or a purchase). On staging, create
+// Rate limits (D-RATE-01) count every simulated visitor as one address: run k6 ON the server (nginx
+// does not limit requests from the server itself) or the results show 429s, not real capacity. With
+// SIGNUPS=1, set AUTH_RATE_LIMIT_MAX_ATTEMPTS=0 on staging for the run (10 sign-ups per 15 minutes).
+//
+// Listening needs accounts that may play the song (a purchase). On staging, create
 // listeners load1@example.com ... load200@example.com with one password (LISTEN_PASSWORD) and give
 // them access, then pass TRACK_ID. Without TRACK_ID only browsing and sign-ups run.
 //   -e TRACK_ID=<released track id> -e LISTEN_PASSWORD=... -e LISTENERS=200 -e SIGNUPS=1

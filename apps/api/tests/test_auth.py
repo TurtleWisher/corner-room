@@ -21,14 +21,15 @@ async def test_register_login_refresh_logout(client: AsyncClient) -> None:
     )
     assert register.status_code == 201, register.text
     body = register.json()
-    assert "access_token" not in body
-    assert body["user"]["email"] == "fan@example.com"
-    assert body["user"]["status"] == "PENDING_VERIFICATION"
+    assert "access_token" not in body and "user" not in body
+    from tests.auth_helpers import user_by_email
+
+    assert (await user_by_email("fan@example.com"))["status"] == "PENDING_VERIFICATION"
     assert "cr_refresh" not in register.cookies
 
     from tests.auth_helpers import activate_user
 
-    await activate_user(client, body["user"]["id"])
+    await activate_user(client, (await user_by_email("fan@example.com"))["id"])
     session_login = await client.post(
         "/api/v1/auth/login",
         json={"email": "fan@example.com", "password": "password12"},
@@ -83,12 +84,24 @@ async def test_login_rejected_wrong_password(client: AsyncClient) -> None:
 
 @pytest.mark.postgres
 @pytest.mark.asyncio
-async def test_duplicate_email_conflict(client: AsyncClient) -> None:
+async def test_duplicate_email_answers_the_same(client: AsyncClient) -> None:
+    """Owner, 2026-10-24 (Q-SEC-04): signing up with a taken address looks exactly like a new one;
+    no second account is made and the address's owner is told by email."""
     payload = {"email": "dup@example.com", "password": "password12", "display_name": "Dup"}
     first = await client.post("/api/v1/auth/register", json=payload)
     assert first.status_code == 201
-    second = await client.post("/api/v1/auth/register", json=payload)
-    assert second.status_code == 409
+    second = await client.post("/api/v1/auth/register", json=payload | {"password": "different99"})
+    assert second.status_code == 201
+    assert set(second.json()) == set(first.json()) and second.json()["status"] == first.json()["status"]
+
+    from sqlalchemy import func, select
+
+    from cornerroom.infra.db import get_session_factory
+    from cornerroom.modules.identity.domain.models import User
+
+    async with get_session_factory()() as session:
+        count = (await session.execute(select(func.count()).select_from(User).where(User.email == "dup@example.com"))).scalar_one()
+    assert count == 1
 
 
 @pytest.mark.asyncio

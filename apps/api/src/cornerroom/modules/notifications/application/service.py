@@ -9,7 +9,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cornerroom.infra.errors import NotFoundError
+from cornerroom.infra.errors import AppError, NotFoundError
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import DomainEvent
 from cornerroom.kernel.ports import NotificationPort
@@ -289,6 +289,11 @@ class NotificationService:
         push: bool,
         sms: bool,
     ) -> NotificationPreference:
+        # Only the kinds of notification Corner Room actually sends (security audit 2026-10-23, low).
+        from cornerroom.modules.notifications.domain.policy import EVENT_NOTIFICATION_TYPE
+
+        if notification_type not in set(EVENT_NOTIFICATION_TYPE.values()):
+            raise AppError("VALIDATION_ERROR", "Unknown notification type", 422)
         stmt = select(NotificationPreference).where(
             NotificationPreference.user_id == user_id,
             NotificationPreference.notification_type == notification_type,

@@ -9,6 +9,7 @@ failure. Nothing becomes playable until every required copy is verified.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import socket
 from datetime import timedelta
@@ -581,6 +582,7 @@ class MediaJobService:
 
     async def _inspect_cover(self, job: MediaJob, asset: MediaAsset) -> None:
         from PIL import Image, UnidentifiedImageError
+        from PIL.Image import DecompressionBombError
 
         from cornerroom.modules.documents.domain.models import UploadIntent
         from cornerroom.modules.music.application.service import MusicService
@@ -593,6 +595,10 @@ class MediaJobService:
             with Image.open(path) as img:
                 fmt, (width, height), mode = img.format, img.size, img.mode
                 img.verify()
+        except DecompressionBombError:
+            # Claims to be gigantic: turned down from the header alone, never decoded (stage 1 probes).
+            fmt = fmt or "PNG"
+            width = height = 10**6
         except (UnidentifiedImageError, OSError, SyntaxError, ValueError):
             fmt = fmt or None
             width = height = None
@@ -609,6 +615,10 @@ class MediaJobService:
             max_px=self.settings.media_cover_max_px,
             recommended_px=None if picture else 3000,
         )
+        if not any(f.severity == "BLOCK" for f in findings) and not await asyncio.to_thread(_decodes, path):
+            # The header looked fine but the picture itself is broken or truncated (stage 1 probes):
+            # decoded only now, after the size limits, so a "bomb" is never decoded.
+            findings.append(Finding("COVER_UNREADABLE", "BLOCK"))
         import PIL
 
         inspection = await self._save_inspection(
@@ -646,6 +656,18 @@ class MediaJobService:
                     await covers.image(asset.id, size)
                 except Exception:  # noqa: BLE001 - the cover route makes any missing size on demand
                     break
+
+
+def _decodes(path: Path) -> bool:
+    """Whether the whole image decodes (not just its header)."""
+    from PIL import Image
+
+    try:
+        with Image.open(path) as img:
+            img.load()
+        return True
+    except Exception:  # noqa: BLE001 - any decoder failure means the picture can't be used
+        return False
 
 
 def _mime(codec: str) -> str:

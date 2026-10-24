@@ -279,8 +279,18 @@ async def list_versions(
     svc: Annotated[MusicService, Depends(music_service)],
     ctx: Annotated[AuthContext | None, Depends(get_optional_auth_context)],
 ) -> dict[str, list[VersionOut]]:
-    await svc.get_track(track_id, ctx)
+    _track, public_only = await svc.get_track(track_id, ctx)
     rows = await svc.list_versions(track_id)
+    if public_only:
+        # Fans and visitors see only the version in use, without stored file ids or processing notes
+        # (security audit 2026-10-23, low).
+        return {
+            "items": [
+                _version_out(r).model_copy(update={"media_asset_id": None, "processing_detail": None})
+                for r in rows
+                if r.is_current and r.status == "READY"
+            ]
+        }
     return {"items": [_version_out(r) for r in rows]}
 
 

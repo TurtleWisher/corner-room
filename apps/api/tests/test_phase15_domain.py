@@ -93,15 +93,34 @@ def test_super_admin_seed_not_silently_stripped() -> None:
 async def test_complete_upload_owner_only(pg_session, settings: Settings) -> None:
     from cornerroom.modules.documents.application.service import DocumentService
 
+    from cornerroom.infra.storage import build_object_key, new_asset_id
+    from cornerroom.modules.documents.domain.models import MediaAsset
+
     owner = uuid4()
     stranger = uuid4()
     svc = DocumentService(pg_session, settings)
-    asset, _ = await svc.create_upload_session(
-        AuthContext(user_id=owner, request_id="up-1"),
+    # Opening a simple upload needs media staff in a workspace (security audit 2026-10-23, F4).
+    with pytest.raises(AppError) as no_workspace:
+        await svc.create_upload_session(
+            AuthContext(user_id=owner, request_id="up-0"), storage_class="public_media", filename="cover.png", mime="image/png"
+        )
+    assert no_workspace.value.code == "WORKSPACE_REQUIRED"
+    # An upload session a staff member opened: only that person may finish it.
+    asset_id = new_asset_id()
+    asset = MediaAsset(
+        id=asset_id,
         storage_class="public_media",
-        filename="cover.png",
+        bucket="local",
+        object_key=build_object_key("public_media", asset_id, "cover.png"),
         mime="image/png",
+        byte_size=0,
+        sha256="",
+        status="PENDING",
+        scan_status="PENDING",
+        created_by=owner,
     )
+    pg_session.add(asset)
+    await pg_session.flush()
     with pytest.raises(AppError) as denied:
         await svc.complete_upload(
             AuthContext(user_id=stranger, request_id="up-2"),

@@ -685,11 +685,14 @@ class ArtistService:
             staff = await self._can_staff_manage_workspace(ctx, ctx.organization_id)
         if mine or not staff:
             stmt = stmt.where(ArtistApplication.user_id == ctx.user_id)
-        else:
-            # A label's staff see applications sent to their label (join links) and open ones.
+        elif await self._in_platform_workspace(ctx):
+            # Open applications (no label's join link) are the platform team's alone (Q-SEC-02).
             stmt = stmt.where(
                 (ArtistApplication.organization_id == ctx.organization_id) | ArtistApplication.organization_id.is_(None)
             )
+        else:
+            # A label's staff see only applications sent through their own join link.
+            stmt = stmt.where(ArtistApplication.organization_id == ctx.organization_id)
         stmt = stmt.order_by(ArtistApplication.created_at.desc(), ArtistApplication.id.desc())
         if cursor:
             stmt = stmt.where(keyset_before(ArtistApplication.created_at, ArtistApplication.id, cursor))
@@ -708,11 +711,18 @@ class ArtistService:
             return row
         if (
             ctx.organization_id is not None
-            and row.organization_id in (None, ctx.organization_id)
+            and (row.organization_id == ctx.organization_id or (row.organization_id is None and await self._in_platform_workspace(ctx)))
             and await self._can_staff_manage_workspace(ctx, ctx.organization_id)
         ):
             return row
         raise NotFoundError("Application not found")
+
+    async def _in_platform_workspace(self, ctx: AuthContext) -> bool:
+        """Acting in Corner Room's own platform workspace (owner, 2026-10-24, Q-SEC-02)."""
+        if ctx.organization_id is None:
+            return False
+        org = await self.session.get(Organization, ctx.organization_id)
+        return org is not None and org.type == "PLATFORM" and org.deleted_at is None
 
     async def transition_application(
         self,
@@ -733,8 +743,11 @@ class ArtistService:
             ):
                 raise NotFoundError("Application not found")
             await self._require_active_org(ctx.organization_id)
-            # Sent to another label through its join link: not this workspace's to decide.
+            # Sent to another label through its join link: not this workspace's to decide. Open
+            # applications are the platform team's alone (owner, 2026-10-24, Q-SEC-02).
             if row.organization_id is not None and row.organization_id != ctx.organization_id:
+                raise NotFoundError("Application not found")
+            if row.organization_id is None and not await self._in_platform_workspace(ctx):
                 raise NotFoundError("Application not found")
         if expected_version is not None and row.version != expected_version:
             raise ConflictError("Application version conflict")

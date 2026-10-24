@@ -78,7 +78,9 @@ class UserOut(BaseModel):
 
 
 class RegisterResponse(BaseModel):
-    user: UserOut
+    # Owner, 2026-10-24 (Q-SEC-04): the same answer whether or not the address already has an
+    # account, so no account details here; the address's owner is told by email.
+    status: str = "check_your_email"
     verification_required: bool = True
     # "dev_mailbox" (local/dev/test), "email" (a real provider), or "not_configured" (OD-08).
     verification_delivery: str = "not_configured"
@@ -149,7 +151,7 @@ async def register(
     svc: Annotated[IdentityService, Depends(identity_service)],
 ) -> RegisterResponse:
     ip, ua = _client(request)
-    user, profile = await svc.register(
+    created = await svc.register(
         email=body.email,
         password=body.password,
         display_name=body.display_name,
@@ -157,14 +159,12 @@ async def register(
         ip=ip,
         user_agent=ua,
     )
-    link = await svc.deliver_verification(
-        user, request_id=getattr(request.state, "request_id", ""), ip=ip, user_agent=ua
-    )
-    return RegisterResponse(
-        user=_user_out(user, profile),
-        verification_delivery=svc.verification_delivery(),
-        dev_verification_url=link,
-    )
+    link = None
+    if created is not None:
+        link = await svc.deliver_verification(
+            created[0], request_id=getattr(request.state, "request_id", ""), ip=ip, user_agent=ua
+        )
+    return RegisterResponse(verification_delivery=svc.verification_delivery(), dev_verification_url=link)
 
 
 @router.post("/login", response_model=TokenResponse)

@@ -60,12 +60,12 @@ export function SignUpForm({
         verifyPath: found ? verifyLinkFor(found, next, signInPath) : null,
       });
     } catch (err) {
+      // A taken address is answered like a new one (owner, 2026-10-24, Q-SEC-04): its owner is
+      // told by email, so the page never says whether an account exists.
       setError(
-        err instanceof ApiError && err.status === 409
-          ? "An account with this email already exists. Sign in instead."
-          : err instanceof ApiError && err.status === 422
-            ? "Check your details: a valid email and a password of at least 8 characters."
-            : friendlyError(err, "Your account could not be created. Please try again."),
+        err instanceof ApiError && err.status === 422
+          ? "Check your details: a valid email and a password of at least 8 characters."
+          : friendlyError(err, "Your account could not be created. Please try again."),
       );
       requestAnimationFrame(() => errorRef.current?.focus());
     } finally {
@@ -88,13 +88,14 @@ export function SignUpForm({
       );
     }
     return (
-      <AuthCard theme={theme} title={done.delivery === "not_configured" ? "Account created" : "Check your email"}>
+      // Worded the same whether the address was new or already had an account (Q-SEC-04).
+      <AuthCard theme={theme} title={done.delivery === "not_configured" ? "Thanks for signing up" : "Check your email"}>
         <p className="flex items-start gap-2 text-fg">
           <CircleCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-success" />
           {done.delivery === "not_configured"
             ? // OD-08: no email provider yet, so no email is promised.
-              "Your account is created and waiting for verification. You can sign in once it is active."
-            : `Your account is created. Open the link we sent to ${email} to verify it, then sign in.`}
+              "Your sign-up is waiting for verification. You can sign in once your account is active."
+            : `We sent an email to ${email}. Open it to finish signing up, then sign in.`}
         </p>
         {done.verifyPath ? (
           <div className="mt-6 border border-dashed border-line p-4">

@@ -29,9 +29,22 @@ async def register_user(
     )
     assert response.status_code == 201, response.text
     body = response.json()
-    assert "access_token" not in body
-    assert body["user"]["status"] == "PENDING_VERIFICATION"
-    return body["user"]
+    assert "access_token" not in body and "user" not in body  # Q-SEC-04: no account details
+    user = await user_by_email(email)
+    assert user["status"] == "PENDING_VERIFICATION"
+    return user
+
+
+async def user_by_email(email: str) -> dict:
+    """The account behind an address, read from the database (sign-up no longer returns it)."""
+    from sqlalchemy import select
+
+    from cornerroom.infra.db import get_session_factory
+    from cornerroom.modules.identity.domain.models import User
+
+    async with get_session_factory()() as session:
+        row = (await session.execute(select(User).where(User.email == email.strip().lower(), User.deleted_at.is_(None)))).scalar_one()
+        return {"id": str(row.id), "email": row.email, "status": row.status}
 
 
 async def activate_user(client: AsyncClient, user_id: str) -> None:
