@@ -1,6 +1,40 @@
 import { describe, expect, it } from "vitest";
 
-import { loginFormState, resolveProtectedView, safeNextPath, signInPageFrom, staffNavFlags, verifyLinkFor, withNext } from "./auth-view";
+import {
+  authWorldFor,
+  forgotPasswordLink,
+  loginFormState,
+  newPasswordProblem,
+  resolveProtectedView,
+  safeNextPath,
+  signInPageFrom,
+  staffNavFlags,
+  verifyLinkFor,
+  withNext,
+} from "./auth-view";
+
+describe("forgot and reset password", () => {
+  it("links to the forgot page and remembers a non-fan sign-in page", () => {
+    expect(forgotPasswordLink("/login")).toBe("/forgot-password");
+    expect(forgotPasswordLink("/studio/sign-in")).toBe("/forgot-password?signin=%2Fstudio%2Fsign-in");
+    expect(forgotPasswordLink("/staff/sign-in")).toBe("/forgot-password?signin=%2Fstaff%2Fsign-in");
+    // Anything unknown is the fan page, so a crafted value can't send people elsewhere.
+    expect(forgotPasswordLink("//evil.example")).toBe("/forgot-password");
+  });
+
+  it("keeps the world of the sign-in page", () => {
+    expect(authWorldFor("/login")).toBe("ember");
+    expect(authWorldFor("/studio/sign-in")).toBe("artist-studio");
+    expect(authWorldFor("/staff/sign-in")).toBe("staff");
+  });
+
+  it("checks the new password like the API does", () => {
+    expect(newPasswordProblem("short", "short")).toEqual({ field: "password", message: "Use at least 8 characters." });
+    expect(newPasswordProblem("x".repeat(129), "x".repeat(129))).toEqual({ field: "password", message: "Use 128 characters or fewer." });
+    expect(newPasswordProblem("longenough1", "longenough2")).toEqual({ field: "confirm", message: "The two passwords do not match." });
+    expect(newPasswordProblem("longenough1", "longenough1")).toBeNull();
+  });
+});
 
 describe("login form state", () => {
   it("shows loading while submitting", () => {

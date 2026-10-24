@@ -6,7 +6,8 @@
  * words, where it goes afterwards and what it offers people who have no account yet.
  */
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { AuthCard, type AuthWorld } from "@/components/account/auth-card";
@@ -14,7 +15,7 @@ import { GoogleSignInOption } from "@/components/account/google-button";
 import { useAuth } from "@/components/auth-provider";
 import { Button, ButtonLink, ErrorState, Field, Input } from "@/components/ds";
 import { ApiError, requestVerification, verifyPathFromLink } from "@/lib/api";
-import { HOME_WELCOME, safeNextPath, verifyLinkFor } from "@/lib/auth-view";
+import { forgotPasswordLink, HOME_WELCOME, safeNextPath, verifyLinkFor } from "@/lib/auth-view";
 import { friendlyError, googleSignInError, signInError } from "@/lib/error-copy";
 
 export function SignInForm({
@@ -36,6 +37,7 @@ export function SignInForm({
   theme?: AuthWorld;
 }) {
   const router = useRouter();
+  const signInPath = usePathname() ?? "/login";
   const { status, user, login, logout } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -153,6 +155,11 @@ export function SignInForm({
         <Field label="Password">
           {(c) => <Input {...c} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />}
         </Field>
+        <p className="-mt-1 text-right text-sm">
+          <Link href={forgotPasswordLink(signInPath)} className="cr-focus font-semibold text-highlight underline">
+            Forgot your password?
+          </Link>
+        </p>
         <Button type="submit" size="lg" block busy={busy}>
           Sign in
         </Button>

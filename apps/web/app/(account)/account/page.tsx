@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { CircleAlert, CircleCheck, LogOut, MonitorSmartphone, Pencil, Trash2 } from "lucide-react";
 
+import { ChangePasswordForm } from "@/components/account/change-password-form";
 import { DeliveryAddressForm } from "@/components/account/delivery-address-form";
 import { useAuth } from "@/components/auth-provider";
 import { Avatar, Button, Card, DateTime, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
@@ -295,6 +296,12 @@ function Profile() {
             Delivery address
           </h2>
           <DeliveryAddressPanel />
+        </Card>
+        <Card as="section" aria-labelledby="password" className="p-6">
+          <h2 id="password" className="mb-4 text-xl font-bold text-fg">
+            Password
+          </h2>
+          <ChangePasswordForm email={user.email} name={user.display_name} />
         </Card>
         <Card as="section" aria-labelledby="devices" className="p-6">
           <h2 id="devices" className="mb-2 text-xl font-bold text-fg">

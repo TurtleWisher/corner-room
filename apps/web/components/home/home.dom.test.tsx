@@ -133,13 +133,16 @@ describe("MissionBand", () => {
 });
 
 describe("SiteFooter", () => {
-  it("keeps the brand lines and shows a contact placeholder, never invented details", () => {
+  it("keeps the brand lines, the one support address and the legal pages, and no invented details", () => {
     const { container } = render(<SiteFooter />);
     expect(screen.getByText("The city's corner. The music's room.")).toBeTruthy();
-    expect(screen.getByText("Contact details coming soon.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "support@cornerroom.live" }).getAttribute("href")).toBe("mailto:support@cornerroom.live");
     const text = container.textContent ?? "";
-    expect(text).not.toMatch(/@[a-z0-9-]+\.[a-z]/i); // no email
+    expect(text.match(/@[a-z0-9-]+\.[a-z]/gi)).toHaveLength(1); // only the support address
     expect(text).not.toMatch(/\+?\d[\d\s-]{7,}/); // no phone number
+    for (const [name, href] of [["Terms", "/terms"], ["Privacy", "/privacy"], ["Refunds", "/refunds"]]) {
+      expect(screen.getByRole("link", { name }).getAttribute("href")).toBe(href);
+    }
     expect(screen.getByRole("link", { name: "Store" }).getAttribute("href")).toBe("/store");
   });
 });

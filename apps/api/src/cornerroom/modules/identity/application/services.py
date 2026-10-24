@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+import structlog
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,6 +61,8 @@ from cornerroom.modules.identity.domain.models import (
     User,
     USER_STATUSES,
 )
+
+log = structlog.get_logger("identity")
 
 
 def _normalize_email(email: str) -> str:
@@ -736,8 +739,12 @@ class IdentityService:
         email_n = _normalize_email(email)
         user = await self._get_user_by_email(email_n)
         ttl = self.settings.password_recovery_ttl_seconds
-        if user is not None and user.deleted_at is None and ttl > 0:
-            await self.issue_challenge(
+        # A link nobody can receive is pointless: issue one only when it can be emailed.
+        issued = bool(
+            user is not None and user.deleted_at is None and user.email and ttl > 0 and self.email_sender is not None
+        )
+        if issued:
+            raw = await self.issue_challenge(
                 user_id=user.id,
                 purpose="PASSWORD_RECOVERY",
                 ttl_seconds=ttl,
@@ -745,6 +752,7 @@ class IdentityService:
                 ip=ip,
                 user_agent=user_agent,
             )
+            await self._send_password_reset_link(user, raw, ttl)
         await self.audit.record(
             action="auth.password_recovery_requested",
             entity_type="User",
@@ -754,8 +762,28 @@ class IdentityService:
             request_id=request_id,
             ip=ip,
             user_agent=user_agent,
-            new_state={"issued": bool(user is not None and ttl > 0)},
+            new_state={"issued": issued},
         )
+
+    async def _send_password_reset_link(self, user: User, raw: str, ttl: int) -> None:
+        """Email the reset link. The token travels in the URL fragment so it never reaches server
+        logs. A failed send is logged, not raised: the answer must look the same whether or not
+        the address has an account."""
+        link = f"{self.settings.web_base_url.rstrip('/')}/reset-password#token={raw}"
+        minutes = max(1, ttl // 60)
+        try:
+            await self.email_sender.send(
+                to=user.email,
+                subject="Reset your Corner Room password",
+                body=(
+                    "Someone (maybe you) asked to reset the password of your Corner Room account.\n\n"
+                    f"Open this link to choose a new password (it works once, for {minutes} minutes):\n\n"
+                    f"{link}\n\n"
+                    "If you didn't ask for this, you can ignore this email. Your password has not changed.\n"
+                ),
+            )
+        except Exception:  # noqa: BLE001 - see docstring
+            log.exception("password_reset_email_failed", user_id=str(user.id))
 
     async def complete_password_recovery(
         self,

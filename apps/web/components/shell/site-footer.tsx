@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
 import { Logo } from "@/components/brand/logo";
 import { Reveal } from "@/components/ds/reveal";
+import { LEGAL_LINKS, SUPPORT_EMAIL, supportMailto } from "@/lib/site-contact";
 
 /* Provisional tagline (D-P16-07, launch blocker LB-02). Replace both lines together with the home hero. */
 export const TAGLINE = "The city's corner. The music's room.";
@@ -15,8 +16,7 @@ type FooterLink = { href: string; label: string };
 /**
  * Site footer for the public, listening, account and artist shells. A low corner light rises
  * behind the logo as the closing note (static; it only fades in once, and not under reduced
- * motion). Contact details are not approved yet, so they are an explicit placeholder: never an
- * invented email, phone, address or social account.
+ * motion). Contact: the default support address and the legal pages (owner, 2026-10-25).
  */
 export function SiteFooter({ world = "ember" }: { world?: "ember" | "sky" }) {
   const { status } = useAuth();
@@ -81,8 +81,22 @@ export function SiteFooter({ world = "ember" }: { world?: "ember" | "sky" }) {
         ))}
         <div>
           <p className="cr-eyebrow text-fg-muted">Contact</p>
-          {/* Placeholder until the owner approves contact details. Do not fill in invented ones. */}
-          <p className="mt-4 text-sm text-fg-muted">Contact details coming soon.</p>
+          {/* Default contact (owner, 2026-10-25; OD-31): lib/site-contact.ts. No phone, address or
+              social accounts until the owner gives real ones. */}
+          <a href={supportMailto()} className="cr-focus mt-4 inline-block text-sm text-fg hover:text-highlight">
+            {SUPPORT_EMAIL}
+          </a>
+          <nav aria-label="Footer: Legal" className="mt-5">
+            <ul className="flex flex-wrap gap-x-4 gap-y-2">
+              {LEGAL_LINKS.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className="cr-focus text-sm text-fg-muted hover:text-highlight">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
         </div>
       </div>
     </footer>

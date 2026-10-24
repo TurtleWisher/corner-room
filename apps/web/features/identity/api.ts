@@ -211,6 +211,46 @@ export async function completeVerification(token: string): Promise<void> {
 }
 
 /**
+ * Change the password while signed in. The API signs out every other device and starts a fresh
+ * session here, so the new access token replaces the old one. A wrong current password is a 401
+ * that must not be mistaken for an expired session (no refresh, no retry).
+ */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const result = await apiFetch<TokenResponse>("/api/v1/auth/password/change", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    retry: false,
+    skipRefresh: true,
+  });
+  setAccessToken(result.access_token);
+}
+
+/** Ask for a password reset link. The answer is the same whether or not the address has an account. */
+export async function requestPasswordReset(email: string): Promise<void> {
+  await apiFetch<{ status: string }>("/api/v1/auth/password/forgot", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+    retry: false,
+    skipAuth: true,
+    skipRefresh: true,
+  });
+}
+
+/** Set a new password with the one-time token from the emailed link. Signs out every device. */
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  await apiFetch<void>("/api/v1/auth/password/reset", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword }),
+    retry: false,
+    skipAuth: true,
+    skipRefresh: true,
+  });
+}
+
+/**
  * Turn a dev verification link into a same-site path. The token stays in the `#` fragment, so it
  * is never sent to a server or written to access logs. Anything unexpected gives null.
  */

@@ -96,6 +96,27 @@ export function signInPageFrom(value: string | null | undefined): string {
   return (SIGN_IN_PAGES as readonly string[]).includes(value ?? "") ? (value as string) : "/login";
 }
 
+/** The world an account page takes from the sign-in page it came from (fans Ember, D-THEME-01/02). */
+export function authWorldFor(signInPath: string): "ember" | "staff" | "artist-studio" {
+  if (signInPath === "/staff/sign-in") return "staff";
+  if (signInPath === "/studio/sign-in") return "artist-studio";
+  return "ember";
+}
+
+/** "Forgot your password?" from a sign-in page, remembering which one to return to. */
+export function forgotPasswordLink(signInPath: string): string {
+  const page = signInPageFrom(signInPath);
+  return page === "/login" ? "/forgot-password" : `/forgot-password?signin=${encodeURIComponent(page)}`;
+}
+
+/** Same bounds as the API (8 to 128 characters); null when the new password can be sent. */
+export function newPasswordProblem(password: string, confirm: string): { field: "password" | "confirm"; message: string } | null {
+  if (password.length < 8) return { field: "password", message: "Use at least 8 characters." };
+  if (password.length > 128) return { field: "password", message: "Use 128 characters or fewer." };
+  if (password !== confirm) return { field: "confirm", message: "The two passwords do not match." };
+  return null;
+}
+
 /** The verification link, telling it where to sign in afterwards and where to go after that. */
 export function verifyLinkFor(verifyPath: string, next: string | null | undefined, signInPath: string): string {
   const withDest = withNext(verifyPath, next);
