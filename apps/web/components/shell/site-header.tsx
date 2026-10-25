@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Menu, Search } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
+import { BetaTag } from "@/components/brand/beta-tag";
 import { Logo } from "@/components/brand/logo";
 import { ButtonLink } from "@/components/ds";
 import { AccountMenu, AvatarButton } from "@/components/shell/account-menu";
@@ -88,9 +89,12 @@ export function SiteHeader({
   return (
     <header data-theme={world} className="cr-scope cr-bar sticky top-0 z-30 border-b border-line">
       <div className="mx-auto flex h-16 max-w-[90rem] items-center gap-6 px-4 md:px-6">
-        <Link href="/" className="cr-focus shrink-0" aria-label="Corner Room home">
-          <Logo variant={world === "sky" ? "indigo" : "ember"} height={40} alt="" />
-        </Link>
+        <div className="flex shrink-0 items-end gap-2">
+          <Link href="/" className="cr-focus shrink-0" aria-label="Corner Room home">
+            <Logo variant={world === "sky" ? "indigo" : "ember"} height={40} alt="" />
+          </Link>
+          <BetaTag className="pb-0.5" />
+        </div>
         <NavLinks items={PUBLIC_NAV} label="Main" className="hidden min-w-0 flex-1 lg:block" />
         <div className="ml-auto flex items-center gap-1">
           <Link href={SEARCH_HREF} aria-label="Search" title="Search" className={ICON_LINK}>

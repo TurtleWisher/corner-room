@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 from cornerroom.infra.base import ActorMixin, Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin, VersionMixin
@@ -210,3 +210,42 @@ class OrderDeliveryAddress(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     house_road: Mapped[str] = mapped_column(String(200), nullable=False)
     postcode: Mapped[str | None] = mapped_column(String(4), nullable=True)
     landmark: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+PRESALE_STATUSES = ("WAITING", "CLAIMED", "CANCELLED")
+
+
+class PresaleClaim(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
+    """A sale made before Corner Room existed (owner, 2026-10-25: the MIZULS single's ~90 buyers).
+
+    Staff list who paid and how much. When that email becomes a verified Corner Room account, the
+    pre-sale becomes a normal order and payment through the usual pipeline, so the buyer owns the
+    song and it counts in sales and finance from then on (`PresaleService.claim_for_user`).
+    Personal data: name and email only (no phone or address)."""
+
+    __tablename__ = "presale_claims"
+    __table_args__ = (
+        CheckConstraint("status IN ('WAITING','CLAIMED','CANCELLED')", name="status"),
+        CheckConstraint("amount_minor >= 0", name="amount_not_negative"),  # 0 = a gift (owner, 2026-10-25)
+        Index("ix_presale_claims_email", "email"),
+        Index(
+            "uq_presale_claims_product_email_live",
+            "product_id",
+            "email",
+            unique=True,
+            postgresql_where=text("status <> 'CANCELLED'"),
+        ),
+        {"schema": "commerce"},
+    )
+
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("identity.organizations.id"), nullable=False)
+    product_id: Mapped[UUID] = mapped_column(ForeignKey("commerce.products.id"), nullable=False)
+    # Always stored lower-case and trimmed, the way accounts store emails.
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    buyer_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
+    paid_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="WAITING")
+    claimed_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("identity.users.id"), nullable=True)
+    order_id: Mapped[UUID | None] = mapped_column(ForeignKey("commerce.orders.id"), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

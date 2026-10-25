@@ -46,7 +46,7 @@ Corner Room is a Bangladesh-first "unified entertainment operating system": live
 
 Modules: identity, authorization, audit, documents, events (with venues), ticketing, artists (with bands), music, streaming, commerce, entitlements, subscriptions, royalties, finance, campaigns, notifications, search, analytics, administration.
 
-Migrations: `apps/api/alembic/versions/0001` to `0030`, a linear chain with head `0030_activate_playback_profiles` (0017 to 0022 are the audio platform; 0023 artist join links; 0024 per-ticket refunds; 0025 delivery addresses; 0026 Bangla QR staff verification; 0027 order lines record their product; 0028 event posters; 0029 profile pictures and staff-reviewed artist profile changes; 0030 switches the Opus 160 / MP3 320 playback copies on, data only). Additive only: **never rewrite an existing revision**, and never use `create_all` on a migrated database.
+Migrations: `apps/api/alembic/versions/0001` to `0031`, a linear chain with head `0031_presale_claims` (0017 to 0022 are the audio platform; 0023 artist join links; 0024 per-ticket refunds; 0025 delivery addresses; 0026 Bangla QR staff verification; 0027 order lines record their product; 0028 event posters; 0029 profile pictures and staff-reviewed artist profile changes; 0030 switches the Opus 160 / MP3 320 playback copies on, data only; 0031 pre-sales: buyers who paid before launch, claimed into normal orders when their email is verified, `modules/commerce/application/presales.py`). Additive only: **never rewrite an existing revision**, and never use `create_all` on a migrated database.
 
 ### Frontend layout (`apps/web/`)
 

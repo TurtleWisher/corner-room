@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Menu } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
+import { BetaTag } from "@/components/brand/beta-tag";
 import { Logo } from "@/components/brand/logo";
 import { ButtonLink } from "@/components/ds";
 import { Drawer } from "@/components/ds/dialog";
@@ -55,10 +56,15 @@ function StaffNav({ sections, onNavigate }: { sections: NavSection[]; onNavigate
 
 function ConsoleMark() {
   return (
-    <Link href="/" className="cr-focus flex items-center gap-3" aria-label="Corner Room home">
-      <Logo variant="ember" height={40} alt="" />
+    <div className="flex items-center gap-3">
+      <div className="flex items-end gap-2">
+        <Link href="/" className="cr-focus" aria-label="Corner Room home">
+          <Logo variant="ember" height={40} alt="" />
+        </Link>
+        <BetaTag className="pb-0.5" />
+      </div>
       <span className="cr-eyebrow text-[0.6875rem] text-fg">Staff console</span>
-    </Link>
+    </div>
   );
 }
 
@@ -107,9 +113,12 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
             >
               <Menu className="size-5" aria-hidden="true" />
             </button>
-            <Link href="/" className="cr-focus lg:hidden" aria-label="Corner Room home">
-              <Logo variant="ember" height={40} alt="" />
-            </Link>
+            <div className="flex items-end gap-2 lg:hidden">
+              <Link href="/" className="cr-focus" aria-label="Corner Room home">
+                <Logo variant="ember" height={40} alt="" />
+              </Link>
+              <BetaTag className="pb-0.5" />
+            </div>
             {crumb ? (
               <p className="hidden text-sm text-fg-muted lg:block">
                 {crumb[0]} / <span className="font-semibold text-fg">{crumb[1]}</span>

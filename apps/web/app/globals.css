@@ -7,6 +7,7 @@
 @import "./styles/modules/home.css";
 @import "./styles/modules/listen.css";
 @import "./styles/purchase.css";
+@import "./styles/coming-soon.css";
 
 /*
  * Legacy layer (pre-Phase 16 pages). Kept byte-for-byte in effect so existing pages render

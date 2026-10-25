@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { ArrowRight, LayoutGrid, Library, ListMusic, Receipt, Ticket, type LucideIcon } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
+import { ComingSoon } from "@/components/brand/coming-soon";
 import { LitSurface } from "@/components/brand/corner-light";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { ButtonLink, Card, DateTime, Skeleton } from "@/components/ds";
@@ -244,7 +245,13 @@ function Upcoming({ state }: { state: ReturnType<typeof useAsync<EventRecord[]>>
       ) : state.status === "error" ? (
         <p className="py-8 text-sm text-fg-muted">Events could not be loaded. Please try again later.</p>
       ) : rows.length === 0 ? (
-        <p className="py-8 text-sm text-fg-muted">No events announced yet.</p>
+        <ComingSoon
+          as="h3"
+          eyebrow="Events"
+          title="Events coming soon"
+          body="The first shows will be announced here, with tickets on sale in the same place."
+          className="mt-4"
+        />
       ) : (
         <ul>
           {rows.map((event) => (

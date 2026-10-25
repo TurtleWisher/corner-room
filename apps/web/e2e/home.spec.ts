@@ -35,7 +35,7 @@ test("home sections are present, in order, with honest states and no sideways sc
   await scrollThrough(page);
   await expect(page.getByRole("heading", { name: /New releases/ })).toBeVisible();
   await expect(page.getByText("Releases could not be loaded. Please try again later.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Find the music you love. Help the artists who make it." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Find the music you love. Purchase music of your favorite artist and own it." })).toBeVisible();
   await expect(page.getByText("Contact details coming soon.")).toBeVisible();
   // No product tiles are invented when the store cannot be read.
   await expect(page.getByRole("list", { name: "In the Store now" })).toHaveCount(0);

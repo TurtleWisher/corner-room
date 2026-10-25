@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
+import { ComingSoon } from "@/components/brand/coming-soon";
 import { LitSurface } from "@/components/brand/corner-light";
-import { Button, EmptyState, ErrorState, Reveal, Skeleton } from "@/components/ds";
+import { Button, ErrorState, Reveal, Skeleton } from "@/components/ds";
 import { EventRow } from "@/components/events/event-row";
 import { PageIntro, RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
@@ -125,11 +126,21 @@ export default function WhatsOnPage() {
         ) : first.status === "error" ? (
           <ErrorState title="Events unavailable" message={loadErrorMessage(first.error, "events")} action={<RetryButton onClick={first.reload} />} />
         ) : all.length === 0 ? (
-          <EmptyState title="No events announced yet" body="New shows will appear here when they are announced." />
+          <ComingSoon
+            eyebrow="Events"
+            title="Events coming soon"
+            body="The first shows will be announced here, with tickets on sale in the same place. Check back soon."
+          />
         ) : (
           // The focus effect spans every list on the page: the row under the pointer stays sharp.
           <div className="ev-whatson space-y-12">
-            {current.length === 0 ? <EmptyState title="Nothing coming up right now" body="New shows will appear here when they are announced." /> : null}
+            {current.length === 0 ? (
+              <ComingSoon
+                eyebrow="Events"
+                title="New events coming soon"
+                body="Nothing is on right now. The next shows will be announced here, with tickets on sale in the same place."
+              />
+            ) : null}
             {groupByMonth(current).map((group, i) => (
               <Reveal as="section" index={i} key={group.label} aria-labelledby={`m-${group.label}`}>
                 <h2 id={`m-${group.label}`} className="cr-eyebrow border-b border-line pb-3 text-[0.75rem] text-highlight">

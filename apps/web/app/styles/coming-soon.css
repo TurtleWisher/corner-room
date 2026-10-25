@@ -1,0 +1,49 @@
+/* "Coming soon" panel (components/brand/coming-soon.tsx): a small equaliser that rises and falls. */
+.cr-soon-eq {
+  display: inline-flex;
+  height: 2rem;
+  align-items: flex-end;
+  gap: 4px;
+}
+.cr-soon-eq i {
+  width: 5px;
+  height: 100%;
+  background: currentColor;
+  transform-origin: bottom;
+  transform: scaleY(0.45);
+  animation: cr-soon-eq 1100ms cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+.cr-soon-eq i:nth-child(2) {
+  animation-delay: -250ms;
+}
+.cr-soon-eq i:nth-child(3) {
+  animation-delay: -700ms;
+}
+.cr-soon-eq i:nth-child(4) {
+  animation-delay: -100ms;
+}
+.cr-soon-eq i:nth-child(5) {
+  animation-delay: -850ms;
+}
+.cr-soon-eq i:nth-child(6) {
+  animation-delay: -400ms;
+}
+.cr-soon-eq i:nth-child(7) {
+  animation-delay: -1000ms;
+}
+@keyframes cr-soon-eq {
+  from {
+    transform: scaleY(0.2);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cr-soon-eq i {
+    animation: none;
+  }
+  .cr-soon-eq i:nth-child(even) {
+    transform: scaleY(0.7);
+  }
+}

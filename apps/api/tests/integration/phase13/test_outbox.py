@@ -52,6 +52,10 @@ def test_phase13_uses_existing_outbox_only() -> None:
         "consume_notification_event",
         "consume_search_event",
         "consume_analytics_event",
+        # Pre-sales claimed when a listed email is verified (D-PRESALE-01, 2026-10-25).
+        "consume_presale_event",
+        # Finance staff alerted when a buyer sends a transaction ID (D-PAYALERT-01, 2026-10-25).
+        "consume_payment_alert_event",
     }
 
 
