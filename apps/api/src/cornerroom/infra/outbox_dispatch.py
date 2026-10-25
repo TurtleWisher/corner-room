@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cornerroom.infra.outbox import OutboxEvent
 from cornerroom.kernel.events import DomainEvent
 from cornerroom.modules.analytics.application.consumers import consume_analytics_event
+from cornerroom.modules.commerce.application.presales import consume_presale_event
 from cornerroom.modules.notifications.application.consumers import consume_notification_event
 from cornerroom.modules.search.application.consumers import consume_search_event
 
@@ -29,6 +30,8 @@ SIDE_CONSUMERS: list[OutboxHandler] = [
     consume_notification_event,
     consume_search_event,
     consume_analytics_event,
+    # A newly verified account may have pre-sales waiting under its email (D-PRESALE-01).
+    consume_presale_event,
 ]
 
 

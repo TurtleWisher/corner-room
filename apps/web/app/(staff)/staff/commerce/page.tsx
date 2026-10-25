@@ -15,6 +15,7 @@ import {
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
 import { PriceProposals } from "@/components/staff/price-proposals";
 import { PaymentChecks } from "@/components/staff/payment-checks";
+import { Presales } from "@/components/staff/presales";
 import { Refunds } from "@/components/staff/refunds";
 import { StatusChip } from "@/components/ds";
 
@@ -101,6 +102,7 @@ function CommerceBody() {
       <PaymentChecks />
       <PriceProposals onDecided={() => void reload()} />
       <Refunds />
+      <Presales products={products} />
       <Card>
         <form onSubmit={onProduct} className="space-y-3">
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name" />

@@ -279,3 +279,39 @@ export async function rejectSubmission(id: string, reason: string): Promise<Staf
     retry: false,
   });
 }
+/* ---------- Pre-sales (owner, 2026-10-25, D-PRESALE-01) ---------- */
+
+export type PresaleRecord = {
+  id: string;
+  email: string;
+  buyer_name: string | null;
+  amount_minor: number;
+  currency_code: string;
+  paid_on: string | null;
+  status: string;
+  claimed_at: string | null;
+  order_id: string | null;
+};
+
+export type PresaleTotals = { buyers: number; claimed: number; amount_minor: number; claimed_amount_minor: number };
+
+export type PresaleList = { product_id: string; items: PresaleRecord[]; totals: Record<string, PresaleTotals> };
+
+export type PresaleRowInput = { email: string; buyer_name: string | null; amount_minor: number; paid_on: string | null };
+
+export async function fetchPresales(productId: string): Promise<PresaleList> {
+  return apiFetch<PresaleList>(`/api/v1/staff/presales?product_id=${encodeURIComponent(productId)}`, { retry: false });
+}
+
+export async function uploadPresales(productId: string, rows: PresaleRowInput[]): Promise<{ added: number; skipped: string[]; claimed_now: number }> {
+  return apiFetch(`/api/v1/staff/presales`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ product_id: productId, rows }),
+    retry: false,
+  });
+}
+
+export async function cancelPresale(id: string): Promise<PresaleRecord> {
+  return apiFetch<PresaleRecord>(`/api/v1/staff/presales/${id}/cancel`, { method: "POST", retry: false });
+}

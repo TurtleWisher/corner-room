@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 from cornerroom.api.deps import (
     catalog_commerce_service,
@@ -15,10 +15,12 @@ from cornerroom.api.deps import (
     get_auth_context,
     get_optional_auth_context,
     payment_service,
+    presale_service,
 )
 from cornerroom.infra.errors import AppError
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.commerce.application.catalog import CatalogCommerceService
+from cornerroom.modules.commerce.application.presales import MAX_NAME_LENGTH, MAX_ROWS_PER_UPLOAD, PresaleService
 from cornerroom.modules.commerce.application.service import CheckoutService
 from cornerroom.modules.commerce.domain.models import Offer, Product
 from cornerroom.modules.entitlements.domain.models import Entitlement
@@ -584,3 +586,87 @@ async def decide_offer_proposal(
     proposal = await svc.decide_proposal(ctx, proposal_id, decision=body.decision, note=body.note)
     rows = await svc.list_proposals(ctx, status=None, proposal_id=proposal.id)
     return ProposalQueueOut(**rows[0])
+
+
+# --- Pre-sales (owner, 2026-10-25, D-PRESALE-01) ----------------------------------------------
+
+
+class PresaleRowIn(BaseModel):
+    email: EmailStr
+    buyer_name: str | None = Field(default=None, max_length=MAX_NAME_LENGTH)
+    amount_minor: int = Field(gt=0)
+    currency_code: str = Field(default="BDT", min_length=3, max_length=3)
+    paid_on: date | None = None
+
+
+class PresaleUploadIn(BaseModel):
+    product_id: UUID
+    rows: list[PresaleRowIn] = Field(min_length=1, max_length=MAX_ROWS_PER_UPLOAD)
+
+
+class PresaleUploadOut(BaseModel):
+    added: int
+    skipped: list[str]
+    claimed_now: int
+
+
+class PresaleOut(BaseModel):
+    id: UUID
+    email: str
+    buyer_name: str | None
+    amount_minor: int
+    currency_code: str
+    paid_on: date | None
+    status: str
+    claimed_at: datetime | None
+    order_id: UUID | None
+
+
+class PresaleTotalsOut(BaseModel):
+    buyers: int
+    claimed: int
+    amount_minor: int
+    claimed_amount_minor: int
+
+
+class PresaleListOut(BaseModel):
+    product_id: UUID
+    items: list[PresaleOut]
+    totals: dict[str, PresaleTotalsOut]
+
+
+@router.get("/staff/presales", response_model=PresaleListOut)
+async def staff_presales(
+    product_id: UUID,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[PresaleService, Depends(presale_service)],
+) -> PresaleListOut:
+    """A song's or release's pre-sale list: who paid before launch and who has claimed it."""
+    data = await svc.list_for_product(ctx, product_id)
+    return PresaleListOut(
+        product_id=data["product_id"],
+        items=[PresaleOut.model_validate(row, from_attributes=True) for row in data["items"]],
+        totals={code: PresaleTotalsOut(**t) for code, t in data["totals"].items()},
+    )
+
+
+@router.post("/staff/presales", response_model=PresaleUploadOut, status_code=201)
+async def upload_presales(
+    body: PresaleUploadIn,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[PresaleService, Depends(presale_service)],
+) -> PresaleUploadOut:
+    """Add buyers who paid before launch. Already-listed emails are skipped, so re-uploading is safe;
+    buyers with a verified account get the song at once, everyone else when they verify."""
+    result = await svc.upload(ctx, product_id=body.product_id, rows=[row.model_dump() for row in body.rows])
+    return PresaleUploadOut(**result)
+
+
+@router.post("/staff/presales/{presale_id}/cancel", response_model=PresaleOut)
+async def cancel_presale(
+    presale_id: UUID,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[PresaleService, Depends(presale_service)],
+) -> PresaleOut:
+    """Remove a mistaken row that is still waiting (a claimed pre-sale is refunded like any order)."""
+    return PresaleOut.model_validate(await svc.cancel(ctx, presale_id), from_attributes=True)
