@@ -42,7 +42,7 @@ def upgrade() -> None:
         sa.Column("created_by", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("updated_by", postgresql.UUID(as_uuid=True), nullable=True),
         sa.CheckConstraint("status IN ('WAITING','CLAIMED','CANCELLED')", name="ck_presale_claims_status"),
-        sa.CheckConstraint("amount_minor > 0", name="ck_presale_claims_amount_positive"),
+        sa.CheckConstraint("amount_minor >= 0", name="ck_presale_claims_amount_not_negative"),  # 0 = a gift
         schema="commerce",
     )
     op.create_index("ix_presale_claims_email", "presale_claims", ["email"], schema="commerce")

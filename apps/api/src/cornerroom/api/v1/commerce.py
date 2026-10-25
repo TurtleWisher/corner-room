@@ -594,7 +594,7 @@ async def decide_offer_proposal(
 class PresaleRowIn(BaseModel):
     email: EmailStr
     buyer_name: str | None = Field(default=None, max_length=MAX_NAME_LENGTH)
-    amount_minor: int = Field(gt=0)
+    amount_minor: int = Field(ge=0)  # 0 = a gift (owner, 2026-10-25): counts as a sale, no money
     currency_code: str = Field(default="BDT", min_length=3, max_length=3)
     paid_on: date | None = None
 

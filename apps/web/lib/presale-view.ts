@@ -85,7 +85,8 @@ export function parsePresaleList(text: string): ParsedPresales {
     if (!EMAIL.test(email)) return problems.push({ line: n, message: `Line ${n}: "${email || "(empty)"}" is not an email address.` });
     if (seen.has(email)) return problems.push({ line: n, message: `Line ${n}: ${email} is already in this list.` });
     const amount = parsePriceToMinor(cells[at.amount_minor] ?? "");
-    if (amount === null || amount <= 0) return problems.push({ line: n, message: `Line ${n}: the amount for ${email} is not a price.` });
+    // 0 is a gift (owner, 2026-10-25): the buyer gets it and it counts as a sale, with no money.
+    if (amount === null || amount < 0) return problems.push({ line: n, message: `Line ${n}: the amount for ${email} is not a price.` });
     const rawDate = at.paid_on >= 0 ? (cells[at.paid_on] ?? "") : "";
     const paidOn = parsePaidOn(rawDate);
     if (rawDate.trim() && !paidOn) problems.push({ line: n, message: `Line ${n}: the date "${rawDate}" was not understood, so it is left empty.` });

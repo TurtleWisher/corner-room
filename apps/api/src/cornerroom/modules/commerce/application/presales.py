@@ -23,15 +23,16 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.infra.errors import AppError, ForbiddenError, NotFoundError
+from cornerroom.infra.outbox import enqueue_outbox
 from cornerroom.infra.settings import Settings, get_settings
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
-from cornerroom.kernel.events import DomainEvent, USER_ACTIVATED, USER_REGISTERED, USER_VERIFIED
+from cornerroom.kernel.events import ORDER_PAID, USER_ACTIVATED, USER_REGISTERED, USER_VERIFIED, DomainEvent
 from cornerroom.kernel.money import Money
 from cornerroom.kernel.payment import PaymentCallback
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
-from cornerroom.modules.commerce.domain.lifecycle import assert_sellable_type
+from cornerroom.modules.commerce.domain.lifecycle import assert_sellable_type, order_transition_action
 from cornerroom.modules.commerce.domain.models import Order, OrderItem, PresaleClaim, Product
 from cornerroom.modules.identity.domain.models import User
 
@@ -255,17 +256,20 @@ class PresaleService:
         )
         await self.session.flush()
         checkout._add_tax_line(order)
-        payment = await checkout.payments.create_intent(ctx, order=order, idempotency_key=f"pay:{key}")
-        payment = await checkout.payments.apply_callback(
-            PaymentCallback(
-                payment_id=payment.id,
-                amount_minor=claim.amount_minor,
-                currency_code=claim.currency_code,
-                provider_event_id=key,
-                captured=True,
+        if claim.amount_minor == 0:
+            await self._fulfil_gift(checkout, ctx, order)
+        else:
+            payment = await checkout.payments.create_intent(ctx, order=order, idempotency_key=f"pay:{key}")
+            payment = await checkout.payments.apply_callback(
+                PaymentCallback(
+                    payment_id=payment.id,
+                    amount_minor=claim.amount_minor,
+                    currency_code=claim.currency_code,
+                    provider_event_id=key,
+                    captured=True,
+                )
             )
-        )
-        order = await checkout.fulfill_captured_payment(ctx, payment)
+            order = await checkout.fulfill_captured_payment(ctx, payment)
         claim.status = "CLAIMED"
         claim.claimed_user_id = user.id
         claim.order_id = order.id
@@ -284,6 +288,29 @@ class PresaleService:
         )
         log.info("presale_claimed", presale_id=str(claim.id), order_id=str(order.id))
         return True
+
+    async def _fulfil_gift(self, checkout: Any, ctx: AuthContext, order: Order) -> None:
+        """A ৳0 gift (owner, 2026-10-25): the buyer owns it and it counts as a sale, but no payment
+        is made, so nothing reaches the ledger, revenue or royalty money."""
+        order_transition_action(order.status, "PAID")
+        order.status = "PAID"
+        await self.session.flush()
+        organization_id = await checkout._fulfill_items(ctx, order)
+        order_transition_action(order.status, "FULFILLED")
+        order.status = "FULFILLED"
+        await self.session.flush()
+        await enqueue_outbox(
+            self.session,
+            DomainEvent(
+                event_type=ORDER_PAID,
+                producer="commerce",
+                aggregate_type="Order",
+                aggregate_id=order.id,
+                payload={"order_id": str(order.id), "gift": True},
+                occurred_at=self.clock.now(),
+                organization_id=organization_id,
+            ),
+        )
 
 
 CLAIM_EVENTS = {USER_VERIFIED, USER_REGISTERED, USER_ACTIVATED}

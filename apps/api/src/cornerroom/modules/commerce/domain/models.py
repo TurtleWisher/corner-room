@@ -225,7 +225,7 @@ class PresaleClaim(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
     __tablename__ = "presale_claims"
     __table_args__ = (
         CheckConstraint("status IN ('WAITING','CLAIMED','CANCELLED')", name="status"),
-        CheckConstraint("amount_minor > 0", name="amount_positive"),
+        CheckConstraint("amount_minor >= 0", name="amount_not_negative"),  # 0 = a gift (owner, 2026-10-25)
         Index("ix_presale_claims_email", "email"),
         Index(
             "uq_presale_claims_product_email_live",

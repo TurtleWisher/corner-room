@@ -34,6 +34,12 @@ describe("pre-sale list", () => {
     expect(problems[2].message).toContain("left empty");
   });
 
+  it("keeps a ৳0 gift as a row (owner, 2026-10-25)", () => {
+    const { rows, problems } = parsePresaleList("Email,Amount\ngift@example.com,0");
+    expect(problems).toEqual([]);
+    expect(rows).toEqual([{ email: "gift@example.com", buyer_name: null, amount_minor: 0, paid_on: null }]);
+  });
+
   it("doesn't mistake a 'Paid on' date column for the amount", () => {
     const { rows } = parsePresaleList("Paid on,Email,Amount\n2026-09-02,ab@example.com,500");
     expect(rows).toEqual([{ email: "ab@example.com", buyer_name: null, amount_minor: 50000, paid_on: "2026-09-02" }]);

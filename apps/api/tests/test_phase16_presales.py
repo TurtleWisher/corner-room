@@ -160,3 +160,54 @@ async def test_waiting_presales_can_be_removed_and_unverified_accounts_do_not_cl
     # Bad input is refused before anything is stored.
     bad = await client.post("/api/v1/staff/presales", headers=bearer(finance), json={"product_id": product_id, "rows": [{"email": "not-an-email", "amount_minor": 0}]})
     assert bad.status_code == 422
+    negative = await client.post("/api/v1/staff/presales", headers=bearer(finance), json={"product_id": product_id, "rows": [{"email": "neg@example.com", "amount_minor": -100}]})
+    assert negative.status_code == 422
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_a_gift_presale_gives_the_song_and_counts_as_a_sale_with_no_money(client: AsyncClient) -> None:
+    """Owner, 2026-10-25: ৳0 gifts on the list get the song and count as a sale, but no payment is
+    made, so nothing reaches finance."""
+    from cornerroom.infra.db import get_session_factory
+    from cornerroom.modules.commerce.domain.models import Order
+    from cornerroom.modules.finance.domain.models_payments import Payment
+
+    admin, orgs = await _orgs(client)
+    label = orgs["LABEL"]
+    release_id, _track, owner, artist_id = await _released(client, admin, label, "gift-artist@example.com", "Gift Act")
+    finance = await _staff_with(client, admin, "gift-fin@example.com", "finance_manager", label)
+    queue = (await client.get("/api/v1/offer-proposals", headers=bearer(finance))).json()
+    pid = next(p["id"] for p in queue if p["release_id"] == release_id)
+    await client.post(f"/api/v1/offer-proposals/{pid}/decision", headers=bearer(finance), json={"decision": "accept"})
+    product_id = next(o["product_id"] for o in (await client.get("/api/v1/offers")).json()["items"] if o.get("subject_id") == release_id)
+
+    friend = await register_and_login(client, "gift-friend@example.com")
+    await _mark_verified("gift-friend@example.com")
+    up = await client.post(
+        "/api/v1/staff/presales",
+        headers=bearer(finance),
+        json={"product_id": product_id, "rows": [{"email": "gift-friend@example.com", "buyer_name": "Friend", "amount_minor": 0}]},
+    )
+    assert up.status_code == 201, up.text
+    assert up.json()["claimed_now"] == 1
+
+    ents = (await client.get("/api/v1/me/entitlements", headers=bearer(friend["access_token"]))).json()["items"]
+    assert any(e["scope"] == "RELEASE" and e["ref_id"] == release_id and e["status"] == "ACTIVE" for e in ents)
+    sales = (await client.get(f"/api/v1/studio/profiles/artist/{artist_id}/sales", headers=bearer(owner["access_token"]))).json()
+    assert sales["totals"][0]["sold_count"] == 1 and sales["totals"][0]["gross_amount_minor"] == 0
+
+    async with get_session_factory()() as session:
+        order = (await session.execute(select(Order).where(Order.user_id == UUID(friend["user"]["id"])))).scalar_one()
+        assert order.status == "FULFILLED" and order.total_amount_minor == 0
+        payments = (await session.execute(select(func.count()).select_from(Payment).where(Payment.order_id == order.id))).scalar_one()
+        assert payments == 0
+    # The OrderPaid event is delivered like any other (receipt notification, analytics).
+    while await drain_outbox_all():
+        pass
+
+
+async def drain_outbox_all() -> int:
+    from cornerroom.worker import drain_outbox
+
+    return await drain_outbox({})
