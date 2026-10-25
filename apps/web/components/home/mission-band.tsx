@@ -12,12 +12,13 @@ import { storeHighlights } from "@/lib/home-view";
 import { offerTitle, productKind } from "@/lib/store-view";
 
 /*
- * The mission and the way into the Store (home section 03). Copy is PROVISIONAL (owner draft,
- * 2026-10-13, OD-30): replace together with the tagline review (LB-02). Products come only from
+ * The mission and the way into the Store (home section 03). Copy is PROVISIONAL (owner wording,
+ * 2026-10-25, replacing the 2026-10-13 draft, OD-30): replace together with the tagline review
+ * (LB-02). Products come only from
  * the live store (songs and releases; no plans or passes, D-COMMERCE-01); there are no collectibles
  * or merch (Q-P1-28).
  */
-export const MISSION_LINE = "Find the music you love. Help the artists who make it.";
+export const MISSION_LINE = "Find the music you love. Purchase music of your favorite artist and own it.";
 
 export function MissionBand() {
   const store = useAsync(() => fetchOffers().then((o) => storeHighlights(o.items)), []);
@@ -36,7 +37,9 @@ export function MissionBand() {
           <Display as="h2" id="home-mission" size="md" className="mt-5 max-w-3xl leading-[0.92]">
             {MISSION_LINE}
           </Display>
-          <p className="cr-display-line mt-5 max-w-xl text-base text-fg md:text-lg">Buy songs and releases straight from the artists, and keep them.</p>
+          <p className="cr-display-line mt-5 max-w-xl text-base text-fg md:text-lg">
+            Pay once for a song or a release. It stays yours, and you can save it to play offline.
+          </p>
           <ButtonLink href="/store" size="lg" className="mt-8">
             Visit the Store <ArrowRight aria-hidden="true" />
           </ButtonLink>

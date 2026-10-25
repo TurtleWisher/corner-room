@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Menu } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
+import { BetaTag } from "@/components/brand/beta-tag";
 import { Logo } from "@/components/brand/logo";
 import { ButtonLink, Skeleton } from "@/components/ds";
 import { Drawer } from "@/components/ds/dialog";
@@ -24,12 +25,17 @@ const WORLD = "artist-studio";
 /** The mint mark (D-THEME-02): the official mint colourway on its Signal Mint field, never on the dark base. */
 function StudioMark({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/studio" className="cr-focus flex items-center gap-3" aria-label="Artist Studio home">
-      <span className="cr-cut cr-cut-sm inline-flex shrink-0 p-1.5 [--cut-fill:var(--cr-brand)]">
-        <Logo variant="artist-mint" height={40} alt="" />
-      </span>
+    <div className="flex items-center gap-3">
+      <div className="flex items-end gap-2">
+        <Link href="/studio" className="cr-focus" aria-label="Artist Studio home">
+          <span className="cr-cut cr-cut-sm inline-flex shrink-0 p-1.5 [--cut-fill:var(--cr-brand)]">
+            <Logo variant="artist-mint" height={40} alt="" />
+          </span>
+        </Link>
+        <BetaTag className="pb-0.5" />
+      </div>
       {compact ? null : <span className="cr-eyebrow text-[0.6875rem] text-fg">Artist Studio</span>}
-    </Link>
+    </div>
   );
 }
 

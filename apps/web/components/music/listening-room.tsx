@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { CoverArt } from "@/components/brand/cover-art";
+import { BetaTag } from "@/components/brand/beta-tag";
 import { Logo } from "@/components/brand/logo";
 import { PointerLightLayer } from "@/components/brand/pointer-light";
 import { RoomCube } from "@/components/brand/room-cube";
@@ -609,7 +610,10 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
       <PointerLightLayer />
       <header className="lr-top">
         <div className="flex items-center gap-3">
-          <Logo variant="indigo" height={36} alt="Corner Room" />
+          <div className="flex items-end gap-2">
+            <Logo variant="indigo" height={36} alt="Corner Room" />
+            <BetaTag className="pb-0.5" />
+          </div>
           <span className="cr-eyebrow hidden text-[0.6875rem] text-fg-muted sm:inline">Listening room</span>
         </div>
         <div className="flex items-center gap-2">

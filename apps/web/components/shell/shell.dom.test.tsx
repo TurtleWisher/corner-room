@@ -24,6 +24,7 @@ vi.mock("@/features/studio/api", () => ({ fetchMyProfiles: () => fetchMyProfiles
 
 import { AccountMenu } from "./account-menu";
 import { MobileTabBar } from "./mobile-tab-bar";
+import { SiteHeader } from "./site-header";
 import { StaffShell } from "./staff-shell";
 import { StudioShell } from "./studio-shell";
 import { WorkspaceChip } from "./workspace-chip";
@@ -96,6 +97,35 @@ describe("StaffShell", () => {
     expect(Array.from(nav.querySelectorAll("a")).some((a) => a.textContent?.trim() === "Finance")).toBe(false);
     expect(screen.getByText("content")).toBeTruthy();
     expect(screen.getAllByText("Admin").length).toBeGreaterThan(0);
+  });
+});
+
+describe("Beta label", () => {
+  it("sits beside the logo in every header, outside the logo's home link (owner, 2026-10-25)", () => {
+    const beside = (container: HTMLElement) =>
+      Array.from(container.querySelectorAll("a")).filter((a) => a.querySelector('img[src*="corner-room-logo"]')).map((a) => a.nextElementSibling?.textContent);
+    const views = [
+      render(<SiteHeader />),
+      render(<SiteHeader world="sky" />),
+      render(
+        <StaffShell>
+          <p>content</p>
+        </StaffShell>,
+      ),
+      render(
+        <StudioShell>
+          <main id="main">page</main>
+        </StudioShell>,
+      ),
+    ];
+    for (const { container } of views) {
+      const labels = beside(container);
+      expect(labels.length).toBeGreaterThan(0);
+      expect(labels.every((t) => t === "Beta")).toBe(true);
+    }
+    // The links keep their names, so "Beta" is read as its own word.
+    expect(screen.getAllByRole("link", { name: "Corner Room home" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("link", { name: "Artist Studio home" }).length).toBeGreaterThan(0);
   });
 });
 
