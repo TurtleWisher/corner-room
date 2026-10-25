@@ -148,6 +148,9 @@ class Settings(BaseSettings):
     smtp_timeout_seconds: int = 20
     # The From line, e.g. "Corner Room <no-reply@cornerroom.live>" (a domain verified in Brevo).
     email_from: str = "Corner Room <no-reply@cornerroom.live>"
+    # Finance staff inbox told when a buyer sends a Bangla QR transaction ID (D-PAYALERT-01).
+    # Empty = no alert.
+    payment_alert_email: str = ""
     password_recovery_ttl_seconds: int = 0
     # 0 = no expiry. Do not treat a default as product invite policy.
     organization_invitation_ttl_seconds: int = 0
