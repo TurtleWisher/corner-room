@@ -178,7 +178,13 @@ function TrackList({
               {duration ? <span className="cr-num text-sm text-fg-muted">{duration}</span> : null}
               {signedIn ? <SaveButton trackId={trackId} title={title} /> : null}
               {state.kind !== "unavailable" ? (
-                <TrackBuyControl track={{ id: trackId, title, artist }} commerce={commerce} playFrom={playFrom} releaseIds={[releaseId]} />
+                <TrackBuyControl
+                  track={{ id: trackId, title, artist }}
+                  commerce={commerce}
+                  playFrom={playFrom}
+                  releaseIds={[releaseId]}
+                  onReleasePage={releaseId}
+                />
               ) : null}
             </div>
           </li>
