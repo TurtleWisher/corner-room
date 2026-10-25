@@ -102,7 +102,8 @@ async def test_presale_buyers_get_the_song_on_verification_and_it_counts_as_a_sa
     # The late buyer signs up and verifies the normal way; the outbox claims the pre-sale.
     late = await register_user(client, "late-buyer@example.com")
     await _verify_by_link(client, late["id"])
-    await drain_outbox({})
+    while await drain_outbox({}):
+        pass
     listing = (await client.get("/api/v1/staff/presales", headers=bearer(finance), params={"product_id": product_id})).json()
     assert {r["email"]: r["status"] for r in listing["items"]} == {"early-buyer@example.com": "CLAIMED", "late-buyer@example.com": "CLAIMED"}
     assert listing["totals"]["BDT"]["claimed_amount_minor"] == 65000
@@ -143,7 +144,8 @@ async def test_waiting_presales_can_be_removed_and_unverified_accounts_do_not_cl
     )
     # An account that never proved its email does not take a pre-sale.
     await register_user(client, "unproven@example.com")
-    await drain_outbox({})
+    while await drain_outbox({}):
+        pass
     rows = {r["email"]: r for r in (await client.get("/api/v1/staff/presales", headers=bearer(finance), params={"product_id": product_id})).json()["items"]}
     assert rows["unproven@example.com"]["status"] == "WAITING"
 
