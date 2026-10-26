@@ -44,6 +44,7 @@ export function TrackBuyControl({
   size = "sm",
   playFrom,
   releaseIds = [],
+  onReleasePage,
 }: {
   track: PlayerTrack;
   commerce: CustomerCommerce;
@@ -52,6 +53,9 @@ export function TrackBuyControl({
   playFrom?: PlayOptions;
   /** Releases the track is known to be on, so a bought release counts as owning it. */
   releaseIds?: readonly string[];
+  /** The release whose own page this is: it already shows its buy button, so a song sold only as
+   * part of it gets a quiet lock here, not a second price button (owner, 2026-10-25). */
+  onReleasePage?: string;
 }) {
   const { status } = useAuth();
   const player = useOptionalPlayer();
@@ -103,6 +107,13 @@ export function TrackBuyControl({
   // No price of its own: the release it is on may be for sale (D-AUDIO-12); otherwise it can't be
   // bought yet. Corner Room has no plans or whole-catalog pass (D-COMMERCE-01).
   const release = releaseIds.map((id) => offerForRelease(commerce.entitlements, commerce.offers, id, [track.id])).find(Boolean);
+  if (release && onReleasePage && release.subject_id === onReleasePage) {
+    return (
+      <span className="inline-flex items-center text-fg-muted" role="img" aria-label={`${track.title}: buy the release above to play it`} title="Buy the release above to play">
+        <Lock aria-hidden="true" className="size-4" />
+      </span>
+    );
+  }
   if (release) {
     return (
       <ButtonLink href={`/checkout?offer=${release.id}`} size={size} aria-label={`Locked. Buy the release with ${track.title} to play it`} title="Buy to play">

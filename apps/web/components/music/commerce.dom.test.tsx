@@ -50,6 +50,19 @@ describe("TrackBuyControl", () => {
     expect(lock.getAttribute("href")).toBe("/checkout?offer=o1");
   });
 
+  it("on a release's own page, a song sold only with that release gets a quiet lock, not a second price", () => {
+    auth.status = "authenticated";
+    const single = { ...offer, id: "o2", product_type: "RELEASE", subject_id: "r1", amount_minor: 11400 };
+    const onlyRelease: CustomerCommerce = { offers: [single], entitlements: [], ready: true, reload: () => {} };
+    render(<TrackBuyControl track={track} commerce={onlyRelease} releaseIds={["r1"]} onReleasePage="r1" />);
+    expect(screen.getByRole("img", { name: "Night Bus: buy the release above to play it" })).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
+    cleanup();
+    // Anywhere else (a track list, the song's own page) it still offers the release.
+    render(<TrackBuyControl track={track} commerce={onlyRelease} releaseIds={["r1"]} />);
+    expect(screen.getByRole("link", { name: "Locked. Buy the release with Night Bus to play it" }).getAttribute("href")).toBe("/checkout?offer=o2");
+  });
+
   it("lets owners play (no player here, so it links to the song)", () => {
     auth.status = "authenticated";
     const owned = [{ id: "e1", scope: "TRACK", ref_id: "t1", status: "ACTIVE" }] as unknown as CustomerCommerce["entitlements"];
