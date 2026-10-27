@@ -36,6 +36,7 @@ export function MobileTabBar({ world = "ember" }: { world?: "ember" | "sky" }) {
       <div data-theme={world} className="cr-scope h-16 lg:hidden" aria-hidden="true" />
       <nav
         aria-label="Main"
+        data-tab-bar=""
         data-theme={world}
         className="cr-scope cr-bar fixed inset-x-0 bottom-0 z-40 flex h-16 border-t border-line pb-[env(safe-area-inset-bottom)] lg:hidden"
       >

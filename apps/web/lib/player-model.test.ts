@@ -65,8 +65,8 @@ describe("repeat and shuffle", () => {
 });
 
 describe("codecs and levelling", () => {
-  it("asks for what the browser can decode, MP3 always included", () => {
-    expect(acceptCodecs((m) => (m.includes("opus") || m === "audio/mpeg" ? "probably" : ""))).toEqual(["opus", "mp3"]);
+  it("asks for MP3 320 first (owner, 2026-10-28), Opus as the fallback where it decodes", () => {
+    expect(acceptCodecs((m) => (m.includes("opus") || m === "audio/mpeg" ? "probably" : ""))).toEqual(["mp3", "opus"]);
     expect(acceptCodecs(() => "")).toEqual(["mp3"]);
     expect(
       acceptCodecs(() => {
