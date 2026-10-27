@@ -30,7 +30,7 @@ import {
   type TrackRecord,
 } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
-import { creditHref, creditName, formatDuration, playQueue, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
+import { canModerateMusic, creditHref, creditName, formatDuration, playQueue, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
 import { ownsTrack, releaseBuyLabel, releaseBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 import { cn } from "@/lib/utils";
@@ -43,6 +43,22 @@ const ACTIONS = ["start_demo", "start_production", "start_qc", "start_metadata_r
 function humanAction(action: string): string {
   const s = action.replace(/_/g, " ");
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** The release's own artist sees its status and the way to Studio; review and release buttons are
+ * for staff (owner, 2026-10-27). */
+function ReleaseArtistTools({ release }: { release: ReleaseRecord }) {
+  return (
+    <StaffPanel title="Manage this release" description="Only you and Corner Room staff see this.">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-fg-muted">Status</span>
+        <StatusChip value={release.status} map={RELEASE_STATUS} />
+        <Link href="/studio" className="cr-focus ml-auto inline-flex items-center gap-1 font-semibold text-link underline">
+          Edit in Studio
+        </Link>
+      </div>
+    </StaffPanel>
+  );
 }
 
 function ReleaseStaffTools({ release, onChanged }: { release: ReleaseRecord; onChanged: (row?: ReleaseRecord) => void }) {
@@ -196,7 +212,7 @@ function TrackList({
 
 export default function ReleasePage() {
   const { id } = useParams<{ id: string }>();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const signedIn = status === "authenticated";
   const credits = useCredits();
   const commerce = useCustomerCommerce();
@@ -346,7 +362,8 @@ export default function ReleasePage() {
             <TrackList rows={rows} playable={playable} signedIn={signedIn} artist={artist} commerce={commerce} playFrom={playFrom} releaseId={release.id} />
           )}
         </section>
-        {canStaff ? (
+        {canStaff && !canModerateMusic(user?.permissions) ? <ReleaseArtistTools release={release} /> : null}
+        {canStaff && canModerateMusic(user?.permissions) ? (
           <ReleaseStaffTools
             release={release}
             onChanged={(row) => {

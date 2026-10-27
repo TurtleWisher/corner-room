@@ -132,6 +132,14 @@ async def test_solo_artist_makes_and_submits_a_single(client: AsyncClient) -> No
     )
     assert credits.status_code == 200, credits.text
     assert [c["role_key"] for c in credits.json()["credits"]] == ["primary_artist", "songwriter", "performer"]
+    # The track page's credits list carries the typed names and instruments, in Studio's order
+    # (owner, 2026-10-27: they showed "Not available").
+    shown = (await client.get(f"/api/v1/tracks/{track_id}/credits", headers=bearer(token))).json()["items"]
+    assert [(c["role_key"], c["display_name"], c["instrument"]) for c in shown] == [
+        ("primary_artist", None, None),
+        ("songwriter", "Abdul Karim", None),
+        ("performer", None, "Dotara"),
+    ]
     featured_typed = await client.put(
         f"/api/v1/studio/tracks/{track_id}/credits",
         headers=bearer(token),

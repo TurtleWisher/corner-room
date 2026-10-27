@@ -35,6 +35,31 @@ export function creditName(
   return null;
 }
 
+/**
+ * Who a song credit names (owner, 2026-10-27: Studio credits were saved but showed "Not available"):
+ * the linked Corner Room profile when there is one, else the name typed in Studio, with the
+ * instrument when given. Null only when the credit names nobody.
+ */
+export function creditPerson(
+  credit: { artist_id?: string | null; display_name?: string | null; instrument?: string | null },
+  artists: Pick<ArtistRecord, "id" | "stage_name">[],
+): string | null {
+  const linked = credit.artist_id ? artists.find((a) => a.id === credit.artist_id)?.stage_name : null;
+  const name = (linked || credit.display_name || "").trim();
+  if (!name) return null;
+  const instrument = (credit.instrument || "").trim();
+  return instrument ? `${name} (${instrument})` : name;
+}
+
+/**
+ * Whether this person reviews and releases music (staff), as opposed to the song's own artist, who
+ * also gets the management box but only for their song (owner, 2026-10-27: "Manage this song").
+ * UX only: the API checks every action.
+ */
+export function canModerateMusic(permissions: readonly string[] | undefined): boolean {
+  return (permissions ?? []).includes("music.approve");
+}
+
 /** Where the credit links to, when the page knows. */
 export function creditHref(record: { primary_artist_id?: string | null; primary_band_id?: string | null }): string | null {
   if (record.primary_artist_id) return `/artists/${record.primary_artist_id}`;

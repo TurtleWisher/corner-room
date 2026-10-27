@@ -339,7 +339,8 @@ class AuthProvidersResponse(BaseModel):
     google: bool
 
 
-@router.get("/providers", response_model=AuthProvidersResponse)
+# HEAD too, so uptime monitors that send HEAD get 200 instead of 405 (owner, 2026-10-27).
+@router.api_route("/providers", methods=["GET", "HEAD"], response_model=AuthProvidersResponse)
 async def auth_providers(settings: Annotated[Settings, Depends(settings_dep)]) -> AuthProvidersResponse:
     """Which outside sign-in options are switched on, so the web shows only working buttons."""
     return AuthProvidersResponse(google=settings.google_enabled)
