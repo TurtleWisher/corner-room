@@ -1,8 +1,10 @@
 import {
   UserRoundPen,
   Activity,
+  AudioWaveform,
   BadgeCheck,
   Bell,
+  BookUser,
   Building2,
   CalendarDays,
   ChartLine,
@@ -61,7 +63,11 @@ const ICONS: Record<string, LucideIcon> = {
   "/studio": LayoutDashboard,
   "/studio/profile": UserRoundPen,
   "/studio/sales": ChartNoAxesColumn,
+  "/staff/catalog": Disc3,
+  "/staff/catalog/artists": MicVocal,
+  "/staff/catalog/processing": AudioWaveform,
   "/staff/commerce": Store,
+  "/staff/customers": BookUser,
   "/staff/finance": Landmark,
   "/staff/royalties": Coins,
   "/staff/campaigns": Megaphone,
@@ -71,6 +77,11 @@ const ICONS: Record<string, LucideIcon> = {
   "/staff/users": Users,
   "/staff/organizations": Building2,
 };
+
+/** Whether a destination has its icon (every menu entry should; tested in nav-icons.test.ts). */
+export function hasNavIcon(href: string): boolean {
+  return href in ICONS;
+}
 
 export function NavIcon({ href, className }: { href: string; className?: string }) {
   const Icon = ICONS[href];
