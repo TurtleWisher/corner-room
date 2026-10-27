@@ -52,7 +52,7 @@ Migrations: `apps/api/alembic/versions/0001` to `0036`, a linear chain with head
 
 - Next.js 15.5, React 19, Tailwind 4, TypeScript strict, App Router. About 58 pages, mostly client components.
 - **Route groups** (Stage 5; URLs unchanged): `app/(public)` (home), `app/(public)/(legacy)` (public pages not yet rebuilt), `(listen)` (Sky), `(account)`, `(artist)`, `(staff)` (side nav plus workspace chip). Each group's `layout.tsx` draws its shell from `components/shell/`. Pages not yet rebuilt render inside `LegacyMain`, outside `.cr-scope`, so their bodies stay as they were. `/theme-kit` sits outside the groups.
-- `components/app-shell.tsx` only provides `auth-provider`, `workspace-provider` and `notifications-provider`.
+- `components/app-shell.tsx` provides `auth-provider`, `workspace-provider`, `notifications-provider` and the one `PlayerProvider` with its `PlayerBar` (owner, 2026-10-28): the player lives above every route group so music never stops on a page change. Don't move it back into a group layout. The bar sits above the phone tab bar via `.cr-player-dock` and `[data-tab-bar]` (`app/globals.css`); control styling is in `app/styles/player-controls.css`.
 - **API client:** `lib/api/client.ts` (apiFetch, ApiError, token handling) plus `features/<domain>/api.ts` per domain. `lib/api.ts` is a compatibility barrel; new code imports from the domain module.
 - Navigation lives in `lib/nav-view.ts` (tested). Visibility is UX only.
 - Shell details and the URL changes awaiting approval (URL-01 to URL-04): `docs/frontend/APP_SHELL.md`. **Don't change URLs without approval.**

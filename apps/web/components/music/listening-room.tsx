@@ -213,7 +213,7 @@ function Volume() {
         onClick={p.toggleMute}
         aria-pressed={p.muted}
         aria-label={p.muted ? "Unmute" : "Mute"}
-        className="cr-focus inline-flex size-10 items-center justify-center text-fg-muted hover:text-fg"
+        className="cr-focus cr-pctl inline-flex size-10 items-center justify-center"
       >
         {level === 0 ? <VolumeX aria-hidden="true" className="size-4" /> : <Volume2 aria-hidden="true" className="size-4" />}
       </button>
@@ -251,7 +251,7 @@ function Normalise() {
       aria-pressed={p.normalise}
       aria-label={p.normalise ? "Normalise volume: on" : "Normalise volume: off"}
       title={p.normalise ? "Normalise volume on: songs play at a similar loudness" : "Normalise volume off"}
-      className={cn("cr-focus inline-flex size-10 items-center justify-center hover:text-fg", p.normalise ? "text-highlight" : "text-fg-muted")}
+      className="cr-focus cr-pctl inline-flex size-10 items-center justify-center"
     >
       <AudioLines aria-hidden="true" className="size-4" />
     </button>
@@ -344,7 +344,7 @@ function LyricsToggle() {
       aria-pressed={lyrics.on}
       aria-label="Lyrics"
       title={lyrics.on ? "Hide lyrics" : "Show lyrics"}
-      className={cn("cr-focus inline-flex size-10 items-center justify-center hover:text-fg", lyrics.on ? "text-highlight" : "text-fg-muted")}
+      className="cr-focus cr-pctl inline-flex size-10 items-center justify-center"
     >
       <MicVocal aria-hidden="true" className="size-4" />
     </button>
@@ -396,7 +396,7 @@ function Transport({ label, large = false, keyRef }: { label: string; large?: bo
         type="button"
         onClick={p.previous}
         aria-label="Previous track"
-        className="cr-focus inline-flex size-11 items-center justify-center text-fg-muted hover:text-fg"
+        className="cr-focus cr-pctl inline-flex size-11 items-center justify-center"
       >
         <SkipBack aria-hidden="true" className={icon} />
       </button>
@@ -406,7 +406,8 @@ function Transport({ label, large = false, keyRef }: { label: string; large?: bo
         onClick={p.toggle}
         disabled={p.status === "loading"}
         aria-label={problem ? `Try ${label} again` : playing ? `Pause ${label}` : `Play ${label}`}
-        className={cn("lr-key cr-cut cr-cut-sm cr-focus", large && "lr-key-large")}
+        data-playing={playing ? "" : undefined}
+        className={cn("lr-key cr-cut cr-cut-sm cr-pkey cr-focus", large && "lr-key-large")}
       >
         {problem ? (
           <RotateCcw aria-hidden="true" className={icon} />
@@ -421,7 +422,7 @@ function Transport({ label, large = false, keyRef }: { label: string; large?: bo
         onClick={p.next}
         disabled={!p.hasNext}
         aria-label="Next track"
-        className="cr-focus inline-flex size-11 items-center justify-center text-fg-muted hover:text-fg disabled:opacity-35 disabled:hover:text-fg-muted"
+        className="cr-focus cr-pctl inline-flex size-11 items-center justify-center"
       >
         <SkipForward aria-hidden="true" className={icon} />
       </button>
@@ -568,7 +569,7 @@ function ControlBar({ track, onFocus }: { track: PlayerTrack; onFocus: () => voi
           onClick={onFocus}
           aria-label="Focus view"
           title="Focus view"
-          className="cr-focus inline-flex size-10 items-center justify-center text-fg-muted hover:text-fg"
+          className="cr-focus cr-pctl inline-flex size-10 items-center justify-center"
         >
           <Maximize2 aria-hidden="true" className="size-4" />
         </button>

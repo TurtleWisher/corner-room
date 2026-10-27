@@ -145,16 +145,20 @@ const PREFS_KEY = "cr.player.prefs";
 
 type Prefs = { shuffle: boolean; repeat: RepeatMode; normalise: boolean };
 
-/** Shuffle, repeat and levelling, remembered on this device only (a convenience, not account data). */
+/**
+ * Shuffle, repeat and levelling, remembered on this device only (a convenience, not account data).
+ * Levelling is off unless the listener turns it on (owner, 2026-10-28): songs play as mastered.
+ * It is kept as `levelling`; the old `normalise` value (on by default before) is ignored.
+ */
 function readPrefs(): Prefs {
-  const fallback: Prefs = { shuffle: false, repeat: "off", normalise: true };
+  const fallback: Prefs = { shuffle: false, repeat: "off", normalise: false };
   try {
     const raw = JSON.parse(window.localStorage.getItem(PREFS_KEY) ?? "null") as Partial<Prefs> | null;
     if (!raw || typeof raw !== "object") return fallback;
     return {
       shuffle: raw.shuffle === true,
       repeat: raw.repeat === "all" || raw.repeat === "one" ? raw.repeat : "off",
-      normalise: raw.normalise !== false,
+      normalise: (raw as { levelling?: unknown }).levelling === true,
     };
   } catch {
     return fallback;
@@ -163,7 +167,7 @@ function readPrefs(): Prefs {
 
 function writePrefs(prefs: Prefs): void {
   try {
-    window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    window.localStorage.setItem(PREFS_KEY, JSON.stringify({ shuffle: prefs.shuffle, repeat: prefs.repeat, levelling: prefs.normalise }));
   } catch {
     /* storage unavailable: the choice still applies for this visit */
   }
@@ -236,7 +240,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     muted: false,
     repeat: "off",
     shuffle: false,
-    normalise: true,
+    normalise: false,
     gainDb: null,
     format: null,
   });
@@ -749,11 +753,7 @@ export function ShuffleButton({ className }: { className?: string }) {
       aria-pressed={p.shuffle}
       aria-label={p.shuffle ? "Shuffle: on" : "Shuffle: off"}
       title={p.shuffle ? "Shuffle on" : "Shuffle off"}
-      className={cn(
-        "cr-focus relative inline-flex size-10 items-center justify-center hover:text-fg",
-        p.shuffle ? "text-highlight" : "text-fg-muted",
-        className,
-      )}
+      className={cn("cr-focus cr-pctl inline-flex size-10 items-center justify-center", className)}
     >
       <Shuffle aria-hidden="true" className="size-4" />
       {p.shuffle ? <span aria-hidden="true" className="absolute bottom-1.5 size-1 rounded-full bg-current" /> : null}
@@ -771,7 +771,8 @@ export function RepeatButton({ className }: { className?: string }) {
       onClick={p.cycleRepeat}
       aria-label={repeatLabel(p.repeat)}
       title={repeatLabel(p.repeat)}
-      className={cn("cr-focus relative inline-flex size-10 items-center justify-center hover:text-fg", on ? "text-highlight" : "text-fg-muted", className)}
+      data-on={on ? "" : undefined}
+      className={cn("cr-focus cr-pctl inline-flex size-10 items-center justify-center", className)}
     >
       {p.repeat === "one" ? <Repeat1 aria-hidden="true" className="size-4" /> : <Repeat aria-hidden="true" className="size-4" />}
       {on ? <span aria-hidden="true" className="absolute bottom-1.5 size-1 rounded-full bg-current" /> : null}
@@ -797,10 +798,11 @@ function BarProgress({ label }: { label: string }) {
         step={5}
         value={Math.floor(position)}
         disabled={duration <= 0}
+        style={{ "--pct": `${duration > 0 ? Math.min(100, (position / duration) * 100) : 0}%` } as React.CSSProperties}
         onChange={(e) => p.seek(Number(e.target.value))}
         aria-label={`Seek in ${label}`}
         aria-valuetext={`${clock(position)} of ${durationLabel(duration)}`}
-        className={cn("cr-focus h-1 min-w-0 flex-1 cursor-pointer accent-[var(--cr-highlight)] disabled:cursor-default")}
+        className="cr-focus cr-prange min-w-0 flex-1"
       />
       <span className="cr-num w-10 text-xs text-fg-muted">{durationLabel(duration)}</span>
     </div>
@@ -810,7 +812,8 @@ function BarProgress({ label }: { label: string }) {
 /**
  * Fixed player bar: glass over the Sky world, front-only cube, title and artist, previous, play
  * or pause, next, a labelled scrubber with 5 s keyboard steps, elapsed and total, and the way into
- * the listening room. Sits above the phone tab bar; hidden inside the room, which has its own.
+ * the listening room. On every page (it lives in the app shell); above the phone tab bar where a
+ * page has one; hidden inside the room, which has its own.
  */
 export function PlayerBar() {
   const p = usePlayer();
@@ -825,7 +828,7 @@ export function PlayerBar() {
       <section
         aria-label="Player"
         data-theme="sky"
-        className="cr-scope fixed inset-x-0 bottom-16 z-40 border-t border-cr-sky/60 lg:bottom-0"
+        className="cr-scope cr-player-dock fixed inset-x-0 z-40 border-t border-cr-sky/60"
       >
         <div className="cr-glass mx-auto flex h-20 max-w-[90rem] items-center gap-3 px-3 md:gap-5 md:px-6">
           <Link href={`/listen/${p.track.id}`} aria-label={`Open the listening room for ${label}`} className="cr-focus size-12 shrink-0 bg-cr-sky">
@@ -861,7 +864,7 @@ export function PlayerBar() {
                   type="button"
                   onClick={p.previous}
                   aria-label="Previous track"
-                  className="cr-focus hidden size-10 items-center justify-center text-fg-muted hover:text-fg md:inline-flex"
+                  className="cr-focus cr-pctl hidden size-10 items-center justify-center md:inline-flex"
                 >
                   <SkipBack aria-hidden="true" className="size-4" />
                 </button>
@@ -870,7 +873,8 @@ export function PlayerBar() {
                   onClick={p.toggle}
                   disabled={p.status === "loading"}
                   aria-label={playing ? `Pause ${label}` : `Play ${label}`}
-                  className="cr-focus inline-flex size-11 shrink-0 items-center justify-center bg-accent text-on-accent disabled:opacity-50"
+                  data-playing={playing ? "" : undefined}
+                  className="cr-focus cr-cut cr-cut-sm cr-pkey inline-flex size-11 shrink-0 items-center justify-center"
                 >
                   {playing ? <Pause aria-hidden="true" className="size-5" /> : <Play aria-hidden="true" className="size-5" />}
                 </button>
@@ -879,7 +883,7 @@ export function PlayerBar() {
                     type="button"
                     onClick={p.next}
                     aria-label="Next track"
-                    className="cr-focus inline-flex size-10 items-center justify-center text-fg-muted hover:text-fg"
+                    className="cr-focus cr-pctl inline-flex size-10 items-center justify-center"
                   >
                     <SkipForward aria-hidden="true" className="size-4" />
                   </button>

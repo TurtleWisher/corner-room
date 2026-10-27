@@ -488,7 +488,9 @@ describe("Phase 8 controls", () => {
     expect(screen.getByText(/stopped|couldn't|could not/i)).toBeTruthy();
   });
 
-  it("offers normalise volume, on by default, and remembers the choice on this device", async () => {
+  it("offers normalise volume, off by default, and remembers the choice on this device", async () => {
+    // The old automatic "on" (saved with shuffle and repeat) no longer turns it on (owner, 2026-10-28).
+    window.localStorage.setItem("cr.player.prefs", JSON.stringify({ shuffle: false, repeat: "off", normalise: true }));
     render(
       <PlayerProvider>
         <Start />
@@ -496,10 +498,10 @@ describe("Phase 8 controls", () => {
       </PlayerProvider>,
     );
     await act(async () => screen.getByText("start t1").click());
-    const toggle = screen.getByRole("button", { name: "Normalise volume: on" });
-    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    const toggle = screen.getByRole("button", { name: "Normalise volume: off" });
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
     await act(async () => toggle.click());
-    expect(screen.getByRole("button", { name: "Normalise volume: off" })).toBeTruthy();
-    expect(JSON.parse(window.localStorage.getItem("cr.player.prefs") ?? "{}").normalise).toBe(false);
+    expect(screen.getByRole("button", { name: "Normalise volume: on" })).toBeTruthy();
+    expect(JSON.parse(window.localStorage.getItem("cr.player.prefs") ?? "{}").levelling).toBe(true);
   });
 });

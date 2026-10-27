@@ -166,22 +166,25 @@ export function shuffled<T>(tracks: readonly T[], current: number, random: () =>
 /*
  * Codec choice (design 8): the browser says what it can decode; the API sends the best match
  * first plus alternates to fall back to on a decode error, without another permission round-trip.
+ * The MP3 320 copy is asked for first (owner, 2026-10-28: the highest-quality copy for everyone);
+ * Opus 160 is the fallback.
  */
 const CODEC_TESTS: [codec: string, mime: string][] = [
-  ["opus", 'audio/ogg; codecs="opus"'],
   ["mp3", "audio/mpeg"],
+  ["opus", 'audio/ogg; codecs="opus"'],
 ];
 
-/** Codecs this browser reports it can play, best first. MP3 is always last-resort included. */
+/** Codecs this browser reports it can play, best first. MP3 is always included, first. */
 export function acceptCodecs(canPlayType: (mime: string) => string): string[] {
-  const out = CODEC_TESTS.filter(([, mime]) => {
+  const out = CODEC_TESTS.filter(([codec, mime]) => {
+    if (codec === "mp3") return true;
     try {
       return canPlayType(mime) !== "";
     } catch {
       return false;
     }
   }).map(([codec]) => codec);
-  return out.includes("mp3") ? out : [...out, "mp3"];
+  return out;
 }
 
 /** "Opus · 160 kbps" for the format line; null when the API did not say (older demo audio). */
