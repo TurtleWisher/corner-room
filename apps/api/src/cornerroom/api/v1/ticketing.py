@@ -99,7 +99,7 @@ class HoldOut(BaseModel):
 class OrderCreate(BaseModel):
     hold_id: UUID | None = None
     offer_id: UUID | None = None
-    # D-ADDR-01: the buyer confirmed their saved Bangladesh delivery address for this order.
+    # D-ADDR-01/02: the buyer confirmed their saved delivery address for this order.
     delivery_address_confirmed: bool = False
 
 
@@ -154,7 +154,7 @@ class OrderOut(BaseModel):
     refunded_amount_minor: int | None = None
     # The buyer's latest Bangla QR payment report and the staff decision (single-order reads).
     payment_submission: dict[str, Any] | None = None
-    # The Bangladesh delivery address confirmed for this order (single-order reads, owner only).
+    # The delivery address confirmed for this order (single-order reads, owner only).
     delivery_address: dict[str, str | None] | None = None
 
 

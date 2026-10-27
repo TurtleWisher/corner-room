@@ -70,6 +70,27 @@ class MemberCreate(BaseModel):
     user_id: UUID | None = None
     artist_id: UUID | None = None
     role_label: str | None = Field(default=None, max_length=80)
+    # D-LINEUP-01: list someone by name alone (no account or artist page), attribution only.
+    display_name: str | None = Field(default=None, max_length=200)
+
+
+class MemberDetailsIn(BaseModel):
+    """Fields left out stay as they are; null clears them."""
+
+    display_name: str | None = Field(default=None, max_length=200)
+    role_label: str | None = Field(default=None, max_length=80)
+
+
+class LineupMemberOut(BaseModel):
+    id: UUID
+    name: str
+    role_label: str | None
+    artist_id: UUID | None
+    portrait_asset_id: UUID | None
+
+
+class LineupOut(BaseModel):
+    items: list[LineupMemberOut]
 
 
 class MemberOut(BaseModel):
@@ -78,6 +99,7 @@ class MemberOut(BaseModel):
     user_id: UUID | None
     artist_id: UUID | None
     role_label: str | None
+    display_name: str | None = None
     status: str
     is_admin: bool = False
     started_at: str | None
@@ -130,6 +152,7 @@ def _member_out(row: BandMember) -> MemberOut:
         user_id=row.user_id,
         artist_id=row.artist_id,
         role_label=row.role_label,
+        display_name=row.display_name,
         status=row.status,
         is_admin=row.is_admin,
         started_at=row.started_at.isoformat() if row.started_at else None,
@@ -216,8 +239,43 @@ async def list_members(
     svc: Annotated[ArtistService, Depends(artist_service)],
     ctx: Annotated[AuthContext | None, Depends(get_optional_auth_context)],
 ) -> MemberPage:
+    _band, public_view = await svc.get_band(band_id, ctx)
     rows = await svc.list_members(ctx, band_id)
-    return MemberPage(items=[_member_out(r) for r in rows])
+    items = [_member_out(r) for r in rows]
+    if public_view:
+        # Members' accounts are private; fans see the lineup (/lineup) instead.
+        for item in items:
+            item.user_id = None
+    return MemberPage(items=items)
+
+
+@router.get("/{band_id}/lineup", response_model=LineupOut)
+async def band_lineup(
+    band_id: UUID,
+    svc: Annotated[ArtistService, Depends(artist_service)],
+    ctx: Annotated[AuthContext | None, Depends(get_optional_auth_context)],
+) -> LineupOut:
+    """The band's current members for song, release and band pages (D-LINEUP-01)."""
+    return LineupOut(items=[LineupMemberOut(**m) for m in await svc.lineup(ctx, band_id)])
+
+
+@router.patch("/{band_id}/members/{member_id}", response_model=MemberOut)
+async def update_member(
+    band_id: UUID,
+    member_id: UUID,
+    body: MemberDetailsIn,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[ArtistService, Depends(artist_service)],
+) -> MemberOut:
+    fields = body.model_fields_set
+    row = await svc.update_member_details(
+        ctx,
+        band_id,
+        member_id,
+        display_name=body.display_name if "display_name" in fields else ...,
+        role_label=body.role_label if "role_label" in fields else ...,
+    )
+    return _member_out(row)
 
 
 @router.post("/{band_id}/members", response_model=MemberOut, status_code=201)
@@ -233,6 +291,7 @@ async def invite_member(
         user_id=body.user_id,
         artist_id=body.artist_id,
         role_label=body.role_label,
+        display_name=body.display_name,
     )
     return _member_out(row)
 

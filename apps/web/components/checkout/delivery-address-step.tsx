@@ -1,7 +1,7 @@
 "use client";
 
 /*
- * Checkout step before any payment (D-ADDR-01): the buyer confirms the Bangladesh address where
+ * Checkout step before any payment (D-ADDR-01/02): the buyer confirms the address (any country) where
  * gifts can be sent, or adds one. The server refuses to start a payment without a saved address
  * and this confirmation; the page only collects them.
  */

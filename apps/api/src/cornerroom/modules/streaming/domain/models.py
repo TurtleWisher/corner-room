@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -76,6 +77,29 @@ class PlaybackEvent(UUIDPrimaryKeyMixin, Base):
     eligible_hint: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     ignored: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class Listen(UUIDPrimaryKeyMixin, Base):
+    """One counted listen (owner, 2026-10-27, D-LISTEN-01): a play that reached the minimum time
+    actually heard. One per listening session (each play, a repeat included, is its own session),
+    so a play reported several times still counts once. Capped per person per song per day.
+    Append-only; the public listen count of a song is the number of its rows."""
+
+    __tablename__ = "listens"
+    __table_args__ = (
+        UniqueConstraint("user_id", "session_id", name="uq_listens_user_session"),
+        Index("ix_listens_track_id", "track_id"),
+        Index("ix_listens_user_track_day", "user_id", "track_id", "listen_day"),
+        {"schema": "streaming"},
+    )
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("identity.users.id"), nullable=False)
+    track_id: Mapped[UUID] = mapped_column(ForeignKey("music.tracks.id"), nullable=False)
+    session_id: Mapped[UUID] = mapped_column(ForeignKey("streaming.listening_sessions.id"), nullable=False)
+    listened_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The calendar day in Bangladesh (UTC+6) the listen counted on, for the daily cap.
+    listen_day: Mapped[date] = mapped_column(Date, nullable=False)
+    counted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class Playlist(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):

@@ -114,6 +114,10 @@ class Settings(BaseSettings):
     # decided: 0 means the limiter is off, like the other limits.
     download_rate_limit_max: int = 0
     download_rate_limit_window_seconds: int = 0
+    # Listen counts (owner, 2026-10-27, D-LISTEN-01): a play counts once it has been heard for
+    # 30 seconds (as the big streaming services count), at most 30 a day per person per song.
+    listen_min_ms: int = 30000
+    listen_daily_cap: int = 30
     verification_challenge_ttl_seconds: int = 0
     # Public web origin used to build links in messages (verification). No trailing slash.
     web_base_url: str = "http://localhost:3000"

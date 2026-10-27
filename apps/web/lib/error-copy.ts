@@ -22,7 +22,7 @@ const COPY: Record<string, string> = {
   RELEASE_NOT_AVAILABLE: "This release isn't on sale right now.",
   OFFER_NOT_ELIGIBLE: "This price is for fans who already own some of these songs.",
   ORDER_CANCELLED: "This order was cancelled because the reservation ran out. Please start again.",
-  DELIVERY_ADDRESS_REQUIRED: "Add a Bangladesh address where we can send your gifts before you pay.",
+  DELIVERY_ADDRESS_REQUIRED: "Add an address where we can send your gifts before you pay.",
   DELIVERY_ADDRESS_CONFIRMATION_REQUIRED: "Confirm the address where we can send your gifts before you pay.",
   ACCOUNT_LOCKED: "This account is locked. Contact support.",
   ACCOUNT_NOT_ACTIVE: "This account is not active yet.",

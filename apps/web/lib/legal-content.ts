@@ -48,8 +48,8 @@ export const TERMS: LegalDocument = {
       // D-PAY-01, Q-PAY-01/05 (staff verification), Q-PAY-02 and Q-COM-03 (late payment refunded).
       bullets: [
         "Prices are shown in Bangladeshi taka (BDT) before you pay.",
-        // D-ADDR-01.
-        "Before paying, you give a Bangladesh address where gifts can be sent to you.",
+        // D-ADDR-01, D-ADDR-02 (any country since 2026-10-27).
+        "Before paying, you give an address, in Bangladesh or abroad, where gifts can be sent to you.",
         "You pay with Bangla QR: scan the code or pay the merchant number shown at checkout, then tell us the transaction ID.",
         "Our team checks every payment. Your order is complete once we confirm it, and your tickets stay held for you while we check.",
         "If we can't match a payment, we tell you why so you can send the details again.",

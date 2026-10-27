@@ -8,11 +8,13 @@ import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { Avatar, Button, ButtonLink, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
+import { BandLineup } from "@/components/artists/band-lineup";
 import { ReleaseCard } from "@/components/music/release-card";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import {
   ApiError,
+  addNamedBandMember,
   fetchArtist,
   fetchBand,
   fetchBandMembers,
@@ -27,6 +29,7 @@ import {
   transitionBandMember,
   unfollowArtist,
   unfollowBand,
+  updateBandMember,
   type BandMemberRecord,
   type FollowSummary,
 } from "@/lib/api";
@@ -43,6 +46,65 @@ const ACTIONS: Record<Kind, string[]> = {
   artist: ["start_review", "approve", "activate", "begin_contract", "mark_signed", "suspend", "terminate"],
   band: ["activate", "pause", "resume", "disband"],
 };
+
+type Run = (key: string, fn: () => Promise<unknown>) => Promise<void>;
+
+/** Staff: list a member who has no account or artist page, by name (owner, 2026-10-27, D-LINEUP-01). */
+function NamedMemberForm({ bandId, busy, run, onAdded }: { bandId: string; busy: string | null; run: Run; onAdded: () => void }) {
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  return (
+    <form
+      className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,14rem)_auto] md:items-end"
+      onSubmit={(e: FormEvent) => {
+        e.preventDefault();
+        void run("named", () => addNamedBandMember(bandId, name, role)).then(() => {
+          setName("");
+          setRole("");
+          onAdded();
+        });
+      }}
+    >
+      <Field label="Or add a member by name" hint="No account needed. Shown in the band's lineup only.">
+        {(c) => <Input {...c} value={name} onChange={(e) => setName(e.target.value)} maxLength={200} required />}
+      </Field>
+      <Field label="Role">{(c) => <Input {...c} value={role} onChange={(e) => setRole(e.target.value)} maxLength={80} placeholder="e.g. Vocals, guitar" />}</Field>
+      <Button type="submit" variant="secondary" busy={busy === "named"}>
+        Add by name
+      </Button>
+    </form>
+  );
+}
+
+/** Staff: the name and role fans see for one member in the lineup. */
+function MemberLineupName({ bandId, member, busy, run }: { bandId: string; member: BandMemberRecord; busy: string | null; run: Run }) {
+  const [name, setName] = useState(member.display_name ?? "");
+  const [role, setRole] = useState(member.role_label ?? "");
+  const changed = name !== (member.display_name ?? "") || role !== (member.role_label ?? "");
+  return (
+    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+      <Input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={member.artist_id ? "Artist page name" : "Name in the lineup"}
+        aria-label="Name in the lineup"
+        maxLength={200}
+        className="h-9 max-w-[14rem]"
+      />
+      <Input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Role" aria-label="Role" maxLength={80} className="h-9 max-w-[10rem]" />
+      {changed ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          busy={busy === `name-${member.id}`}
+          onClick={() => void run(`name-${member.id}`, () => updateBandMember(bandId, member.id, { display_name: name || null, role_label: role || null }))}
+        >
+          Save
+        </Button>
+      ) : null}
+    </span>
+  );
+}
 
 function Lifecycle({ kind, entity, onChanged }: { kind: Kind; entity: Entity; onChanged: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -102,11 +164,12 @@ function Lifecycle({ kind, entity, onChanged }: { kind: Kind; entity: Entity; on
               Invite
             </Button>
           </form>
+          <NamedMemberForm bandId={entity.id} busy={busy} run={run} onAdded={() => members.reload()} />
           {members.status === "ok" && members.data.length ? (
             <ul className="mt-4 divide-y divide-line border-y border-line">
               {members.data.map((m) => (
-                <li key={m.id} className="flex items-center justify-between gap-3 py-2">
-                  <span className="font-mono text-xs text-fg">{m.artist_id ?? m.user_id}</span>
+                <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 py-2">
+                  <MemberLineupName bandId={entity.id} member={m} busy={busy} run={run} />
                   <span className="flex items-center gap-2">
                     <StatusChip value={m.status} />
                     {m.is_admin ? <span className="text-xs font-semibold text-highlight">Band admin</span> : null}
@@ -283,6 +346,7 @@ export function ProfilePage({ kind, id }: { kind: Kind; id: string }) {
       ) : null}
 
       <div className="mx-auto max-w-[90rem] space-y-12 px-4 py-14 md:px-6">
+        {kind === "band" ? <BandLineup bandId={entity.id} /> : null}
         <section aria-labelledby="releases-title">
           <h2 id="releases-title" className="mb-5 text-xl font-bold text-fg">
             Releases

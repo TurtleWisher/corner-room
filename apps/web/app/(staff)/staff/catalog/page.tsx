@@ -10,7 +10,17 @@ import { CircleAlert, Search } from "lucide-react";
 
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
 import { useWorkspace } from "@/components/workspace-provider";
-import { createStudioRelease, fetchIntakeQueue, fetchStaffProfiles, type IntakeQueueItem, type StaffProfileCard } from "@/features/studio/api";
+import {
+  createStudioRelease,
+  fetchIntakeQueue,
+  fetchLyricsQueue,
+  fetchStaffProfiles,
+  reviewLyrics,
+  type IntakeQueueItem,
+  type LyricsReviewItem,
+  type StaffProfileCard,
+} from "@/features/studio/api";
+import { ApiError } from "@/lib/api/client";
 import { friendlyError } from "@/lib/error-copy";
 import { RELEASE_TYPE_LABEL, displayStateLabel, displayStateTone } from "@/lib/studio-view";
 
@@ -162,11 +172,115 @@ function Queue() {
   );
 }
 
+function LyricsText({ label, text }: { label: string; text?: string | null }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <pre className="mt-1 max-h-72 overflow-auto whitespace-pre-wrap rounded border p-2 font-sans text-sm">{text || "No lyrics"}</pre>
+    </div>
+  );
+}
+
+function LyricsChange({ item, onDone }: { item: LyricsReviewItem; onDone: () => void }) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function act(action: "approve" | "reject") {
+    if (action === "reject" && !note.trim()) {
+      setError("Write a note the artist will see.");
+      return;
+    }
+    setBusy(action);
+    setError(null);
+    try {
+      await reviewLyrics(item.track_id, action, note);
+      onDone();
+    } catch (err) {
+      setError(friendlyError(err, "That review didn't go through."));
+      setBusy(null);
+    }
+  }
+
+  return (
+    <li className="border-b py-4">
+      <p className="font-medium">
+        {item.title}
+        <span className="font-normal text-muted-foreground">
+          {" "}
+          · {item.profile_name ?? "Artist not available"}
+          {item.release_title ? ` · ${item.release_title}` : ""}
+        </span>
+      </p>
+      <div className="mt-2 grid gap-3 md:grid-cols-2">
+        <LyricsText label="Listeners see now" text={item.lyrics} />
+        <LyricsText label="Suggested change" text={item.lyrics_pending} />
+      </div>
+      <textarea
+        className="mt-3 min-h-16 w-full rounded border p-2 text-sm"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Note for the artist (required to send back)"
+        aria-label={`Review note for ${item.title}`}
+        maxLength={2000}
+      />
+      <div className="mt-2 flex gap-2">
+        <Button disabled={busy !== null} onClick={() => void act("approve")}>
+          Approve lyrics
+        </Button>
+        <Button variant="outline" disabled={busy !== null} onClick={() => void act("reject")}>
+          Send back
+        </Button>
+      </div>
+      {error ? (
+        <p role="alert" className="mt-2 flex items-center gap-2 text-sm text-red-600">
+          <CircleAlert aria-hidden="true" className="size-4" /> {error}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+/**
+ * Lyrics changes to songs that are already out (owner, 2026-10-27, D-LYRICS-01). Lyrics typed
+ * while drafting are read in the release review instead. The artist can't approve their own.
+ */
+function LyricsQueue() {
+  const { currentOrg } = useWorkspace();
+  const [items, setItems] = useState<LyricsReviewItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [round, setRound] = useState(0);
+
+  useEffect(() => {
+    if (!currentOrg) return;
+    fetchLyricsQueue()
+      .then(setItems)
+      // Staff who can't approve music don't review lyrics: no card for them.
+      .catch((err) => (err instanceof ApiError && err.status === 403 ? setItems([]) : setError(friendlyError(err, "Lyrics waiting for review couldn't be loaded."))));
+  }, [currentOrg, round]);
+
+  if (!currentOrg || (items !== null && items.length === 0 && !error)) return null;
+  return (
+    <Card className="p-5">
+      <h2 className="text-lg font-semibold">Lyrics waiting for review</h2>
+      <p className="mt-1 text-sm text-muted-foreground">Changes to songs that are already out. Listeners keep the current lyrics until you approve.</p>
+      {error ? <ErrorState message={error} /> : items === null ? <LoadingState /> : (
+        <ul className="mt-2">
+          {items.map((item) => (
+            <LyricsChange key={`${item.track_id}|${item.submitted_at}`} item={item} onDone={() => setRound((n) => n + 1)} />
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 export default function StaffCatalogPage() {
   return (
     <Protected>
       <div className="grid gap-6">
         <h1 className="text-2xl font-bold">Catalog releases</h1>
+        <LyricsQueue />
         <StartRelease />
         <Queue />
       </div>

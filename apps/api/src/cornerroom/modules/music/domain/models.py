@@ -149,6 +149,13 @@ class Track(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ba
     takedown_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
     genre_primary: Mapped[str | None] = mapped_column(String(48), ForeignKey("music.genres.key"), nullable=True)
     genre_secondary: Mapped[str | None] = mapped_column(String(48), ForeignKey("music.genres.key"), nullable=True)
+    # D-LYRICS-01: public once the song is released. After release a change waits in
+    # lyrics_pending (lyrics_pending_at set; a null text there means "remove") for staff.
+    lyrics: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lyrics_pending: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lyrics_pending_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lyrics_pending_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    lyrics_review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     __mapper_args__ = {"version_id_col": version}
 

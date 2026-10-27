@@ -136,6 +136,13 @@ class StudioTrackOut(BaseModel):
     version: int
     audio: list[AudioVersionOut]
     credits: list[CreditOut]
+    # Counted listens (D-LISTEN-01).
+    listens: int = 0
+    # D-LYRICS-01: what listeners see once released, and a change waiting for staff.
+    lyrics: str | None = None
+    lyrics_waiting: bool = False
+    lyrics_pending: str | None = None
+    lyrics_review_note: str | None = None
 
 
 class ReadinessItemOut(BaseModel):
@@ -340,6 +347,35 @@ async def update_track(track_id: UUID, body: TrackPatchIn, ctx: Ctx, svc: Studio
     return StudioTrackOut(**await svc._track_view(track, position))
 
 
+class LyricsIn(BaseModel):
+    """Plain text, one sung line per line. Empty or null removes them."""
+
+    lyrics: str | None = Field(default=None, max_length=12000)
+
+
+async def _studio_track(svc: StudioService, ctx: AuthContext, track_id: UUID) -> StudioTrackOut:
+    track, release, _role = await svc._track(ctx, track_id)
+    position = next(p for p, t in await svc._tracks_of(release.id) if t.id == track.id)
+    return StudioTrackOut(**await svc._track_view(track, position))
+
+
+@router.put("/studio/tracks/{track_id}/lyrics", response_model=StudioTrackOut)
+async def save_lyrics(track_id: UUID, body: LyricsIn, ctx: Ctx, svc: StudioDep) -> StudioTrackOut:
+    """Draft songs save now; approved or released songs wait for staff (D-LYRICS-01)."""
+    from cornerroom.modules.music.application.lyrics import LyricsService
+
+    await LyricsService(svc.session, svc.settings, svc.clock).save(ctx, track_id, body.lyrics)
+    return await _studio_track(svc, ctx, track_id)
+
+
+@router.delete("/studio/tracks/{track_id}/lyrics/pending", response_model=StudioTrackOut)
+async def withdraw_lyrics(track_id: UUID, ctx: Ctx, svc: StudioDep) -> StudioTrackOut:
+    from cornerroom.modules.music.application.lyrics import LyricsService
+
+    await LyricsService(svc.session, svc.settings, svc.clock).withdraw(ctx, track_id)
+    return await _studio_track(svc, ctx, track_id)
+
+
 @router.put("/studio/tracks/{track_id}/credits", response_model=StudioTrackOut)
 async def set_credits(track_id: UUID, body: CreditsIn, ctx: Ctx, svc: StudioDep) -> StudioTrackOut:
     await svc.set_credits(ctx, track_id, [c.model_dump() for c in body.credits])
@@ -534,3 +570,40 @@ async def review_release(
         ctx, release_id, action=body.action, note=body.note, release_at=body.release_at, takedown_kind=body.takedown_kind
     )
     return ReleaseFieldsOut(**StudioService._release_fields(release))
+
+
+class LyricsReviewItemOut(BaseModel):
+    track_id: UUID
+    title: str
+    status: str
+    release_id: UUID | None
+    release_title: str | None
+    profile_name: str | None
+    submitted_at: datetime | None
+    lyrics: str | None
+    lyrics_waiting: bool
+    lyrics_pending: str | None
+    lyrics_review_note: str | None
+
+
+class LyricsReviewIn(BaseModel):
+    action: Literal["approve", "reject"]
+    note: str | None = Field(default=None, max_length=2000)
+
+
+@router.get("/catalog-intake/lyrics", response_model=list[LyricsReviewItemOut])
+async def lyrics_queue(ctx: Ctx, svc: StudioDep) -> list[LyricsReviewItemOut]:
+    """Staff: lyrics changes to released songs, waiting in the active workspace (music.approve)."""
+    from cornerroom.modules.music.application.lyrics import LyricsService
+
+    return [LyricsReviewItemOut(**r) for r in await LyricsService(svc.session, svc.settings, svc.clock).queue(ctx)]
+
+
+@router.post("/catalog-intake/tracks/{track_id}/lyrics/review", response_model=LyricsReviewItemOut)
+async def review_lyrics(track_id: UUID, body: LyricsReviewIn, ctx: Ctx, svc: StudioDep) -> LyricsReviewItemOut:
+    from cornerroom.modules.music.application.lyrics import LyricsService
+
+    item = await LyricsService(svc.session, svc.settings, svc.clock).review(
+        ctx, track_id, approve=body.action == "approve", note=body.note
+    )
+    return LyricsReviewItemOut(**item)

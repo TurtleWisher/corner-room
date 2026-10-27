@@ -645,6 +645,78 @@
   --cut-border: var(--cr-glass-edge-hover);
 }
 
+/* Floating lyrics (owner, 2026-10-27, D-LYRICS-01): faint lines drifting weightless through the
+   open space, behind the cards and bar (z-index 1, under the content's 2). One line at a time
+   reads; the next is a whisper and the last one rises away. Transform and opacity only. */
+[data-module="music"] .lr-lyrics {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+[data-module="music"] .lr-lyric {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  max-width: min(22rem, 23vw);
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: clamp(1.05rem, 1.5vw, 1.55rem);
+  font-weight: 300;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  color: var(--cr-fg);
+  text-shadow: 0 2px 22px rgb(11 9 25 / 0.7);
+  opacity: 0;
+  translate: 0 1.25rem;
+  transition:
+    opacity 1800ms var(--lr-ease),
+    translate 2600ms var(--lr-ease);
+  animation: lr-lyric-float var(--float, 20s) ease-in-out infinite alternate;
+  animation-play-state: paused;
+}
+[data-module="music"] .lr[data-playing] .lr-lyric {
+  animation-play-state: running;
+}
+[data-module="music"] .lr-lyric[data-age="0"] {
+  opacity: 0.6;
+  translate: 0 0;
+}
+[data-module="music"] .lr-lyric[data-age="1"] {
+  opacity: 0.12;
+}
+[data-module="music"] .lr-lyric[data-age="-1"] {
+  opacity: 0;
+  translate: 0 -1.75rem;
+}
+@starting-style {
+  [data-module="music"] .lr-lyric {
+    opacity: 0;
+  }
+}
+@keyframes lr-lyric-float {
+  from {
+    transform: translate3d(0, 0, 0) rotate(calc(var(--tilt, 0) * -1deg));
+  }
+  to {
+    transform: translate3d(var(--dx, 0), var(--dy, -12px), 0) rotate(calc(var(--tilt, 0) * 1deg));
+  }
+}
+/* Phones have little open space: one line, high in the room, under the top bar. */
+@media (max-width: 767px) {
+  [data-module="music"] .lr-lyric {
+    left: 1.25rem;
+    right: 1.25rem;
+    top: 4.25rem;
+    max-width: none;
+    font-size: 1rem;
+  }
+  [data-module="music"] .lr-lyric[data-age="1"] {
+    opacity: 0;
+  }
+}
+
 [data-module="music"] .lr-fallback {
   position: relative;
   z-index: 2;
@@ -667,8 +739,13 @@
   [data-module="music"] .lr-focus-cover,
   [data-module="music"] .lr-focus-art,
   [data-module="music"] .lr-halo,
+  [data-module="music"] .lr-lyric,
   [data-module="music"] .lr-eq i {
     animation: none !important;
+  }
+  [data-module="music"] .lr-lyric {
+    translate: none !important;
+    transition: opacity 600ms linear;
   }
   [data-module="music"] .lr-drift canvas,
   [data-module="music"] .lr-peek {

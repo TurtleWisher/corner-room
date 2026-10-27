@@ -140,6 +140,8 @@ class PlayableTrackOut(BaseModel):
     # Released albums, EPs and singles this song is on, so a bought release counts as owning the
     # song in every list (owner, 2026-10-27: pre-sale buyers saw "Not on sale yet").
     release_ids: list[UUID] = []
+    # Counted listens (D-LISTEN-01).
+    listens: int = 0
 
 
 async def _released_release_ids(session: Any, track_ids: list[UUID]) -> dict[UUID, list[UUID]]:
@@ -512,6 +514,7 @@ async def playable_catalog(
 ) -> PlayableTrackPage:
     rows, next_cursor = await svc.list_playable_tracks(ctx, limit=limit, cursor=cursor)
     releases = await _released_release_ids(svc.session, [track.id for track, _ in rows])
+    listens = await svc.listen_counts([track.id for track, _ in rows])
     return PlayableTrackPage(
         items=[
             PlayableTrackOut(
@@ -526,6 +529,7 @@ async def playable_catalog(
                 duration_ms=playability.duration_ms,
                 reason=playability.reason,
                 release_ids=releases.get(track.id, []),
+                listens=listens.get(track.id, 0),
             )
             for track, playability in rows
         ],

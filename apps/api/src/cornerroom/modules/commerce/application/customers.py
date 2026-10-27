@@ -33,7 +33,15 @@ MAX_ROWS = 5000
 
 
 def _address_text(row: Any) -> str:
-    parts = [row.house_road, row.area, row.upazila, row.district, row.division, getattr(row, "postcode", None)]
+    from cornerroom.modules.identity.domain.countries import country_name
+
+    country = getattr(row, "country_code", None) or "BD"
+    parts = [
+        row.house_road, row.area, row.upazila, row.district, row.division,
+        getattr(row, "address_line1", None), getattr(row, "address_line2", None), getattr(row, "city", None),
+        getattr(row, "region", None), getattr(row, "postcode", None),
+        country_name(country) if country != "BD" else None,
+    ]
     return ", ".join(p.strip() for p in parts if p and p.strip())
 
 

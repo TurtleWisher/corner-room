@@ -131,7 +131,7 @@ function Sessions() {
   );
 }
 
-/** D-ADDR-01: the Bangladesh address for gifts, editable any time. */
+/** D-ADDR-01/02: the address for gifts (any country), editable any time. */
 function DeliveryAddressPanel() {
   const loaded = useAsync(fetchMyDeliveryAddress, []);
   const [address, setAddress] = useState<DeliveryAddress | null | undefined>(undefined);

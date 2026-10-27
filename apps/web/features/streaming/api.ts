@@ -16,6 +16,8 @@ export type PlayableTrackRecord = {
   reason?: string | null;
   /** Released albums, EPs and singles the song is on: buying one of them owns the song. */
   release_ids?: string[];
+  /** Counted listens (D-LISTEN-01). */
+  listens?: number;
 };
 
 export type ListeningSessionRecord = {

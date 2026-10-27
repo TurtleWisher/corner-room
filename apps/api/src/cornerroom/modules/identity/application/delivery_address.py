@@ -1,4 +1,4 @@
-"""The user's Bangladesh delivery address for gifts (D-ADDR-01).
+"""The user's delivery address for gifts, anywhere in the world (D-ADDR-01, D-ADDR-02).
 
 Only the owner reads or changes it. It is personal data: the audit row records that it was saved,
 never its contents, and nothing here logs it.

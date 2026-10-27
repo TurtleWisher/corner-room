@@ -435,7 +435,71 @@ class StreamingService:
             ctx=ctx,
             organization_id=None,
         )
+        await self._count_listen(ctx.user_id, track_id, session_id, duration_ms)
         return event, True
+
+    async def _count_listen(self, user_id: UUID, track_id: UUID, session_id: UUID, heard_ms: int) -> bool:
+        """Count this play as one listen once it has been heard long enough (owner, 2026-10-27,
+        D-LISTEN-01). A play is reported several times (pause, end); it counts once. Above the
+        daily cap for this person and song, it is not counted. Never adjusted by hand."""
+        from datetime import timedelta, timezone
+
+        from sqlalchemy import func
+
+        from cornerroom.modules.streaming.domain.models import Listen
+
+        if heard_ms < self.settings.listen_min_ms:
+            return False
+        now = self.clock.now()
+        day = now.astimezone(timezone(timedelta(hours=6))).date()  # Bangladesh has no daylight saving
+        already = (
+            await self.session.execute(
+                select(Listen.id).where(Listen.user_id == user_id, Listen.session_id == session_id)
+            )
+        ).first()
+        if already is not None:
+            return False
+        today = (
+            await self.session.execute(
+                select(func.count())
+                .select_from(Listen)
+                .where(Listen.user_id == user_id, Listen.track_id == track_id, Listen.listen_day == day)
+            )
+        ).scalar_one()
+        if today >= self.settings.listen_daily_cap:
+            return False
+        try:
+            async with self.session.begin_nested():
+                self.session.add(
+                    Listen(
+                        user_id=user_id,
+                        track_id=track_id,
+                        session_id=session_id,
+                        listened_ms=heard_ms,
+                        listen_day=day,
+                        counted_at=now,
+                    )
+                )
+                await self.session.flush()
+        except IntegrityError:
+            return False  # the same play, counted by a report that arrived at the same moment
+        return True
+
+    async def listen_counts(self, track_ids: list[UUID]) -> dict[UUID, int]:
+        """Public listen counts for these songs (0 when none yet)."""
+        from sqlalchemy import func
+
+        from cornerroom.modules.streaming.domain.models import Listen
+
+        counts = {tid: 0 for tid in track_ids}
+        if not track_ids:
+            return counts
+        rows = await self.session.execute(
+            select(Listen.track_id, func.count()).where(Listen.track_id.in_(track_ids)).group_by(Listen.track_id)
+        )
+        for track_id, n in rows:
+            counts[track_id] = int(n)
+        return counts
 
     async def ingest_batch(
         self,

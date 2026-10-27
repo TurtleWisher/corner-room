@@ -171,7 +171,7 @@ class BandMember(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixi
             name="status",
         ),
         CheckConstraint(
-            "user_id IS NOT NULL OR artist_id IS NOT NULL",
+            "user_id IS NOT NULL OR artist_id IS NOT NULL OR display_name IS NOT NULL",
             name="member_party",
         ),
         Index("ix_band_members_band_id", "band_id"),
@@ -202,6 +202,9 @@ class BandMember(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixi
     user_id: Mapped[UUID | None] = mapped_column(ForeignKey("identity.users.id"), nullable=True)
     artist_id: Mapped[UUID | None] = mapped_column(ForeignKey("artists.artists.id"), nullable=True)
     role_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # D-LINEUP-01: the name shown in the band's lineup when the member has no artist page (or to
+    # override it). A member with only this name is attribution only: no account, no access.
+    display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="INVITED")
     # Band admin may publish the band's music (D-AUDIO-05). Only members with an account.
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")

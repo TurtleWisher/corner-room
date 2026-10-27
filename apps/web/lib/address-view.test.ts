@@ -2,7 +2,19 @@ import { describe, expect, it } from "vitest";
 
 import type { AddressOptions, DeliveryAddress } from "@/features/identity/api";
 
-import { addressLines, displayMobile, districtsFor, draftFrom, EMPTY_ADDRESS, missingFields, toPayload, withDivision } from "./address-view";
+import {
+  addressLines,
+  displayMobile,
+  displayPhone,
+  districtsFor,
+  draftFrom,
+  EMPTY_ADDRESS,
+  missingFields,
+  nationalNumber,
+  toPayload,
+  withCountry,
+  withDivision,
+} from "./address-view";
 
 const OPTIONS: AddressOptions = {
   country: "Bangladesh",
@@ -13,6 +25,7 @@ const OPTIONS: AddressOptions = {
 };
 
 const SAVED: DeliveryAddress = {
+  country_code: "BD",
   recipient_name: "Nadia Rahman",
   phone: "+8801712345678",
   division: "Dhaka",
@@ -52,5 +65,39 @@ describe("address view", () => {
 
   it("prints the address as lines", () => {
     expect(addressLines(SAVED)).toEqual(["Nadia Rahman · 01712 345678", "House 12", "Road 27", "Dhanmondi, Dhaka", "Dhaka division 1209"]);
+  });
+
+  it("lays out an address abroad (D-ADDR-02)", () => {
+    const uk: DeliveryAddress = {
+      country_code: "GB",
+      recipient_name: "Nadia Rahman",
+      phone_country: "GB",
+      phone: "+447700900123",
+      division: null,
+      district: null,
+      upazila: null,
+      area: null,
+      house_road: null,
+      address_line1: "12 Brick Lane",
+      address_line2: "Flat 3",
+      city: "London",
+      region: null,
+      postcode: "E1 6RA",
+      landmark: null,
+    };
+    const name = (code: string) => (code === "GB" ? "United Kingdom" : undefined);
+    expect(addressLines(uk, name)).toEqual(["Nadia Rahman · +447700900123", "12 Brick Lane", "Flat 3", "London, E1 6RA", "United Kingdom"]);
+    expect(missingFields({ ...draftFrom(uk), city: " " })).toEqual(["city"]);
+    expect(draftFrom(uk, [{ code: "GB", name: "United Kingdom", calling_code: "44" }]).phone).toBe("7700900123");
+    expect(nationalNumber("+447700900123", "GB", [])).toBe("+447700900123");
+    expect(displayPhone("+8801712345678")).toBe("01712 345678");
+    // Only the chosen country's fields are sent.
+    expect(toPayload({ ...draftFrom(uk), division: "Dhaka" })).toMatchObject({ division: null, city: "London", address_line2: "Flat 3" });
+    expect(toPayload(draftFrom(SAVED))).toMatchObject({ address_line1: null, city: null, division: "Dhaka" });
+  });
+
+  it("moves the phone's country with the address until a number is typed", () => {
+    expect(withCountry(EMPTY_ADDRESS, "GB").phone_country).toBe("GB");
+    expect(withCountry({ ...EMPTY_ADDRESS, phone: "01712345678" }, "GB").phone_country).toBe("BD");
   });
 });

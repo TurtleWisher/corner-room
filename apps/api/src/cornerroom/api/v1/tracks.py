@@ -28,6 +28,10 @@ class TrackOut(BaseModel):
     metadata: dict[str, Any] | None
     version: int
     release_ids: list[UUID] = []
+    # Counted listens (D-LISTEN-01): plays heard for 30 seconds, at most 30 a day per person.
+    listens: int = 0
+    # D-LYRICS-01: single-track reads of a released song only (never in lists).
+    lyrics: str | None = None
 
 
 class PublicTrackOut(BaseModel):
@@ -39,6 +43,10 @@ class PublicTrackOut(BaseModel):
     # Released albums/EPs/singles the song is on (single-track reads), so a page can tell that
     # buying one of them already owns the song (D-AUDIO-12).
     release_ids: list[UUID] = []
+    # Counted listens (D-LISTEN-01): plays heard for 30 seconds, at most 30 a day per person.
+    listens: int = 0
+    # D-LYRICS-01: single-track reads of a released song only (never in lists).
+    lyrics: str | None = None
 
 
 class TrackPage(BaseModel):
@@ -214,7 +222,19 @@ async def get_track(
     row, public_view = await svc.get_track(track_id, ctx)
     out = _public_track(row) if public_view else _track_out(row)
     out.release_ids = await _released_release_ids(svc, row.id)
+    out.listens = await _listen_count(svc, row.id)
+    out.lyrics = row.lyrics if row.status == "RELEASED" else None
     return out
+
+
+async def _listen_count(svc: MusicService, track_id: UUID) -> int:
+    from sqlalchemy import func, select
+
+    from cornerroom.modules.streaming.domain.models import Listen
+
+    return int(
+        (await svc.session.execute(select(func.count()).select_from(Listen).where(Listen.track_id == track_id))).scalar_one()
+    )
 
 
 async def _released_release_ids(svc: MusicService, track_id: UUID) -> list[UUID]:

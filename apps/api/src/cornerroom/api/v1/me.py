@@ -200,37 +200,60 @@ async def revoke_all_my_sessions(
     await svc.revoke_all_sessions(ctx, keep_current=False)
 
 
-# --- Delivery address for gifts (D-ADDR-01) -------------------------------------------------
+# --- Delivery address for gifts (D-ADDR-01, anywhere in the world since D-ADDR-02) ----------
 
 
 class DeliveryAddressIn(BaseModel):
+    """Bangladesh (the default) fills division to house/road; other countries fill the address
+    lines, city, region. Phones come with their country (`phone_country`) or a leading +."""
+
+    country_code: str = Field(default="BD", max_length=2)
     recipient_name: str = Field(max_length=200)
+    phone_country: str | None = Field(default=None, max_length=2)
     phone: str = Field(max_length=32)
-    division: str = Field(max_length=64)
-    district: str = Field(max_length=64)
-    upazila: str = Field(max_length=200)
-    area: str = Field(max_length=200)
-    house_road: str = Field(max_length=300)
+    division: str | None = Field(default=None, max_length=64)
+    district: str | None = Field(default=None, max_length=64)
+    upazila: str | None = Field(default=None, max_length=200)
+    area: str | None = Field(default=None, max_length=200)
+    house_road: str | None = Field(default=None, max_length=300)
+    address_line1: str | None = Field(default=None, max_length=300)
+    address_line2: str | None = Field(default=None, max_length=300)
+    city: str | None = Field(default=None, max_length=200)
+    region: str | None = Field(default=None, max_length=200)
     postcode: str | None = Field(default=None, max_length=16)
     landmark: str | None = Field(default=None, max_length=300)
 
 
 class DeliveryAddressOut(BaseModel):
+    country_code: str
     recipient_name: str
+    phone_country: str | None
     phone: str
-    division: str
-    district: str
-    upazila: str
-    area: str
-    house_road: str
+    division: str | None
+    district: str | None
+    upazila: str | None
+    area: str | None
+    house_road: str | None
+    address_line1: str | None
+    address_line2: str | None
+    city: str | None
+    region: str | None
     postcode: str | None
     landmark: str | None
     updated_at: datetime | None = None
 
 
+class CountryOut(BaseModel):
+    code: str
+    name: str
+    calling_code: str
+
+
 class AddressOptionsOut(BaseModel):
     country: str = "Bangladesh"
     divisions: list[dict]
+    # D-ADDR-02: every country, Bangladesh first, with its calling code for phone numbers.
+    countries: list[CountryOut] = []
 
 
 def _address_out(row) -> DeliveryAddressOut:
@@ -241,10 +264,16 @@ def _address_out(row) -> DeliveryAddressOut:
 
 @router.get("/address-options", response_model=AddressOptionsOut)
 async def address_options() -> AddressOptionsOut:
-    """Bangladesh divisions and their districts, so the form and the API use the same names."""
+    """Countries with calling codes, and Bangladesh's divisions and districts, so the form and
+    the API use the same names."""
     from cornerroom.modules.identity.domain.bd_address import DIVISIONS
+    from cornerroom.modules.identity.domain.countries import BY_CODE, COUNTRIES
 
-    return AddressOptionsOut(divisions=[{"name": name, "districts": list(districts)} for name, districts in DIVISIONS.items()])
+    countries = [BY_CODE["BD"], *(c for c in COUNTRIES if c[0] != "BD")]
+    return AddressOptionsOut(
+        divisions=[{"name": name, "districts": list(districts)} for name, districts in DIVISIONS.items()],
+        countries=[CountryOut(code=c, name=n, calling_code=d) for c, n, d in countries],
+    )
 
 
 @router.get("/me/delivery-address", response_model=DeliveryAddressOut)

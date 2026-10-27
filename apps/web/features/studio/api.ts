@@ -89,6 +89,13 @@ export type StudioTrack = {
   version: number;
   audio: StudioAudio[];
   credits: StudioCredit[];
+  /** Counted listens (D-LISTEN-01). */
+  listens?: number;
+  /** D-LYRICS-01: what listeners see once released, and a change waiting for staff. */
+  lyrics?: string | null;
+  lyrics_waiting?: boolean;
+  lyrics_pending?: string | null;
+  lyrics_review_note?: string | null;
 };
 
 export type ReadinessItem = { code: string; ok: boolean; track_id?: string | null };
@@ -165,6 +172,43 @@ export function updateStudioTrack(trackId: string, body: Partial<StudioTrack> & 
 export function setStudioCredits(trackId: string, credits: StudioCredit[]): Promise<StudioTrack> {
   const body = credits.map((c) => ({ role_key: c.role_key, artist_id: c.artist_id || null, display_name: c.display_name || null, instrument: c.instrument || null }));
   return apiFetch<StudioTrack>(`/api/v1/studio/tracks/${trackId}/credits`, { method: "PUT", headers: json, body: JSON.stringify({ credits: body }), retry: false });
+}
+
+/** Draft songs save now; approved or released songs wait for staff (D-LYRICS-01). */
+export function saveStudioLyrics(trackId: string, lyrics: string | null): Promise<StudioTrack> {
+  return apiFetch<StudioTrack>(`/api/v1/studio/tracks/${trackId}/lyrics`, { method: "PUT", headers: json, body: JSON.stringify({ lyrics }), retry: false });
+}
+
+export function withdrawStudioLyrics(trackId: string): Promise<StudioTrack> {
+  return apiFetch<StudioTrack>(`/api/v1/studio/tracks/${trackId}/lyrics/pending`, { method: "DELETE", retry: false });
+}
+
+export type LyricsReviewItem = {
+  track_id: string;
+  title: string;
+  status: string;
+  release_id?: string | null;
+  release_title?: string | null;
+  profile_name?: string | null;
+  submitted_at?: string | null;
+  lyrics?: string | null;
+  lyrics_waiting: boolean;
+  lyrics_pending?: string | null;
+  lyrics_review_note?: string | null;
+};
+
+/** Staff: lyrics changes to released songs waiting in the active workspace. */
+export function fetchLyricsQueue(): Promise<LyricsReviewItem[]> {
+  return apiFetch<LyricsReviewItem[]>("/api/v1/catalog-intake/lyrics");
+}
+
+export function reviewLyrics(trackId: string, action: "approve" | "reject", note?: string): Promise<LyricsReviewItem> {
+  return apiFetch<LyricsReviewItem>(`/api/v1/catalog-intake/tracks/${trackId}/lyrics/review`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify({ action, note: note || null }),
+    retry: false,
+  });
 }
 
 export function newStudioVersion(trackId: string): Promise<{ version_id: string; status: string; is_current: boolean }> {

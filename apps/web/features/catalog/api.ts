@@ -16,6 +16,10 @@ export type TrackRecord = {
   version?: number;
   /** Released albums/EPs/singles the song is on (single-track reads, D-AUDIO-12). */
   release_ids?: string[];
+  /** Counted listens (D-LISTEN-01): plays heard for 30 seconds, at most 30 a day per person. */
+  listens?: number;
+  /** D-LYRICS-01: single-track reads of a released song only. */
+  lyrics?: string | null;
 };
 
 export type ReleaseRecord = {

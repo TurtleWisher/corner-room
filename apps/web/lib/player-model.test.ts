@@ -11,6 +11,10 @@ import {
   isSuperseded,
   levelMultiplier,
   listenedMs,
+  accumulateHeard,
+  heardAfterJump,
+  LISTEN_REPORT_MS,
+  NOTHING_HEARD,
   nextRepeat,
   outputLevels,
   playProblem,
@@ -156,5 +160,24 @@ describe("browser playback answers", () => {
     expect(seekTarget(-4, 20)).toBe(0);
     expect(seekTarget(5, 0)).toBeNull();
     expect(seekTarget(5, Infinity)).toBeNull();
+  });
+});
+
+describe("time actually heard (D-LISTEN-01)", () => {
+  it("counts normal playback and ignores seeks and jumps", () => {
+    let s = NOTHING_HEARD;
+    for (const t of [0, 0.25, 0.5, 1.5, 2.5]) s = accumulateHeard(s, t);
+    expect(Math.round(s.heardMs)).toBe(2500);
+    // Dragged to 3:00: the jump adds nothing.
+    s = accumulateHeard(heardAfterJump(s), 180);
+    s = accumulateHeard(s, 181);
+    expect(Math.round(s.heardMs)).toBe(3500);
+    // Jumping back adds nothing either.
+    s = accumulateHeard(s, 10);
+    expect(Math.round(s.heardMs)).toBe(3500);
+    expect(accumulateHeard(s, NaN)).toBe(s);
+  });
+  it("reports at the 30-second listen mark", () => {
+    expect(LISTEN_REPORT_MS).toBe(30_000);
   });
 });
