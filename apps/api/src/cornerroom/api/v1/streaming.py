@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 import json
 
@@ -137,6 +137,31 @@ class PlayableTrackOut(BaseModel):
     track_version_id: UUID | None
     duration_ms: int | None
     reason: str | None
+    # Released albums, EPs and singles this song is on, so a bought release counts as owning the
+    # song in every list (owner, 2026-10-27: pre-sale buyers saw "Not on sale yet").
+    release_ids: list[UUID] = []
+
+
+async def _released_release_ids(session: Any, track_ids: list[UUID]) -> dict[UUID, list[UUID]]:
+    from sqlalchemy import select
+
+    from cornerroom.modules.music.domain.models import Release, ReleaseTrack
+
+    out: dict[UUID, list[UUID]] = {tid: [] for tid in track_ids}
+    if not track_ids:
+        return out
+    rows = await session.execute(
+        select(ReleaseTrack.track_id, Release.id)
+        .join(Release, Release.id == ReleaseTrack.release_id)
+        .where(
+            ReleaseTrack.track_id.in_(track_ids),
+            Release.deleted_at.is_(None),
+            Release.status == "RELEASED",
+        )
+    )
+    for track_id, release_id in rows:
+        out[track_id].append(release_id)
+    return out
 
 
 class PlayableTrackPage(BaseModel):
@@ -486,6 +511,7 @@ async def playable_catalog(
     cursor: str | None = Query(default=None),
 ) -> PlayableTrackPage:
     rows, next_cursor = await svc.list_playable_tracks(ctx, limit=limit, cursor=cursor)
+    releases = await _released_release_ids(svc.session, [track.id for track, _ in rows])
     return PlayableTrackPage(
         items=[
             PlayableTrackOut(
@@ -499,6 +525,7 @@ async def playable_catalog(
                 track_version_id=playability.track_version_id if ctx else None,
                 duration_ms=playability.duration_ms,
                 reason=playability.reason,
+                release_ids=releases.get(track.id, []),
             )
             for track, playability in rows
         ],

@@ -12,6 +12,7 @@ import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ButtonLink, DateTime, EmptyState, ErrorState, Field, Input, Money, Skeleton, StatusChip } from "@/components/ds";
 import { TrackBuyControl, useCustomerCommerce, type CustomerCommerce } from "@/components/music/commerce";
+import { CreditFace } from "@/components/music/credit-face";
 import { useCredits } from "@/components/music/credits";
 import { usePlayer, type PlayOptions } from "@/components/music/player";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
@@ -30,7 +31,7 @@ import {
   type TrackRecord,
 } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
-import { creditHref, creditName, formatDuration, playQueue, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
+import { canModerateMusic, creditName, formatDuration, playQueue, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
 import { ownsTrack, releaseBuyLabel, releaseBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,22 @@ const ACTIONS = ["start_demo", "start_production", "start_qc", "start_metadata_r
 function humanAction(action: string): string {
   const s = action.replace(/_/g, " ");
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** The release's own artist sees its status and the way to Studio; review and release buttons are
+ * for staff (owner, 2026-10-27). */
+function ReleaseArtistTools({ release }: { release: ReleaseRecord }) {
+  return (
+    <StaffPanel title="Manage this release" description="Only you and Corner Room staff see this.">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-fg-muted">Status</span>
+        <StatusChip value={release.status} map={RELEASE_STATUS} />
+        <Link href="/studio" className="cr-focus ml-auto inline-flex items-center gap-1 font-semibold text-link underline">
+          Edit in Studio
+        </Link>
+      </div>
+    </StaffPanel>
+  );
 }
 
 function ReleaseStaffTools({ release, onChanged }: { release: ReleaseRecord; onChanged: (row?: ReleaseRecord) => void }) {
@@ -196,7 +213,7 @@ function TrackList({
 
 export default function ReleasePage() {
   const { id } = useParams<{ id: string }>();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const signedIn = status === "authenticated";
   const credits = useCredits();
   const commerce = useCustomerCommerce();
@@ -244,7 +261,6 @@ export default function ReleasePage() {
   const { rows, playable } = data.data!;
   const release = override ?? data.data!.release;
   const artist = creditName(release, credits.artists, credits.bands);
-  const artistHref = creditHref(release);
   const durations = rows.map((r) => playable.get(r.trackId)?.duration_ms);
   const canStaff = signedIn && typeof release.version === "number";
   const owns = (trackId: string) => ownsTrack(commerce.entitlements, trackId, [release.id]);
@@ -277,13 +293,7 @@ export default function ReleasePage() {
               {release.title}
             </Display>
             <p className="mt-4 text-lg text-fg">
-              {artist && artistHref ? (
-                <Link href={artistHref} className="cr-focus font-semibold hover:text-highlight">
-                  {artist}
-                </Link>
-              ) : (
-                <span className="text-fg-muted">Artist not available</span>
-              )}
+              <CreditFace record={release} people={credits} />
             </p>
             <p className="mt-1 text-sm text-fg">
               {release.release_at ? (
@@ -346,7 +356,8 @@ export default function ReleasePage() {
             <TrackList rows={rows} playable={playable} signedIn={signedIn} artist={artist} commerce={commerce} playFrom={playFrom} releaseId={release.id} />
           )}
         </section>
-        {canStaff ? (
+        {canStaff && !canModerateMusic(user?.permissions) ? <ReleaseArtistTools release={release} /> : null}
+        {canStaff && canModerateMusic(user?.permissions) ? (
           <ReleaseStaffTools
             release={release}
             onChanged={(row) => {

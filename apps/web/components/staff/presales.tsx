@@ -3,7 +3,7 @@
 /*
  * Pre-sales on Staff -> Commerce (owner, 2026-10-25, D-PRESALE-01). Finance staff paste or upload
  * the list of people who paid before launch (a Notion CSV, or rows copied from the table: email,
- * name, amount, date; other columns are ignored). Each buyer gets the song when their email
+ * name, amount, date, phone and address; other columns are ignored). Each buyer gets the song when their email
  * becomes a verified Corner Room account, and from then it counts as a normal sale. The server
  * checks finance.post in the product's label and records everything; nothing here decides money.
  */
@@ -69,6 +69,7 @@ function PresaleRows({ productId, refreshKey }: { productId: string; refreshKey:
               <p className="truncate text-sm font-semibold text-fg">{row.buyer_name ?? row.email}</p>
               <p className="truncate text-xs text-fg-muted">
                 {row.email}
+                {row.phone ? ` · ${row.phone}` : ""}
                 {row.paid_on ? (
                   <>
                     {" · paid "}
@@ -123,6 +124,7 @@ export function Presales({ products }: { products: ProductRecord[] }) {
         `Added ${result.added} buyer${result.added === 1 ? "" : "s"}` +
           (result.claimed_now ? `; ${result.claimed_now} already had an account and now have the song` : "") +
           (result.skipped.length ? `; ${result.skipped.length} were already listed and were skipped` : "") +
+          (result.contact_filled ? `; phone or address filled in for ${result.contact_filled} already listed` : "") +
           ".",
       );
       setText("");
@@ -142,7 +144,7 @@ export function Presales({ products }: { products: ProductRecord[] }) {
       </h2>
       <p className="text-sm text-fg-muted">
         People who paid before launch. Each buyer gets the song when they sign up and verify with the same email (or continue with Google), and it then counts as
-        a sale. Only email, name, amount and date are read; leave phone numbers and addresses out.
+        a sale. Email, name, amount, date, phone and address are read (phone and address only for admins and finance); other columns are ignored.
       </p>
       <Card className="space-y-4">
         <Field label="Song or release">

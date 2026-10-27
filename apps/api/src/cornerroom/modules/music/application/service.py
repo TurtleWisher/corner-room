@@ -1495,5 +1495,6 @@ class MusicService:
             stmt = stmt.where(Credit.track_id == track_id)
         if release_id is not None:
             stmt = stmt.where(Credit.release_id == release_id)
-        stmt = stmt.order_by(Credit.created_at.asc())
+        # Studio's order first (position), then the older one-by-one credits by time.
+        stmt = stmt.order_by(Credit.position.asc(), Credit.created_at.asc())
         return list((await self.session.execute(stmt)).scalars().all())

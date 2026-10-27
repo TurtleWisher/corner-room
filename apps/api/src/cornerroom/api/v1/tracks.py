@@ -114,6 +114,11 @@ class CreditOut(BaseModel):
     artist_id: UUID | None
     user_id: UUID | None
     credit_role: str
+    # The name and instrument typed in Studio (most credits are people without a profile here).
+    role_key: str | None = None
+    display_name: str | None = None
+    instrument: str | None = None
+    position: int = 0
 
 
 def _track_out(row: Track) -> TrackOut:
@@ -162,6 +167,10 @@ def _credit_out(row: Credit) -> CreditOut:
         artist_id=row.artist_id,
         user_id=row.user_id,
         credit_role=row.credit_role,
+        role_key=row.role_key,
+        display_name=row.display_name,
+        instrument=row.instrument,
+        position=row.position,
     )
 
 

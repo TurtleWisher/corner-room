@@ -15,11 +15,13 @@ from cornerroom.api.deps import (
     get_auth_context,
     get_optional_auth_context,
     payment_service,
+    customer_service,
     presale_service,
 )
 from cornerroom.infra.errors import AppError
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.commerce.application.catalog import CatalogCommerceService
+from cornerroom.modules.commerce.application.customers import CustomerService
 from cornerroom.modules.commerce.application.presales import MAX_NAME_LENGTH, MAX_ROWS_PER_UPLOAD, PresaleService
 from cornerroom.modules.commerce.application.service import CheckoutService
 from cornerroom.modules.commerce.domain.models import Offer, Product
@@ -597,6 +599,9 @@ class PresaleRowIn(BaseModel):
     amount_minor: int = Field(ge=0)  # 0 = a gift (owner, 2026-10-25): counts as a sale, no money
     currency_code: str = Field(default="BDT", min_length=3, max_length=3)
     paid_on: date | None = None
+    # From the sheet (owner, 2026-10-27): staff with customer access only.
+    phone: str | None = Field(default=None, max_length=64)
+    address: str | None = Field(default=None, max_length=1000)
 
 
 class PresaleUploadIn(BaseModel):
@@ -608,6 +613,8 @@ class PresaleUploadOut(BaseModel):
     added: int
     skipped: list[str]
     claimed_now: int
+    # Already-listed buyers whose missing phone or address was filled in from this upload.
+    contact_filled: int = 0
 
 
 class PresaleOut(BaseModel):
@@ -620,6 +627,8 @@ class PresaleOut(BaseModel):
     status: str
     claimed_at: datetime | None
     order_id: UUID | None
+    phone: str | None = None
+    address: str | None = None
 
 
 class PresaleTotalsOut(BaseModel):
@@ -633,6 +642,83 @@ class PresaleListOut(BaseModel):
     product_id: UUID
     items: list[PresaleOut]
     totals: dict[str, PresaleTotalsOut]
+
+
+class CustomerPresaleOut(BaseModel):
+    product: str | None
+    amount_minor: int
+    currency_code: str
+    paid_on: date | None
+    status: str
+
+
+class CustomerOut(BaseModel):
+    key: str
+    name: str | None
+    email: str | None
+    phone: str | None
+    address: str | None
+    user_id: UUID | None
+    account_status: str | None
+    email_verified: bool
+    joined_at: datetime | None
+    orders: int
+    spent: dict[str, int]
+    last_order_at: datetime | None
+    presales: list[CustomerPresaleOut]
+    # "WEBSITE" (has a Corner Room account) and/or "PRESALE" (paid before launch).
+    sources: list[str]
+
+
+class CustomerListOut(BaseModel):
+    items: list[CustomerOut]
+    total: int
+    truncated: bool
+    presale_buyers: int
+    website_customers: int
+
+
+@router.get("/staff/customers", response_model=CustomerListOut)
+async def staff_customers(
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[CustomerService, Depends(customer_service)],
+    q: str | None = Query(default=None, max_length=200),
+    profile_kind: str | None = Query(default=None, pattern="^(artist|band)$"),
+    profile_id: UUID | None = None,
+    scope: str | None = Query(default=None, pattern="^(track|release|event)$"),
+    scope_id: UUID | None = None,
+) -> CustomerListOut:
+    """All customers (website accounts and pre-sale buyers), for admins and finance staff
+    (owner, 2026-10-27, D-CUSTOMERS-01). Filter to one artist's or band's buyers, or to one
+    song's, release's or event's buyers."""
+    data = await svc.list_customers(
+        ctx, q=q, profile_kind=profile_kind, profile_id=profile_id, scope=scope, scope_id=scope_id
+    )
+    return CustomerListOut(**data)
+
+
+class FollowerOut(BaseModel):
+    user_id: UUID
+    name: str | None
+    email: str | None
+    phone: str | None
+    followed_at: datetime | None
+
+
+class FollowerListOut(BaseModel):
+    items: list[FollowerOut]
+    total: int
+
+
+@router.get("/staff/followers", response_model=FollowerListOut)
+async def staff_followers(
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[CustomerService, Depends(customer_service)],
+    kind: str = Query(pattern="^(artist|band)$"),
+    target_id: UUID = Query(),
+) -> FollowerListOut:
+    """Followers of an artist or band, for admins and finance staff (owner, 2026-10-27)."""
+    return FollowerListOut(**await svc.list_followers(ctx, kind=kind, target_id=target_id))
 
 
 @router.get("/staff/presales", response_model=PresaleListOut)

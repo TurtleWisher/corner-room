@@ -79,6 +79,7 @@ class MemberOut(BaseModel):
     artist_id: UUID | None
     role_label: str | None
     status: str
+    is_admin: bool = False
     started_at: str | None
     ended_at: str | None
 
@@ -130,6 +131,7 @@ def _member_out(row: BandMember) -> MemberOut:
         artist_id=row.artist_id,
         role_label=row.role_label,
         status=row.status,
+        is_admin=row.is_admin,
         started_at=row.started_at.isoformat() if row.started_at else None,
         ended_at=row.ended_at.isoformat() if row.ended_at else None,
     )
@@ -245,6 +247,39 @@ async def member_lifecycle(
 ) -> MemberOut:
     row = await svc.transition_member(ctx, band_id, member_id, action=body.action)
     return _member_out(row)
+
+
+class MemberAdminIn(BaseModel):
+    is_admin: bool
+
+
+@router.post("/{band_id}/members/{member_id}/admin", response_model=MemberOut)
+async def member_admin(
+    band_id: UUID,
+    member_id: UUID,
+    body: MemberAdminIn,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[ArtistService, Depends(artist_service)],
+) -> MemberOut:
+    """Staff: make a member a band admin, or not (owner, 2026-10-27)."""
+    row = await svc.set_member_admin(ctx, band_id, member_id, is_admin=body.is_admin)
+    return _member_out(row)
+
+
+class FollowSummaryOut(BaseModel):
+    followers: int
+    following: bool
+
+
+@router.get("/{band_id}/followers/summary", response_model=FollowSummaryOut)
+async def band_follow_summary(
+    band_id: UUID,
+    ctx: Annotated[AuthContext | None, Depends(get_optional_auth_context)],
+    svc: Annotated[ArtistService, Depends(artist_service)],
+) -> FollowSummaryOut:
+    """Public: how many follow this band; signed in, also whether you do (owner, 2026-10-27)."""
+    data = await svc.follow_summary(ctx.user_id if ctx else None, target_type="BAND", target_id=band_id)
+    return FollowSummaryOut(**data)
 
 
 @router.post("/{band_id}/follow", response_model=FollowOut, status_code=201)

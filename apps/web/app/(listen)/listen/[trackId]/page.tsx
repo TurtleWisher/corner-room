@@ -16,7 +16,7 @@ import { useAsync } from "@/components/use-async";
 import { fetchTrack } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
 import { creditName, playQueue } from "@/lib/music-view";
-import { ownsTrack } from "@/lib/ownership";
+import { ownsTrack, releaseIdsFor } from "@/lib/ownership";
 
 /**
  * The listening room for a track (kept at /listen/[trackId] so existing links still work).
@@ -40,7 +40,7 @@ export default function ListeningRoomPage() {
   const track = useAsync(() => fetchTrack(trackId, { skipAuth: status !== "authenticated" }), [trackId, status]);
   const title = track.status === "ok" ? track.data.title : "";
   const artist = track.status === "ok" ? creditName(track.data, people.artists, people.bands) : null;
-  const owns = commerce.ready && ownsTrack(commerce.entitlements, trackId);
+  const owns = commerce.ready && ownsTrack(commerce.entitlements, trackId, releaseIdsFor(catalog.map, trackId));
   const current = player.track?.id === trackId;
 
   // One effect, so the order is fixed: first notice that the player moved on inside the room
@@ -61,7 +61,7 @@ export default function ListeningRoomPage() {
     const queue = playQueue(
       catalog.list.map((t) => ({ trackId: t.id, title: t.title, artist: creditName(t, people.artists, people.bands) })),
       catalog.map,
-      (id) => ownsTrack(commerce.entitlements, id),
+      (id) => ownsTrack(commerce.entitlements, id, releaseIdsFor(catalog.map, id)),
     );
     void player.play({ id: trackId, title, artist }, { queue, source: "Your music" });
   }, [playingId, current, owns, title, artist, trackId, catalog, commerce.entitlements, people, player]);

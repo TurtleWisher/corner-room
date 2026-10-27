@@ -14,6 +14,8 @@ export type PlayableTrackRecord = {
   track_version_id?: string | null;
   duration_ms?: number | null;
   reason?: string | null;
+  /** Released albums, EPs and singles the song is on: buying one of them owns the song. */
+  release_ids?: string[];
 };
 
 export type ListeningSessionRecord = {

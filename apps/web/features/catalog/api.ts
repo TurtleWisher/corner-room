@@ -45,6 +45,11 @@ export type CreditRecord = {
   artist_id?: string | null;
   user_id?: string | null;
   credit_role: string;
+  role_key?: string | null;
+  /** The name typed in Studio, for people without a Corner Room profile. */
+  display_name?: string | null;
+  instrument?: string | null;
+  position?: number;
 };
 
 export type TrackVersionRecord = {

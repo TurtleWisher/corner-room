@@ -12,6 +12,7 @@ import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, Card, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
 import { TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
+import { CreditFace } from "@/components/music/credit-face";
 import { useCredits } from "@/components/music/credits";
 import { TrackAudioPanel } from "@/components/music/track-audio-panel";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
@@ -27,11 +28,29 @@ import {
 } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
 import { humanizeStatus } from "@/lib/format/status";
-import { creditHref, creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
-import { ownsTrack, trackBuyState } from "@/lib/ownership";
+import { canModerateMusic, creditName, creditPerson, formatDuration, playQueue, playState } from "@/lib/music-view";
+import { ownsTrack, releaseIdsFor, trackBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 
 const ACTIONS = ["submit", "start_review", "approve", "reject", "schedule", "release", "takedown", "archive"];
+
+/** The song's own artist sees its status and audio report here, with the way to Studio; review
+ * and release buttons are for staff (owner, 2026-10-27). */
+function TrackArtistTools({ track }: { track: TrackRecord }) {
+  return (
+    <StaffPanel title="Manage this song" description="Only you and Corner Room staff see this.">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-fg-muted">Status</span>
+        <StatusChip value={track.status} map={RELEASE_STATUS} />
+        {track.isrc ? <span className="cr-num text-fg-muted">ISRC {track.isrc}</span> : null}
+        <Link href="/studio" className="cr-focus ml-auto inline-flex items-center gap-1 font-semibold text-link underline">
+          Edit in Studio
+        </Link>
+      </div>
+      <TrackAudioPanel trackId={track.id} />
+    </StaffPanel>
+  );
+}
 
 function TrackStaffTools({ track, onChanged }: { track: TrackRecord; onChanged: (row?: TrackRecord) => void }) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -101,7 +120,7 @@ function TrackStaffTools({ track, onChanged }: { track: TrackRecord; onChanged: 
 
 export default function TrackPage() {
   const { id } = useParams<{ id: string }>();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const signedIn = status === "authenticated";
   const people = useCredits();
   const commerce = useCustomerCommerce();
@@ -111,7 +130,7 @@ export default function TrackPage() {
     queue: playQueue(
       catalog.list.map((t) => ({ trackId: t.id, title: t.title, artist: creditName(t, people.artists, people.bands) })),
       catalog.map,
-      (trackId) => ownsTrack(commerce.entitlements, trackId),
+      (trackId) => ownsTrack(commerce.entitlements, trackId, releaseIdsFor(catalog.map, trackId)),
     ),
     source: "Your music",
   };
@@ -151,7 +170,6 @@ export default function TrackPage() {
   const { credits, playable } = data.data!;
   const track = override ?? data.data!.track;
   const artist = creditName(track, people.artists, people.bands);
-  const artistHref = creditHref(track);
   const play = playState(playable);
   // A song bought as part of its album or EP counts as owned here too (D-AUDIO-12).
   const buy = trackBuyState(commerce.entitlements, commerce.offers, track.id, track.release_ids ?? []);
@@ -173,13 +191,7 @@ export default function TrackPage() {
               {track.title}
             </Display>
             <p className="mt-4 text-lg text-fg">
-              {artist && artistHref ? (
-                <Link href={artistHref} className="cr-focus font-semibold hover:text-highlight">
-                  {artist}
-                </Link>
-              ) : (
-                <span className="text-fg-muted">Artist not available</span>
-              )}
+              <CreditFace record={track} people={people} />
             </p>
             {play.kind === "unavailable" ? <p className="mt-2 text-sm text-fg-muted">{play.reason}</p> : null}
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -216,7 +228,7 @@ export default function TrackPage() {
           ) : (
             <ul className="border-t border-line">
               {credits.map((c) => {
-                const who = c.artist_id ? people.artists.find((a) => a.id === c.artist_id)?.stage_name : null;
+                const who = creditPerson(c, people.artists);
                 return (
                   <li key={c.id} className="flex justify-between gap-4 border-b border-line py-3 text-sm">
                     <span className="text-fg-muted">{humanizeStatus(c.credit_role)}</span>
@@ -233,7 +245,11 @@ export default function TrackPage() {
         </Card>
         {canStaff ? (
           <div className="lg:col-span-2">
-            <TrackStaffTools track={track} onChanged={(row) => (row ? setOverride(row) : data.reload())} />
+            {canModerateMusic(user?.permissions) ? (
+              <TrackStaffTools track={track} onChanged={(row) => (row ? setOverride(row) : data.reload())} />
+            ) : (
+              <TrackArtistTools track={track} />
+            )}
           </div>
         ) : null}
       </div>

@@ -9,7 +9,7 @@ import { usePlayer } from "@/components/music/player";
 import type { ArtistRecord, BandRecord, PlayableTrackRecord } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
 import { creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
-import { ownsTrack } from "@/lib/ownership";
+import { ownsTrack, releaseIdsFor } from "@/lib/ownership";
 import { cn } from "@/lib/utils";
 
 export type TrackRowItem = {
@@ -47,7 +47,7 @@ export function TrackRows({
       return { trackId: item.trackId, title: item.title || rec?.title, artist: rec ? creditName(rec, people.artists, people.bands) : null };
     }),
     playable,
-    (id) => ownsTrack(commerce.entitlements, id),
+    (id) => ownsTrack(commerce.entitlements, id, releaseIdsFor(playable, id)),
   );
   return (
     <ul aria-label={label} className="border-t border-line">
@@ -86,7 +86,12 @@ export function TrackRows({
             </div>
             <div className="flex items-center gap-2">
               {item.extra}
-              {state.kind !== "unavailable" ? <TrackBuyControl track={{ id: item.trackId, title, artist }} commerce={commerce} playFrom={{ queue, source: label }} /> : null}
+              {state.kind !== "unavailable" ? <TrackBuyControl
+                  track={{ id: item.trackId, title, artist }}
+                  commerce={commerce}
+                  playFrom={{ queue, source: label }}
+                  releaseIds={releaseIdsFor(playable, item.trackId)}
+                /> : null}
             </div>
           </li>
         );

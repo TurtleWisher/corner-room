@@ -99,6 +99,9 @@ async def _counts(email: str, sub: str) -> tuple[int, int]:
 async def test_providers_reports_google_only_when_configured(client: AsyncClient) -> None:
     off = await client.get("/api/v1/auth/providers")
     assert off.json() == {"google": False}
+    # Uptime monitors send HEAD: it answers like GET, without a body.
+    head = await client.head("/api/v1/auth/providers")
+    assert head.status_code == 200 and head.content == b""
     start = await client.get("/api/v1/auth/google/start")
     where, query = _where(start)
     assert query["google_error"] == "not_configured"

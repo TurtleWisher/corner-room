@@ -7,7 +7,7 @@ import { ChartLine, Heart, HeartOff } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { Display, Eyebrow } from "@/components/brand/display";
-import { Avatar, Button, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
+import { Avatar, Button, ButtonLink, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
 import { ReleaseCard } from "@/components/music/release-card";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
@@ -16,17 +16,23 @@ import {
   fetchArtist,
   fetchBand,
   fetchBandMembers,
+  fetchFollowSummary,
   fetchReleases,
   followArtist,
+  followBand,
   inviteBandMember,
+  setBandMemberAdmin,
   transitionArtist,
   transitionBand,
   transitionBandMember,
   unfollowArtist,
+  unfollowBand,
   type BandMemberRecord,
+  type FollowSummary,
 } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
 import { friendlyError } from "@/lib/error-copy";
+import { formatCount } from "@/lib/format/count";
 import { humanizeStatus } from "@/lib/format/status";
 import { sortReleases } from "@/lib/music-view";
 
@@ -103,6 +109,18 @@ function Lifecycle({ kind, entity, onChanged }: { kind: Kind; entity: Entity; on
                   <span className="font-mono text-xs text-fg">{m.artist_id ?? m.user_id}</span>
                   <span className="flex items-center gap-2">
                     <StatusChip value={m.status} />
+                    {m.is_admin ? <span className="text-xs font-semibold text-highlight">Band admin</span> : null}
+                    {/* A band admin manages the band in Studio (owner, 2026-10-27, D-BAND-01). */}
+                    {m.status === "ACTIVE" && m.user_id ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        busy={busy === `admin-${m.id}`}
+                        onClick={() => void run(`admin-${m.id}`, () => setBandMemberAdmin(entity.id, m.id, !m.is_admin))}
+                      >
+                        {m.is_admin ? "Remove admin" : "Make admin"}
+                      </Button>
+                    ) : null}
                     {m.status !== "REMOVED" && m.status !== "LEFT" ? (
                       <Button variant="ghost" size="sm" busy={busy === m.id} onClick={() => void run(m.id, () => transitionBandMember(entity.id, m.id, "remove"))}>
                         Remove
@@ -124,28 +142,60 @@ function Lifecycle({ kind, entity, onChanged }: { kind: Kind; entity: Entity; on
   );
 }
 
-function FollowButton({ artistId }: { artistId: string }) {
-  const [following, setFollowing] = useState(false);
+/**
+ * Follow an artist or band, with the follower count everyone sees (owner, 2026-10-27: following
+ * looked undone after a refresh, bands had no button, and no count was shown). The state comes from
+ * the server on every visit; visitors who aren't signed in see the count and a way to sign in.
+ */
+function FollowButton({ kind, id, signedIn }: { kind: "artist" | "band"; id: string; signedIn: boolean }) {
+  const summary = useAsync(() => fetchFollowSummary(kind, id, { skipAuth: !signedIn }), [kind, id, signedIn]);
+  const [override, setOverride] = useState<FollowSummary | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const state = override ?? (summary.status === "ok" ? summary.data : null);
+
   async function toggle() {
+    if (!state) return;
     setBusy(true);
     setError(null);
     try {
-      if (following) await unfollowArtist(artistId);
-      else await followArtist(artistId);
-      setFollowing(!following);
+      if (state.following) await (kind === "artist" ? unfollowArtist(id) : unfollowBand(id));
+      else await (kind === "artist" ? followArtist(id) : followBand(id));
+      setOverride(await fetchFollowSummary(kind, id));
     } catch (err) {
       setError(friendlyError(err, "That did not work. Please try again."));
     } finally {
       setBusy(false);
     }
   }
+
+  const count = state ? (
+    <span className="text-sm text-fg">
+      <span className="cr-num font-semibold">{formatCount(state.followers)}</span> {state.followers === 1 ? "follower" : "followers"}
+    </span>
+  ) : null;
+  if (!signedIn) {
+    return (
+      <span className="inline-flex flex-wrap items-center gap-3">
+        <ButtonLink href={`/login?next=${encodeURIComponent(`/${kind === "artist" ? "artists" : "bands"}/${id}`)}`} size="lg" variant="secondary">
+          <Heart aria-hidden="true" /> Sign in to follow
+        </ButtonLink>
+        {count}
+      </span>
+    );
+  }
   return (
-    <span className="inline-flex items-center gap-3">
-      <Button variant={following ? "secondary" : "primary"} size="lg" busy={busy} onClick={() => void toggle()} aria-pressed={following}>
-        {following ? <HeartOff aria-hidden="true" /> : <Heart aria-hidden="true" />} {following ? "Following" : "Follow"}
+    <span className="inline-flex flex-wrap items-center gap-3">
+      <Button
+        variant={state?.following ? "secondary" : "primary"}
+        size="lg"
+        busy={busy || !state}
+        onClick={() => void toggle()}
+        aria-pressed={state?.following ?? false}
+      >
+        {state?.following ? <HeartOff aria-hidden="true" /> : <Heart aria-hidden="true" />} {state?.following ? "Following" : "Follow"}
       </Button>
+      {count}
       {error ? (
         <span role="alert" className="text-sm text-danger">
           {error}
@@ -214,11 +264,9 @@ export function ProfilePage({ kind, id }: { kind: Kind; id: string }) {
             <Display as="h1" id="profile-title" size="xl" className="mt-4">
               {entity.name}
             </Display>
-            {kind === "artist" && signedIn ? (
-              <div className="mt-6">
-                <FollowButton artistId={entity.id} />
-              </div>
-            ) : null}
+            <div className="mt-6">
+              <FollowButton kind={kind} id={entity.id} signedIn={signedIn} />
+            </div>
           </div>
         </div>
       </LitSurface>

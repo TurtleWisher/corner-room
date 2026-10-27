@@ -3,7 +3,7 @@
 import { RosterPage } from "@/components/artists/roster-page";
 import { createArtist, fetchArtists, type ArtistRecord } from "@/lib/api";
 
-const entry = (a: ArtistRecord) => ({ id: a.id, name: a.stage_name, bio: a.bio, status: a.status, primary_org_id: a.primary_org_id });
+const entry = (a: ArtistRecord) => ({ id: a.id, name: a.stage_name, bio: a.bio, status: a.status, primary_org_id: a.primary_org_id, picture: a.portrait_asset_id });
 
 export default function ArtistsPage() {
   return (

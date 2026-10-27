@@ -6,13 +6,14 @@ import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { Avatar, Button, Card, EmptyState, ErrorState, Field, Input, Skeleton, StatusChip, Table, TBody, TD, TH, THead, TR } from "@/components/ds";
+import { coverUrl } from "@/lib/cover-view";
 import { PageIntro, RetryButton, StaffPanel } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import { useWorkspace } from "@/components/workspace-provider";
 import { ApiError } from "@/lib/api";
 import { rowsForActiveOrg } from "@/lib/workspace-view";
 
-export type RosterEntry = { id: string; name: string; bio: string | null; status: string; primary_org_id?: string | null };
+export type RosterEntry = { id: string; name: string; bio: string | null; status: string; primary_org_id?: string | null; picture?: string | null };
 
 type Props = {
   kind: "artist" | "band";
@@ -110,8 +111,8 @@ function StaffTools({ kind, loadWorkspace, create }: Pick<Props, "kind" | "loadW
 }
 
 /**
- * Public roster (Artists module, Ember): a grid of monogram portraits (OD-05: no portraits served
- * yet), name and the first line of the bio. Staff get the workspace roster and the create form in
+ * Public roster (Artists module, Ember): a grid of portraits (the approved picture, else the
+ * monogram), name and the first line of the bio. Staff get the workspace roster and the create form in
  * a separate panel, as the legacy page offered.
  */
 export function RosterPage({ kind, title, lede, loadPublic, loadWorkspace, create }: Props) {
@@ -148,7 +149,12 @@ export function RosterPage({ kind, title, lede, loadPublic, loadWorkspace, creat
               <li key={row.id}>
                 <Link href={`/${kind}s/${row.id}`} className="cr-focus group block">
                   <Card className="flex flex-col items-start gap-4 p-5 group-hover:[--cut-border:var(--cr-line-strong)]">
-                    <Avatar name={row.name} size={88} />
+                    {/* The approved picture, else the monogram (owner, 2026-10-27: pictures everywhere). */}
+                    <Avatar
+                      name={row.name}
+                      size={88}
+                      src={coverUrl(kind === "band" ? { band: row.id, picture: row.picture } : { artist: row.id, picture: row.picture }, 160)}
+                    />
                     <div className="min-w-0">
                       <h2 className="truncate text-lg font-bold text-fg group-hover:text-highlight">{row.name}</h2>
                       <p className="mt-1 line-clamp-2 text-sm text-fg-muted">{row.bio || (kind === "band" ? "Band" : "Artist")}</p>

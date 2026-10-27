@@ -30,6 +30,11 @@ export async function fetchMyNotifications(limit = 50): Promise<NotificationReco
   return apiFetch<NotificationRecord[]>(`/api/v1/me/notifications?limit=${limit}`, { retry: false });
 }
 
+/** Mark every unread notification read (owner, 2026-10-27: opening the list clears the bell). */
+export async function markAllNotificationsRead(): Promise<{ marked: number }> {
+  return apiFetch<{ marked: number }>("/api/v1/me/notifications/read-all", { method: "POST", retry: false });
+}
+
 export async function markNotificationRead(id: string): Promise<NotificationRecord> {
   return apiFetch<NotificationRecord>(`/api/v1/me/notifications/${id}/read`, {
     method: "POST",

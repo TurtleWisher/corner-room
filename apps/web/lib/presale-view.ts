@@ -1,14 +1,21 @@
 /*
  * Reading a pre-sale list pasted or uploaded by staff (owner, 2026-10-25, D-PRESALE-01): a CSV
  * export or rows copied from a Notion table (tab-separated). Columns are found by their header
- * (email, name, amount, date), so the owner's sheet can keep its own order and extra columns,
- * which are ignored (phone and address are never sent). Input checking only: the API validates
- * again and decides everything.
+ * (email, name, amount, date, and phone and address since 2026-10-27), so the owner's sheet can
+ * keep its own order and extra columns, which are ignored. Phone and address are seen only by
+ * staff with customer access. Input checking only: the API validates again and decides everything.
  */
 
 import { parsePriceToMinor } from "@/lib/studio-view";
 
-export type PresaleDraft = { email: string; buyer_name: string | null; amount_minor: number; paid_on: string | null };
+export type PresaleDraft = {
+  email: string;
+  buyer_name: string | null;
+  amount_minor: number;
+  paid_on: string | null;
+  phone?: string | null;
+  address?: string | null;
+};
 export type PresaleProblem = { line: number; message: string };
 export type ParsedPresales = { rows: PresaleDraft[]; problems: PresaleProblem[] };
 
@@ -20,6 +27,9 @@ const HEADERS: Record<keyof PresaleDraft, RegExp> = {
   // "Paid" alone is an amount; "Paid on" is a date (below).
   amount_minor: /amount|price|^paid$|taka|bdt|total/i,
   paid_on: /date|paid\s*on|when/i,
+  phone: /phone|mobile|contact\s*no|whatsapp/i,
+  // Notion's sheet calls the address "Place".
+  address: /address|place|location/i,
 };
 
 /** Split one line on tabs (Notion copy) or commas (CSV), honouring "quoted, fields". */
@@ -72,7 +82,14 @@ export function parsePresaleList(text: string): ParsedPresales {
   if (lines.length < 2) return { rows: [], problems: [{ line: 1, message: "Paste the header row and at least one buyer." }] };
   const header = splitLine(lines[0]);
   const col = (key: keyof PresaleDraft) => header.findIndex((h) => HEADERS[key].test(h));
-  const at = { email: col("email"), buyer_name: col("buyer_name"), amount_minor: col("amount_minor"), paid_on: col("paid_on") };
+  const at = {
+    email: col("email"),
+    buyer_name: col("buyer_name"),
+    amount_minor: col("amount_minor"),
+    paid_on: col("paid_on"),
+    phone: col("phone"),
+    address: col("address"),
+  };
   if (at.email < 0 || at.amount_minor < 0) {
     return { rows: [], problems: [{ line: 1, message: "The first row needs column names, including Email and Amount." }] };
   }
@@ -92,7 +109,8 @@ export function parsePresaleList(text: string): ParsedPresales {
     if (rawDate.trim() && !paidOn) problems.push({ line: n, message: `Line ${n}: the date "${rawDate}" was not understood, so it is left empty.` });
     seen.add(email);
     const name = at.buyer_name >= 0 ? (cells[at.buyer_name] ?? "").replace(/\s+/g, " ").trim() : "";
-    rows.push({ email, buyer_name: name || null, amount_minor: amount, paid_on: paidOn });
+    const tidy = (index: number) => (index >= 0 ? (cells[index] ?? "").replace(/\s+/g, " ").trim() : "") || null;
+    rows.push({ email, buyer_name: name || null, amount_minor: amount, paid_on: paidOn, phone: tidy(at.phone), address: tidy(at.address) });
   });
   return { rows, problems };
 }

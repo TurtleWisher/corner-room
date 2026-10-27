@@ -28,6 +28,7 @@ import { ButtonLink } from "@/components/ds";
 import { roomCameFrom } from "@/components/music/outside-room";
 import { playerStatusText, RepeatButton, ShuffleButton, usePlayer, usePlayerProgress, type PlayerTrack } from "@/components/music/player";
 import { TrackActions } from "@/components/music/track-actions";
+import { useAsync } from "@/components/use-async";
 import {
   carouselWindow,
   edgeZone,
@@ -35,9 +36,12 @@ import {
   leaveTarget,
   nowPlayingAnnouncement,
   queuePositionLabel,
+  roomEyebrow,
   swipeDirection,
 } from "@/lib/listening-room-view";
+import { fetchPlayableCatalog, type PlayableTrackRecord } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
+import { creditHref } from "@/lib/music-view";
 import { clock, durationLabel } from "@/lib/player-model";
 import { cn } from "@/lib/utils";
 
@@ -252,11 +256,32 @@ function Normalise() {
   );
 }
 
-/** What is streaming, from the API ("Opus · 160 kbps"). Nothing when it is not known. */
-function Format() {
-  const p = usePlayer();
-  if (!p.format) return null;
-  return <span className="cr-num text-[0.6875rem] text-fg-muted">{p.format}</span>;
+/**
+ * The artist or band of the playing song, linked to their page (owner, 2026-10-27). The link comes
+ * from the public catalog; until it loads, or when it is unknown, the name is plain text.
+ */
+let publicCatalog: Promise<Map<string, PlayableTrackRecord>> | null = null;
+
+/** The public catalog, once per page view, only to link names (no sign-in needed). */
+function loadPublicCatalog(): Promise<Map<string, PlayableTrackRecord>> {
+  if (!publicCatalog) {
+    publicCatalog = fetchPlayableCatalog({ skipAuth: true })
+      .then((page) => new Map(page.items.map((t) => [t.id, t])))
+      .catch(() => new Map());
+  }
+  return publicCatalog;
+}
+
+function ArtistLink({ track }: { track: PlayerTrack }) {
+  const catalog = useAsync(loadPublicCatalog, []);
+  const href = creditHref((catalog.status === "ok" ? catalog.data.get(track.id) : undefined) ?? {});
+  const name = track.artist || "Artist not available";
+  if (!href || !track.artist) return <>{name}</>;
+  return (
+    <Link href={href} className="cr-focus hover:text-highlight hover:underline">
+      {name}
+    </Link>
+  );
 }
 
 function Transport({ label, large = false, keyRef }: { label: string; large?: boolean; keyRef?: React.Ref<HTMLButtonElement> }) {
@@ -428,7 +453,6 @@ function ControlBar({ track, onFocus }: { track: PlayerTrack; onFocus: () => voi
           <div className="flex items-baseline justify-between gap-3">
             <p className="truncate text-sm font-bold text-fg">{label}</p>
             <span className="flex items-baseline gap-3">
-              <Format />
               <Status />
             </span>
           </div>
@@ -510,16 +534,17 @@ function FocusView({ track, edge, keyRef }: { track: PlayerTrack; edge: "left" |
       </div>
       <div className="lr-focus-info">
         <p className="cr-eyebrow text-[0.6875rem] text-highlight">
-          {[p.source ? `From ${p.source}` : "Listening room", position].filter(Boolean).join(" · ")}
+          {roomEyebrow(p.source, titleOf(track), position, p.queue.length)}
         </p>
         <h1 key={track.id} id="room-title" className="lr-title cr-display mt-4 text-[2.5rem] leading-[0.92] text-fg md:text-[4rem]">
           {label}
         </h1>
-        <p className="mt-3 text-lg text-fg-muted">{track.artist || "Artist not available"}</p>
+        <p className="mt-3 text-lg text-fg-muted">
+          <ArtistLink track={track} />
+        </p>
         <div className="lr-focus-console cr-cut cr-glass-card">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <Status />
-            <Format />
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <Transport label={label} large keyRef={keyRef} />
@@ -636,12 +661,14 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
             <Carousel onFocus={enterFocus} frontRef={frontCard} />
             <div className="lr-heading">
               <p className="cr-eyebrow text-[0.6875rem] text-highlight">
-                {[p.source ? `From ${p.source}` : "Listening room", position].filter(Boolean).join(" · ")}
+                {roomEyebrow(p.source, titleOf(track), position, p.queue.length)}
               </p>
               <h1 key={track.id} id="room-title" className="lr-title cr-display mt-3 text-[2.25rem] leading-[0.95] text-fg md:text-[3rem]">
                 {titleOf(track)}
               </h1>
-              <p className="mt-1.5 text-base text-fg-muted">{track.artist || "Artist not available"}</p>
+              <p className="mt-1.5 text-base text-fg-muted">
+                <ArtistLink track={track} />
+              </p>
             </div>
             <ControlBar track={track} onFocus={enterFocus} />
             <Link href={`/tracks/${track.id}`} className="cr-focus mt-4 inline-block text-sm font-semibold text-link hover:underline">

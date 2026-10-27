@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -82,6 +82,8 @@ class ApplicationCreate(BaseModel):
     bio: str | None = Field(default=None, max_length=8000)
     metadata: dict[str, Any] | None = None
     payload: dict[str, Any] | None = None
+    # "SOLO" (a solo artist) or "BAND" (owner, 2026-10-27).
+    profile_kind: Literal["SOLO", "BAND"] = "SOLO"
 
 
 class ApplicationOut(BaseModel):
@@ -97,6 +99,9 @@ class ApplicationOut(BaseModel):
     artist_status: str | None = None
     created_at: datetime | None = None
     organization_id: UUID | None = None
+    # "SOLO" or "BAND" as chosen when applying, and the band it became, if any (D-BAND-01).
+    profile_kind: str = "SOLO"
+    moved_to_band_id: UUID | None = None
 
 
 class ApplicationPage(BaseModel):
@@ -159,6 +164,8 @@ def _application_out(row: ArtistApplication, artist: Artist | None = None) -> Ap
         artist_status=artist.status if artist else None,
         created_at=row.created_at,
         organization_id=row.organization_id,
+        profile_kind=((artist.extra_metadata or {}).get("profile_kind") or "SOLO") if artist else "SOLO",
+        moved_to_band_id=((artist.extra_metadata or {}).get("moved_to_band_id")) if artist else None,
     )
 
 
@@ -267,6 +274,22 @@ async def grant_artist_member(
     return {"status": "granted"}
 
 
+class FollowSummaryOut(BaseModel):
+    followers: int
+    following: bool
+
+
+@router.get("/artists/{artist_id}/followers/summary", response_model=FollowSummaryOut)
+async def artist_follow_summary(
+    artist_id: UUID,
+    ctx: Annotated[AuthContext | None, Depends(get_optional_auth_context)],
+    svc: Annotated[ArtistService, Depends(artist_service)],
+) -> FollowSummaryOut:
+    """Public: how many follow this artist; signed in, also whether you do."""
+    data = await svc.follow_summary(ctx.user_id if ctx else None, target_type="ARTIST", target_id=artist_id)
+    return FollowSummaryOut(**data)
+
+
 @router.post("/artists/{artist_id}/follow", response_model=FollowOut, status_code=201)
 async def follow_artist(
     artist_id: UUID,
@@ -301,8 +324,27 @@ async def submit_application(
         extra_metadata=body.metadata,
         payload=body.payload,
         join_code=body.join_code,
+        profile_kind=body.profile_kind,
     )
     return _application_out(row, artist)
+
+
+class MovedToBandOut(BaseModel):
+    band_id: UUID
+    name: str
+
+
+@router.post("/artists/{artist_id}/move-to-band", response_model=MovedToBandOut)
+async def move_to_band(
+    artist_id: UUID,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[ArtistService, Depends(artist_service)],
+) -> MovedToBandOut:
+    """Staff: turn a solo artist profile into a band profile (D-BAND-01)."""
+    from cornerroom.modules.artists.application.band_move import move_artist_to_band
+
+    band = await move_artist_to_band(svc, ctx, artist_id)
+    return MovedToBandOut(band_id=band.id, name=band.name)
 
 
 @router.get("/artist-applications", response_model=ApplicationPage)

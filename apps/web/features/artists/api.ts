@@ -38,6 +38,9 @@ export type ApplicationRecord = {
   /** The artist profile's own state: ACTIVE means the artist can publish from Studio. */
   artist_status?: string | null;
   created_at?: string | null;
+  /** Applied as a solo artist or a band; and the band it became, if any (D-BAND-01). */
+  profile_kind?: "SOLO" | "BAND";
+  moved_to_band_id?: string | null;
 };
 
 export type BandMemberRecord = {
@@ -47,6 +50,8 @@ export type BandMemberRecord = {
   artist_id: string | null;
   role_label: string | null;
   status: string;
+  /** A band admin manages the band in Studio (D-BAND-01). */
+  is_admin?: boolean;
 };
 
 export type LineupRecord = {
@@ -110,11 +115,28 @@ export async function transitionArtist(id: string, action: string, version?: num
   });
 }
 
+/** Staff: turn a solo artist profile into a band profile (D-BAND-01). */
+export async function moveArtistToBand(artistId: string): Promise<{ band_id: string; name: string }> {
+  return apiFetch<{ band_id: string; name: string }>(`/api/v1/artists/${artistId}/move-to-band`, { method: "POST", retry: false });
+}
+
+/** Staff: make a band member an admin (manages the band in Studio), or not. */
+export async function setBandMemberAdmin(bandId: string, memberId: string, isAdmin: boolean): Promise<BandMemberRecord> {
+  return apiFetch<BandMemberRecord>(`/api/v1/bands/${bandId}/members/${memberId}/admin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_admin: isAdmin }),
+    retry: false,
+  });
+}
+
 export async function submitArtistApplication(body: {
   stage_name: string;
   bio?: string;
   /** From a label's join link: the application goes to that label. */
   join_code?: string;
+  /** A solo artist or a band (owner, 2026-10-27). */
+  profile_kind?: "SOLO" | "BAND";
 }): Promise<ApplicationRecord> {
   return apiFetch<ApplicationRecord>("/api/v1/artist-applications", {
     method: "POST",
@@ -183,6 +205,22 @@ export async function transitionApplication(id: string, action: string, version?
     body: JSON.stringify({ action, version }),
     retry: false,
   });
+}
+
+export type FollowSummary = { followers: number; following: boolean };
+
+/** Followers of an artist or band, and whether you follow (owner, 2026-10-27). Public. */
+export async function fetchFollowSummary(kind: "artist" | "band", id: string, opts?: { skipAuth?: boolean }): Promise<FollowSummary> {
+  const base = kind === "artist" ? `/api/v1/artists/${id}` : `/api/v1/bands/${id}`;
+  return apiFetch<FollowSummary>(`${base}/followers/summary`, { retry: false, skipAuth: opts?.skipAuth, skipRefresh: opts?.skipAuth });
+}
+
+export async function followBand(id: string): Promise<{ status: string }> {
+  return apiFetch(`/api/v1/bands/${id}/follow`, { method: "POST", retry: false });
+}
+
+export async function unfollowBand(id: string): Promise<{ status: string }> {
+  return apiFetch(`/api/v1/bands/${id}/follow`, { method: "DELETE", retry: false });
 }
 
 export async function followArtist(id: string): Promise<{ status: string }> {

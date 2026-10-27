@@ -72,6 +72,20 @@ async def list_notifications(
     return [_notification_out(r) for r in rows]
 
 
+class MarkedAllOut(BaseModel):
+    marked: int
+
+
+# Declared before "/{notification_id}/read" so "read-all" is never taken for an id.
+@router.post("/me/notifications/read-all", response_model=MarkedAllOut)
+async def mark_all_read(
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[NotificationService, Depends(notification_service)],
+) -> MarkedAllOut:
+    """Mark every unread notification read: opening the list clears the bell (owner, 2026-10-27)."""
+    return MarkedAllOut(marked=await svc.mark_all_read(ctx.user_id))
+
+
 @router.post("/me/notifications/{notification_id}/read", response_model=NotificationOut)
 async def mark_read(
     notification_id: UUID,

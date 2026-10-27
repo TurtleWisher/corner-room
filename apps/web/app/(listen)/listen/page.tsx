@@ -11,7 +11,7 @@ import { ListenPage } from "@/components/music/listen-page";
 import { usePlayer } from "@/components/music/player";
 import { TrackRows } from "@/components/music/track-rows";
 import { creditName, playQueue } from "@/lib/music-view";
-import { hasCatalogAccess, ownsTrack } from "@/lib/ownership";
+import { hasCatalogAccess, ownsTrack, releaseIdsFor } from "@/lib/ownership";
 
 /** "More music coming soon" beside the songs while the catalog is just starting (owner, 2026-10-25). */
 function MoreMusicSoon() {
@@ -37,9 +37,9 @@ export default function ListenHome() {
   const queue = playQueue(
     catalog.list.map((t) => ({ trackId: t.id, title: t.title, artist: creditName(t, people.artists, people.bands) })),
     catalog.map,
-    (id) => ownsTrack(commerce.entitlements, id),
+    (id) => ownsTrack(commerce.entitlements, id, releaseIdsFor(catalog.map, id)),
   );
-  const firstOwned = playable.find((t) => ownsTrack(commerce.entitlements, t.id));
+  const firstOwned = playable.find((t) => ownsTrack(commerce.entitlements, t.id, t.release_ids ?? []));
 
   return (
     <ListenPage

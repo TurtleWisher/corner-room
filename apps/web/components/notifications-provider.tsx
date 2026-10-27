@@ -12,7 +12,7 @@ import {
 import { usePathname } from "next/navigation";
 
 import { useAuth } from "@/components/auth-provider";
-import { ApiError, fetchMyNotifications, markNotificationRead, type NotificationRecord } from "@/lib/api";
+import { ApiError, fetchMyNotifications, markAllNotificationsRead, markNotificationRead, type NotificationRecord } from "@/lib/api";
 import { applyOptimisticRead, parseNotificationList } from "@/lib/notifications-view";
 
 type NotificationsContextValue = {
@@ -21,6 +21,7 @@ type NotificationsContextValue = {
   error: string | null;
   reload: () => Promise<void>;
   markRead: (id: string) => Promise<void>;
+  markAllRead: () => Promise<void>;
 };
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
@@ -71,9 +72,20 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     [items],
   );
 
+  // Opening the list reads everything in it: the bell clears at once, then the server confirms.
+  const markAllRead = useCallback(async () => {
+    const now = new Date().toISOString();
+    setItems((current) => current.map((row) => (row.status === "READ" ? row : { ...row, status: "READ", read_at: row.read_at ?? now })));
+    try {
+      await markAllNotificationsRead();
+    } catch {
+      await reload();
+    }
+  }, [reload]);
+
   const value = useMemo(
-    () => ({ items, loading, error, reload, markRead }),
-    [items, loading, error, reload, markRead],
+    () => ({ items, loading, error, reload, markRead, markAllRead }),
+    [items, loading, error, reload, markRead, markAllRead],
   );
 
   return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>;
