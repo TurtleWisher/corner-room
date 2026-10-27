@@ -1,14 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  carouselWindow,
-  edgeZone,
-  isVisibleOffset,
-  leaveTarget,
-  nowPlayingAnnouncement,
-  queuePositionLabel,
-  swipeDirection,
-} from "./listening-room-view";
+import { carouselWindow, edgeZone, isVisibleOffset, leaveTarget, nowPlayingAnnouncement, queuePositionLabel, roomEyebrow, swipeDirection } from "./listening-room-view";
 
 describe("carousel", () => {
   const q = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -83,5 +75,15 @@ describe("room copy and gestures", () => {
   it("leaves back to where the listener came from, else to Listen", () => {
     expect(leaveTarget("/releases/abc")).toBe("back");
     expect(leaveTarget(null)).toBe("/listen");
+  });
+});
+
+describe("roomEyebrow", () => {
+  it("names the list it came from, but not a single named after the song", () => {
+    expect(roomEyebrow("Night Bus EP", "Low Tide", "2 of 4", 4)).toBe("From Night Bus EP · 2 of 4");
+    expect(roomEyebrow("Chaya Pore", "Chaya Pore", null, 1)).toBe("Listening room");
+    // A title track on a longer EP still says where it came from.
+    expect(roomEyebrow("Night Bus", "Night Bus", "Track 2 of 3", 3)).toBe("From Night Bus · Track 2 of 3");
+    expect(roomEyebrow(null, "Chaya Pore", null)).toBe("Listening room");
   });
 });

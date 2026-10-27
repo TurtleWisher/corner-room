@@ -60,6 +60,26 @@ export function canModerateMusic(permissions: readonly string[] | undefined): bo
   return (permissions ?? []).includes("music.approve");
 }
 
+/**
+ * The primary artist's or band's approved picture, as a cover source (owner, 2026-10-27: artists
+ * are recognised by their picture on every page, not only their own). Null when there is none.
+ */
+export function creditPicture(
+  record: { primary_artist_id?: string | null; primary_band_id?: string | null },
+  artists: Pick<ArtistRecord, "id" | "portrait_asset_id">[],
+  bands: Pick<BandRecord, "id" | "portrait_asset_id">[],
+): { artist: string; picture: string } | { band: string; picture: string } | null {
+  if (record.primary_artist_id) {
+    const picture = artists.find((a) => a.id === record.primary_artist_id)?.portrait_asset_id;
+    return picture ? { artist: record.primary_artist_id, picture } : null;
+  }
+  if (record.primary_band_id) {
+    const picture = bands.find((b) => b.id === record.primary_band_id)?.portrait_asset_id;
+    return picture ? { band: record.primary_band_id, picture } : null;
+  }
+  return null;
+}
+
 /** Where the credit links to, when the page knows. */
 export function creditHref(record: { primary_artist_id?: string | null; primary_band_id?: string | null }): string | null {
   if (record.primary_artist_id) return `/artists/${record.primary_artist_id}`;

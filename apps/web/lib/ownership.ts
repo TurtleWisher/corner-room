@@ -23,6 +23,14 @@ export function ownsRelease(entitlements: EntitlementRecord[], releaseId: string
  * Can the customer already play this track (bought it, bought a release it is on, or has catalog
  * access)? `releaseIds` are the releases the page knows the track is on.
  */
+/**
+ * The releases a song is on, from the catalog the page already loaded, so a song bought as part of
+ * a release counts as owned in every list (owner, 2026-10-27: pre-sale buyers saw "Not on sale yet").
+ */
+export function releaseIdsFor(catalog: ReadonlyMap<string, { release_ids?: string[] }> | undefined, trackId: string): string[] {
+  return catalog?.get(trackId)?.release_ids ?? [];
+}
+
 export function ownsTrack(entitlements: EntitlementRecord[], trackId: string, releaseIds: readonly string[] = []): boolean {
   return entitlements.some(
     (e) =>

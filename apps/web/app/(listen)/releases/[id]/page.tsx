@@ -12,6 +12,7 @@ import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ButtonLink, DateTime, EmptyState, ErrorState, Field, Input, Money, Skeleton, StatusChip } from "@/components/ds";
 import { TrackBuyControl, useCustomerCommerce, type CustomerCommerce } from "@/components/music/commerce";
+import { CreditFace } from "@/components/music/credit-face";
 import { useCredits } from "@/components/music/credits";
 import { usePlayer, type PlayOptions } from "@/components/music/player";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
@@ -30,7 +31,7 @@ import {
   type TrackRecord,
 } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
-import { canModerateMusic, creditHref, creditName, formatDuration, playQueue, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
+import { canModerateMusic, creditName, formatDuration, playQueue, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
 import { ownsTrack, releaseBuyLabel, releaseBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 import { cn } from "@/lib/utils";
@@ -260,7 +261,6 @@ export default function ReleasePage() {
   const { rows, playable } = data.data!;
   const release = override ?? data.data!.release;
   const artist = creditName(release, credits.artists, credits.bands);
-  const artistHref = creditHref(release);
   const durations = rows.map((r) => playable.get(r.trackId)?.duration_ms);
   const canStaff = signedIn && typeof release.version === "number";
   const owns = (trackId: string) => ownsTrack(commerce.entitlements, trackId, [release.id]);
@@ -293,13 +293,7 @@ export default function ReleasePage() {
               {release.title}
             </Display>
             <p className="mt-4 text-lg text-fg">
-              {artist && artistHref ? (
-                <Link href={artistHref} className="cr-focus font-semibold hover:text-highlight">
-                  {artist}
-                </Link>
-              ) : (
-                <span className="text-fg-muted">Artist not available</span>
-              )}
+              <CreditFace record={release} people={credits} />
             </p>
             <p className="mt-1 text-sm text-fg">
               {release.release_at ? (

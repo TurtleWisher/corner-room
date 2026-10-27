@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Check } from "lucide-react";
+import { useEffect, useState } from "react";
 
-import { Button, EmptyState, ErrorState, Skeleton } from "@/components/ds";
+import { EmptyState, ErrorState, Skeleton } from "@/components/ds";
 import { useNotifications } from "@/components/notifications-provider";
 import { AccountPage } from "@/components/shell/account-page";
 import { RetryButton } from "@/components/shell/staff-panel";
@@ -22,21 +21,24 @@ function typeLabel(type: string): string {
 }
 
 function Feed() {
-  const { items, loading, error, reload, markRead } = useNotifications();
-  const [failed, setFailed] = useState<string | null>(null);
+  const { items, loading, error, reload, markAllRead } = useNotifications();
+  // What was new when you opened the page stays marked for this visit, while the bell clears
+  // (owner, 2026-10-27: the number stayed after the notifications were read).
+  const [newOnOpen, setNewOnOpen] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    if (newOnOpen !== null || loading || items.length === 0) return;
+    const unread = new Set(items.filter(isUnread).map((n) => n.id));
+    setNewOnOpen(unread);
+    if (unread.size > 0) void markAllRead();
+  }, [items, loading, newOnOpen, markAllRead]);
   if (loading && items.length === 0) return <Skeleton className="h-40 w-full" />;
   if (error) return <ErrorState title="Notifications unavailable" message={error} action={<RetryButton onClick={() => void reload()} />} />;
   if (items.length === 0) return <EmptyState title="No notifications yet" body="Updates about your tickets and purchases appear here." />;
   return (
     <>
-      {failed ? (
-        <p role="alert" className="mb-3 text-sm text-danger">
-          {failed}
-        </p>
-      ) : null}
       <ul className="divide-y divide-line border-y border-line">
         {items.map((n) => {
-          const unread = isUnread(n);
+          const unread = newOnOpen?.has(n.id) ?? isUnread(n);
           return (
             <li key={n.id} className="flex items-start gap-4 py-4">
               <span aria-hidden="true" className={cn("mt-1.5 size-2.5 shrink-0", unread ? "bg-accent" : "bg-transparent")} />
@@ -48,16 +50,6 @@ function Feed() {
                 {n.body ? <p className="mt-1 text-sm text-fg-muted">{n.body}</p> : null}
                 <p className="mt-1 text-xs text-fg-muted">{n.category ? humanizeStatus(n.category) : typeLabel(n.type)}</p>
               </div>
-              {unread ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Mark "${n.title}" as read`}
-                  onClick={() => void markRead(n.id).catch((err) => setFailed(friendlyError(err, "That could not be marked as read.")))}
-                >
-                  <Check aria-hidden="true" /> Mark read
-                </Button>
-              ) : null}
             </li>
           );
         })}

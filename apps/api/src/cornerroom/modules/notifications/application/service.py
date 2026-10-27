@@ -275,6 +275,19 @@ class NotificationService:
         await self.session.flush()
         return row
 
+    async def mark_all_read(self, user_id: UUID) -> int:
+        """Everything this person has not read yet becomes read (owner, 2026-10-27: the bell kept
+        its number after the notifications were opened). Returns how many changed."""
+        from sqlalchemy import update
+
+        result = await self.session.execute(
+            update(Notification)
+            .where(Notification.user_id == user_id, Notification.status != "READ")
+            .values(status="READ", read_at=datetime.now(timezone.utc))
+        )
+        await self.session.flush()
+        return int(result.rowcount or 0)
+
     async def get_preferences(self, user_id: UUID) -> list[NotificationPreference]:
         stmt = select(NotificationPreference).where(NotificationPreference.user_id == user_id)
         return list((await self.session.execute(stmt)).scalars().all())

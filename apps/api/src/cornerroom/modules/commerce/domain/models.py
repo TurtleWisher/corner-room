@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 from cornerroom.infra.base import ActorMixin, Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin, VersionMixin
@@ -245,6 +245,9 @@ class PresaleClaim(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
     amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
     paid_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # From the sheet (owner, 2026-10-27): seen only by staff with customer access.
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="WAITING")
     claimed_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("identity.users.id"), nullable=True)
     order_id: Mapped[UUID | None] = mapped_column(ForeignKey("commerce.orders.id"), nullable=True)

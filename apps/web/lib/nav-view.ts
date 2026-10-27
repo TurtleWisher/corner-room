@@ -138,6 +138,8 @@ export function menuSections(signedIn: boolean, flags: NavFlags = {}): NavSectio
 export function staffNavSections(permissions: string[] | undefined): NavSection[] {
   const flags = staffNavFlags(permissions);
   const money: NavItem[] = [{ href: "/staff/commerce", label: "Commerce" }];
+  // All customers and followers, with CSV download (owner, 2026-10-27): admins and finance staff.
+  if (flags.showFinance || flags.showUsers) money.push({ href: "/staff/customers", label: "Customers" });
   if (flags.showFinance) money.push({ href: "/staff/finance", label: "Finance" });
   money.push({ href: "/staff/royalties", label: "Royalty ops" });
 

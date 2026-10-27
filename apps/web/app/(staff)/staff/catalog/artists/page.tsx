@@ -9,6 +9,7 @@
  */
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Check, CircleAlert, Copy } from "lucide-react";
 
 import { DateTime, StatusChip } from "@/components/ds";
@@ -22,6 +23,7 @@ import {
   fetchJoinLinks,
   transitionApplication,
   transitionArtist,
+  moveArtistToBand,
   type ApplicationRecord,
   type JoinLinkRecord,
 } from "@/features/artists/api";
@@ -258,6 +260,22 @@ function Applications() {
     }
   }
 
+  async function move(app: ApplicationRecord) {
+    if (!app.artist_id) return;
+    setBusy(app.id + "move");
+    setError(null);
+    setNotice(null);
+    try {
+      const band = await moveArtistToBand(app.artist_id);
+      setNotice(`${band.name} is now a band. Its songs, releases, followers and credits moved with it; the account that ran it is the band admin.`);
+      load();
+    } catch (err) {
+      setError(friendlyError(err, "That didn't go through."));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (!currentOrg) return <ChooseWorkspace />;
   const shown = (apps ?? []).filter((a) => matches(a, filter));
 
@@ -292,7 +310,12 @@ function Applications() {
           <li key={app.id}>
             <Card>
               <div className="flex flex-wrap items-baseline justify-between gap-3">
-                <p className="text-lg font-semibold text-fg">{app.stage_name ?? "Untitled application"}</p>
+                <p className="text-lg font-semibold text-fg">
+                  {app.stage_name ?? "Untitled application"}
+                  {app.profile_kind === "BAND" || app.moved_to_band_id ? (
+                    <span className="ml-2 align-middle text-xs font-semibold uppercase tracking-wide text-highlight">Band</span>
+                  ) : null}
+                </p>
                 <span className="flex items-center gap-2 text-sm">
                   <StatusChip value={app.status} />
                   {app.artist_status ? <span className="text-fg-muted">Artist: {app.artist_status.replaceAll("_", " ").toLowerCase()}</span> : null}
@@ -317,12 +340,49 @@ function Applications() {
                     {busy === app.id + a.action ? "Working" : a.label}
                   </Button>
                 ))}
+                <MoveToBand app={app} busy={busy} onMove={() => void move(app)} />
               </div>
             </Card>
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * Staff: turn an active solo artist into a band (owner, 2026-10-27, D-BAND-01). Asks once more
+ * before doing it, because the solo profile goes away. Done bands link to their page.
+ */
+function MoveToBand({ app, busy, onMove }: { app: ApplicationRecord; busy: string | null; onMove: () => void }) {
+  const [asking, setAsking] = useState(false);
+  if (app.moved_to_band_id) {
+    return (
+      <Link href={`/bands/${app.moved_to_band_id}`} className="cr-focus self-center text-sm font-semibold text-link underline">
+        Open the band
+      </Link>
+    );
+  }
+  if (app.artist_status !== "ACTIVE" || app.profile_kind === "BAND") return null;
+  if (!asking) {
+    return (
+      <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => setAsking(true)}>
+        Move to a band profile
+      </Button>
+    );
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-fg">
+        Make {app.stage_name ?? "this artist"} a band? Songs, releases, followers and credits move; the solo profile goes away.
+      </span>
+      <Button size="sm" disabled={busy !== null} onClick={onMove}>
+        {busy === app.id + "move" ? "Moving" : "Yes, make it a band"}
+      </Button>
+      <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => setAsking(false)}>
+        Cancel
+      </Button>
+    </span>
   );
 }
 

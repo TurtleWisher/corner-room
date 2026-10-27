@@ -12,17 +12,15 @@ describe("pre-sale list", () => {
     const { rows, problems } = parsePresaleList(csv);
     expect(problems).toEqual([]);
     expect(rows).toEqual([
-      { email: "nadia@example.com", buyer_name: "Rahman, Nadia", amount_minor: 25000, paid_on: "2026-09-01" },
-      { email: "karim@example.com", buyer_name: "Karim", amount_minor: 120000, paid_on: "2026-09-01" },
+      { email: "nadia@example.com", buyer_name: "Rahman, Nadia", amount_minor: 25000, paid_on: "2026-09-01", phone: "01711111111", address: "House 1, Dhaka" },
+      { email: "karim@example.com", buyer_name: "Karim", amount_minor: 120000, paid_on: "2026-09-01", phone: "01822222222", address: "Chattogram" },
     ]);
     expect(presaleTotal(rows)).toBe(145000);
-    // Phone numbers and addresses never reach the rows.
-    expect(JSON.stringify(rows)).not.toMatch(/0171|House/);
   });
 
   it("reads rows copied straight from a Notion table (tabs)", () => {
     const { rows } = parsePresaleList("Email\tCustomer\tPaid\nmina@example.com\tMina\t৳300.50");
-    expect(rows).toEqual([{ email: "mina@example.com", buyer_name: "Mina", amount_minor: 30050, paid_on: null }]);
+    expect(rows).toEqual([{ email: "mina@example.com", buyer_name: "Mina", amount_minor: 30050, paid_on: null, phone: null, address: null }]);
   });
 
   it("names every line it can't use, and keeps the good ones", () => {
@@ -37,12 +35,12 @@ describe("pre-sale list", () => {
   it("keeps a ৳0 gift as a row (owner, 2026-10-25)", () => {
     const { rows, problems } = parsePresaleList("Email,Amount\ngift@example.com,0");
     expect(problems).toEqual([]);
-    expect(rows).toEqual([{ email: "gift@example.com", buyer_name: null, amount_minor: 0, paid_on: null }]);
+    expect(rows).toEqual([{ email: "gift@example.com", buyer_name: null, amount_minor: 0, paid_on: null, phone: null, address: null }]);
   });
 
   it("doesn't mistake a 'Paid on' date column for the amount", () => {
     const { rows } = parsePresaleList("Paid on,Email,Amount\n2026-09-02,ab@example.com,500");
-    expect(rows).toEqual([{ email: "ab@example.com", buyer_name: null, amount_minor: 50000, paid_on: "2026-09-02" }]);
+    expect(rows).toEqual([{ email: "ab@example.com", buyer_name: null, amount_minor: 50000, paid_on: "2026-09-02", phone: null, address: null }]);
   });
 
   it("asks for a header with Email and Amount", () => {
@@ -55,5 +53,12 @@ describe("pre-sale list", () => {
     expect(parsePaidOn("31/12/2026")).toBe("2026-12-31");
     expect(parsePaidOn("31/02/2026")).toBeNull();
     expect(parsePaidOn("")).toBeNull();
+  });
+});
+
+describe("pre-sale contact details (owner, 2026-10-27)", () => {
+  it("reads Notion's Phone and Place columns", () => {
+    const { rows } = parsePresaleList('Customer Name,Email,Payment Amount,Phone,Purchase Date,Place\nSabuj,s@example.com,100,01303-290669,10/10/2025,"Flat 3D,  Dhanmondi"');
+    expect(rows[0]).toMatchObject({ phone: "01303-290669", address: "Flat 3D, Dhanmondi", paid_on: "2025-10-10" });
   });
 });

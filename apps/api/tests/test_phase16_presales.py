@@ -80,7 +80,7 @@ async def test_presale_buyers_get_the_song_on_verification_and_it_counts_as_a_sa
     assert denied.status_code == 404, denied.text
     up = await client.post("/api/v1/staff/presales", headers=bearer(finance), json={"product_id": product_id, "rows": rows})
     assert up.status_code == 201, up.text
-    assert up.json() == {"added": 2, "skipped": ["late-buyer@example.com"], "claimed_now": 1}
+    assert up.json() == {"added": 2, "skipped": ["late-buyer@example.com"], "claimed_now": 1, "contact_filled": 0}
 
     # Uploading the same list again changes nothing.
     again = await client.post("/api/v1/staff/presales", headers=bearer(finance), json={"product_id": product_id, "rows": rows[:2]})

@@ -66,3 +66,19 @@ export function swipeDirection(dx: number, dy: number): "next" | "previous" | nu
 export function leaveTarget(cameFrom: string | null): "back" | "/listen" {
   return cameFrom ? "back" : "/listen";
 }
+
+/**
+ * The small line above the title: where the music came from, and the position in Up next. A single
+ * named after its only song is not repeated (owner, 2026-10-27: "From Chaya Pore · Chaya Pore"); a
+ * title track on a longer EP or album still says where it came from.
+ */
+export function roomEyebrow(
+  source: string | null | undefined,
+  title: string,
+  position: string | null | undefined,
+  queueLength = 0,
+): string {
+  const sameAsSong = !!source && source.trim().toLowerCase() === title.trim().toLowerCase() && queueLength <= 1;
+  const from = source && !sameAsSong ? `From ${source}` : "Listening room";
+  return [from, position].filter(Boolean).join(" · ");
+}

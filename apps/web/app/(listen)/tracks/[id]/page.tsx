@@ -12,6 +12,7 @@ import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, Card, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
 import { TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
+import { CreditFace } from "@/components/music/credit-face";
 import { useCredits } from "@/components/music/credits";
 import { TrackAudioPanel } from "@/components/music/track-audio-panel";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
@@ -27,8 +28,8 @@ import {
 } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
 import { humanizeStatus } from "@/lib/format/status";
-import { canModerateMusic, creditHref, creditName, creditPerson, formatDuration, playQueue, playState } from "@/lib/music-view";
-import { ownsTrack, trackBuyState } from "@/lib/ownership";
+import { canModerateMusic, creditName, creditPerson, formatDuration, playQueue, playState } from "@/lib/music-view";
+import { ownsTrack, releaseIdsFor, trackBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 
 const ACTIONS = ["submit", "start_review", "approve", "reject", "schedule", "release", "takedown", "archive"];
@@ -129,7 +130,7 @@ export default function TrackPage() {
     queue: playQueue(
       catalog.list.map((t) => ({ trackId: t.id, title: t.title, artist: creditName(t, people.artists, people.bands) })),
       catalog.map,
-      (trackId) => ownsTrack(commerce.entitlements, trackId),
+      (trackId) => ownsTrack(commerce.entitlements, trackId, releaseIdsFor(catalog.map, trackId)),
     ),
     source: "Your music",
   };
@@ -169,7 +170,6 @@ export default function TrackPage() {
   const { credits, playable } = data.data!;
   const track = override ?? data.data!.track;
   const artist = creditName(track, people.artists, people.bands);
-  const artistHref = creditHref(track);
   const play = playState(playable);
   // A song bought as part of its album or EP counts as owned here too (D-AUDIO-12).
   const buy = trackBuyState(commerce.entitlements, commerce.offers, track.id, track.release_ids ?? []);
@@ -191,13 +191,7 @@ export default function TrackPage() {
               {track.title}
             </Display>
             <p className="mt-4 text-lg text-fg">
-              {artist && artistHref ? (
-                <Link href={artistHref} className="cr-focus font-semibold hover:text-highlight">
-                  {artist}
-                </Link>
-              ) : (
-                <span className="text-fg-muted">Artist not available</span>
-              )}
+              <CreditFace record={track} people={people} />
             </p>
             {play.kind === "unavailable" ? <p className="mt-2 text-sm text-fg-muted">{play.reason}</p> : null}
             <div className="mt-8 flex flex-wrap items-center gap-3">

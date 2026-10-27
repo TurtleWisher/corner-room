@@ -8,6 +8,7 @@ import {
   ownsRelease,
   ownsTrack,
   releaseBuyLabel,
+  releaseIdsFor,
   releaseBuyState,
   trackBuyState,
 } from "@/lib/ownership";
@@ -85,5 +86,21 @@ describe("ownership", () => {
     expect(releaseBuyLabel("ALBUM", {})).toBe("Buy the album");
     expect(releaseBuyLabel("EP", { audience: "OWNS_PART_OF_RELEASE" })).toBe("Complete the EP");
     expect(releaseBuyLabel(null, { audience: "EVERYONE" })).toBe("Buy the release");
+  });
+});
+
+describe("songs bought with their release (owner, 2026-10-27: pre-sale buyers saw \"Not on sale yet\")", () => {
+  const catalog = new Map([["t1", { release_ids: ["r1"] }], ["t2", {}]]);
+  it("finds a song's releases from the loaded catalog", () => {
+    expect(releaseIdsFor(catalog, "t1")).toEqual(["r1"]);
+    expect(releaseIdsFor(catalog, "t2")).toEqual([]);
+    expect(releaseIdsFor(undefined, "t1")).toEqual([]);
+  });
+  it("counts a song as owned in lists when its release was bought (pre-sale claims are release purchases)", () => {
+    const presale = [ent("RELEASE", "r1")];
+    expect(ownsTrack(presale, "t1", releaseIdsFor(catalog, "t1"))).toBe(true);
+    // Without the release list, lists used to call it not owned.
+    expect(ownsTrack(presale, "t1")).toBe(false);
+    expect(trackBuyState(presale, [], "t1", releaseIdsFor(catalog, "t1"))).toEqual({ kind: "owned", via: "release" });
   });
 });

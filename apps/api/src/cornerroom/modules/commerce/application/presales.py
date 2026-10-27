@@ -41,6 +41,14 @@ log = structlog.get_logger("commerce.presales")
 # Technical limits for one upload (not business rules).
 MAX_ROWS_PER_UPLOAD = 500
 MAX_NAME_LENGTH = 200
+MAX_PHONE_LENGTH = 32
+MAX_ADDRESS_LENGTH = 500
+
+
+def _clean_text(value: Any, limit: int) -> str | None:
+    """Collapse spaces and trim; empty is None."""
+    text_value = " ".join(str(value or "").split())[:limit]
+    return text_value or None
 
 
 def normalize_email(email: str) -> str:
@@ -86,19 +94,31 @@ class PresaleService:
             raise AppError("VALIDATION_ERROR", "The list is empty", 422, extras={"field": "rows"})
         if len(rows) > MAX_ROWS_PER_UPLOAD:
             raise AppError("VALIDATION_ERROR", f"Upload at most {MAX_ROWS_PER_UPLOAD} buyers at a time", 422, extras={"field": "rows"})
-        existing = set(
-            (
+        existing = {
+            claim.email: claim
+            for claim in (
                 await self.session.execute(
-                    select(PresaleClaim.email).where(PresaleClaim.product_id == product.id, PresaleClaim.status != "CANCELLED")
+                    select(PresaleClaim).where(PresaleClaim.product_id == product.id, PresaleClaim.status != "CANCELLED")
                 )
             ).scalars()
-        )
+        }
         added: list[PresaleClaim] = []
         skipped: list[str] = []
+        updated = 0
         seen: set[str] = set()
         for row in rows:
             email = normalize_email(str(row.get("email") or ""))
+            phone = _clean_text(row.get("phone"), MAX_PHONE_LENGTH)
+            address = _clean_text(row.get("address"), MAX_ADDRESS_LENGTH)
             if email in existing or email in seen:
+                # Already listed: only fill in a phone or address it didn't have (owner, 2026-10-27),
+                # so the final sheet can be uploaded again safely.
+                listed = existing.get(email)
+                if listed is not None and ((phone and not listed.phone) or (address and not listed.address)):
+                    listed.phone = listed.phone or phone
+                    listed.address = listed.address or address
+                    listed.updated_by = ctx.user_id
+                    updated += 1
                 skipped.append(email)
                 continue
             seen.add(email)
@@ -113,6 +133,8 @@ class PresaleService:
                 amount_minor=money.amount_minor,
                 currency_code=money.currency_code,
                 paid_on=paid_on if isinstance(paid_on, date) else None,
+                phone=phone,
+                address=address,
                 status="WAITING",
                 created_by=ctx.user_id,
                 updated_by=ctx.user_id,
@@ -126,7 +148,12 @@ class PresaleService:
             action="presale.list_uploaded",
             entity_type="Product",
             entity_id=product.id,
-            new_state={"added": len(added), "skipped": len(skipped), "amount_minor": sum(c.amount_minor for c in added)},
+            new_state={
+                "added": len(added),
+                "skipped": len(skipped),
+                "contact_filled": updated,
+                "amount_minor": sum(c.amount_minor for c in added),
+            },
             organization_id=product.organization_id,
         )
         claimed = 0
@@ -134,7 +161,7 @@ class PresaleService:
             user = await self._verified_user_by_email(claim.email)
             if user is not None and await self._claim(claim, user):
                 claimed += 1
-        return {"added": len(added), "skipped": skipped, "claimed_now": claimed}
+        return {"added": len(added), "skipped": skipped, "claimed_now": claimed, "contact_filled": updated}
 
     async def list_for_product(self, ctx: AuthContext, product_id: UUID) -> dict[str, Any]:
         product = await self._product_for_staff(ctx, product_id)

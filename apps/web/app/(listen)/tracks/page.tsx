@@ -16,7 +16,7 @@ import { useWorkspace } from "@/components/workspace-provider";
 import { ApiError, createTrack, fetchPlayableCatalog, fetchTracks, type PlayableTrackRecord } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
 import { creditName, formatDuration, playQueue } from "@/lib/music-view";
-import { ownsTrack } from "@/lib/ownership";
+import { ownsTrack, releaseIdsFor } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 import { rowsForActiveOrg } from "@/lib/workspace-view";
 
@@ -112,7 +112,7 @@ export default function TracksPage() {
         ? playQueue(
             data.data.tracks.map((t) => ({ trackId: t.id, title: t.title, artist: creditName(t, people.artists, people.bands) })),
             data.data.playable,
-            (id) => ownsTrack(commerce.entitlements, id),
+            (id) => ownsTrack(commerce.entitlements, id, releaseIdsFor(data.data?.playable, id)),
           )
         : [],
     source: "Tracks",

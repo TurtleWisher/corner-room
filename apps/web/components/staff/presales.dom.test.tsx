@@ -28,7 +28,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Pre-sales (DOM)", () => {
-  it("offers only songs and releases, previews a pasted list and sends only email, name, amount and date", async () => {
+  it("offers only songs and releases, previews a pasted list and sends email, name, amount, date, phone and address", async () => {
     api.uploadPresales.mockResolvedValue({ added: 2, skipped: [], claimed_now: 1 });
     render(<Presales products={PRODUCTS} />);
     const select = screen.getByLabelText("Song or release") as HTMLSelectElement;
@@ -43,11 +43,11 @@ describe("Pre-sales (DOM)", () => {
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("1 already had an account"));
     const [productId, rows] = api.uploadPresales.mock.calls[0];
     expect(productId).toBe("p1");
+    // Phone and address are kept since 2026-10-27 (seen only by staff with customer access).
     expect(rows).toEqual([
-      { email: "nadia@example.com", buyer_name: "Nadia", amount_minor: 25000, paid_on: null },
-      { email: "karim@example.com", buyer_name: "Karim", amount_minor: 30000, paid_on: null },
+      { email: "nadia@example.com", buyer_name: "Nadia", amount_minor: 25000, paid_on: null, phone: "01711111111", address: null },
+      { email: "karim@example.com", buyer_name: "Karim", amount_minor: 30000, paid_on: null, phone: "01822222222", address: null },
     ]);
-    expect(JSON.stringify(rows)).not.toContain("0171");
   });
 
   it("shows who has the song, the totals, and removes a waiting row", async () => {

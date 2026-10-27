@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PlayableTrackRecord } from "@/lib/api";
 
-import { canModerateMusic, creditPerson, playQueue } from "./music-view";
+import { canModerateMusic, creditPerson, creditPicture, playQueue } from "./music-view";
 
 function rec(id: string, ok = true): PlayableTrackRecord {
   return { id, title: `T-${id}`, catalog_playable: ok, audio_deliverable: ok, duration_ms: 1000, reason: ok ? null : "NO_AUDIO" } as PlayableTrackRecord;
@@ -49,5 +49,16 @@ describe("canModerateMusic", () => {
     expect(canModerateMusic(["music.write", "music.approve"])).toBe(true);
     expect(canModerateMusic(["music.write"])).toBe(false);
     expect(canModerateMusic(undefined)).toBe(false);
+  });
+});
+
+describe("creditPicture", () => {
+  it("finds the artist's or band's approved picture, or nothing", () => {
+    const artists = [{ id: "a1", portrait_asset_id: "p1" }, { id: "a2", portrait_asset_id: null }];
+    const bands = [{ id: "b1", portrait_asset_id: "p2" }];
+    expect(creditPicture({ primary_artist_id: "a1" }, artists, bands)).toEqual({ artist: "a1", picture: "p1" });
+    expect(creditPicture({ primary_band_id: "b1" }, artists, bands)).toEqual({ band: "b1", picture: "p2" });
+    expect(creditPicture({ primary_artist_id: "a2" }, artists, bands)).toBeNull();
+    expect(creditPicture({}, artists, bands)).toBeNull();
   });
 });

@@ -24,6 +24,7 @@ from cornerroom.kernel.events import (
     ARTIST_FOLLOWED,
     ARTIST_SUSPENDED,
     ARTIST_UNFOLLOWED,
+    BAND_ADMIN_CHANGED,
     BAND_MEMBER_CHANGED,
     DomainEvent,
 )
@@ -48,6 +49,7 @@ from cornerroom.modules.artists.domain.models import (
     BandMember,
     Follow,
 )
+from cornerroom.modules.artists.application.band_move import move_artist_to_band, wants_band
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.documents.domain.models import MediaAsset
@@ -363,6 +365,7 @@ class ArtistService:
         extra_metadata: dict[str, Any] | None = None,
         payload: dict[str, Any] | None = None,
         join_code: str | None = None,
+        profile_kind: str = "SOLO",
     ) -> tuple[ArtistApplication, Artist]:
         name = stage_name.strip()
         if not name:
@@ -387,6 +390,9 @@ class ArtistService:
             extra_metadata=self._meta(extra_metadata),
             created_by=ctx.user_id,
         )
+        if profile_kind == "BAND":
+            # Applied as a band (owner, 2026-10-27): becomes a band profile when staff activate it.
+            artist.extra_metadata = {**(artist.extra_metadata or {}), "profile_kind": "BAND"}
         self.session.add(artist)
         await self.session.flush()
         application = ArtistApplication(
@@ -660,6 +666,8 @@ class ArtistService:
             new_state={"status": artist.status},
             organization_id=artist.primary_org_id,
         )
+        if action == "activate" and wants_band(artist):
+            await move_artist_to_band(self, ctx, artist.id, staff_checked=True)
         return artist
 
     async def get_application_row(self, application_id: UUID) -> ArtistApplication:
@@ -1121,6 +1129,40 @@ class ArtistService:
         )
         return member
 
+    async def set_member_admin(self, ctx: AuthContext, band_id: UUID, member_id: UUID, *, is_admin: bool) -> BandMember:
+        """Staff only (owner, 2026-10-27): a band admin uploads and manages the band in Studio."""
+        band = await self.get_band_row(band_id)
+        if band.primary_org_id is None or not await self._can_staff_manage_workspace(ctx, band.primary_org_id):
+            raise NotFoundError("Band not found")
+        await self._require_active_org(band.primary_org_id)
+        member = await self.session.get(BandMember, member_id)
+        if member is None or member.deleted_at is not None or member.band_id != band.id:
+            raise NotFoundError("Membership not found")
+        if is_admin and (member.status != "ACTIVE" or member.user_id is None):
+            raise AppError("VALIDATION_ERROR", "Only an active member with an account can be a band admin", 422)
+        previous = member.is_admin
+        member.is_admin = is_admin
+        member.updated_by = ctx.user_id
+        await self.session.flush()
+        await self._emit(
+            event_type=BAND_ADMIN_CHANGED,
+            aggregate_type="Band",
+            aggregate_id=band.id,
+            payload={"member_id": str(member.id), "is_admin": is_admin},
+            ctx=ctx,
+            organization_id=band.primary_org_id,
+        )
+        await self.audit.record_from_auth(
+            ctx,
+            action="band_member.admin_changed",
+            entity_type="BandMember",
+            entity_id=member.id,
+            previous_state={"is_admin": previous},
+            new_state={"is_admin": is_admin},
+            organization_id=band.primary_org_id,
+        )
+        return member
+
     async def _follow_target(self, target_type: str, target_id: UUID) -> tuple[str, UUID | None]:
         if target_type == "ARTIST":
             artist = await self.get_artist_row(target_id)
@@ -1133,6 +1175,21 @@ class ArtistService:
                 raise NotFoundError("Band not found")
             return "Band", band.primary_org_id
         raise AppError("VALIDATION_ERROR", "Invalid follow target", 422)
+
+    async def follow_summary(self, user_id: UUID | None, *, target_type: str, target_id: UUID) -> dict[str, Any]:
+        """Public follower count, and whether this person follows (owner, 2026-10-27: following
+        looked undone after a refresh, and no count was shown)."""
+        from sqlalchemy import func
+
+        await self._follow_target(target_type, target_id)
+        active = (Follow.target_type == target_type, Follow.target_id == target_id, Follow.status == "ACTIVE", Follow.deleted_at.is_(None))
+        followers = (await self.session.execute(select(func.count()).select_from(Follow).where(*active))).scalar_one()
+        following = False
+        if user_id is not None:
+            following = (
+                await self.session.execute(select(Follow.id).where(*active, Follow.user_id == user_id))
+            ).first() is not None
+        return {"followers": int(followers), "following": following}
 
     async def follow(
         self,

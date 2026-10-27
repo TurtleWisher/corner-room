@@ -12,6 +12,7 @@ import { friendlyError } from "@/lib/error-copy";
 import { canApplyAgain } from "@/lib/onboarding-view";
 
 function Apply({ onSent }: { onSent: () => void }) {
+  const [kind, setKind] = useState<"SOLO" | "BAND">("SOLO");
   const [stageName, setStageName] = useState("");
   const [bio, setBio] = useState("");
   const [busy, setBusy] = useState(false);
@@ -22,7 +23,7 @@ function Apply({ onSent }: { onSent: () => void }) {
     setError(null);
     setBusy(true);
     try {
-      await submitArtistApplication({ stage_name: stageName, bio: bio || undefined });
+      await submitArtistApplication({ stage_name: stageName, bio: bio || undefined, profile_kind: kind });
       onSent();
     } catch (err) {
       setError(friendlyError(err, "Your application could not be sent. Please try again."));
@@ -42,8 +43,33 @@ function Apply({ onSent }: { onSent: () => void }) {
         </div>
       ) : null}
       <form onSubmit={onSubmit} className="mt-6 space-y-4">
-        <Field label="Stage name">{(c) => <Input {...c} value={stageName} onChange={(e) => setStageName(e.target.value)} maxLength={200} required />}</Field>
-        <Field label="About you" hint="Optional">
+        {/* Solo artist or band (owner, 2026-10-27): a band gets a band profile, with you as its admin. */}
+        <fieldset>
+          <legend className="text-sm font-semibold text-fg">You are applying as</legend>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {(
+              [
+                ["SOLO", "A solo artist", "Just you, under your stage name."],
+                ["BAND", "A band", "A group. You manage the band; more members can be added later."],
+              ] as const
+            ).map(([value, title, hint]) => (
+              <label
+                key={value}
+                className={`cr-focus flex cursor-pointer gap-3 border p-3 ${kind === value ? "border-highlight" : "border-line"}`}
+              >
+                <input type="radio" name="profile_kind" value={value} checked={kind === value} onChange={() => setKind(value)} className="mt-1" />
+                <span>
+                  <span className="block text-sm font-semibold text-fg">{title}</span>
+                  <span className="block text-xs text-fg-muted">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <Field label={kind === "BAND" ? "Band name" : "Stage name"}>
+          {(c) => <Input {...c} value={stageName} onChange={(e) => setStageName(e.target.value)} maxLength={200} required />}
+        </Field>
+        <Field label={kind === "BAND" ? "About the band" : "About you"} hint="Optional">
           {(c) => <Textarea {...c} rows={5} value={bio} onChange={(e) => setBio(e.target.value)} />}
         </Field>
         <Button type="submit" size="lg" busy={busy}>

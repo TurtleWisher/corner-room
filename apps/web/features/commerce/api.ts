@@ -291,19 +291,28 @@ export type PresaleRecord = {
   status: string;
   claimed_at: string | null;
   order_id: string | null;
+  phone?: string | null;
+  address?: string | null;
 };
 
 export type PresaleTotals = { buyers: number; claimed: number; amount_minor: number; claimed_amount_minor: number };
 
 export type PresaleList = { product_id: string; items: PresaleRecord[]; totals: Record<string, PresaleTotals> };
 
-export type PresaleRowInput = { email: string; buyer_name: string | null; amount_minor: number; paid_on: string | null };
+export type PresaleRowInput = {
+  email: string;
+  buyer_name: string | null;
+  amount_minor: number;
+  paid_on: string | null;
+  phone?: string | null;
+  address?: string | null;
+};
 
 export async function fetchPresales(productId: string): Promise<PresaleList> {
   return apiFetch<PresaleList>(`/api/v1/staff/presales?product_id=${encodeURIComponent(productId)}`, { retry: false });
 }
 
-export async function uploadPresales(productId: string, rows: PresaleRowInput[]): Promise<{ added: number; skipped: string[]; claimed_now: number }> {
+export async function uploadPresales(productId: string, rows: PresaleRowInput[]): Promise<{ added: number; skipped: string[]; claimed_now: number; contact_filled?: number }> {
   return apiFetch(`/api/v1/staff/presales`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -314,4 +323,37 @@ export async function uploadPresales(productId: string, rows: PresaleRowInput[])
 
 export async function cancelPresale(id: string): Promise<PresaleRecord> {
   return apiFetch<PresaleRecord>(`/api/v1/staff/presales/${id}/cancel`, { method: "POST", retry: false });
+}
+
+/* All customers and followers for admins and finance staff (owner, 2026-10-27, D-CUSTOMERS-01). */
+export type CustomerList = {
+  items: import("@/lib/customers-view").CustomerRow[];
+  total: number;
+  truncated: boolean;
+  presale_buyers: number;
+  website_customers: number;
+};
+
+export type CustomerScope =
+  | { kind: "all" }
+  | { kind: "artist" | "band"; id: string }
+  | { kind: "track" | "release" | "event"; id: string };
+
+export async function fetchCustomers(scope: CustomerScope, q?: string): Promise<CustomerList> {
+  const params = new URLSearchParams();
+  if (q && q.trim()) params.set("q", q.trim());
+  if (scope.kind === "artist" || scope.kind === "band") {
+    params.set("profile_kind", scope.kind);
+    params.set("profile_id", scope.id);
+  } else if (scope.kind !== "all") {
+    params.set("scope", scope.kind);
+    params.set("scope_id", scope.id);
+  }
+  const query = params.toString();
+  return apiFetch<CustomerList>(`/api/v1/staff/customers${query ? `?${query}` : ""}`, { retry: false });
+}
+
+export async function fetchFollowers(kind: "artist" | "band", id: string): Promise<{ items: import("@/lib/customers-view").FollowerRow[]; total: number }> {
+  const params = new URLSearchParams({ kind, target_id: id });
+  return apiFetch(`/api/v1/staff/followers?${params.toString()}`, { retry: false });
 }
