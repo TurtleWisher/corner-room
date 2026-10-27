@@ -188,7 +188,7 @@ class CheckoutService:
         return existing, payment
 
     async def _confirmed_delivery_address(self, ctx: AuthContext, confirmed: bool):
-        """D-ADDR-01: no payment starts until the buyer has a Bangladesh delivery address saved
+        """D-ADDR-01/02: no payment starts until the buyer has a delivery address saved
         and has confirmed it for this order."""
         from cornerroom.modules.identity.application.delivery_address import DeliveryAddressService
 
@@ -196,7 +196,7 @@ class CheckoutService:
         if address is None:
             raise AppError(
                 "DELIVERY_ADDRESS_REQUIRED",
-                "Add a Bangladesh address where we can send your gifts before you pay",
+                "Add an address where we can send your gifts before you pay",
                 409,
             )
         if not confirmed:

@@ -86,6 +86,13 @@ function setMedia(position: number, duration: number) {
   fireEvent.timeUpdate(a);
 }
 
+/** Real listening: the playhead moves forward a second at a time while playing (D-LISTEN-01). */
+function listen(seconds: number, duration = 200) {
+  const a = audioEl();
+  Object.defineProperty(a, "paused", { value: false, configurable: true });
+  for (let t = 0; t <= seconds; t += 1) setMedia(t, duration);
+}
+
 describe("PlayerProvider", () => {
   it("plays a track and follows media events", async () => {
     render(
@@ -162,12 +169,30 @@ describe("PlayerProvider", () => {
     );
     await act(async () => screen.getByText("start t1").click());
     await act(async () => {
-      setMedia(8, 20);
+      listen(8, 20);
       audioEl().pause();
     });
     await act(async () => screen.getByText("start t2").click());
     const t1Reports = api.ingestPlaybackEvent.mock.calls.filter(([body]) => body.track_id === "t1");
     expect(t1Reports).toHaveLength(1);
+  });
+});
+
+describe("listen counting (D-LISTEN-01)", () => {
+  it("reports what was actually heard, at the 30-second mark, and a skip ahead adds nothing", async () => {
+    render(
+      <PlayerProvider>
+        <Start track={QUEUE[0]} />
+      </PlayerProvider>,
+    );
+    await act(async () => screen.getByText("start t1").click());
+    // Jumping straight to 3:00 is not listening: no report, nothing heard.
+    await act(async () => setMedia(180, 200));
+    expect(api.ingestPlaybackEvent).not.toHaveBeenCalled();
+    // Thirty real seconds: one report goes out while the song is still playing.
+    await act(async () => listen(31));
+    expect(api.ingestPlaybackEvent).toHaveBeenCalledTimes(1);
+    expect((api.ingestPlaybackEvent.mock.calls[0][0] as { duration_ms?: number }).duration_ms).toBe(30_000);
   });
 });
 
@@ -196,7 +221,7 @@ describe("listening sessions", () => {
       </PlayerProvider>,
     );
     await act(async () => screen.getByText("start t1").click());
-    await act(async () => setMedia(8, 20));
+    await act(async () => listen(8, 20));
     await act(async () => screen.getByText("start t2").click());
     expect(order).toEqual(["report t1"]);
     await act(async () => land?.());

@@ -275,7 +275,7 @@ function NewCheckout() {
   const [quantity, setQuantity] = useState("1");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // D-ADDR-01: the buyer confirms a Bangladesh delivery address before every payment.
+  // D-ADDR-01/02: the buyer confirms a delivery address (any country) before every payment.
   const [addressConfirmed, setAddressConfirmed] = useState(false);
   const summary = useAsync(() => (item ? loadSummary(item) : Promise.resolve(null)), [item?.kind, item?.id]);
   const owned = useAsync(

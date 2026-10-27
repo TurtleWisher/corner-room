@@ -7,6 +7,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, CircleAlert, CircleCheck, Plus, Save, Send, Trash2, Undo2, UserRound } from "lucide-react";
 
 import { Button, Card, DateTime, ErrorState, Field, Input, Money, Select, Skeleton } from "@/components/ds";
+import { Textarea } from "@/components/ds/input";
 import { MediaReport } from "@/components/music/media-report";
 import { ArtworkReport } from "@/components/uploads/artwork-report";
 import { UploadCard } from "@/components/uploads/upload-card";
@@ -19,10 +20,12 @@ import {
   proposeStudioPrice,
   removeStudioTrack,
   reorderStudioTracks,
+  saveStudioLyrics,
   setStudioCredits,
   submitStudioRelease,
   updateStudioRelease,
   updateStudioTrack,
+  withdrawStudioLyrics,
   withdrawStudioRelease,
   type StudioCredit,
   type StudioReleaseDetail,
@@ -31,6 +34,8 @@ import {
 } from "@/features/studio/api";
 import { coverUrl } from "@/lib/cover-view";
 import { friendlyError } from "@/lib/error-copy";
+import { formatCount } from "@/lib/format/count";
+import { lyricsMode } from "@/lib/lyrics-view";
 import {
   EDITABLE_STATUSES,
   RELEASE_TYPE_LABEL,
@@ -284,6 +289,67 @@ function CreditsEditor({ track, taxonomy, editable, reload }: { track: StudioTra
   );
 }
 
+/**
+ * A song's lyrics (owner, 2026-10-27, D-LYRICS-01). While drafting they save straight away and
+ * staff read them in the release review; once the song is approved or out, a change waits for
+ * Corner Room to check it and listeners keep seeing the current lyrics until then.
+ */
+function LyricsEditor({ track, editable, reload }: { track: StudioTrack; editable: boolean; reload: Reload }) {
+  const mode = lyricsMode(track.status, editable);
+  const shown = track.lyrics_waiting ? (track.lyrics_pending ?? "") : (track.lyrics ?? "");
+  const [text, setText] = useState(shown);
+  const { busy, error, run } = useAction(reload);
+  const changed = text.trim() !== shown.trim();
+  const id = `lyrics-${track.id}`;
+
+  return (
+    <div>
+      <p className="text-sm text-fg-muted">
+        One sung line per line, with an empty line between verses. Listeners see them on the song page and in the listening room once the song
+        is out.
+      </p>
+      {track.lyrics_waiting ? (
+        <p className="mt-2 text-sm text-fg">Your change is waiting for Corner Room to check it. Listeners still see the current lyrics.</p>
+      ) : null}
+      {track.lyrics_review_note && !track.lyrics_waiting ? (
+        <p className="mt-2 flex items-start gap-2 text-sm text-danger">
+          <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          Not approved: {track.lyrics_review_note}
+        </p>
+      ) : null}
+      <label htmlFor={id} className="sr-only">
+        Lyrics of {track.title}
+      </label>
+      <Textarea
+        id={id}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        readOnly={mode === "locked"}
+        maxLength={10000}
+        rows={Math.min(14, Math.max(5, text.split("\n").length + 1))}
+        placeholder={mode === "locked" ? "No lyrics yet." : "Type or paste the lyrics"}
+        className="mt-3 resize-y"
+      />
+      {mode === "locked" ? (
+        <p className="mt-2 text-xs text-fg-muted">Lyrics can be changed again after the review.</p>
+      ) : (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button size="sm" busy={busy === "lyrics"} disabled={!changed} onClick={() => void run("lyrics", () => saveStudioLyrics(track.id, text.trim() ? text : null))}>
+            {mode === "draft" ? <Save aria-hidden="true" /> : <Send aria-hidden="true" />}
+            {mode === "draft" ? "Save lyrics" : "Send lyrics for review"}
+          </Button>
+          {track.lyrics_waiting ? (
+            <Button variant="ghost" size="sm" busy={busy === "withdraw"} onClick={() => void run("withdraw", () => withdrawStudioLyrics(track.id))}>
+              <Undo2 aria-hidden="true" /> Withdraw the change
+            </Button>
+          ) : null}
+        </div>
+      )}
+      <Problem message={error} />
+    </div>
+  );
+}
+
 function TrackCard({
   track,
   index,
@@ -320,6 +386,12 @@ function TrackCard({
       <div className="flex flex-wrap items-center gap-3">
         <span className="cr-num text-2xl font-bold text-highlight">{track.position}</span>
         <h3 className="min-w-0 flex-1 truncate text-lg font-semibold text-fg">{track.title}</h3>
+        {/* Counted listens (owner, 2026-10-27, D-LISTEN-01): plays heard for 30 seconds. */}
+        {typeof track.listens === "number" ? (
+          <span className="text-sm text-fg-muted">
+            <span className="cr-num font-semibold text-fg">{formatCount(track.listens)}</span> {track.listens === 1 ? "listen" : "listens"}
+          </span>
+        ) : null}
         {editable ? (
           <span className="flex gap-1">
             <Button variant="ghost" size="sm" aria-label={`Move ${track.title} up`} disabled={index === 0} onClick={() => onMove(-1)}>
@@ -419,6 +491,18 @@ function TrackCard({
         <h4 className="font-semibold text-fg">Credits</h4>
         <div className="mt-2">
           <CreditsEditor key={track.credits.map((c) => c.id).join()} track={track} taxonomy={taxonomy} editable={trackEditable} reload={reload} />
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <h4 className="font-semibold text-fg">Lyrics</h4>
+        <div className="mt-2">
+          <LyricsEditor
+            key={`${track.version}|${track.lyrics_waiting ? "w" : ""}`}
+            track={track}
+            editable={editable}
+            reload={reload}
+          />
         </div>
       </div>
     </li>

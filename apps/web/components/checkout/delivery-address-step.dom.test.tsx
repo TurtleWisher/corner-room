@@ -14,6 +14,7 @@ vi.mock("@/features/identity/api", () => ({
 import { DeliveryAddressStep } from "./delivery-address-step";
 
 const SAVED: DeliveryAddress = {
+  country_code: "BD",
   recipient_name: "Nadia Rahman",
   phone: "+8801712345678",
   division: "Dhaka",
@@ -32,6 +33,10 @@ beforeEach(() => {
     divisions: [
       { name: "Dhaka", districts: ["Dhaka", "Gazipur"] },
       { name: "Sylhet", districts: ["Sylhet"] },
+    ],
+    countries: [
+      { code: "BD", name: "Bangladesh", calling_code: "880" },
+      { code: "GB", name: "United Kingdom", calling_code: "44" },
     ],
   });
 });
@@ -54,7 +59,7 @@ describe("DeliveryAddressStep", () => {
     render(<DeliveryAddressStep confirmed={false} onConfirmedChange={onChange} />);
     const name = await screen.findByLabelText(/Recipient's name/);
     fireEvent.change(name, { target: { value: "Nadia Rahman" } });
-    fireEvent.change(screen.getByLabelText(/Mobile number/), { target: { value: "01712 345678" } });
+    fireEvent.change(screen.getByRole("textbox", { name: /Phone number/ }), { target: { value: "01712 345678" } });
     await waitFor(() => expect((screen.getByLabelText(/Division/) as HTMLSelectElement).disabled).toBe(false));
     // The district list waits for a division.
     expect((screen.getByLabelText(/District/) as HTMLSelectElement).disabled).toBe(true);
@@ -70,6 +75,30 @@ describe("DeliveryAddressStep", () => {
     expect(await screen.findByText("Nadia Rahman · 01712 345678")).toBeTruthy();
   });
 
+  it("takes an address abroad with the international layout (D-ADDR-02)", async () => {
+    api.fetchMyDeliveryAddress.mockResolvedValue(null);
+    api.saveMyDeliveryAddress.mockImplementation(async (a: DeliveryAddress) => ({ ...a, phone: "+447700900123" }));
+    render(<DeliveryAddressStep confirmed={false} onConfirmedChange={() => {}} />);
+    await waitFor(() => expect(screen.getByRole("option", { name: "United Kingdom" })).toBeTruthy());
+    fireEvent.change(screen.getByLabelText(/^Country/), { target: { value: "GB" } });
+    expect(screen.queryByLabelText(/Division/)).toBeNull();
+    expect((screen.getByLabelText("Phone number's country") as HTMLSelectElement).value).toBe("GB");
+    fireEvent.change(screen.getByLabelText(/Recipient's name/), { target: { value: "Nadia Rahman" } });
+    fireEvent.change(screen.getByRole("textbox", { name: /Phone number/ }), { target: { value: "07700 900123" } });
+    fireEvent.change(screen.getByLabelText(/^Address/), { target: { value: "12 Brick Lane" } });
+    fireEvent.change(screen.getByLabelText(/City or town/), { target: { value: "London" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save address" }));
+    await waitFor(() => expect(api.saveMyDeliveryAddress).toHaveBeenCalledTimes(1));
+    expect(api.saveMyDeliveryAddress.mock.calls[0][0]).toMatchObject({
+      country_code: "GB",
+      phone_country: "GB",
+      address_line1: "12 Brick Lane",
+      city: "London",
+      division: null,
+      region: null,
+    });
+  });
+
   it("points at the field the server names in an error", async () => {
     const { ApiError } = await import("@/lib/api/client");
     api.fetchMyDeliveryAddress.mockResolvedValue(null);
@@ -78,7 +107,7 @@ describe("DeliveryAddressStep", () => {
     );
     render(<DeliveryAddressStep confirmed={false} onConfirmedChange={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: "Save address" }));
-    const phone = await screen.findByLabelText(/Mobile number/);
+    const phone = await screen.findByRole("textbox", { name: /Phone number/ });
     await waitFor(() => expect(phone.getAttribute("aria-invalid")).toBe("true"));
     expect(screen.getByText("Enter a Bangladesh mobile number, like 01712 345678")).toBeTruthy();
   });

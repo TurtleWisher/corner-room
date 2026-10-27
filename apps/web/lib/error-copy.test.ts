@@ -14,7 +14,7 @@ describe("friendlyError", () => {
   });
   it("explains purchase refusals in plain words", () => {
     expect(friendlyError(err("TRACK_NOT_SOLD_SEPARATELY", 409))).toBe("This song is sold only as part of its album or EP.");
-    expect(friendlyError(err("DELIVERY_ADDRESS_REQUIRED", 409))).toMatch(/Bangladesh address/);
+    expect(friendlyError(err("DELIVERY_ADDRESS_REQUIRED", 409))).toMatch(/address where we can send your gifts/);
     expect(friendlyError(err("ORDER_CANCELLED", 409))).toMatch(/start again/);
   });
   it("falls back by status, then to a generic line", () => {

@@ -28,14 +28,18 @@ import {
 } from "@/lib/api";
 import {
   acceptCodecs,
+  accumulateHeard,
   afterEnd,
   clock,
   durationLabel,
   formatLabel,
   isAutoplayBlocked,
   isSuperseded,
+  heardAfterJump,
   levelMultiplier,
-  listenedMs,
+  LISTEN_REPORT_MS,
+  NOTHING_HEARD,
+  type HeardState,
   nextRepeat,
   outputLevels,
   playProblem,
@@ -192,6 +196,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const audio = useRef<HTMLAudioElement | null>(null);
   const session = useRef<ListeningSessionRecord | null>(null);
   const lastReport = useRef<{ session: string; ms: number } | null>(null);
+  // Time actually heard in this play (D-LISTEN-01), and whether the 30-second report went out.
+  const heard = useRef<HeardState>(NOTHING_HEARD);
+  const reportedListen = useRef<string | null>(null);
   // The latest playback report still on its way: a session is closed only after it lands, or
   // the API refuses the report as SESSION_CLOSED and the listen is lost.
   const inflight = useRef<Promise<unknown>>(Promise.resolve());
@@ -258,7 +265,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const s = session.current;
     const a = audio.current;
     if (!s || !a || !s.track_id) return;
-    const ms = listenedMs(a.currentTime, a.duration);
+    // What was actually heard, not where the playhead is: skipping to the end is not listening.
+    const ms = Math.round(heard.current.heardMs);
     if (ms <= 0) return;
     // A pause followed by a track change would otherwise report the same listen twice.
     if (lastReport.current?.session === s.id && lastReport.current.ms === ms && !completed) return;
@@ -281,6 +289,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       report(false);
       a.pause();
       closeSession();
+      // A new play: nothing heard yet (each play, a repeat included, is its own session).
+      heard.current = NOTHING_HEARD;
+      reportedListen.current = null;
       // Drop the old source completely so it can never keep playing under the new track.
       a.removeAttribute("src");
       a.load();
@@ -655,6 +666,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         onPause={() => {
           setState((s) => (s.status === "playing" ? { ...s, status: "paused", buffering: false } : s));
           report(false);
+          heard.current = heardAfterJump(heard.current);
         }}
         onEnded={() => {
           report(true);
@@ -672,7 +684,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           progress.set({ position: 0 });
           setState((x) => ({ ...x, status: "paused", buffering: false }));
         }}
-        onTimeUpdate={(e) => syncPosition(e.currentTarget)}
+        onTimeUpdate={(e) => {
+          const a = e.currentTarget;
+          syncPosition(a);
+          if (a.paused || a.seeking) return;
+          heard.current = accumulateHeard(heard.current, a.currentTime);
+          // Tell the API as soon as this play reaches the listen mark, so counts update live.
+          const s = session.current;
+          if (s && heard.current.heardMs >= LISTEN_REPORT_MS && reportedListen.current !== s.id) {
+            reportedListen.current = s.id;
+            report(false);
+          }
+        }}
+        onSeeking={() => {
+          heard.current = heardAfterJump(heard.current);
+        }}
         onSeeked={(e) => syncPosition(e.currentTarget)}
         onDurationChange={(e) => {
           const d = e.currentTarget.duration;

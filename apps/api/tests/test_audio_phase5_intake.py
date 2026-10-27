@@ -82,6 +82,8 @@ async def test_staff_prepare_catalog_only_and_cannot_submit(client: AsyncClient)
     assert set(added.json()["tracks"][0]) == {
         "id", "position", "title", "version_title", "status", "explicit", "language_code", "genre_primary",
         "genre_secondary", "isrc", "version", "audio", "credits",
+        # Catalog fields added 2026-10-27: listen counts (D-LISTEN-01) and lyrics (D-LYRICS-01).
+        "listens", "lyrics", "lyrics_waiting", "lyrics_pending", "lyrics_review_note",
     }
 
     # A18: staff prepare, the artist submits.

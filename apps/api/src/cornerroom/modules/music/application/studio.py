@@ -449,11 +449,22 @@ class StudioService:
         if ids:
             for a in (await self.session.execute(select(Artist).where(Artist.id.in_(ids)))).scalars():
                 artist_names[a.id] = a.stage_name
+        from sqlalchemy import func
+
+        from cornerroom.modules.music.application.lyrics import lyrics_view
+        from cornerroom.modules.streaming.domain.models import Listen
+
+        # The song's counted listens, for the artist (D-LISTEN-01).
+        listens = (
+            await self.session.execute(select(func.count()).select_from(Listen).where(Listen.track_id == track.id))
+        ).scalar_one()
         return {
             "id": track.id, "position": position, "title": track.title, "version_title": track.version_title,
+            "listens": int(listens),
             "status": track.status, "explicit": track.explicit, "language_code": track.language_code,
             "genre_primary": track.genre_primary, "genre_secondary": track.genre_secondary, "isrc": track.isrc,
             "version": track.version,
+            **lyrics_view(track),
             "audio": [
                 {"version_id": v.id, "status": v.status, "processing_detail": v.processing_detail, "is_current": v.is_current,
                  "has_audio": v.media_asset_id is not None, "duration_ms": v.duration_ms}

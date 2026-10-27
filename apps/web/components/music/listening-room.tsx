@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -8,6 +8,7 @@ import {
   AudioLines,
   LogIn,
   Maximize2,
+  MicVocal,
   Pause,
   Play,
   RotateCcw,
@@ -39,8 +40,9 @@ import {
   roomEyebrow,
   swipeDirection,
 } from "@/lib/listening-room-view";
-import { fetchPlayableCatalog, type PlayableTrackRecord } from "@/lib/api";
+import { fetchPlayableCatalog, fetchTrack, type PlayableTrackRecord } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
+import { floatSlot, floatingLines, lyricIndexAt, lyricLines } from "@/lib/lyrics-view";
 import { creditHref } from "@/lib/music-view";
 import { clock, durationLabel } from "@/lib/player-model";
 import { cn } from "@/lib/utils";
@@ -284,6 +286,104 @@ function ArtistLink({ track }: { track: PlayerTrack }) {
   );
 }
 
+/**
+ * Floating lyrics (owner, 2026-10-27, D-LYRICS-01): off until the listener turns them on with the
+ * small button by the volume. Lines drift slowly through the open space behind the cards, paced
+ * across the song (lyrics carry no timings, so this is an estimate). Decorative here: the song
+ * page has the full lyrics for reading and screen readers.
+ */
+type RoomLyrics = { trackId: string | null; lines: string[]; on: boolean; toggle: () => void };
+const LyricsContext = createContext<RoomLyrics>({ trackId: null, lines: [], on: false, toggle: () => {} });
+const LYRICS_PREF = "cr.room.lyrics";
+const lyricsCache = new Map<string, Promise<string | null>>();
+
+/** A released song's lyrics, once per song per page view (public read, no sign-in needed). */
+function loadLyrics(trackId: string): Promise<string | null> {
+  let hit = lyricsCache.get(trackId);
+  if (!hit) {
+    hit = fetchTrack(trackId, { skipAuth: true })
+      .then((t) => t.lyrics ?? null)
+      .catch(() => null);
+    lyricsCache.set(trackId, hit);
+  }
+  return hit;
+}
+
+function useRoomLyrics(trackId: string | null): RoomLyrics {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    try {
+      setOn(window.localStorage.getItem(LYRICS_PREF) === "1");
+    } catch {
+      // Storage blocked: lyrics stay off until turned on.
+    }
+  }, []);
+  const toggle = useCallback(() => {
+    setOn((was) => {
+      try {
+        window.localStorage.setItem(LYRICS_PREF, was ? "0" : "1");
+      } catch {
+        // Remembering is a convenience only.
+      }
+      return !was;
+    });
+  }, []);
+  const loaded = useAsync(async () => (trackId ? { trackId, text: await loadLyrics(trackId) } : null), [trackId]);
+  // Never show the previous song's lines while the next song's are loading.
+  const text = loaded.status === "ok" && loaded.data?.trackId === trackId ? loaded.data.text : null;
+  return { trackId, lines: lyricLines(text), on, toggle };
+}
+
+function LyricsToggle() {
+  const lyrics = useContext(LyricsContext);
+  if (lyrics.lines.length === 0) return null;
+  return (
+    <button
+      type="button"
+      onClick={lyrics.toggle}
+      aria-pressed={lyrics.on}
+      aria-label="Lyrics"
+      title={lyrics.on ? "Hide lyrics" : "Show lyrics"}
+      className={cn("cr-focus inline-flex size-10 items-center justify-center hover:text-fg", lyrics.on ? "text-highlight" : "text-fg-muted")}
+    >
+      <MicVocal aria-hidden="true" className="size-4" />
+    </button>
+  );
+}
+
+function FloatingLyrics() {
+  const lyrics = useContext(LyricsContext);
+  const { position, duration } = usePlayerProgress();
+  if (!lyrics.on || lyrics.lines.length === 0) return null;
+  const index = lyricIndexAt(lyrics.lines.length, position, duration);
+  return (
+    <div aria-hidden="true" className="lr-lyrics">
+      {floatingLines(lyrics.lines, index).map((line) => {
+        const slot = floatSlot(line.key);
+        return (
+          <p
+            key={`${lyrics.trackId}-${line.key}`}
+            data-age={line.age}
+            className="lr-lyric"
+            style={
+              {
+                "--x": `${slot.x}%`,
+                "--y": `${slot.y}%`,
+                "--dx": `${slot.dx}px`,
+                "--dy": `${slot.dy}px`,
+                "--tilt": slot.tilt,
+                "--float": `${slot.seconds}s`,
+              } as React.CSSProperties
+            }
+          >
+            {line.text}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 function Transport({ label, large = false, keyRef }: { label: string; large?: boolean; keyRef?: React.Ref<HTMLButtonElement> }) {
   const p = usePlayer();
   const playing = p.status === "playing";
@@ -461,6 +561,7 @@ function ControlBar({ track, onFocus }: { track: PlayerTrack; onFocus: () => voi
       </div>
       <div className="lr-tools">
         <Actions track={track} />
+        <LyricsToggle />
         <Volume />
         <button
           type="button"
@@ -550,6 +651,7 @@ function FocusView({ track, edge, keyRef }: { track: PlayerTrack; edge: "left" |
             <Transport label={label} large keyRef={keyRef} />
             <div className="flex items-center">
               <Actions track={track} />
+              <LyricsToggle />
               <Volume />
             </div>
           </div>
@@ -580,6 +682,7 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
   const frontCard = useRef<HTMLButtonElement>(null);
   const focusKey = useRef<HTMLButtonElement>(null);
   const moved = useRef(false);
+  const lyrics = useRoomLyrics(track?.id ?? null);
 
   useEffect(() => {
     if (!track || track.id === announced.current || !track.title) return;
@@ -633,52 +736,55 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
     >
       <Backdrop track={track} />
       <PointerLightLayer />
-      <header className="lr-top">
-        <div className="flex items-center gap-3">
-          <div className="flex items-end gap-2">
-            <Logo variant="indigo" height={36} alt="Corner Room" />
-            <BetaTag className="pb-0.5" />
-          </div>
-          <span className="cr-eyebrow hidden text-[0.6875rem] text-fg-muted sm:inline">Listening room</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {track && mode === "focus" ? (
-            <button type="button" onClick={exitFocus} className="lr-chip cr-cut cr-cut-sm cr-focus">
-              <ArrowLeft aria-hidden="true" className="size-4" /> All tracks
-            </button>
-          ) : null}
-          <button type="button" onClick={leave} aria-label="Leave the listening room" className="lr-chip lr-chip-icon cr-cut cr-cut-sm cr-focus">
-            <X aria-hidden="true" className="size-4" />
-          </button>
-        </div>
-      </header>
-
-      {track ? (
-        mode === "focus" ? (
-          <FocusView track={track} edge={edge} keyRef={focusKey} />
-        ) : (
-          <div className="lr-carousel-view">
-            <Carousel onFocus={enterFocus} frontRef={frontCard} />
-            <div className="lr-heading">
-              <p className="cr-eyebrow text-[0.6875rem] text-highlight">
-                {roomEyebrow(p.source, titleOf(track), position, p.queue.length)}
-              </p>
-              <h1 key={track.id} id="room-title" className="lr-title cr-display mt-3 text-[2.25rem] leading-[0.95] text-fg md:text-[3rem]">
-                {titleOf(track)}
-              </h1>
-              <p className="mt-1.5 text-base text-fg-muted">
-                <ArtistLink track={track} />
-              </p>
+      <LyricsContext.Provider value={lyrics}>
+        {track ? <FloatingLyrics /> : null}
+        <header className="lr-top">
+          <div className="flex items-center gap-3">
+            <div className="flex items-end gap-2">
+              <Logo variant="indigo" height={36} alt="Corner Room" />
+              <BetaTag className="pb-0.5" />
             </div>
-            <ControlBar track={track} onFocus={enterFocus} />
-            <Link href={`/tracks/${track.id}`} className="cr-focus mt-4 inline-block text-sm font-semibold text-link hover:underline">
-              Track page
-            </Link>
+            <span className="cr-eyebrow hidden text-[0.6875rem] text-fg-muted sm:inline">Listening room</span>
           </div>
-        )
-      ) : (
-        <div className="lr-fallback">{fallback ?? null}</div>
-      )}
+          <div className="flex items-center gap-2">
+            {track && mode === "focus" ? (
+              <button type="button" onClick={exitFocus} className="lr-chip cr-cut cr-cut-sm cr-focus">
+                <ArrowLeft aria-hidden="true" className="size-4" /> All tracks
+              </button>
+            ) : null}
+            <button type="button" onClick={leave} aria-label="Leave the listening room" className="lr-chip lr-chip-icon cr-cut cr-cut-sm cr-focus">
+              <X aria-hidden="true" className="size-4" />
+            </button>
+          </div>
+        </header>
+
+        {track ? (
+          mode === "focus" ? (
+            <FocusView track={track} edge={edge} keyRef={focusKey} />
+          ) : (
+            <div className="lr-carousel-view">
+              <Carousel onFocus={enterFocus} frontRef={frontCard} />
+              <div className="lr-heading">
+                <p className="cr-eyebrow text-[0.6875rem] text-highlight">
+                  {roomEyebrow(p.source, titleOf(track), position, p.queue.length)}
+                </p>
+                <h1 key={track.id} id="room-title" className="lr-title cr-display mt-3 text-[2.25rem] leading-[0.95] text-fg md:text-[3rem]">
+                  {titleOf(track)}
+                </h1>
+                <p className="mt-1.5 text-base text-fg-muted">
+                  <ArtistLink track={track} />
+                </p>
+              </div>
+              <ControlBar track={track} onFocus={enterFocus} />
+              <Link href={`/tracks/${track.id}`} className="cr-focus mt-4 inline-block text-sm font-semibold text-link hover:underline">
+                Track page
+              </Link>
+            </div>
+          )
+        ) : (
+          <div className="lr-fallback">{fallback ?? null}</div>
+        )}
+      </LyricsContext.Provider>
 
       <p role="status" aria-live="polite" className="sr-only">
         {announce}

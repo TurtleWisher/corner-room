@@ -49,6 +49,8 @@ export type BandMemberRecord = {
   user_id: string | null;
   artist_id: string | null;
   role_label: string | null;
+  /** The name shown in the band's lineup (D-LINEUP-01). */
+  display_name?: string | null;
   status: string;
   /** A band admin manages the band in Studio (D-BAND-01). */
   is_admin?: boolean;
@@ -288,6 +290,42 @@ export async function inviteBandMember(id: string, user_id: string, role_label?:
     body: JSON.stringify({ user_id, role_label }),
     retry: false,
   });
+}
+
+/** A member listed by name only: no account, attribution only (D-LINEUP-01). */
+export async function addNamedBandMember(id: string, display_name: string, role_label?: string): Promise<BandMemberRecord> {
+  return apiFetch<BandMemberRecord>(`/api/v1/bands/${id}/members`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ display_name, role_label: role_label || null }),
+    retry: false,
+  });
+}
+
+export async function updateBandMember(
+  bandId: string,
+  memberId: string,
+  details: { display_name?: string | null; role_label?: string | null },
+): Promise<BandMemberRecord> {
+  return apiFetch<BandMemberRecord>(`/api/v1/bands/${bandId}/members/${memberId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(details),
+    retry: false,
+  });
+}
+
+export type BandLineupMember = {
+  id: string;
+  name: string;
+  role_label?: string | null;
+  artist_id?: string | null;
+  portrait_asset_id?: string | null;
+};
+
+/** The band's current members as fans see them (D-LINEUP-01). Public. */
+export async function fetchBandLineup(id: string): Promise<{ items: BandLineupMember[] }> {
+  return apiFetch<{ items: BandLineupMember[] }>(`/api/v1/bands/${id}/lineup`, { retry: false, skipAuth: true, skipRefresh: true });
 }
 
 export async function transitionBandMember(

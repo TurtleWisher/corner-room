@@ -9,6 +9,7 @@ import { usePlayer } from "@/components/music/player";
 import type { ArtistRecord, BandRecord, PlayableTrackRecord } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
 import { creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
+import { formatCount } from "@/lib/format/count";
 import { ownsTrack, releaseIdsFor } from "@/lib/ownership";
 import { cn } from "@/lib/utils";
 
@@ -79,7 +80,9 @@ export function TrackRows({
                 {current ? <span className="ml-2 text-xs font-semibold text-highlight">Now playing</span> : null}
               </Link>
               <p className="truncate text-sm text-fg-muted">
-                {[artist, duration].filter(Boolean).join(" · ") || "Artist not available"}
+                {[artist, duration, typeof rec?.listens === "number" ? `${formatCount(rec.listens)} ${rec.listens === 1 ? "listen" : "listens"}` : null]
+                  .filter(Boolean)
+                  .join(" · ") || "Artist not available"}
                 {item.note ? <> · {item.note}</> : null}
               </p>
               {state.kind === "unavailable" ? <p className="text-xs text-fg-muted">{state.reason}</p> : null}

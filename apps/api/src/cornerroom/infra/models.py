@@ -27,6 +27,7 @@ from cornerroom.modules.music.domain.models import (
 )
 from cornerroom.modules.streaming.domain.models import (
     LibraryItem,
+    Listen,
     ListeningSession,
     PlaybackEvent,
     Playlist,
@@ -178,6 +179,7 @@ __all__ = [
     "IdempotencyRecord",
     "LibraryItem",
     "ListeningSession",
+    "Listen",
     "PlaybackEvent",
     "Playlist",
     "PlaylistItem",

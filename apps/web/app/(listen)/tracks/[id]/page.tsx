@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { ChartLine } from "lucide-react";
 
+import { BandLineup } from "@/components/artists/band-lineup";
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { CoverArt } from "@/components/brand/cover-art";
@@ -13,6 +14,7 @@ import { RoomCube } from "@/components/brand/room-cube";
 import { Button, Card, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
 import { TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
 import { CreditFace } from "@/components/music/credit-face";
+import { SongLyrics } from "@/components/music/song-lyrics";
 import { useCredits } from "@/components/music/credits";
 import { TrackAudioPanel } from "@/components/music/track-audio-panel";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
@@ -27,6 +29,7 @@ import {
   type TrackRecord,
 } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
+import { formatCount } from "@/lib/format/count";
 import { humanizeStatus } from "@/lib/format/status";
 import { canModerateMusic, creditName, creditPerson, formatDuration, playQueue, playState } from "@/lib/music-view";
 import { ownsTrack, releaseIdsFor, trackBuyState } from "@/lib/ownership";
@@ -193,6 +196,11 @@ export default function TrackPage() {
             <p className="mt-4 text-lg text-fg">
               <CreditFace record={track} people={people} />
             </p>
+            {typeof track.listens === "number" ? (
+              <p className="mt-2 text-sm text-fg-muted">
+                <span className="cr-num font-semibold text-fg">{formatCount(track.listens)}</span> {track.listens === 1 ? "listen" : "listens"}
+              </p>
+            ) : null}
             {play.kind === "unavailable" ? <p className="mt-2 text-sm text-fg-muted">{play.reason}</p> : null}
             <div className="mt-8 flex flex-wrap items-center gap-3">
               {play.kind === "unavailable" ? null : (
@@ -238,6 +246,8 @@ export default function TrackPage() {
               })}
             </ul>
           )}
+          <SongLyrics lyrics={track.lyrics} />
+          {track.primary_band_id ? <BandLineup bandId={track.primary_band_id} className="mt-10" /> : null}
         </section>
         <Card className="h-fit p-5 text-sm text-fg">
           <p className="font-semibold">How listening works</p>

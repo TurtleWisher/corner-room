@@ -1005,6 +1005,7 @@ class ArtistService:
         user_id: UUID | None = None,
         artist_id: UUID | None = None,
         role_label: str | None = None,
+        display_name: str | None = None,
     ) -> BandMember:
         band = await self.get_band_row(band_id)
         await self._assert_band_perm(ctx, band, "artist.manage", mutate=True)
@@ -1012,8 +1013,9 @@ class ArtistService:
             await self._require_active_org(band.primary_org_id)
         if band.status == "DISBANDED":
             raise AppError("INVALID_TRANSITION", "Disbanded bands cannot add members", 409)
-        if user_id is None and artist_id is None:
-            raise AppError("VALIDATION_ERROR", "user_id or artist_id is required", 422)
+        name = " ".join((display_name or "").split())[:200] or None
+        if user_id is None and artist_id is None and name is None:
+            raise AppError("VALIDATION_ERROR", "Choose an account or artist, or type the member's name", 422)
         if user_id is not None:
             user = await self.session.get(User, user_id)
             if user is None or user.deleted_at is not None:
@@ -1021,12 +1023,16 @@ class ArtistService:
         if artist_id is not None:
             await self.get_artist_row(artist_id)
         label = role_label.strip() if role_label else None
+        # A member listed by name only has no account to accept an invitation: listed at once.
+        name_only = user_id is None and artist_id is None
         member = BandMember(
             band_id=band.id,
             user_id=user_id,
             artist_id=artist_id,
             role_label=label,
-            status="INVITED",
+            display_name=name,
+            status="ACTIVE" if name_only else "INVITED",
+            started_at=self.clock.now() if name_only else None,
             created_by=ctx.user_id,
         )
         self.session.add(member)
@@ -1052,10 +1058,77 @@ class ArtistService:
             action="band_member.invited",
             entity_type="BandMember",
             entity_id=member.id,
-            new_state={"status": "INVITED", "band_id": str(band.id), "role_label": label},
+            new_state={"status": member.status, "band_id": str(band.id), "role_label": label, "display_name": name},
             organization_id=band.primary_org_id,
         )
         return member
+
+    async def update_member_details(
+        self,
+        ctx: AuthContext,
+        band_id: UUID,
+        member_id: UUID,
+        *,
+        display_name: Any = ...,
+        role_label: Any = ...,
+    ) -> BandMember:
+        """Staff: the name and role shown in the band's lineup (D-LINEUP-01). Display only."""
+        band = await self.get_band_row(band_id)
+        await self._assert_band_perm(ctx, band, "artist.manage", mutate=True)
+        member = await self.session.get(BandMember, member_id)
+        if member is None or member.deleted_at is not None or member.band_id != band.id:
+            raise NotFoundError("Membership not found")
+        if display_name is not ...:
+            name = " ".join((display_name or "").split())[:200] or None
+            if name is None and member.user_id is None and member.artist_id is None:
+                raise AppError("VALIDATION_ERROR", "A member listed by name needs a name", 422)
+            member.display_name = name
+        if role_label is not ...:
+            member.role_label = " ".join((role_label or "").split())[:80] or None
+        member.updated_by = ctx.user_id
+        await self.session.flush()
+        await self.audit.record_from_auth(
+            ctx,
+            action="band_member.details_updated",
+            entity_type="BandMember",
+            entity_id=member.id,
+            new_state={"display_name": member.display_name, "role_label": member.role_label},
+            organization_id=band.primary_org_id,
+        )
+        return member
+
+    async def lineup(self, ctx: AuthContext | None, band_id: UUID) -> list[dict[str, Any]]:
+        """The band's current members as fans see them (D-LINEUP-01): the typed name, else the
+        member's artist page name. Members with neither are left out; never an account detail."""
+        band, _public = await self.get_band(band_id, ctx)
+        members = (
+            await self.session.execute(
+                select(BandMember)
+                .where(BandMember.band_id == band.id, BandMember.status == "ACTIVE", BandMember.deleted_at.is_(None))
+                .order_by(BandMember.created_at.asc())
+            )
+        ).scalars().all()
+        artist_ids = {m.artist_id for m in members if m.artist_id}
+        artists: dict[UUID, Artist] = {}
+        if artist_ids:
+            rows = await self.session.execute(select(Artist).where(Artist.id.in_(artist_ids), Artist.deleted_at.is_(None)))
+            for a in rows.scalars():
+                if self._is_public_artist(a):
+                    artists[a.id] = a
+        out: list[dict[str, Any]] = []
+        for m in members:
+            artist = artists.get(m.artist_id) if m.artist_id else None
+            name = m.display_name or (artist.stage_name if artist else None)
+            if not name:
+                continue
+            out.append({
+                "id": m.id,
+                "name": name,
+                "role_label": m.role_label,
+                "artist_id": artist.id if artist else None,
+                "portrait_asset_id": artist.portrait_asset_id if artist else None,
+            })
+        return out
 
     async def list_members(
         self,

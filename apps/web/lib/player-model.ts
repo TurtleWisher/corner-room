@@ -46,6 +46,37 @@ export function clock(seconds: number | null | undefined): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/**
+ * Time actually heard in this play (owner, 2026-10-27, D-LISTEN-01): only normal forward progress
+ * while playing counts; seeking, skipping ahead or jumping back adds nothing. The API counts a
+ * listen from this, so dragging to the end of a song is not a listen.
+ */
+export type HeardState = { heardMs: number; lastTime: number | null };
+
+export const NOTHING_HEARD: HeardState = { heardMs: 0, lastTime: null };
+
+/** Normal playback moves at most about a second between time updates; more is a jump. */
+const MAX_STEP_SECONDS = 2;
+
+export function accumulateHeard(state: HeardState, currentTime: number): HeardState {
+  if (!Number.isFinite(currentTime)) return state;
+  if (state.lastTime === null) return { ...state, lastTime: currentTime };
+  const step = currentTime - state.lastTime;
+  const heard = step > 0 && step <= MAX_STEP_SECONDS ? state.heardMs + step * 1000 : state.heardMs;
+  return { heardMs: heard, lastTime: currentTime };
+}
+
+/** After a seek or a pause, the next time update starts fresh instead of counting the jump. */
+export function heardAfterJump(state: HeardState): HeardState {
+  return { ...state, lastTime: null };
+}
+
+/**
+ * When to send an extra report so the count updates while the song is still playing. The API
+ * applies the real rule (30 seconds, D-LISTEN-01); this only decides when to tell it.
+ */
+export const LISTEN_REPORT_MS = 30_000;
+
 /** Whole milliseconds actually listened, for the playback event (never more than the media length). */
 export function listenedMs(currentTime: number, duration: number): number {
   const t = Number.isFinite(currentTime) ? currentTime : 0;

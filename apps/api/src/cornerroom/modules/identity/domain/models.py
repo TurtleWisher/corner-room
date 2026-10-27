@@ -286,7 +286,8 @@ class ExternalIdentity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 class DeliveryAddress(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """The Bangladesh address where a user can receive gifts (D-ADDR-01). One per user.
+    """The address where a user can receive gifts, anywhere in the world (D-ADDR-01, D-ADDR-02).
+    One per user. A Bangladesh address fills division to house/road; elsewhere address lines to region.
 
     Personal data: only the owner reads it through the API; it is never logged or audited in
     full. Checkout copies it onto each order (commerce.order_delivery_addresses).
@@ -295,18 +296,30 @@ class DeliveryAddress(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "delivery_addresses"
     __table_args__ = (
         UniqueConstraint("user_id", name="uq_delivery_addresses_user_id"),
-        CheckConstraint("phone ~ '^\\+8801[3-9][0-9]{8}$'", name="phone_bd_mobile"),
-        CheckConstraint("postcode IS NULL OR postcode ~ '^[0-9]{4}$'", name="postcode_format"),
+        CheckConstraint("phone ~ '^\\+[1-9][0-9]{6,14}$'", name="phone_e164"),
+        CheckConstraint("country_code ~ '^[A-Z]{2}$'", name="country_code_format"),
+        CheckConstraint(
+            "(country_code = 'BD' AND division IS NOT NULL AND district IS NOT NULL AND upazila IS NOT NULL"
+            " AND area IS NOT NULL AND house_road IS NOT NULL)"
+            " OR (country_code <> 'BD' AND address_line1 IS NOT NULL AND city IS NOT NULL)",
+            name="address_shape",
+        ),
         {"schema": "identity"},
     )
 
     user_id: Mapped[UUID] = mapped_column(ForeignKey("identity.users.id"), nullable=False)
+    country_code: Mapped[str] = mapped_column(String(2), nullable=False, default="BD", server_default="BD")
     recipient_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    phone_country: Mapped[str | None] = mapped_column(String(2), nullable=True)
     phone: Mapped[str] = mapped_column(String(16), nullable=False)
-    division: Mapped[str] = mapped_column(String(32), nullable=False)
-    district: Mapped[str] = mapped_column(String(64), nullable=False)
-    upazila: Mapped[str] = mapped_column(String(80), nullable=False)
-    area: Mapped[str] = mapped_column(String(120), nullable=False)
-    house_road: Mapped[str] = mapped_column(String(200), nullable=False)
-    postcode: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    division: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    district: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    upazila: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    area: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    house_road: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    address_line1: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    address_line2: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    region: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    postcode: Mapped[str | None] = mapped_column(String(16), nullable=True)
     landmark: Mapped[str | None] = mapped_column(String(200), nullable=True)
