@@ -261,10 +261,14 @@ export type StaffSubmission = {
   decision_note: string | null;
   buyer_email: string | null;
   submitted_at: string;
+  decided_at?: string | null;
 };
 
-export async function fetchStaffSubmissions(): Promise<StaffSubmission[]> {
-  return apiFetch<StaffSubmission[]>("/api/v1/staff/payment-submissions");
+export type SubmissionQueue = "SUBMITTED" | "CONFIRMED" | "REJECTED";
+
+/** Waiting checks (oldest first), or past decisions (newest first, D-CUSTOMERS-02). */
+export async function fetchStaffSubmissions(status: SubmissionQueue = "SUBMITTED"): Promise<StaffSubmission[]> {
+  return apiFetch<StaffSubmission[]>(`/api/v1/staff/payment-submissions?status=${status}`);
 }
 
 export async function confirmSubmission(id: string): Promise<StaffSubmission> {

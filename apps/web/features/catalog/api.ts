@@ -20,6 +20,8 @@ export type TrackRecord = {
   listens?: number;
   /** D-LYRICS-01: single-track reads of a released song only. */
   lyrics?: string | null;
+  /** D-LISTEN-02 (editors and staff): plays before counting started, already included in `listens`. */
+  listens_before_counting?: number;
 };
 
 export type ReleaseRecord = {
@@ -73,6 +75,16 @@ export async function fetchTracks(opts?: { skipAuth?: boolean }): Promise<Page<T
     retry: false,
     skipAuth: opts?.skipAuth,
     skipRefresh: opts?.skipAuth,
+  });
+}
+
+/** Staff: the plays a song had before listen counting started (D-LISTEN-02). Audited. */
+export async function setListensBeforeCounting(id: string, count: number, note?: string): Promise<TrackRecord> {
+  return apiFetch<TrackRecord>(`/api/v1/tracks/${id}/listens-before-counting`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ count, note: note || null }),
+    retry: false,
   });
 }
 

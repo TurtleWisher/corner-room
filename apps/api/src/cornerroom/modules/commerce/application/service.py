@@ -1449,8 +1449,12 @@ class CheckoutService:
             .join(Order, Order.id == PaymentSubmission.order_id)
             .join(Payment, Payment.id == PaymentSubmission.payment_id)
             .join(User, User.id == PaymentSubmission.user_id)
-            .order_by(PaymentSubmission.created_at, PaymentSubmission.id)
         )
+        # Waiting checks oldest first; decided ones (D-CUSTOMERS-02) newest decision first.
+        if status in ("CONFIRMED", "REJECTED"):
+            stmt = stmt.order_by(PaymentSubmission.decided_at.desc().nulls_last(), PaymentSubmission.id)
+        else:
+            stmt = stmt.order_by(PaymentSubmission.created_at, PaymentSubmission.id)
         if status is not None:
             stmt = stmt.where(PaymentSubmission.status == status)
         if submission_id is not None:
@@ -1478,6 +1482,7 @@ class CheckoutService:
                     "decision_note": sub.decision_note,
                     "buyer_email": mask_email(email) if email else None,
                     "submitted_at": sub.created_at,
+                    "decided_at": sub.decided_at,
                 }
             )
         return out

@@ -5,15 +5,15 @@ import { useParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { ChartLine } from "lucide-react";
 
-import { BandLineup } from "@/components/artists/band-lineup";
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { CoverArt } from "@/components/brand/cover-art";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
-import { Button, Card, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
+import { Button, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
 import { TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
 import { CreditFace } from "@/components/music/credit-face";
+import { SongCredits } from "@/components/music/song-credits";
 import { SongLyrics } from "@/components/music/song-lyrics";
 import { useCredits } from "@/components/music/credits";
 import { TrackAudioPanel } from "@/components/music/track-audio-panel";
@@ -25,13 +25,14 @@ import {
   fetchPlayableCatalog,
   fetchTrack,
   fetchTrackCredits,
+  setListensBeforeCounting,
   transitionTrack,
   type TrackRecord,
 } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
 import { formatCount } from "@/lib/format/count";
 import { humanizeStatus } from "@/lib/format/status";
-import { canModerateMusic, creditName, creditPerson, formatDuration, playQueue, playState } from "@/lib/music-view";
+import { canModerateMusic, creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
 import { ownsTrack, releaseIdsFor, trackBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 
@@ -60,6 +61,8 @@ function TrackStaffTools({ track, onChanged }: { track: TrackRecord; onChanged: 
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState("");
   const [artistId, setArtistId] = useState("");
+  const [before, setBefore] = useState(String(track.listens_before_counting ?? 0));
+  const [beforeNote, setBeforeNote] = useState("");
 
   async function run(key: string, fn: () => Promise<unknown>, after?: (v: unknown) => void) {
     setBusy(key);
@@ -93,6 +96,26 @@ function TrackStaffTools({ track, onChanged }: { track: TrackRecord; onChanged: 
         ))}
       </div>
       <TrackAudioPanel trackId={track.id} />
+      {/* Owner, 2026-10-28 (D-LISTEN-02): plays before listen counting started, added to the count. */}
+      <form
+        className="mt-6 grid gap-3 md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] md:items-end"
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          void run("before", () => setListensBeforeCounting(track.id, Math.max(0, Math.floor(Number(before) || 0)), beforeNote), (row) =>
+            onChanged(row as TrackRecord),
+          );
+        }}
+      >
+        <Field label="Plays before counting started" hint="Added to the listens everyone sees">
+          {(c) => <Input {...c} type="number" min={0} inputMode="numeric" value={before} onChange={(e) => setBefore(e.target.value)} required />}
+        </Field>
+        <Field label="Where the number comes from" hint="Kept in the audit log">
+          {(c) => <Input {...c} value={beforeNote} onChange={(e) => setBeforeNote(e.target.value)} maxLength={300} />}
+        </Field>
+        <Button type="submit" busy={busy === "before"} disabled={busy !== null && busy !== "before"}>
+          Save plays
+        </Button>
+      </form>
       <form
         className="mt-6 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end"
         onSubmit={(e: FormEvent) => {
@@ -181,14 +204,22 @@ export default function TrackPage() {
 
   return (
     <main id="main" data-theme="sky" className="cr-scope">
+      {/* Owner, 2026-10-28: under the cover, the lyrics fold-out, then the credits ending in the
+          "Track credit details" fold-out; the title, artist and buying stay beside the cover. */}
       <LitSurface as="section" theme="sky" aria-labelledby="track-title">
-        <div className="mx-auto grid max-w-[90rem] items-center gap-10 px-4 py-12 md:grid-cols-[minmax(0,22rem)_1fr] md:px-6 md:py-16">
-          <CoverArt
-            src={coverUrl({ track: track.id }, 1200)}
-            fallback={<RoomCube front={track.title} side={artist ?? track.title} tone="sky" label="" animate className="w-full" />}
-            className="w-full"
-          />
-          <div>
+        <div className="mx-auto grid max-w-[90rem] items-start gap-x-12 gap-y-8 px-4 py-12 md:grid-cols-[minmax(0,24rem)_1fr] md:px-6 md:py-16">
+          <div className="md:row-span-2">
+            <CoverArt
+              src={coverUrl({ track: track.id }, 1200)}
+              fallback={<RoomCube front={track.title} side={artist ?? track.title} tone="sky" label="" animate className="w-full" />}
+              className="w-full"
+            />
+            <div className="mt-6 hidden md:block">
+              <SongLyrics lyrics={track.lyrics} className="border-t border-line" />
+              <SongCredits credits={credits} artists={people.artists} bandId={track.primary_band_id} className="border-t border-line" />
+            </div>
+          </div>
+          <div className="md:pt-6">
             <Eyebrow>{["Track", artist, duration].filter(Boolean).join(" · ")}</Eyebrow>
             <Display as="h1" id="track-title" size="lg" className="mt-4">
               {track.title}
@@ -222,47 +253,27 @@ export default function TrackPage() {
                     : "Included with your catalog access."}
               </p>
             ) : null}
+            <p className="mt-8 max-w-md text-sm text-fg-muted">
+              Buy a song, or the release it is on, to keep it. Sign in to listen to what you own.
+            </p>
+          </div>
+          {/* Phones: the same sections, after the title and buy button. */}
+          <div className="md:hidden">
+            <SongLyrics lyrics={track.lyrics} className="border-t border-line" />
+            <SongCredits credits={credits} artists={people.artists} bandId={track.primary_band_id} className="border-t border-line" />
           </div>
         </div>
       </LitSurface>
 
-      <div className="mx-auto grid max-w-[90rem] gap-12 px-4 pb-16 pt-10 md:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
-        <section aria-labelledby="credits-title">
-          <h2 id="credits-title" className="mb-4 text-xl font-bold text-fg">
-            Credits
-          </h2>
-          {credits.length === 0 ? (
-            <p className="text-sm text-fg-muted">No credits listed yet.</p>
+      {canStaff ? (
+        <div className="mx-auto max-w-[90rem] px-4 pb-16 pt-10 md:px-6">
+          {canModerateMusic(user?.permissions) ? (
+            <TrackStaffTools track={track} onChanged={(row) => (row ? setOverride(row) : data.reload())} />
           ) : (
-            <ul className="border-t border-line">
-              {credits.map((c) => {
-                const who = creditPerson(c, people.artists);
-                return (
-                  <li key={c.id} className="flex justify-between gap-4 border-b border-line py-3 text-sm">
-                    <span className="text-fg-muted">{humanizeStatus(c.credit_role)}</span>
-                    <span className="font-semibold text-fg">{who ?? "Not available"}</span>
-                  </li>
-                );
-              })}
-            </ul>
+            <TrackArtistTools track={track} />
           )}
-          <SongLyrics lyrics={track.lyrics} />
-          {track.primary_band_id ? <BandLineup bandId={track.primary_band_id} className="mt-10" /> : null}
-        </section>
-        <Card className="h-fit p-5 text-sm text-fg">
-          <p className="font-semibold">How listening works</p>
-          <p className="mt-2 text-fg-muted">Buy a song, or the release it is on, to keep it. Sign in to listen to what you own.</p>
-        </Card>
-        {canStaff ? (
-          <div className="lg:col-span-2">
-            {canModerateMusic(user?.permissions) ? (
-              <TrackStaffTools track={track} onChanged={(row) => (row ? setOverride(row) : data.reload())} />
-            ) : (
-              <TrackArtistTools track={track} />
-            )}
-          </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </main>
   );
 }

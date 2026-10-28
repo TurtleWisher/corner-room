@@ -32,6 +32,8 @@ class TrackOut(BaseModel):
     listens: int = 0
     # D-LYRICS-01: single-track reads of a released song only (never in lists).
     lyrics: str | None = None
+    # D-LISTEN-02 (editors and staff only): plays before counting started, included in `listens`.
+    listens_before_counting: int = 0
 
 
 class PublicTrackOut(BaseModel):
@@ -140,6 +142,7 @@ def _track_out(row: Track) -> TrackOut:
         primary_org_id=row.primary_org_id,
         metadata=row.extra_metadata,
         version=row.version,
+        listens_before_counting=row.listens_before_counting or 0,
     )
 
 
@@ -227,14 +230,39 @@ async def get_track(
     return out
 
 
+class ListensBeforeIn(BaseModel):
+    count: int = Field(ge=0)
+    note: str | None = Field(default=None, max_length=300)
+
+
+@router.put("/tracks/{track_id}/listens-before-counting", response_model=TrackOut)
+async def set_listens_before_counting(
+    track_id: UUID,
+    body: ListensBeforeIn,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[MusicService, Depends(music_service)],
+) -> TrackOut:
+    """Staff: plays the song had before listen counting started (D-LISTEN-02). Audited."""
+    from cornerroom.modules.music.application.listen_baseline import set_listens_before
+
+    row = await set_listens_before(svc.session, ctx, track_id, body.count, body.note)
+    out = _track_out(row)
+    out.release_ids = await _released_release_ids(svc, row.id)
+    out.listens = await _listen_count(svc, row.id)
+    return out
+
+
 async def _listen_count(svc: MusicService, track_id: UUID) -> int:
     from sqlalchemy import func, select
 
     from cornerroom.modules.streaming.domain.models import Listen
 
-    return int(
-        (await svc.session.execute(select(func.count()).select_from(Listen).where(Listen.track_id == track_id))).scalar_one()
-    )
+    from cornerroom.modules.music.domain.models import Track
+
+    counted = (await svc.session.execute(select(func.count()).select_from(Listen).where(Listen.track_id == track_id))).scalar_one()
+    # D-LISTEN-02: plus the plays the song had before counting started.
+    before = (await svc.session.execute(select(Track.listens_before_counting).where(Track.id == track_id))).scalar_one_or_none()
+    return int(counted) + int(before or 0)
 
 
 async def _released_release_ids(svc: MusicService, track_id: UUID) -> list[UUID]:

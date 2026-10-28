@@ -20,11 +20,18 @@ import {
   proposeStudioPrice,
   removeStudioTrack,
   reorderStudioTracks,
+  saveCreditChanges,
+  saveReleaseChanges,
   saveStudioLyrics,
+  saveTrackChanges,
   setStudioCredits,
+  startChanges,
+  submitChanges,
   submitStudioRelease,
   updateStudioRelease,
   updateStudioTrack,
+  withdrawChanges,
+  withdrawStudioCover,
   withdrawStudioLyrics,
   withdrawStudioRelease,
   type StudioCredit,
@@ -35,6 +42,7 @@ import {
 import { coverUrl } from "@/lib/cover-view";
 import { friendlyError } from "@/lib/error-copy";
 import { formatCount } from "@/lib/format/count";
+import { changeMode, pendingAudio, proposedRelease, proposedTrack, type ChangeMode } from "@/lib/changes-view";
 import { lyricsMode } from "@/lib/lyrics-view";
 import {
   EDITABLE_STATUSES,
@@ -95,8 +103,21 @@ function useAction(reload: Reload) {
   return { busy, error, run };
 }
 
-function DetailsForm({ detail, taxonomy, editable, reload }: { detail: StudioReleaseDetail; taxonomy: Taxonomy; editable: boolean; reload: Reload }) {
-  const r = detail.release;
+function DetailsForm({
+  detail,
+  taxonomy,
+  editable,
+  changing = false,
+  reload,
+}: {
+  detail: StudioReleaseDetail;
+  taxonomy: Taxonomy;
+  editable: boolean;
+  /** D-CHANGES-01: released music; saves go into the change request for staff. */
+  changing?: boolean;
+  reload: Reload;
+}) {
+  const r = changing ? proposedRelease(detail) : detail.release;
   const [form, setForm] = useState({
     title: r.title,
     release_type: r.release_type,
@@ -115,6 +136,21 @@ function DetailsForm({ detail, taxonomy, editable, reload }: { detail: StudioRel
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (changing) {
+      void run("details", () =>
+        saveReleaseChanges(r.id, {
+          title: form.title,
+          language_code: form.language_code || null,
+          genre_primary: form.genre_primary || null,
+          genre_secondary: form.genre_secondary || null,
+          label_name: form.label_name || null,
+          p_line: form.p_line || null,
+          c_line: form.c_line || null,
+          upc: form.upc || null,
+        }),
+      );
+      return;
+    }
     void run("details", () =>
       updateStudioRelease(r.id, {
         version: r.version,
@@ -135,11 +171,11 @@ function DetailsForm({ detail, taxonomy, editable, reload }: { detail: StudioRel
 
   return (
     <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
-      <fieldset disabled={!editable} className="contents">
+      <fieldset disabled={!editable && !changing} className="contents">
         <Field label="Release title">{(c) => <Input {...c} value={form.title} onChange={set("title")} maxLength={300} required />}</Field>
         <Field label="Type">
           {(c) => (
-            <Select {...c} value={form.release_type} onChange={set("release_type")}>
+            <Select {...c} value={form.release_type} onChange={set("release_type")} disabled={changing}>
               {taxonomy.release_types.map((t) => (
                 <option key={t} value={t}>
                   {RELEASE_TYPE_LABEL[t] ?? t}
@@ -199,12 +235,12 @@ function DetailsForm({ detail, taxonomy, editable, reload }: { detail: StudioRel
           {(c) => <Input {...c} value={form.upc} onChange={set("upc")} inputMode="numeric" maxLength={14} />}
         </Field>
         <Field label="Time zone for the release date">
-          {(c) => <Input {...c} value={form.release_timezone} onChange={set("release_timezone")} maxLength={64} />}
+          {(c) => <Input {...c} value={form.release_timezone} onChange={set("release_timezone")} maxLength={64} disabled={changing} />}
         </Field>
         {r.release_type !== "SINGLE" ? (
           <Field label="How fans can buy" className="md:col-span-2">
             {(c) => (
-              <Select {...c} value={form.track_sales} onChange={set("track_sales")}>
+              <Select {...c} value={form.track_sales} onChange={set("track_sales")} disabled={changing}>
                 <option value="RELEASE_ONLY">Only the whole {RELEASE_TYPE_LABEL[r.release_type]?.toLowerCase() ?? "release"}</option>
                 <option value="TRACKS_ALLOWED">The whole release, or each song on its own</option>
               </Select>
@@ -212,10 +248,10 @@ function DetailsForm({ detail, taxonomy, editable, reload }: { detail: StudioRel
           </Field>
         ) : null}
       </fieldset>
-      {editable ? (
+      {editable || changing ? (
         <div className="md:col-span-2">
           <Button type="submit" busy={busy === "details"}>
-            <Save aria-hidden="true" /> Save details
+            <Save aria-hidden="true" /> {changing ? "Save changes for review" : "Save details"}
           </Button>
           <Problem message={error} />
         </div>
@@ -224,7 +260,20 @@ function DetailsForm({ detail, taxonomy, editable, reload }: { detail: StudioRel
   );
 }
 
-function CreditsEditor({ track, taxonomy, editable, reload }: { track: StudioTrack; taxonomy: Taxonomy; editable: boolean; reload: Reload }) {
+function CreditsEditor({
+  track,
+  taxonomy,
+  editable,
+  changing = false,
+  reload,
+}: {
+  track: StudioTrack;
+  taxonomy: Taxonomy;
+  editable: boolean;
+  /** D-CHANGES-01: saves go into the change request for staff. */
+  changing?: boolean;
+  reload: Reload;
+}) {
   const [rows, setRows] = useState<StudioCredit[]>(track.credits.map((c) => ({ ...c })));
   const { busy, error, run } = useAction(reload);
   const roles = new Map(taxonomy.credit_roles.map((r) => [r.key, r]));
@@ -279,8 +328,12 @@ function CreditsEditor({ track, taxonomy, editable, reload }: { track: StudioTra
           <Button variant="secondary" size="sm" onClick={() => setRows([...rows, { role_key: "songwriter", display_name: "" }])}>
             <UserRound aria-hidden="true" /> Add a credit
           </Button>
-          <Button size="sm" busy={busy === "credits"} onClick={() => void run("credits", () => setStudioCredits(track.id, rows))}>
-            <Save aria-hidden="true" /> Save credits
+          <Button
+            size="sm"
+            busy={busy === "credits"}
+            onClick={() => void run("credits", () => (changing ? saveCreditChanges(track.id, rows) : setStudioCredits(track.id, rows)))}
+          >
+            <Save aria-hidden="true" /> {changing ? "Save credit changes for review" : "Save credits"}
           </Button>
         </div>
       ) : null}
@@ -357,6 +410,7 @@ function TrackCard({
   detail,
   taxonomy,
   editable,
+  mode = "not_released",
   reload,
   onMove,
 }: {
@@ -366,15 +420,20 @@ function TrackCard({
   detail: StudioReleaseDetail;
   taxonomy: Taxonomy;
   editable: boolean;
+  /** D-CHANGES-01: "editing" saves into the change request for staff. */
+  mode?: ChangeMode;
   reload: Reload;
   onMove: (delta: -1 | 1) => void;
 }) {
+  const changing = mode === "editing";
+  const shown = changing ? proposedTrack(detail, track) : track;
+  const replacement = pendingAudio(detail, track.id);
   const [form, setForm] = useState({
-    title: track.title,
-    version_title: track.version_title ?? "",
-    explicit: track.explicit,
-    language_code: track.language_code ?? "",
-    isrc: track.isrc ?? "",
+    title: shown.title,
+    version_title: shown.version_title ?? "",
+    explicit: shown.explicit,
+    language_code: shown.language_code ?? "",
+    isrc: shown.isrc ?? "",
   });
   const { busy, error, run } = useAction(reload);
   const audio = currentAudio(track);
@@ -417,6 +476,18 @@ function TrackCard({
         className="mt-4 grid gap-3 md:grid-cols-2"
         onSubmit={(e) => {
           e.preventDefault();
+          if (changing) {
+            void run("track", () =>
+              saveTrackChanges(track.id, {
+                title: form.title,
+                version_title: form.version_title || null,
+                explicit: form.explicit,
+                language_code: form.language_code || null,
+                isrc: form.isrc || null,
+              }),
+            );
+            return;
+          }
           void run("track", () =>
             updateStudioTrack(track.id, {
               version: track.version,
@@ -429,7 +500,7 @@ function TrackCard({
           );
         }}
       >
-        <fieldset disabled={!trackEditable} className="contents">
+        <fieldset disabled={!trackEditable && !changing} className="contents">
           <Field label="Song title">{(c) => <Input {...c} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} maxLength={300} required />}</Field>
           <Field label="Version" hint='Optional, e.g. "Live" or "Acoustic"'>
             {(c) => <Input {...c} value={form.version_title} onChange={(e) => setForm({ ...form, version_title: e.target.value })} maxLength={100} />}
@@ -454,10 +525,10 @@ function TrackCard({
             Explicit lyrics
           </label>
         </fieldset>
-        {trackEditable ? (
+        {trackEditable || changing ? (
           <div className="md:col-span-2">
             <Button type="submit" size="sm" busy={busy === "track"}>
-              <Save aria-hidden="true" /> Save song details
+              <Save aria-hidden="true" /> {changing ? "Save song changes for review" : "Save song details"}
             </Button>
           </div>
         ) : null}
@@ -473,7 +544,14 @@ function TrackCard({
         ) : audio && audio.has_audio ? (
           <MediaReport trackId={track.id} versionId={audio.version_id} onSettled={() => reload()} />
         ) : null}
-        {!waiting && editable ? (
+        {replacement && !waiting ? (
+          <div className="mt-3 border border-line p-3">
+            <p className="text-sm font-semibold text-fg">New audio, waiting for review</p>
+            <p className="text-xs text-fg-muted">Listeners keep hearing the current audio until Corner Room approves your changes.</p>
+            <MediaReport trackId={track.id} versionId={replacement} onSettled={() => reload()} />
+          </div>
+        ) : null}
+        {!waiting && (editable || changing) ? (
           <Button
             variant="secondary"
             size="sm"
@@ -482,7 +560,7 @@ function TrackCard({
             disabled={audio?.status === "PROCESSING"}
             onClick={() => void run("version", async () => { await newStudioVersion(track.id); return fetchStudioRelease(detail.release.id); })}
           >
-            <Plus aria-hidden="true" /> {audio ? "Upload a new master" : "Upload the master"}
+            <Plus aria-hidden="true" /> {changing ? "Upload replacement audio" : audio ? "Upload a new master" : "Upload the master"}
           </Button>
         ) : null}
       </div>
@@ -490,7 +568,14 @@ function TrackCard({
       <div className="mt-6">
         <h4 className="font-semibold text-fg">Credits</h4>
         <div className="mt-2">
-          <CreditsEditor key={track.credits.map((c) => c.id).join()} track={track} taxonomy={taxonomy} editable={trackEditable} reload={reload} />
+          <CreditsEditor
+            key={`${shown.credits.map((c) => `${c.id ?? ""}${c.role_key}${c.display_name ?? ""}${c.artist_id ?? ""}`).join()}|${mode}`}
+            track={shown}
+            taxonomy={taxonomy}
+            editable={trackEditable || changing}
+            changing={changing}
+            reload={reload}
+          />
         </div>
       </div>
 
@@ -624,6 +709,94 @@ function SubmitPanel({ detail, reload }: { detail: StudioReleaseDetail; reload: 
   );
 }
 
+/**
+ * Changes to music that is approved or out (owner, 2026-10-28, D-CHANGES-01): every edit waits for
+ * Corner Room. The panel starts a change request, lists what changed (old next to new), and sends
+ * it for review; while it is open, the forms below save into it instead of going live.
+ */
+function ChangesPanel({ detail, mode, reload }: { detail: StudioReleaseDetail; mode: ChangeMode; reload: Reload }) {
+  const { busy, error, run } = useAction(reload);
+  const req = detail.change_request;
+  const last = detail.last_change_decision;
+  if (mode === "not_released") return null;
+  return (
+    <Card tone="solid" className="mt-6 p-5">
+      <h2 className="text-lg font-bold text-fg">Change this music</h2>
+      {mode === "none" ? (
+        <>
+          <p className="mt-1 text-sm text-fg-muted">
+            This music is approved or out. You can change its details, song details, credits or audio file; every change waits for Corner Room to
+            check it, and listeners keep the current version until it is approved. Lyrics and the cover have their own boxes below.
+          </p>
+          {last?.status === "REJECTED" && last.review_note ? (
+            <p className="mt-3 flex items-start gap-2 text-sm text-danger">
+              <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+              Your last changes were not approved: {last.review_note}
+            </p>
+          ) : null}
+          <Button className="mt-3" size="sm" busy={busy === "start"} onClick={() => void run("start", () => startChanges(detail.release.id))}>
+            <Plus aria-hidden="true" /> Make changes
+          </Button>
+        </>
+      ) : (
+        <>
+          <p className="mt-1 text-sm text-fg-muted">
+            {mode === "editing"
+              ? "Edit below. Your changes are saved here and nobody else sees them until Corner Room approves them."
+              : "Your changes are waiting for Corner Room to check them. Listeners keep the current version until then."}
+          </p>
+          {req && req.diff.length ? (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[32rem] text-left text-sm">
+                <thead className="text-xs text-fg-muted">
+                  <tr className="border-b border-line">
+                    <th className="py-2 pr-3 font-semibold">Where</th>
+                    <th className="py-2 pr-3 font-semibold">What</th>
+                    <th className="py-2 pr-3 font-semibold">Now</th>
+                    <th className="py-2 font-semibold">After approval</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {req.diff.map((d, i) => (
+                    <tr key={i} className="border-b border-line align-top">
+                      <td className="py-2 pr-3 text-fg-muted">{d.scope}</td>
+                      <td className="py-2 pr-3 text-fg">{d.field}</td>
+                      <td className="py-2 pr-3 text-fg-muted">{d.before}</td>
+                      <td className="py-2 font-semibold text-fg">{d.after}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-fg">No changes yet.</p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {mode === "editing" ? (
+              <Button size="sm" busy={busy === "send"} disabled={!req?.diff.length} onClick={() => void run("send", () => submitChanges(detail.release.id))}>
+                <Send aria-hidden="true" /> Send changes for review
+              </Button>
+            ) : (
+              <Button size="sm" variant="secondary" busy={busy === "start"} onClick={() => void run("start", () => startChanges(detail.release.id))}>
+                <Undo2 aria-hidden="true" /> Take back to make more changes
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              busy={busy === "discard"}
+              onClick={() => void run("discard", async () => { await withdrawChanges(detail.release.id); return fetchStudioRelease(detail.release.id); })}
+            >
+              <Trash2 aria-hidden="true" /> Discard all changes
+            </Button>
+          </div>
+        </>
+      )}
+      <Problem message={error} />
+    </Card>
+  );
+}
+
 export function ReleaseEditor({ releaseId }: { releaseId: string }) {
   const [detail, setDetail] = useState<StudioReleaseDetail | null>(null);
   const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
@@ -655,6 +828,8 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
   if (error && !detail) return <ErrorState title="Release unavailable" message={error} />;
   if (!detail || !taxonomy) return <Skeleton className="h-96 w-full" />;
   const editable = EDITABLE_STATUSES.has(detail.release.status);
+  const coverChangeable = ["APPROVED", "SCHEDULED", "RELEASED"].includes(detail.release.status);
+  const mode = changeMode(detail);
   const tone = displayStateTone(detail.display_state);
   const ids = detail.tracks.map((t) => t.id);
   const coverOk = detail.readiness.items.find((i) => i.code === "COVER")?.ok ?? false;
@@ -677,12 +852,48 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
         <p className="mt-2 text-sm text-fg-muted">Corner Room staff are helping prepare this release.</p>
       ) : null}
 
+      <ChangesPanel detail={detail} mode={mode} reload={reload} />
+
       <Section id="details" title="Details">
-        <DetailsForm key={detail.release.version} detail={detail} taxonomy={taxonomy} editable={editable} reload={reload} />
+        <DetailsForm
+          key={`${detail.release.version}|${mode}|${JSON.stringify(detail.change_request?.changes ?? {})}`}
+          detail={detail}
+          taxonomy={taxonomy}
+          editable={editable}
+          changing={mode === "editing"}
+          reload={reload}
+        />
       </Section>
 
       <Section id="cover" title="Cover art" done={coverOk}>
-        {editable ? <UploadCard purpose="COVER_ART" targetType="release_cover" targetId={detail.release.id} onCompleted={() => setCoverUploads((n) => n + 1)} /> : null}
+        {/* Owner, 2026-10-28 (D-COVER-01): approved or released music can get a new cover too; it waits
+            for Corner Room to check it and listeners keep the current one until then. */}
+        {coverChangeable ? (
+          <p className="mb-3 text-sm text-fg-muted">
+            A new cover for music that is approved or out waits for Corner Room to check it. Listeners keep the current cover until then.
+          </p>
+        ) : null}
+        {detail.cover_review_note && !detail.cover_waiting ? (
+          <p className="mb-3 flex items-start gap-2 text-sm text-danger">
+            <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            New cover not approved: {detail.cover_review_note}
+          </p>
+        ) : null}
+        {detail.cover_waiting && detail.pending_cover_url ? (
+          <div className="mb-4 flex flex-wrap items-end gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element -- signed cover link from the API */}
+            <img src={coverUrl({ signed: detail.pending_cover_url }) ?? ""} alt="New cover waiting for review" className="size-40 object-cover" />
+            <div className="text-sm text-fg">
+              <p>Your new cover is waiting for Corner Room to check it.</p>
+              <Button variant="ghost" size="sm" className="mt-2" onClick={() => void withdrawStudioCover(detail.release.id).then(() => reload())}>
+                <Undo2 aria-hidden="true" /> Withdraw the new cover
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        {editable || coverChangeable ? (
+          <UploadCard purpose="COVER_ART" targetType="release_cover" targetId={detail.release.id} onCompleted={() => setCoverUploads((n) => n + 1)} />
+        ) : null}
         {detail.cover_url ? (
           // The cover fans will see (accepted by the checks), as uploaded.
           // eslint-disable-next-line @next/next/no-img-element -- signed cover link from the API
@@ -706,13 +917,14 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
         <ol className="grid gap-4">
           {detail.tracks.map((t, i) => (
             <TrackCard
-              key={`${t.id}-${t.version}`}
+              key={`${t.id}-${t.version}-${mode}-${JSON.stringify(detail.change_request?.changes ?? {})}`}
               track={t}
               index={i}
               count={detail.tracks.length}
               detail={detail}
               taxonomy={taxonomy}
               editable={editable}
+              mode={mode}
               reload={reload}
               onMove={(delta) => void tracksAction.run("order", () => reorderStudioTracks(detail.release.id, moveItem(ids, i, delta)))}
             />

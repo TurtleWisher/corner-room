@@ -1,10 +1,51 @@
 /**
- * Customers and followers for staff (owner, 2026-10-27, D-CUSTOMERS-01): filters applied before a
- * CSV download, and the CSV itself. Pure helpers; the server decides who may see the list and
- * which people are in it.
+ * Customers and users for staff (owner, 2026-10-27, D-CUSTOMERS-01; payments and account types
+ * 2026-10-28, D-CUSTOMERS-02): filters applied before a CSV download, and the CSV itself. Pure
+ * helpers; the server decides who may see the list and which people are in it.
  */
 
 export type CustomerPresale = { product: string | null; amount_minor: number; currency_code: string; paid_on: string | null; status: string };
+
+/** One order and how its payment stands. */
+export type CustomerPayment = {
+  order_id: string;
+  status: PaymentStatus;
+  items: string[];
+  amount_minor: number;
+  currency_code: string;
+  /** What the buyer typed when paying, if they sent a payment. */
+  transaction_ref: string | null;
+  paid_from: string | null;
+  paid_with: string | null;
+  decision_note: string | null;
+  at: string;
+};
+
+export type PaymentStatus = "PAID" | "REFUNDED" | "WAITING" | "REJECTED" | "EXPIRED" | "NOT_SENT";
+export type AccountType = "fan" | "artist" | "staff";
+
+/** Words for staff, in the order the filter offers them. */
+export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
+  PAID: "Paid",
+  WAITING: "Waiting for check",
+  REJECTED: "Rejected",
+  EXPIRED: "Expired",
+  NOT_SENT: "Started, no payment sent",
+  REFUNDED: "Refunded",
+};
+
+export const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = { fan: "Fan", artist: "Artist or band", staff: "Staff" };
+
+/** "Paid with Other · AUTULGIFT2026 · from +8801990428674", for one order. */
+export function paymentLine(p: CustomerPayment): string {
+  const parts = [PAYMENT_STATUS_LABEL[p.status] ?? p.status];
+  if (p.items.length) parts.push(p.items.join(", "));
+  if (p.transaction_ref) parts.push(`ID ${p.transaction_ref}`);
+  if (p.paid_from) parts.push(`from ${p.paid_from}`);
+  if (p.paid_with) parts.push(`via ${p.paid_with === "BANK_APP" ? "bank app" : p.paid_with.toLowerCase()}`);
+  if (p.decision_note) parts.push(`note: ${p.decision_note}`);
+  return parts.join(" · ");
+}
 
 export type CustomerRow = {
   key: string;
@@ -21,6 +62,12 @@ export type CustomerRow = {
   last_order_at: string | null;
   presales: CustomerPresale[];
   sources: string[];
+  /** Artist and band names the account manages. */
+  manages?: string[];
+  account_types?: AccountType[];
+  /** The most telling status across their orders; null when they never ordered. */
+  payment_status?: PaymentStatus | null;
+  payments?: CustomerPayment[];
 };
 
 export type FollowerRow = { user_id: string; name: string | null; email: string | null; phone: string | null; followed_at: string | null };
@@ -35,6 +82,9 @@ export type CustomerFilters = {
   joinedFrom: string;
   joinedTo: string;
   minOrders: number;
+  /** "any", "none" (never ordered), or one payment status. */
+  payment: "any" | "none" | PaymentStatus;
+  accountType: "any" | AccountType;
 };
 
 export const NO_FILTERS: CustomerFilters = {
@@ -45,6 +95,8 @@ export const NO_FILTERS: CustomerFilters = {
   joinedFrom: "",
   joinedTo: "",
   minOrders: 0,
+  payment: "any",
+  accountType: "any",
 };
 
 /** The rows that pass every filter set; an empty filter lets everyone through. */
@@ -63,6 +115,11 @@ export function filterCustomers(rows: CustomerRow[], f: CustomerFilters): Custom
     if (f.joinedFrom && (!joined || joined < f.joinedFrom)) return false;
     if (f.joinedTo && (!joined || joined > f.joinedTo)) return false;
     if (f.minOrders > 0 && r.orders < f.minOrders) return false;
+    if (f.payment === "none" && r.payment_status) return false;
+    if (f.payment !== "any" && f.payment !== "none" && !(r.payments ?? []).some((p) => p.status === f.payment) && r.payment_status !== f.payment) {
+      return false;
+    }
+    if (f.accountType !== "any" && !(r.account_types ?? []).includes(f.accountType)) return false;
     return true;
   });
 }
@@ -105,6 +162,10 @@ export function customersCsv(rows: CustomerRow[]): string {
     ...currencies.map((c) => `Spent (${c})`),
     "Last order",
     "Pre-sales",
+    "Account type",
+    "Artist or band",
+    "Payment status",
+    "Payments",
   ];
   const lines = rows.map((r) => [
     r.name,
@@ -119,6 +180,10 @@ export function customersCsv(rows: CustomerRow[]): string {
     ...currencies.map((c) => (r.spent[c] !== undefined ? major(r.spent[c]) : "")),
     r.last_order_at ? r.last_order_at.slice(0, 10) : "",
     r.presales.map((p) => `${p.product ?? "Product"}: ${p.currency_code} ${major(p.amount_minor)} (${p.status.toLowerCase()})`).join("; "),
+    (r.account_types ?? []).map((t) => ACCOUNT_TYPE_LABEL[t] ?? t).join(" + "),
+    (r.manages ?? []).join("; "),
+    r.payment_status ? PAYMENT_STATUS_LABEL[r.payment_status] : "",
+    (r.payments ?? []).map((p) => `${p.at.slice(0, 10)} ${p.currency_code} ${major(p.amount_minor)} ${paymentLine(p)}`).join("; "),
   ]);
   return toCsv(header, lines);
 }

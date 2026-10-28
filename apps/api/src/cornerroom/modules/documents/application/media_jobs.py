@@ -630,7 +630,9 @@ class MediaJobService:
         asset.mime = "image/jpeg" if fmt == "JPEG" else "image/png"
         if intent is not None and intent.target_type in {"release_cover", "event_cover", *PROFILE_PICTURE_TARGETS}:
             if intent.target_type == "release_cover":
-                await MusicService(self.session, settings=self.settings).system_attach_cover(intent.target_id, asset.id)
+                await MusicService(self.session, settings=self.settings).system_attach_cover(
+                    intent.target_id, asset.id, intent.owner_user_id
+                )
             elif intent.target_type == "event_cover":
                 from cornerroom.modules.events.application.service import EventService
 

@@ -117,6 +117,13 @@ export type StudioReleaseDetail = {
   release: StudioRelease;
   /** Signed link to the accepted cover at 1200 px (OD-05); null without one. */
   cover_url?: string | null;
+  /** D-COVER-01: a new cover waiting for staff (approved or released releases), and the last note. */
+  cover_waiting?: boolean;
+  pending_cover_url?: string | null;
+  cover_review_note?: string | null;
+  /** D-CHANGES-01: changes to approved or released music, waiting in a request; the last decision. */
+  change_request?: ChangeRequest | null;
+  last_change_decision?: { status: string; review_note?: string | null; decided_at?: string | null } | null;
   profile: { kind: ProfileKind; id: string; display_name: string };
   viewer_role: "owner" | "staff";
   display_state: string;
@@ -172,6 +179,115 @@ export function updateStudioTrack(trackId: string, body: Partial<StudioTrack> & 
 export function setStudioCredits(trackId: string, credits: StudioCredit[]): Promise<StudioTrack> {
   const body = credits.map((c) => ({ role_key: c.role_key, artist_id: c.artist_id || null, display_name: c.display_name || null, instrument: c.instrument || null }));
   return apiFetch<StudioTrack>(`/api/v1/studio/tracks/${trackId}/credits`, { method: "PUT", headers: json, body: JSON.stringify({ credits: body }), retry: false });
+}
+
+export type ChangeDiff = { scope: string; field: string; before: string; after: string };
+
+/** Changes to approved or released music (D-CHANGES-01): checked values and old next to new. */
+export type ChangeRequest = {
+  id: string;
+  release_id: string;
+  release_title: string;
+  profile_name?: string | null;
+  status: "OPEN" | "SUBMITTED" | "APPROVED" | "REJECTED" | "WITHDRAWN";
+  submitted_at?: string | null;
+  decided_at?: string | null;
+  review_note?: string | null;
+  changes: Record<string, unknown>;
+  diff: ChangeDiff[];
+  audio: { track_id: string; version_id: string; status: string; duration_ms?: number | null }[];
+};
+
+export type ChangeFields = Partial<{
+  title: string;
+  version_title: string | null;
+  explicit: boolean;
+  language_code: string | null;
+  genre_primary: string | null;
+  genre_secondary: string | null;
+  isrc: string | null;
+  label_name: string | null;
+  p_line: string | null;
+  c_line: string | null;
+  upc: string | null;
+}>;
+
+export function startChanges(releaseId: string): Promise<ChangeRequest> {
+  return apiFetch<ChangeRequest>(`/api/v1/studio/releases/${releaseId}/changes`, { method: "POST", retry: false });
+}
+
+export function saveReleaseChanges(releaseId: string, fields: ChangeFields): Promise<ChangeRequest> {
+  return apiFetch<ChangeRequest>(`/api/v1/studio/releases/${releaseId}/changes`, { method: "PATCH", headers: json, body: JSON.stringify(fields), retry: false });
+}
+
+export function saveTrackChanges(trackId: string, fields: ChangeFields): Promise<ChangeRequest> {
+  return apiFetch<ChangeRequest>(`/api/v1/studio/tracks/${trackId}/changes`, { method: "PATCH", headers: json, body: JSON.stringify(fields), retry: false });
+}
+
+export function saveCreditChanges(trackId: string, credits: StudioCredit[]): Promise<ChangeRequest> {
+  const body = credits.map((c) => ({ role_key: c.role_key, artist_id: c.artist_id || null, display_name: c.display_name || null, instrument: c.instrument || null }));
+  return apiFetch<ChangeRequest>(`/api/v1/studio/tracks/${trackId}/changes/credits`, {
+    method: "PUT",
+    headers: json,
+    body: JSON.stringify({ credits: body }),
+    retry: false,
+  });
+}
+
+export function submitChanges(releaseId: string): Promise<ChangeRequest> {
+  return apiFetch<ChangeRequest>(`/api/v1/studio/releases/${releaseId}/changes/submit`, { method: "POST", retry: false });
+}
+
+export function withdrawChanges(releaseId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/studio/releases/${releaseId}/changes`, { method: "DELETE", retry: false });
+}
+
+/** Staff: changes to approved or released music waiting in the active workspace. */
+export function fetchChangesQueue(): Promise<ChangeRequest[]> {
+  return apiFetch<ChangeRequest[]>("/api/v1/catalog-intake/changes");
+}
+
+export function fetchReleaseChanges(releaseId: string): Promise<ChangeRequest | null> {
+  return apiFetch<ChangeRequest | null>(`/api/v1/catalog-intake/releases/${releaseId}/changes`);
+}
+
+export function reviewChanges(releaseId: string, action: "approve" | "reject", note?: string): Promise<ChangeRequest> {
+  return apiFetch<ChangeRequest>(`/api/v1/catalog-intake/releases/${releaseId}/changes/review`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify({ action, note: note || null }),
+    retry: false,
+  });
+}
+
+/** Withdraw a new cover that is waiting for staff (D-COVER-01). */
+export function withdrawStudioCover(releaseId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/studio/releases/${releaseId}/cover/pending`, { method: "DELETE", retry: false });
+}
+
+export type CoverReviewItem = {
+  release_id: string;
+  title: string;
+  status: string;
+  profile_name?: string | null;
+  submitted_at?: string | null;
+  current_cover_url?: string | null;
+  pending_cover_url?: string | null;
+  cover_review_note?: string | null;
+};
+
+/** Staff: new covers for approved or released music, waiting in the active workspace. */
+export function fetchCoverQueue(): Promise<CoverReviewItem[]> {
+  return apiFetch<CoverReviewItem[]>("/api/v1/catalog-intake/covers");
+}
+
+export function reviewCover(releaseId: string, action: "approve" | "reject", note?: string): Promise<CoverReviewItem> {
+  return apiFetch<CoverReviewItem>(`/api/v1/catalog-intake/releases/${releaseId}/cover/review`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify({ action, note: note || null }),
+    retry: false,
+  });
 }
 
 /** Draft songs save now; approved or released songs wait for staff (D-LYRICS-01). */

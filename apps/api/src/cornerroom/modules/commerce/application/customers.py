@@ -1,9 +1,14 @@
-"""All customers, for admins and finance staff (owner, 2026-10-27, D-CUSTOMERS-01).
+"""All customers and users, for admins and finance staff (owner, 2026-10-27, D-CUSTOMERS-01).
 
-One list of everyone who is a Corner Room customer: website accounts (signed up, bought, or both)
-and pre-sale buyers who paid before launch (listed whether or not they have signed up yet). A
-pre-sale buyer who signed up appears once, with both. Filter by an artist or band to see that
-profile's customers (anyone who bought or pre-bought its songs or releases).
+One list of every Corner Room account (fans, artists, staff) and every pre-sale buyer who paid
+before launch (listed whether or not they have signed up yet). A pre-sale buyer who signed up
+appears once, with both. Filter by an artist or band, song, release or event to see who bought it.
+
+Owner, 2026-10-28 (D-CUSTOMERS-02): everyone who tried to pay is findable too, not only confirmed
+sales. Each person carries their orders with a payment status (paid, refunded, waiting for a check,
+rejected, expired, or started without a payment sent) and the transaction ID and paid-from number
+they typed, all searchable. Accounts without a personal name show the artist or band they manage,
+and each account has its types (fan, artist, staff).
 
 Personal data (email, phone, address) is shown only to staff with platform user administration,
 or finance staff acting in Corner Room's platform workspace; every view is audited (counts and the
@@ -26,10 +31,36 @@ from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.commerce.application.sales import SOLD_ORDER_STATUSES
 from cornerroom.modules.commerce.domain.models import Order, OrderDeliveryAddress, OrderItem, PresaleClaim, Product
+from cornerroom.modules.finance.domain.models_payments import PaymentSubmission
 from cornerroom.modules.identity.domain.models import CustomerProfile, DeliveryAddress, Organization, User
 
 # A technical ceiling for one screen (not a business rule); the list is filtered before it applies.
 MAX_ROWS = 5000
+# Orders that did not become sales but show that someone tried to pay (D-CUSTOMERS-02).
+ATTEMPT_ORDER_STATUSES = ("PENDING_PAYMENT", "CANCELLED")
+# A person's overall payment status: the most telling of their orders wins.
+STATUS_RANK = ("PAID", "REFUNDED", "WAITING", "REJECTED", "EXPIRED", "NOT_SENT")
+
+
+def payment_status(order_status: str, submission_status: str | None) -> str:
+    """One order's payment status for staff: PAID, REFUNDED, WAITING (sent, not checked yet),
+    REJECTED, EXPIRED (cancelled unpaid) or NOT_SENT (checkout started, no payment sent)."""
+    if order_status in ("PAID", "FULFILLED"):
+        return "PAID"
+    if order_status in ("REFUNDED", "PARTIALLY_REFUNDED"):
+        return "REFUNDED"
+    if submission_status == "REJECTED":
+        return "REJECTED"
+    if order_status == "CANCELLED":
+        return "EXPIRED"
+    if submission_status == "SUBMITTED":
+        return "WAITING"
+    return "NOT_SENT"
+
+
+def overall_status(statuses: list[str]) -> str | None:
+    found = [s for s in STATUS_RANK if s in statuses]
+    return found[0] if found else None
 
 
 def _address_text(row: Any) -> str:
@@ -170,6 +201,55 @@ class CustomerService:
         )
         return {"items": items[:MAX_ROWS], "total": len(items)}
 
+    async def _profiles_and_types(self, user_ids: list[UUID]) -> tuple[dict[UUID, list[str]], dict[UUID, list[str]]]:
+        """The artist and band names each account manages, and its types: "staff" (holds a role
+        with permissions), "artist" (an artist page or a band), "fan" otherwise."""
+        from cornerroom.modules.artists.domain.models import Artist, Band, BandMember
+        from cornerroom.modules.authorization.domain.models import RoleAssignment, RolePermission
+
+        ids = user_ids or [UUID(int=0)]
+        manages: dict[UUID, list[str]] = defaultdict(list)
+        for artist in (
+            await self.session.execute(select(Artist).where(Artist.claimed_user_id.in_(ids), Artist.deleted_at.is_(None)))
+        ).scalars():
+            manages[artist.claimed_user_id].append(artist.stage_name)
+        for member, band in (
+            await self.session.execute(
+                select(BandMember, Band)
+                .join(Band, Band.id == BandMember.band_id)
+                .where(
+                    BandMember.user_id.in_(ids),
+                    BandMember.status == "ACTIVE",
+                    BandMember.deleted_at.is_(None),
+                    Band.deleted_at.is_(None),
+                )
+            )
+        ).all():
+            if member.user_id is not None and band.name not in manages[member.user_id]:
+                manages[member.user_id].append(band.name)
+        staff = set(
+            (
+                await self.session.execute(
+                    select(RoleAssignment.user_id)
+                    .join(RolePermission, RolePermission.role_id == RoleAssignment.role_id)
+                    .where(
+                        RoleAssignment.user_id.in_(ids),
+                        RoleAssignment.status == "ACTIVE",
+                        RoleAssignment.deleted_at.is_(None),
+                    )
+                )
+            ).scalars()
+        )
+        types: dict[UUID, list[str]] = {}
+        for uid in user_ids:
+            kinds = []
+            if uid in staff:
+                kinds.append("staff")
+            if manages.get(uid):
+                kinds.append("artist")
+            types[uid] = kinds or ["fan"]
+        return dict(manages), types
+
     async def list_customers(
         self,
         ctx: AuthContext,
@@ -196,12 +276,29 @@ class CustomerService:
                 select(Order).where(Order.status.in_(SOLD_ORDER_STATUSES), Order.deleted_at.is_(None))
             )
         ).scalars().all()
+        attempt_rows = (
+            await self.session.execute(
+                select(Order).where(Order.status.in_(ATTEMPT_ORDER_STATUSES), Order.deleted_at.is_(None))
+            )
+        ).scalars().all()
+        all_orders = [*order_rows, *attempt_rows]
         items_by_order: dict[UUID, list[OrderItem]] = defaultdict(list)
-        if order_rows:
+        if all_orders:
             for item in (
-                await self.session.execute(select(OrderItem).where(OrderItem.order_id.in_([o.id for o in order_rows])))
+                await self.session.execute(select(OrderItem).where(OrderItem.order_id.in_([o.id for o in all_orders])))
             ).scalars():
                 items_by_order[item.order_id].append(item)
+        latest_submission: dict[UUID, PaymentSubmission] = {}
+        if all_orders:
+            for sub in (
+                await self.session.execute(
+                    select(PaymentSubmission)
+                    .where(PaymentSubmission.order_id.in_([o.id for o in all_orders]))
+                    .order_by(PaymentSubmission.created_at.asc())
+                )
+            ).scalars():
+                if sub.order_id is not None:
+                    latest_submission[sub.order_id] = sub  # the newest wins
 
         def counts(order: Order) -> bool:
             if products is None:
@@ -214,22 +311,29 @@ class CustomerService:
         for order in order_rows:
             if order.user_id and counts(order):
                 orders_by_user[order.user_id].append(order)
+        attempts_by_user: dict[UUID, list[Order]] = defaultdict(list)
+        for order in attempt_rows:
+            if order.user_id and counts(order):
+                attempts_by_user[order.user_id].append(order)
 
         presale_query = select(PresaleClaim).where(PresaleClaim.status != "CANCELLED")
         if products is not None:
             presale_query = presale_query.where(PresaleClaim.product_id.in_(products or {UUID(int=0)}))
         presales = (await self.session.execute(presale_query)).scalars().all()
+        product_ids = {c.product_id for c in presales} | {
+            i.product_id for items in items_by_order.values() for i in items if i.product_id
+        }
         product_names = {
             p.id: p.name
             for p in (
-                await self.session.execute(select(Product).where(Product.id.in_({c.product_id for c in presales} or {UUID(int=0)})))
+                await self.session.execute(select(Product).where(Product.id.in_(product_ids or {UUID(int=0)})))
             ).scalars()
         }
 
         # Which accounts to show: everyone (no filter), or this profile's buyers.
         user_query = select(User).where(User.deleted_at.is_(None))
         if products is not None:
-            wanted = set(orders_by_user) | {c.claimed_user_id for c in presales if c.claimed_user_id}
+            wanted = set(orders_by_user) | set(attempts_by_user) | {c.claimed_user_id for c in presales if c.claimed_user_id}
             user_query = user_query.where(User.id.in_(wanted or {UUID(int=0)}))
         users = (await self.session.execute(user_query)).scalars().all()
         user_ids = [u.id for u in users]
@@ -239,6 +343,23 @@ class CustomerService:
                 await self.session.execute(select(CustomerProfile).where(CustomerProfile.user_id.in_(user_ids or [UUID(int=0)])))
             ).scalars()
         }
+        manages, account_types = await self._profiles_and_types(user_ids)
+
+        def payment_view(order: Order) -> dict[str, Any]:
+            sub = latest_submission.get(order.id)
+            return {
+                "order_id": order.id,
+                "status": payment_status(order.status, sub.status if sub else None),
+                "items": [product_names.get(i.product_id) or i.item_type.title() for i in items_by_order.get(order.id, [])],
+                "amount_minor": order.total_amount_minor,
+                "currency_code": order.currency_code,
+                "transaction_ref": sub.transaction_ref if sub else None,
+                "paid_from": sub.paid_from if sub else None,
+                "paid_with": sub.paid_with if sub else None,
+                "decision_note": sub.decision_note if sub else None,
+                "at": order.created_at,
+            }
+
         saved = {}
         for addr in (
             await self.session.execute(
@@ -289,11 +410,22 @@ class CustomerService:
                 spent[order.currency_code] += order.total_amount_minor
             address = saved.get(user.id) or delivered.get(user.id)
             phone = user.phone or (address.phone if address else None) or next((c.phone for c in claims if c.phone), None)
+            payments = sorted(
+                [*(payment_view(o) for o in orders), *(payment_view(o) for o in attempts_by_user.get(user.id, []))],
+                key=lambda p: p["at"],
+                reverse=True,
+            )
+            statuses = [p["status"] for p in payments] + (["PAID"] if claims else [])
             rows.append(
                 {
                     "key": str(user.id),
                     "name": names.get(user.id) or (address.recipient_name if address else None)
-                    or next((c.buyer_name for c in claims if c.buyer_name), None),
+                    or next((c.buyer_name for c in claims if c.buyer_name), None)
+                    or next(iter(manages.get(user.id, [])), None),
+                    "manages": manages.get(user.id, []),
+                    "account_types": account_types.get(user.id, ["fan"]),
+                    "payment_status": overall_status(statuses),
+                    "payments": payments[:50],
                     "email": user.email,
                     "phone": phone,
                     "address": _address_text(address) if address else next((c.address for c in claims if c.address), None),
@@ -328,6 +460,10 @@ class CustomerService:
                     "spent": {},
                     "last_order_at": None,
                     "presales": presale_view(claims),
+                    "manages": [],
+                    "account_types": [],
+                    "payment_status": "PAID",
+                    "payments": [],
                     "sources": ["PRESALE"],
                     "_first_paid": first.created_at,
                 }
@@ -338,6 +474,11 @@ class CustomerService:
             rows = [
                 r for r in rows
                 if any(needle in str(r.get(f) or "").lower() for f in ("name", "email", "phone", "address"))
+                or any(needle in str(v or "").lower() for v in r.get("manages", []))
+                # What they typed when paying: a transaction ID or the number they paid from.
+                or any(
+                    needle in str(p.get(f) or "").lower() for p in r.get("payments", []) for f in ("transaction_ref", "paid_from")
+                )
             ]
 
         def sort_key(r: dict[str, Any]) -> datetime:

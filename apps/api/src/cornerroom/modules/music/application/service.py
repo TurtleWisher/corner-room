@@ -1212,7 +1212,8 @@ class MusicService:
         if version.status != "PROCESSING":
             return
         track = await self.get_track_row(version.track_id)
-        if not version.is_current:
+        held = not version.is_current and track.status in {"APPROVED", "SCHEDULED", "RELEASED"}
+        if not version.is_current and not held:
             current = (
                 await self.session.execute(
                     select(TrackVersion).where(
@@ -1230,7 +1231,8 @@ class MusicService:
             version.is_current = True
         version_transition_action(version.status, "READY")
         version.status = "READY"
-        version.processing_detail = "READY"
+        # D-CHANGES-01: new audio for approved or released music waits for staff in a change request.
+        version.processing_detail = "READY_WAITING_REVIEW" if held else "READY"
         await self._flush_versioned()
         await self._system_event(
             TRACK_VERSION_READY, "TrackVersion", version.id,
@@ -1239,19 +1241,45 @@ class MusicService:
         await self.audit.record(
             action="track_version.ready", entity_type="TrackVersion", entity_id=version.id,
             actor_id="system:media", actor_type="system",
-            previous_state={"status": "PROCESSING"}, new_state={"status": "READY", "is_current": True},
+            previous_state={"status": "PROCESSING"}, new_state={"status": "READY", "is_current": version.is_current},
         )
 
-    async def system_attach_cover(self, release_id: UUID, asset_id: UUID) -> None:
+    async def system_attach_cover(self, release_id: UUID, asset_id: UUID, uploaded_by: UUID | None = None) -> None:
+        """An accepted cover upload. A draft release takes it at once (staff see it in the release
+        review); once in review, approved or out, it waits for staff (D-COVER-01, cover_review.py)."""
         release = await self.get_release_row(release_id)
         previous = release.cover_asset_id
-        release.cover_asset_id = asset_id
+        if release.status in {"IDEA", "DEMO", "IN_PRODUCTION", "QC"}:
+            release.cover_asset_id = asset_id
+            await self._flush_versioned()
+            await self.audit.record(
+                action="release.cover_attached", entity_type="Release", entity_id=release.id,
+                actor_id="system:media", actor_type="system",
+                previous_state={"cover_asset_id": str(previous) if previous else None},
+                new_state={"cover_asset_id": str(asset_id)},
+            )
+            return
+        release.cover_pending_asset_id = asset_id
+        release.cover_pending_at = self.clock.now()
+        release.cover_pending_by = uploaded_by
+        release.cover_review_note = None
         await self._flush_versioned()
+        from cornerroom.infra.outbox import enqueue_outbox
+        from cornerroom.kernel.events import RELEASE_COVER_SUBMITTED, DomainEvent
+
+        await enqueue_outbox(
+            self.session,
+            DomainEvent(
+                event_type=RELEASE_COVER_SUBMITTED, producer="music", aggregate_type="Release", aggregate_id=release.id,
+                payload={"status": release.status}, occurred_at=self.clock.now(), actor_id=uploaded_by,
+                organization_id=release.primary_org_id, correlation_id=None,
+            ),
+        )
         await self.audit.record(
-            action="release.cover_attached", entity_type="Release", entity_id=release.id,
+            action="release.cover_submitted", entity_type="Release", entity_id=release.id,
             actor_id="system:media", actor_type="system",
             previous_state={"cover_asset_id": str(previous) if previous else None},
-            new_state={"cover_asset_id": str(asset_id)},
+            new_state={"cover_pending_asset_id": str(asset_id)},
         )
 
     async def media_report(self, ctx: AuthContext, track_id: UUID, version_id: UUID) -> dict[str, Any]:

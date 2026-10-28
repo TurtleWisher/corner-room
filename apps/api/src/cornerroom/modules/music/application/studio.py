@@ -328,6 +328,16 @@ class StudioService:
         return {
             "release": self._release_fields(release),
             "cover_url": self._cover_url(release, 1200),
+            # D-COVER-01: a new cover waiting for staff, and the note when one was sent back.
+            "cover_waiting": release.cover_pending_asset_id is not None,
+            "pending_cover_url": (
+                CoverService(self.session, self.settings).signed_path(release.cover_pending_asset_id, 480)
+                if release.cover_pending_asset_id
+                else None
+            ),
+            "cover_review_note": release.cover_review_note,
+            # D-CHANGES-01: changes to approved or released music waiting for staff, and the last decision.
+            **(await self._change_request_view(release)),
             "profile": {"kind": _kind, "id": _pid, "display_name": profile_name},
             "viewer_role": role,
             "display_state": await self.display_state(release, tracks),
@@ -355,35 +365,14 @@ class StudioService:
         if expected_version is not None and release.version != expected_version:
             raise ConflictError("Someone else changed this release. Reload to see their changes.")
         previous = self._release_fields(release)
-        if "title" in changes:
-            title = _clean(changes["title"], 300)
-            if not title:
-                raise AppError("VALIDATION_ERROR", "Title is required", 422)
-            release.title = title
+        for key, value in (await self.clean_release_fields(changes)).items():
+            setattr(release, key, value)
         if "release_type" in changes:
             if changes["release_type"] not in STUDIO_RELEASE_TYPES:
                 raise AppError("VALIDATION_ERROR", "Invalid release type", 422)
             release.release_type = changes["release_type"]
-        for key in ("genre_primary", "genre_secondary"):
-            if key in changes:
-                value = changes[key]
-                if value is not None and await self.session.get(Genre, value) is None:
-                    raise AppError("VALIDATION_ERROR", "Unknown genre", 422)
-                setattr(release, key, value)
         if release.genre_secondary and release.genre_secondary == release.genre_primary:
             raise AppError("VALIDATION_ERROR", "The second genre must differ from the main genre", 422)
-        if "language_code" in changes:
-            if changes["language_code"] is not None and not is_language(changes["language_code"]):
-                raise AppError("VALIDATION_ERROR", "Unknown language", 422)
-            release.language_code = changes["language_code"]
-        for key, limit in (("label_name", 200), ("p_line", 300), ("c_line", 300)):
-            if key in changes:
-                setattr(release, key, _clean(changes[key], limit))
-        if "upc" in changes:
-            upc = (changes["upc"] or "").strip() or None
-            if upc is not None and (not upc.isdigit() or len(upc) not in (12, 13, 14)):
-                raise AppError("VALIDATION_ERROR", "UPC/EAN must be 12 to 14 digits", 422)
-            release.upc = upc
         if "release_timezone" in changes:
             from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -413,6 +402,141 @@ class StudioService:
             organization_id=release.primary_org_id,
         )
         return release
+
+    async def _change_request_view(self, release: Release) -> dict[str, Any]:
+        from cornerroom.modules.music.application.changes import ChangeRequestService
+
+        changes = ChangeRequestService(self.session, self.settings, self.clock)
+        live = await changes.live_request(release.id)
+        last = await changes.last_decision(release.id)
+        return {
+            "change_request": await changes.view(live, release) if live is not None else None,
+            "last_change_decision": (
+                {"status": last.status, "review_note": last.review_note, "decided_at": last.decided_at} if last is not None else None
+            ),
+        }
+
+    async def clean_release_fields(self, changes: dict[str, Any]) -> dict[str, Any]:
+        """Release details as they will be stored (title, language, genres, label, P and C lines,
+        UPC), checked the same way for a draft and for a change request (D-CHANGES-01). Only the
+        keys present in `changes` are returned."""
+        out: dict[str, Any] = {}
+        if "title" in changes:
+            title = _clean(changes["title"], 300)
+            if not title:
+                raise AppError("VALIDATION_ERROR", "Title is required", 422)
+            out["title"] = title
+        for key in ("genre_primary", "genre_secondary"):
+            if key in changes:
+                value = changes[key]
+                if value is not None and await self.session.get(Genre, value) is None:
+                    raise AppError("VALIDATION_ERROR", "Unknown genre", 422)
+                out[key] = value
+        if "language_code" in changes:
+            if changes["language_code"] is not None and not is_language(changes["language_code"]):
+                raise AppError("VALIDATION_ERROR", "Unknown language", 422)
+            out["language_code"] = changes["language_code"]
+        for key, limit in (("label_name", 200), ("p_line", 300), ("c_line", 300)):
+            if key in changes:
+                out[key] = _clean(changes[key], limit)
+        if "upc" in changes:
+            upc = (changes["upc"] or "").strip() or None
+            if upc is not None and (not upc.isdigit() or len(upc) not in (12, 13, 14)):
+                raise AppError("VALIDATION_ERROR", "UPC/EAN must be 12 to 14 digits", 422)
+            out["upc"] = upc
+        return out
+
+    async def clean_track_fields(self, changes: dict[str, Any]) -> dict[str, Any]:
+        """Song details as they will be stored, checked the same way for a draft and for a change
+        request (D-CHANGES-01). Only the keys present in `changes` are returned."""
+        out: dict[str, Any] = {}
+        if "title" in changes:
+            title = _clean(changes["title"], 300)
+            if not title:
+                raise AppError("VALIDATION_ERROR", "Title is required", 422)
+            out["title"] = title
+        if "version_title" in changes:
+            out["version_title"] = _clean(changes["version_title"], 100)
+        if "explicit" in changes:
+            out["explicit"] = bool(changes["explicit"])
+        if "language_code" in changes:
+            if changes["language_code"] is not None and not is_language(changes["language_code"]):
+                raise AppError("VALIDATION_ERROR", "Unknown language", 422)
+            out["language_code"] = changes["language_code"]
+        for key in ("genre_primary", "genre_secondary"):
+            if key in changes:
+                value = changes[key]
+                if value is not None and await self.session.get(Genre, value) is None:
+                    raise AppError("VALIDATION_ERROR", "Unknown genre", 422)
+                out[key] = value
+        if "isrc" in changes:
+            code = (changes["isrc"] or "").replace("-", "").strip().upper() or None
+            if code is not None and (len(code) != 12 or not code[:2].isalpha() or not code[2:5].isalnum() or not code[5:].isdigit()):
+                raise AppError("VALIDATION_ERROR", "ISRC looks like CC-XXX-YY-NNNNN (12 characters)", 422)
+            out["isrc"] = code
+        return out
+
+    async def clean_credits(self, credits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Credits as they will be stored (D-AUDIO-16): performer roles link to an artist profile;
+        other roles may be a typed name. Checked the same way for a draft and a change request."""
+        roles = {r.key: r for r in (await self.session.execute(select(CreditRole))).scalars()}
+        if len(credits) > 50:
+            raise AppError("VALIDATION_ERROR", "At most 50 credits per track", 422)
+        out: list[dict[str, Any]] = []
+        for index, item in enumerate(credits):
+            spec = roles.get(item.get("role_key") or "")
+            if spec is None:
+                raise AppError("VALIDATION_ERROR", "Unknown credit role", 422, extras={"index": index})
+            artist_id = item.get("artist_id")
+            name = _clean(item.get("display_name"), 200)
+            if artist_id is not None:
+                artist = await self.session.get(Artist, UUID(str(artist_id)))
+                if artist is None or artist.deleted_at is not None:
+                    raise AppError("VALIDATION_ERROR", "Artist not found", 422, extras={"index": index})
+                name = None
+            elif spec.performer:
+                raise AppError(
+                    "VALIDATION_ERROR",
+                    f"{spec.label_en} must be an artist on Corner Room",
+                    422,
+                    extras={"index": index},
+                )
+            elif not name:
+                raise AppError("VALIDATION_ERROR", "Enter the person's name", 422, extras={"index": index})
+            instrument = _clean(item.get("instrument"), 80) if spec.allows_instrument else None
+            out.append(
+                {
+                    "role_key": spec.key,
+                    "artist_id": str(artist_id) if artist_id is not None else None,
+                    "display_name": name,
+                    "instrument": instrument,
+                }
+            )
+        return out
+
+    async def replace_credits(self, track: Track, cleaned: list[dict[str, Any]], actor: UUID) -> list[Credit]:
+        """Swap a track's credits for these checked ones (old rows are kept, soft-deleted)."""
+        now = self.clock.now()
+        existing = (await self.session.execute(select(Credit).where(Credit.track_id == track.id, Credit.deleted_at.is_(None)))).scalars().all()
+        for old in existing:
+            old.deleted_at = now
+        rows = [
+            Credit(
+                track_id=track.id,
+                artist_id=UUID(c["artist_id"]) if c.get("artist_id") else None,
+                display_name=c.get("display_name"),
+                credit_role=c["role_key"],
+                role_key=c["role_key"],
+                instrument=c.get("instrument"),
+                position=index,
+                created_by=actor,
+            )
+            for index, c in enumerate(cleaned)
+        ]
+        for row in rows:
+            self.session.add(row)
+        await self.session.flush()
+        return rows
 
     # --- tracks ------------------------------------------------------------------------------
 
@@ -460,7 +584,8 @@ class StudioService:
         ).scalar_one()
         return {
             "id": track.id, "position": position, "title": track.title, "version_title": track.version_title,
-            "listens": int(listens),
+            # D-LISTEN-02: counted listens plus the plays before counting started.
+            "listens": int(listens) + int(track.listens_before_counting or 0),
             "status": track.status, "explicit": track.explicit, "language_code": track.language_code,
             "genre_primary": track.genre_primary, "genre_secondary": track.genre_secondary, "isrc": track.isrc,
             "version": track.version,
@@ -558,30 +683,8 @@ class StudioService:
             raise AppError("INVALID_TRANSITION", "This track can't be edited now", 409)
         if expected_version is not None and track.version != expected_version:
             raise ConflictError("Someone else changed this track. Reload to see their changes.")
-        if "title" in changes:
-            title = _clean(changes["title"], 300)
-            if not title:
-                raise AppError("VALIDATION_ERROR", "Title is required", 422)
-            track.title = title
-        if "version_title" in changes:
-            track.version_title = _clean(changes["version_title"], 100)
-        if "explicit" in changes:
-            track.explicit = bool(changes["explicit"])
-        if "language_code" in changes:
-            if changes["language_code"] is not None and not is_language(changes["language_code"]):
-                raise AppError("VALIDATION_ERROR", "Unknown language", 422)
-            track.language_code = changes["language_code"]
-        for key in ("genre_primary", "genre_secondary"):
-            if key in changes:
-                value = changes[key]
-                if value is not None and await self.session.get(Genre, value) is None:
-                    raise AppError("VALIDATION_ERROR", "Unknown genre", 422)
-                setattr(track, key, value)
-        if "isrc" in changes:
-            code = (changes["isrc"] or "").replace("-", "").strip().upper() or None
-            if code is not None and (len(code) != 12 or not code[:2].isalpha() or not code[2:5].isalnum() or not code[5:].isdigit()):
-                raise AppError("VALIDATION_ERROR", "ISRC looks like CC-XXX-YY-NNNNN (12 characters)", 422)
-            track.isrc = code
+        for key, value in (await self.clean_track_fields(changes)).items():
+            setattr(track, key, value)
         track.updated_by = ctx.user_id
         try:
             await self.music._flush_versioned()
@@ -599,42 +702,7 @@ class StudioService:
         other roles may be a typed name. Credits are attribution only and pay nothing."""
         track, release, role = await self._track(ctx, track_id)
         self._require_editable(release)
-        roles = {r.key: r for r in (await self.session.execute(select(CreditRole))).scalars()}
-        if len(credits) > 50:
-            raise AppError("VALIDATION_ERROR", "At most 50 credits per track", 422)
-        prepared: list[Credit] = []
-        for index, item in enumerate(credits):
-            spec = roles.get(item.get("role_key") or "")
-            if spec is None:
-                raise AppError("VALIDATION_ERROR", "Unknown credit role", 422, extras={"index": index})
-            artist_id = item.get("artist_id")
-            name = _clean(item.get("display_name"), 200)
-            if artist_id is not None:
-                artist = await self.session.get(Artist, artist_id)
-                if artist is None or artist.deleted_at is not None:
-                    raise AppError("VALIDATION_ERROR", "Artist not found", 422, extras={"index": index})
-                name = None
-            elif spec.performer:
-                raise AppError(
-                    "VALIDATION_ERROR",
-                    f"{spec.label_en} must be an artist on Corner Room",
-                    422,
-                    extras={"index": index},
-                )
-            elif not name:
-                raise AppError("VALIDATION_ERROR", "Enter the person's name", 422, extras={"index": index})
-            instrument = _clean(item.get("instrument"), 80) if spec.allows_instrument else None
-            prepared.append(
-                Credit(track_id=track.id, artist_id=artist_id, display_name=name, credit_role=spec.key, role_key=spec.key,
-                       instrument=instrument, position=index, created_by=ctx.user_id)
-            )
-        now = self.clock.now()
-        existing = (await self.session.execute(select(Credit).where(Credit.track_id == track.id, Credit.deleted_at.is_(None)))).scalars().all()
-        for old in existing:
-            old.deleted_at = now
-        for row in prepared:
-            self.session.add(row)
-        await self.session.flush()
+        prepared = await self.replace_credits(track, await self.clean_credits(credits), ctx.user_id)
         await self._note_staff(ctx, release, role)
         await self.audit.record_from_auth(
             ctx, action="track.credits_set", entity_type="Track", entity_id=track.id,
@@ -649,6 +717,11 @@ class StudioService:
             raise AppError("INVALID_TRANSITION", "This track can't take new audio now", 409)
         version = await self.music.create_version(ctx, track.id, version_type="MASTER")
         await self._note_staff(ctx, release, role)
+        if release.status in {"APPROVED", "SCHEDULED", "RELEASED"}:
+            # D-CHANGES-01: replacement audio for music that is out waits in the change request.
+            from cornerroom.modules.music.application.changes import ChangeRequestService
+
+            await ChangeRequestService(self.session, self.settings, self.clock).attach_audio(ctx, track.id, version)
         return version
 
     # --- readiness, state, submit -----------------------------------------------------------------

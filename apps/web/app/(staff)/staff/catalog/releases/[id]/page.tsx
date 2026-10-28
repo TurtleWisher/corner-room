@@ -8,6 +8,7 @@ import { FormEvent, useState } from "react";
 import { CircleAlert } from "lucide-react";
 
 import { Button, Card, Protected } from "@/components/staff/kit";
+import { ChangesReview } from "@/components/staff/changes-review";
 import { ReleaseEditor } from "@/components/studio/release-editor";
 import { reviewRelease, setManagedMode } from "@/features/studio/api";
 import { friendlyError } from "@/lib/error-copy";
@@ -152,6 +153,7 @@ export default function StaffCatalogReleasePage() {
     <Protected>
       <div className="grid gap-6">
         <h1 className="text-2xl font-bold">Release workspace</h1>
+        <ChangesReview releaseId={id} />
         {/* D-THEME-01: inside the console the editor uses the staff (black) palette, not Ember. */}
         <div className="rounded border border-line p-4">
           <ReleaseEditor releaseId={id} />

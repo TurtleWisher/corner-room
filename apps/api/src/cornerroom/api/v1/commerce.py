@@ -472,6 +472,7 @@ class StaffSubmissionOut(BaseModel):
     decision_note: str | None
     buyer_email: str | None
     submitted_at: datetime
+    decided_at: datetime | None = None
 
 
 class SubmissionRejectIn(BaseModel):
@@ -652,6 +653,23 @@ class CustomerPresaleOut(BaseModel):
     status: str
 
 
+class CustomerPaymentOut(BaseModel):
+    """One order and how its payment stands (D-CUSTOMERS-02)."""
+
+    order_id: UUID
+    # PAID, REFUNDED, WAITING (sent, not checked yet), REJECTED, EXPIRED or NOT_SENT.
+    status: str
+    items: list[str]
+    amount_minor: int
+    currency_code: str
+    # What the buyer typed when paying (Bangla QR), if they sent a payment.
+    transaction_ref: str | None
+    paid_from: str | None
+    paid_with: str | None
+    decision_note: str | None
+    at: datetime
+
+
 class CustomerOut(BaseModel):
     key: str
     name: str | None
@@ -668,6 +686,12 @@ class CustomerOut(BaseModel):
     presales: list[CustomerPresaleOut]
     # "WEBSITE" (has a Corner Room account) and/or "PRESALE" (paid before launch).
     sources: list[str]
+    # D-CUSTOMERS-02: artist and band names the account manages; "fan", "artist", "staff".
+    manages: list[str] = []
+    account_types: list[str] = []
+    # The most telling status across their orders (PAID first); null when they never ordered.
+    payment_status: str | None = None
+    payments: list[CustomerPaymentOut] = []
 
 
 class CustomerListOut(BaseModel):
