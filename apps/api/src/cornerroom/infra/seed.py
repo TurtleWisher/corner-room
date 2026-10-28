@@ -243,6 +243,8 @@ async def seed_foundation(session: AsyncSession, settings: Settings) -> None:
         ("order.cancelled", "Your reservation ran out before your payment was confirmed, so your order was cancelled. If money already left your account, our team will refund it in full."),
         ("payment.failed", "A payment attempt failed."),
         ("payment.rejected", "We couldn't confirm your payment: {reason}. Please check the details and send them again from your order."),
+        # D-CAMPAIGN-02 (owner, 2026-10-28): when an artist dispatches a gift campaign's gifts.
+        ("gift.dispatched", "Good news from {artist}: a gift for buying {music} is on its way to you ({gift}). It should reach you in the next few days."),
         ("refund.completed", "Your refund is complete."),
         ("track.approved", "A track was approved."),
         ("track.released", "A track was released."),

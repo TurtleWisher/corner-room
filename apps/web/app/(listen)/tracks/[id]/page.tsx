@@ -13,6 +13,7 @@ import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
 import { TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
 import { CreditFace } from "@/components/music/credit-face";
+import { GiftNote } from "@/components/music/gift-note";
 import { SongCredits } from "@/components/music/song-credits";
 import { SongLyrics } from "@/components/music/song-lyrics";
 import { useCredits } from "@/components/music/credits";
@@ -256,6 +257,8 @@ export default function TrackPage() {
             <p className="mt-8 max-w-md text-sm text-fg-muted">
               Buy a song, or the release it is on, to keep it. Sign in to listen to what you own.
             </p>
+            {/* A live gift campaign for this song (D-CAMPAIGN-01). */}
+            <GiftNote trackId={track.id} className="mt-6 max-w-md" />
           </div>
           {/* Phones: the same sections, after the title and buy button. */}
           <div className="md:hidden">

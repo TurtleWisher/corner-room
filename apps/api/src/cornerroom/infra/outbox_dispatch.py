@@ -17,6 +17,7 @@ from cornerroom.infra.outbox import OutboxEvent
 from cornerroom.kernel.events import DomainEvent
 from cornerroom.modules.analytics.application.consumers import consume_analytics_event
 from cornerroom.modules.commerce.application.payment_alerts import consume_payment_alert_event
+from cornerroom.modules.commerce.application.gifts import consume_gift_email_event
 from cornerroom.modules.commerce.application.presales import consume_presale_event
 from cornerroom.modules.notifications.application.consumers import consume_notification_event
 from cornerroom.modules.search.application.consumers import consume_search_event
@@ -35,6 +36,8 @@ SIDE_CONSUMERS: list[OutboxHandler] = [
     consume_presale_event,
     # Finance staff get an email when a buyer sends a transaction ID (D-PAYALERT-01).
     consume_payment_alert_event,
+    # Pre-sale buyers without an account hear that their gift is on its way (D-CAMPAIGN-02).
+    consume_gift_email_event,
 ]
 
 

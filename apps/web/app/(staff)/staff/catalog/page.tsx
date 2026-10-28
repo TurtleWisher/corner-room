@@ -9,6 +9,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { CircleAlert, Search } from "lucide-react";
 
 import { ChangesQueue } from "@/components/staff/changes-review";
+import { GiftsReview } from "@/components/staff/gifts-review";
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
 import { useWorkspace } from "@/components/workspace-provider";
 import {
@@ -386,6 +387,7 @@ export default function StaffCatalogPage() {
       <div className="grid gap-6">
         <h1 className="text-2xl font-bold">Catalog releases</h1>
         <ChangesQueue />
+        <GiftsReview />
         <LyricsQueue />
         <CoverQueue />
         <StartRelease />

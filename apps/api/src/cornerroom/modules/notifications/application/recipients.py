@@ -13,6 +13,7 @@ from cornerroom.kernel.events import (
     CAMPAIGN_TASK_COMPLETED,
     DomainEvent,
     ENTITLEMENT_GRANTED,
+    GIFT_DISPATCHED,
     ORDER_CANCELLED,
     ORDER_PAID,
     ORGANIZATION_INVITATION_ISSUED,
@@ -61,6 +62,9 @@ async def resolve_recipient(session: AsyncSession, event: DomainEvent) -> UUID |
     if event_type in {CAMPAIGN_TASK_ASSIGNED, CAMPAIGN_TASK_COMPLETED}:
         return _uuid(payload.get("assignee_user_id"))
     if event_type == ENTITLEMENT_GRANTED:
+        return _uuid(payload.get("user_id"))
+    if event_type == GIFT_DISPATCHED:
+        # A pre-sale buyer without an account has no user id; they get the email directly (gifts).
         return _uuid(payload.get("user_id"))
 
     if event_type == TICKET_ISSUED:

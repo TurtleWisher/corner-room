@@ -61,6 +61,7 @@ export function studioNavSections(profiles: { kind: string; id: string; display_
         { href: "/studio", label: "Your music" },
         { href: "/studio/profile", label: "Profile" },
         { href: "/studio/sales", label: "Sales" },
+        { href: "/studio/gifts", label: "Gifts" },
         { href: "/royalties", label: "Royalties" },
       ],
     },

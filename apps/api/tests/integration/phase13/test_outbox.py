@@ -56,6 +56,8 @@ def test_phase13_uses_existing_outbox_only() -> None:
         "consume_presale_event",
         # Finance staff alerted when a buyer sends a transaction ID (D-PAYALERT-01, 2026-10-25).
         "consume_payment_alert_event",
+        # Pre-sale buyers without an account told their gift is on its way (D-CAMPAIGN-02, 2026-10-28).
+        "consume_gift_email_event",
     }
 
 

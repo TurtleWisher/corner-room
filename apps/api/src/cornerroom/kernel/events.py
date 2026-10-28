@@ -108,6 +108,15 @@ TRACK_LYRICS_SUBMITTED = "TrackLyricsSubmitted"
 TRACK_LYRICS_REJECTED = "TrackLyricsRejected"
 TRACK_LYRICS_CHANGED = "TrackLyricsChanged"
 # D-COVER-01: a new cover for an approved or released release waits for staff (cover_review.py).
+# D-CAMPAIGN-01/02: artists' gift campaigns (commerce/application/gifts.py).
+GIFT_CAMPAIGN_SUBMITTED = "GiftCampaignSubmitted"
+GIFT_CAMPAIGN_APPROVED = "GiftCampaignApproved"
+GIFT_CAMPAIGN_REJECTED = "GiftCampaignRejected"
+GIFT_CAMPAIGN_PAUSED = "GiftCampaignPaused"
+GIFT_CAMPAIGN_RESUMED = "GiftCampaignResumed"
+# One per recipient: the buyer is told the gift is on its way (in-app and email).
+GIFT_DISPATCHED = "GiftDispatched"
+GIFT_SENT = "GiftSent"
 # D-CHANGES-01: changes to released music wait for staff (music/application/changes.py).
 RELEASE_CHANGES_SUBMITTED = "ReleaseChangesSubmitted"
 RELEASE_CHANGES_REJECTED = "ReleaseChangesRejected"
