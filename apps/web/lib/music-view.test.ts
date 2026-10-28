@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PlayableTrackRecord } from "@/lib/api";
 
-import { canModerateMusic, creditPerson, creditPicture, playQueue } from "./music-view";
+import { canModerateMusic, creditDetails, creditPerson, creditPicture, playQueue } from "./music-view";
 
 function rec(id: string, ok = true): PlayableTrackRecord {
   return { id, title: `T-${id}`, catalog_playable: ok, audio_deliverable: ok, duration_ms: 1000, reason: ok ? null : "NO_AUDIO" } as PlayableTrackRecord;
@@ -60,5 +60,32 @@ describe("creditPicture", () => {
     expect(creditPicture({ primary_band_id: "b1" }, artists, bands)).toEqual({ band: "b1", picture: "p2" });
     expect(creditPicture({ primary_artist_id: "a2" }, artists, bands)).toBeNull();
     expect(creditPicture({}, artists, bands)).toBeNull();
+  });
+});
+
+describe("creditDetails (owner, 2026-10-28)", () => {
+  const artists = [{ id: "a1", stage_name: "MIZULS" }];
+  const credits = [
+    { id: "c1", credit_role: "PRIMARY_ARTIST", artist_id: "a1" },
+    { id: "c2", credit_role: "SONGWRITER", display_name: "Rafi Ahmed" },
+    { id: "c3", credit_role: "PERFORMER", display_name: "Rafi Ahmed", instrument: "Guitar" },
+    { id: "c4", credit_role: "PERFORMER", display_name: "Tuli", instrument: "Flute" },
+  ];
+  const lineup = [{ id: "m1", name: "Rafi Ahmed", role_label: "Vocals, guitar" }, { id: "m2", name: "Mitu", role_label: null }];
+  const label = (r: string) => r.toLowerCase();
+
+  it("lists main credits without instruments, and who played what once each", () => {
+    const out = creditDetails(credits, artists, lineup, label);
+    expect(out.main.map((m) => `${m.role}: ${m.name}`)).toEqual([
+      "primary_artist: MIZULS",
+      "songwriter: Rafi Ahmed",
+      "performer: Rafi Ahmed",
+      "performer: Tuli",
+    ]);
+    expect(out.played.map((p) => `${p.name}: ${p.plays}`)).toEqual(["Rafi Ahmed: Vocals, guitar", "Mitu: Band member", "Tuli: Flute"]);
+  });
+
+  it("is empty without credits or a lineup", () => {
+    expect(creditDetails([], artists, [], label)).toEqual({ main: [], played: [] });
   });
 });

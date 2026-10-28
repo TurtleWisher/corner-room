@@ -499,6 +499,13 @@ class StreamingService:
         )
         for track_id, n in rows:
             counts[track_id] = int(n)
+        # D-LISTEN-02: plus the plays each song had before counting started.
+        from cornerroom.modules.music.domain.models import Track
+
+        for track_id, before in await self.session.execute(
+            select(Track.id, Track.listens_before_counting).where(Track.id.in_(track_ids), Track.listens_before_counting > 0)
+        ):
+            counts[track_id] = counts.get(track_id, 0) + int(before)
         return counts
 
     async def ingest_batch(

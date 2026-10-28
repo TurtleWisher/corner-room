@@ -8,19 +8,24 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { CircleAlert, Search } from "lucide-react";
 
+import { ChangesQueue } from "@/components/staff/changes-review";
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
 import { useWorkspace } from "@/components/workspace-provider";
 import {
   createStudioRelease,
   fetchIntakeQueue,
+  fetchCoverQueue,
   fetchLyricsQueue,
   fetchStaffProfiles,
+  reviewCover,
   reviewLyrics,
+  type CoverReviewItem,
   type IntakeQueueItem,
   type LyricsReviewItem,
   type StaffProfileCard,
 } from "@/features/studio/api";
 import { ApiError } from "@/lib/api/client";
+import { coverUrl } from "@/lib/cover-view";
 import { friendlyError } from "@/lib/error-copy";
 import { RELEASE_TYPE_LABEL, displayStateLabel, displayStateTone } from "@/lib/studio-view";
 
@@ -275,12 +280,114 @@ function LyricsQueue() {
   );
 }
 
+function CoverChange({ item, onDone }: { item: CoverReviewItem; onDone: () => void }) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function act(action: "approve" | "reject") {
+    if (action === "reject" && !note.trim()) {
+      setError("Write a note the artist will see.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await reviewCover(item.release_id, action, note);
+      onDone();
+    } catch (err) {
+      setError(friendlyError(err, "That review didn't go through."));
+      setBusy(false);
+    }
+  }
+
+  const img = (url: string | null | undefined, alt: string) =>
+    url ? (
+      // eslint-disable-next-line @next/next/no-img-element -- signed cover link from the API
+      <img src={coverUrl({ signed: url }) ?? ""} alt={alt} className="size-36 object-cover" />
+    ) : (
+      <div className="flex size-36 items-center justify-center border text-xs text-muted-foreground">No cover</div>
+    );
+
+  return (
+    <li className="border-b py-4">
+      <p className="font-medium">
+        {item.title}
+        <span className="font-normal text-muted-foreground"> · {item.profile_name ?? "Artist not available"}</span>
+      </p>
+      <div className="mt-2 flex flex-wrap gap-6">
+        <figure>
+          {img(item.current_cover_url, `Current cover of ${item.title}`)}
+          <figcaption className="mt-1 text-xs text-muted-foreground">Listeners see now</figcaption>
+        </figure>
+        <figure>
+          {img(item.pending_cover_url, `New cover for ${item.title}`)}
+          <figcaption className="mt-1 text-xs text-muted-foreground">New cover</figcaption>
+        </figure>
+      </div>
+      <textarea
+        className="mt-3 min-h-16 w-full rounded border p-2 text-sm"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Note for the artist (required to send back)"
+        aria-label={`Review note for the cover of ${item.title}`}
+        maxLength={2000}
+      />
+      <div className="mt-2 flex gap-2">
+        <Button disabled={busy} onClick={() => void act("approve")}>
+          Approve cover
+        </Button>
+        <Button variant="outline" disabled={busy} onClick={() => void act("reject")}>
+          Send back
+        </Button>
+      </div>
+      {error ? (
+        <p role="alert" className="mt-2 flex items-center gap-2 text-sm text-red-600">
+          <CircleAlert aria-hidden="true" className="size-4" /> {error}
+        </p>
+      ) : null}
+    </li>
+  );
+}
+
+/** New covers for approved or released music (owner, 2026-10-28, D-COVER-01). The uploader can't approve. */
+function CoverQueue() {
+  const { currentOrg } = useWorkspace();
+  const [items, setItems] = useState<CoverReviewItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [round, setRound] = useState(0);
+
+  useEffect(() => {
+    if (!currentOrg) return;
+    fetchCoverQueue()
+      .then(setItems)
+      .catch((err) => (err instanceof ApiError && err.status === 403 ? setItems([]) : setError(friendlyError(err, "Covers waiting for review couldn't be loaded."))));
+  }, [currentOrg, round]);
+
+  if (!currentOrg || (items !== null && items.length === 0 && !error)) return null;
+  return (
+    <Card className="p-5">
+      <h2 className="text-lg font-semibold">Covers waiting for review</h2>
+      <p className="mt-1 text-sm text-muted-foreground">New covers for music that is approved or out. Listeners keep the current cover until you approve.</p>
+      {error ? <ErrorState message={error} /> : items === null ? <LoadingState /> : (
+        <ul className="mt-2">
+          {items.map((item) => (
+            <CoverChange key={`${item.release_id}|${item.submitted_at}`} item={item} onDone={() => setRound((n) => n + 1)} />
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 export default function StaffCatalogPage() {
   return (
     <Protected>
       <div className="grid gap-6">
         <h1 className="text-2xl font-bold">Catalog releases</h1>
+        <ChangesQueue />
         <LyricsQueue />
+        <CoverQueue />
         <StartRelease />
         <Queue />
       </div>

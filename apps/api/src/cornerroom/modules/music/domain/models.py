@@ -98,6 +98,11 @@ class Release(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, 
     rights_declared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # D-AUDIO-14: STANDARD (buyers keep access) or LEGAL (removed for everyone); null until taken down.
     takedown_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # D-COVER-01: a new cover for an approved or released release waits here until staff approve it.
+    cover_pending_asset_id: Mapped[UUID | None] = mapped_column(ForeignKey("documents.media_assets.id"), nullable=True)
+    cover_pending_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cover_pending_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    cover_review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     __mapper_args__ = {"version_id_col": version}
 
@@ -115,6 +120,7 @@ class Track(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ba
             name="primary_party",
         ),
         CheckConstraint("takedown_kind IS NULL OR takedown_kind IN ('STANDARD','LEGAL')", name="takedown_kind"),
+        CheckConstraint("listens_before_counting >= 0", name="listens_before_counting"),
         Index("ix_tracks_status", "status"),
         Index("ix_tracks_primary_org_id", "primary_org_id"),
         Index(
@@ -156,6 +162,8 @@ class Track(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ba
     lyrics_pending_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     lyrics_pending_by: Mapped[UUID | None] = mapped_column(nullable=True)
     lyrics_review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # D-LISTEN-02: plays before listen counting started, set by staff; shown plus counted listens.
+    listens_before_counting: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     __mapper_args__ = {"version_id_col": version}
 
@@ -360,6 +368,38 @@ class IntakeRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     artist_confirmed_by: Mapped[UUID | None] = mapped_column(nullable=True)
     artist_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="OPEN")
+
+
+class ReleaseChangeRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Changes to an approved or released release, waiting for staff (owner, 2026-10-28,
+    D-CHANGES-01). `changes` holds checked values: {"release": {field: value}, "tracks":
+    {track_id: {"fields": {...}, "credits": [...], "audio_version_id": "..."}}}. Nothing in it is
+    public until staff approve; then it is applied in one transaction."""
+
+    __tablename__ = "release_change_requests"
+    __table_args__ = (
+        CheckConstraint("status IN ('OPEN','SUBMITTED','APPROVED','REJECTED','WITHDRAWN')", name="status"),
+        Index("ix_release_change_requests_release", "release_id", "status"),
+        Index(
+            "uq_release_change_requests_live",
+            "release_id",
+            unique=True,
+            postgresql_where=text("status IN ('OPEN','SUBMITTED')"),
+        ),
+        {"schema": "music"},
+    )
+
+    release_id: Mapped[UUID] = mapped_column(ForeignKey("music.releases.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="OPEN")
+    changes: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    submitted_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    __mapper_args__ = {"version_id_col": version}
 
 
 class ReleaseReview(UUIDPrimaryKeyMixin, TimestampMixin, Base):

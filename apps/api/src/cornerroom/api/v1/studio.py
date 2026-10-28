@@ -190,9 +190,47 @@ class ReviewEventOut(BaseModel):
     created_at: datetime
 
 
+class ChangeDiffOut(BaseModel):
+    scope: str
+    field: str
+    before: str
+    after: str
+
+
+class ChangeAudioOut(BaseModel):
+    track_id: UUID
+    version_id: UUID
+    status: str
+    duration_ms: int | None
+
+
+class ChangeRequestOut(BaseModel):
+    """Changes to approved or released music (D-CHANGES-01): checked values and old next to new."""
+
+    id: UUID
+    release_id: UUID
+    release_title: str
+    profile_name: str | None
+    # OPEN (being edited), SUBMITTED (waiting for staff), APPROVED, REJECTED or WITHDRAWN.
+    status: str
+    submitted_at: datetime | None
+    decided_at: datetime | None
+    review_note: str | None
+    changes: dict[str, Any]
+    diff: list[ChangeDiffOut]
+    audio: list[ChangeAudioOut]
+
+
 class ReleaseDetailOut(BaseModel):
     release: ReleaseFieldsOut
     cover_url: str | None = None
+    # D-COVER-01: a new cover waiting for staff, and the note when one was sent back.
+    cover_waiting: bool = False
+    pending_cover_url: str | None = None
+    cover_review_note: str | None = None
+    # D-CHANGES-01: changes to approved or released music waiting for staff, and the last decision.
+    change_request: ChangeRequestOut | None = None
+    last_change_decision: dict[str, Any] | None = None
     profile: ProfileRefOut
     viewer_role: Literal["owner", "staff"]
     display_state: str
@@ -607,3 +645,126 @@ async def review_lyrics(track_id: UUID, body: LyricsReviewIn, ctx: Ctx, svc: Stu
         ctx, track_id, approve=body.action == "approve", note=body.note
     )
     return LyricsReviewItemOut(**item)
+
+
+class CoverReviewItemOut(BaseModel):
+    release_id: UUID
+    title: str
+    status: str
+    profile_name: str | None
+    submitted_at: datetime | None
+    current_cover_url: str | None
+    pending_cover_url: str | None
+    cover_review_note: str | None
+
+
+class CoverReviewIn(BaseModel):
+    action: Literal["approve", "reject"]
+    note: str | None = Field(default=None, max_length=2000)
+
+
+@router.get("/catalog-intake/covers", response_model=list[CoverReviewItemOut])
+async def cover_queue(ctx: Ctx, svc: StudioDep) -> list[CoverReviewItemOut]:
+    """Staff: new covers for approved or released releases, waiting in the active workspace."""
+    from cornerroom.modules.music.application.cover_review import CoverReviewService
+
+    return [CoverReviewItemOut(**r) for r in await CoverReviewService(svc.session, svc.settings, svc.clock).queue(ctx)]
+
+
+@router.post("/catalog-intake/releases/{release_id}/cover/review", response_model=CoverReviewItemOut)
+async def review_cover(release_id: UUID, body: CoverReviewIn, ctx: Ctx, svc: StudioDep) -> CoverReviewItemOut:
+    from cornerroom.modules.music.application.cover_review import CoverReviewService
+
+    item = await CoverReviewService(svc.session, svc.settings, svc.clock).review(
+        ctx, release_id, approve=body.action == "approve", note=body.note
+    )
+    return CoverReviewItemOut(**item)
+
+
+@router.delete("/studio/releases/{release_id}/cover/pending", status_code=204)
+async def withdraw_cover(release_id: UUID, ctx: Ctx, svc: StudioDep) -> None:
+    from cornerroom.modules.music.application.cover_review import CoverReviewService
+
+    await CoverReviewService(svc.session, svc.settings, svc.clock).withdraw(ctx, release_id)
+
+
+# --- Changes to approved or released music (D-CHANGES-01) ------------------------------------
+
+
+class ChangeFieldsIn(BaseModel):
+    """Only the fields sent are changed; the same rules as a draft."""
+
+    model_config = {"extra": "ignore"}
+
+    title: str | None = Field(default=None, max_length=300)
+    version_title: str | None = Field(default=None, max_length=100)
+    explicit: bool | None = None
+    language_code: str | None = None
+    genre_primary: str | None = None
+    genre_secondary: str | None = None
+    isrc: str | None = Field(default=None, max_length=15)
+    label_name: str | None = Field(default=None, max_length=200)
+    p_line: str | None = Field(default=None, max_length=300)
+    c_line: str | None = Field(default=None, max_length=300)
+    upc: str | None = Field(default=None, max_length=14)
+
+
+class ChangeReviewIn(BaseModel):
+    action: Literal["approve", "reject"]
+    note: str | None = Field(default=None, max_length=2000)
+
+
+def _changes(svc: StudioService):  # type: ignore[no-untyped-def]
+    from cornerroom.modules.music.application.changes import ChangeRequestService
+
+    return ChangeRequestService(svc.session, svc.settings, svc.clock)
+
+
+@router.post("/studio/releases/{release_id}/changes", response_model=ChangeRequestOut)
+async def start_changes(release_id: UUID, ctx: Ctx, svc: StudioDep) -> ChangeRequestOut:
+    """Start (or reopen) the change request of an approved or released release."""
+    return ChangeRequestOut(**await _changes(svc).start(ctx, release_id))
+
+
+@router.patch("/studio/releases/{release_id}/changes", response_model=ChangeRequestOut)
+async def change_release_fields(release_id: UUID, body: ChangeFieldsIn, ctx: Ctx, svc: StudioDep) -> ChangeRequestOut:
+    fields = {k: getattr(body, k) for k in body.model_fields_set}
+    return ChangeRequestOut(**await _changes(svc).save_release_fields(ctx, release_id, fields))
+
+
+@router.patch("/studio/tracks/{track_id}/changes", response_model=ChangeRequestOut)
+async def change_track_fields(track_id: UUID, body: ChangeFieldsIn, ctx: Ctx, svc: StudioDep) -> ChangeRequestOut:
+    fields = {k: getattr(body, k) for k in body.model_fields_set}
+    return ChangeRequestOut(**await _changes(svc).save_track_fields(ctx, track_id, fields))
+
+
+@router.put("/studio/tracks/{track_id}/changes/credits", response_model=ChangeRequestOut)
+async def change_track_credits(track_id: UUID, body: CreditsIn, ctx: Ctx, svc: StudioDep) -> ChangeRequestOut:
+    return ChangeRequestOut(**await _changes(svc).save_track_credits(ctx, track_id, [c.model_dump() for c in body.credits]))
+
+
+@router.post("/studio/releases/{release_id}/changes/submit", response_model=ChangeRequestOut)
+async def submit_changes(release_id: UUID, ctx: Ctx, svc: StudioDep) -> ChangeRequestOut:
+    return ChangeRequestOut(**await _changes(svc).submit(ctx, release_id))
+
+
+@router.delete("/studio/releases/{release_id}/changes", status_code=204)
+async def withdraw_changes(release_id: UUID, ctx: Ctx, svc: StudioDep) -> None:
+    await _changes(svc).withdraw(ctx, release_id)
+
+
+@router.get("/catalog-intake/changes", response_model=list[ChangeRequestOut])
+async def changes_queue(ctx: Ctx, svc: StudioDep) -> list[ChangeRequestOut]:
+    """Staff: changes to approved or released music waiting in the active workspace."""
+    return [ChangeRequestOut(**r) for r in await _changes(svc).queue(ctx)]
+
+
+@router.get("/catalog-intake/releases/{release_id}/changes", response_model=ChangeRequestOut | None)
+async def release_changes(release_id: UUID, ctx: Ctx, svc: StudioDep) -> ChangeRequestOut | None:
+    item = await _changes(svc).staff_view(ctx, release_id)
+    return ChangeRequestOut(**item) if item else None
+
+
+@router.post("/catalog-intake/releases/{release_id}/changes/review", response_model=ChangeRequestOut)
+async def review_changes(release_id: UUID, body: ChangeReviewIn, ctx: Ctx, svc: StudioDep) -> ChangeRequestOut:
+    return ChangeRequestOut(**await _changes(svc).review(ctx, release_id, approve=body.action == "approve", note=body.note))

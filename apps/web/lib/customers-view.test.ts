@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { csvCell, csvFileName, customersCsv, filterCustomers, followersCsv, NO_FILTERS, type CustomerRow } from "./customers-view";
+import {
+  csvCell,
+  csvFileName,
+  customersCsv,
+  filterCustomers,
+  followersCsv,
+  NO_FILTERS,
+  paymentLine,
+  type CustomerPayment,
+  type CustomerRow,
+} from "./customers-view";
 
 const row = (over: Partial<CustomerRow>): CustomerRow => ({
   key: "k",
@@ -56,7 +66,7 @@ describe("CSV", () => {
     const csv = customersCsv([
       row({ presales: [{ product: "Chaya Pore", amount_minor: 11400, currency_code: "BDT", paid_on: null, status: "CLAIMED" }] }),
     ]);
-    expect(csv.startsWith("﻿Name,Email,Phone,Address,Source,Has account,Email verified,Joined,Orders,Spent (BDT),Last order,Pre-sales\r\n")).toBe(true);
+    expect(csv.startsWith("﻿Name,Email,Phone,Address,Source,Has account,Email verified,Joined,Orders,Spent (BDT),Last order,Pre-sales,Account type,Artist or band,Payment status,Payments\r\n")).toBe(true);
     expect(csv).toContain("Nadia,nadia@example.com,,,WEBSITE,Yes,Yes,2026-10-26,1,114.00,2026-10-26,Chaya Pore: BDT 114.00 (claimed)");
   });
   it("writes followers and a safe file name", () => {
@@ -65,5 +75,45 @@ describe("CSV", () => {
     );
     expect(csvFileName(["Customers", "MIZULS / Chaya Pore"], "2026-10-27")).toBe("corner-room-customers-mizuls-chaya-pore-2026-10-27.csv");
     expect(csvFileName([], "2026-10-27")).toBe("corner-room-list-2026-10-27.csv");
+  });
+});
+
+describe("payments and account types (owner, 2026-10-28)", () => {
+  const pay = (over: Partial<CustomerPayment>): CustomerPayment => ({
+    order_id: "o1",
+    status: "PAID",
+    items: ["Chaya Pore"],
+    amount_minor: 33000,
+    currency_code: "BDT",
+    transaction_ref: null,
+    paid_from: null,
+    paid_with: null,
+    decision_note: null,
+    at: "2026-10-27T10:00:00Z",
+    ...over,
+  });
+  const gift = pay({ order_id: "o2", status: "WAITING", transaction_ref: "AUTULGIFT2026", paid_from: "+8801990428674", paid_with: "OTHER" });
+  const paid = row({ key: "paid", payment_status: "PAID", payments: [pay({})], account_types: ["fan"] });
+  const waiting = row({ key: "waiting", orders: 0, spent: {}, payment_status: "WAITING", payments: [gift], account_types: ["fan"] });
+  const artist = row({ key: "artist", orders: 0, spent: {}, payment_status: null, payments: [], account_types: ["artist", "staff"], manages: ["MIZULS"] });
+  const all = [paid, waiting, artist];
+  const keys = (rows: CustomerRow[]) => rows.map((r) => r.key);
+
+  it("filters by payment status and account type", () => {
+    expect(keys(filterCustomers(all, { ...NO_FILTERS, payment: "WAITING" }))).toEqual(["waiting"]);
+    expect(keys(filterCustomers(all, { ...NO_FILTERS, payment: "PAID" }))).toEqual(["paid"]);
+    expect(keys(filterCustomers(all, { ...NO_FILTERS, payment: "none" }))).toEqual(["artist"]);
+    expect(keys(filterCustomers(all, { ...NO_FILTERS, accountType: "staff" }))).toEqual(["artist"]);
+    expect(keys(filterCustomers(all, { ...NO_FILTERS, accountType: "fan" }))).toEqual(["paid", "waiting"]);
+  });
+
+  it("describes a payment in one line, and puts it in the CSV", () => {
+    expect(paymentLine(gift)).toBe("Waiting for check · Chaya Pore · ID AUTULGIFT2026 · from +8801990428674 · via other");
+    const csv = customersCsv([waiting, artist]);
+    expect(csv).toContain("Payment status");
+    expect(csv).toContain("AUTULGIFT2026");
+    expect(csv).toContain("Waiting for check");
+    expect(csv).toContain("MIZULS");
+    expect(csv).toContain("Artist or band + Staff");
   });
 });

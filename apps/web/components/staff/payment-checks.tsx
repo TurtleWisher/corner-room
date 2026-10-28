@@ -6,6 +6,9 @@
  * paid from. Finance staff find it on the statement and confirm (the order completes) or reject
  * with a reason the buyer sees (they may fix and resend). The server checks finance.post in the
  * order's label and captures the payment; nothing here decides money.
+ *
+ * Owner, 2026-10-28 (D-CUSTOMERS-02): Confirmed and Rejected tabs keep past decisions visible, with
+ * the reason given and when, so a payment never disappears once it has been checked.
  */
 
 import { useState } from "react";
@@ -13,12 +16,12 @@ import { useState } from "react";
 import { DateTime, Field, Input, Money } from "@/components/ds";
 import { Button, Card, EmptyState, ErrorState, LoadingState } from "@/components/staff/kit";
 import { useAsync } from "@/components/use-async";
-import { confirmSubmission, fetchStaffSubmissions, rejectSubmission, type StaffSubmission } from "@/features/commerce/api";
+import { confirmSubmission, fetchStaffSubmissions, rejectSubmission, type StaffSubmission, type SubmissionQueue } from "@/features/commerce/api";
 import { ApiError } from "@/lib/api/client";
 import { paidWithLabel } from "@/lib/checkout-view";
 import { orderReferenceOf } from "@/lib/refund-view";
 
-function CheckRow({ row, onDone }: { row: StaffSubmission; onDone: () => void }) {
+function CheckRow({ row, onDone, decided = false }: { row: StaffSubmission; onDone: () => void; decided?: boolean }) {
   const [busy, setBusy] = useState<"confirm" | "reject" | null>(null);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
@@ -64,8 +67,20 @@ function CheckRow({ row, onDone }: { row: StaffSubmission; onDone: () => void })
             <DateTime value={row.submitted_at} />
           </dd>
         </div>
+        {decided ? (
+          <div>
+            <dt className="inline text-fg-muted">{row.status === "REJECTED" ? "Rejected " : "Confirmed "}</dt>
+            <dd className="inline text-fg">{row.decided_at ? <DateTime value={row.decided_at} /> : "Not available"}</dd>
+          </div>
+        ) : null}
+        {decided && row.decision_note ? (
+          <div className="sm:col-span-2">
+            <dt className="inline text-fg-muted">Reason given </dt>
+            <dd className="inline text-fg">{row.decision_note}</dd>
+          </div>
+        ) : null}
       </dl>
-      {rejecting ? (
+      {decided ? null : rejecting ? (
         <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
           <Field label="Reason the buyer will see" required>
             {(c) => <Input {...c} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="Transaction ID not found on the statement" />}
@@ -96,8 +111,16 @@ function CheckRow({ row, onDone }: { row: StaffSubmission; onDone: () => void })
   );
 }
 
+const TABS: { value: SubmissionQueue; label: string }[] = [
+  { value: "SUBMITTED", label: "Waiting" },
+  { value: "CONFIRMED", label: "Confirmed" },
+  { value: "REJECTED", label: "Rejected" },
+];
+
 export function PaymentChecks() {
-  const queue = useAsync(fetchStaffSubmissions, []);
+  const [tab, setTab] = useState<SubmissionQueue>("SUBMITTED");
+  const queue = useAsync(() => fetchStaffSubmissions(tab), [tab]);
+  const decided = tab !== "SUBMITTED";
   return (
     <section aria-labelledby="payment-checks-title" className="space-y-3">
       <h2 id="payment-checks-title" className="text-lg font-semibold text-fg">
@@ -107,17 +130,33 @@ export function PaymentChecks() {
         Find each payment on the bKash, Nagad, Rocket, Upay or bank statement before confirming. Confirming completes the order; a rejection shows your reason
         to the buyer, who can send the details again.
       </p>
+      <div role="tablist" aria-label="Payment checks" className="flex gap-1 border-b border-line">
+        {TABS.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.value}
+            onClick={() => setTab(t.value)}
+            className={`cr-focus -mb-px border-b-2 px-3 py-2 text-sm font-semibold ${tab === t.value ? "border-accent text-fg" : "border-transparent text-fg-muted hover:text-fg"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
       <Card>
         {queue.status === "loading" ? (
           <LoadingState label="Loading payment checks" />
         ) : queue.status === "error" ? (
           <ErrorState title="Payment checks" message={queue.error instanceof ApiError ? queue.error.message : "Payment checks could not be loaded."} />
         ) : queue.data.length === 0 ? (
-          <EmptyState message="No payments are waiting to be checked." />
+          <EmptyState
+            message={tab === "SUBMITTED" ? "No payments are waiting to be checked." : tab === "CONFIRMED" ? "No confirmed payments yet." : "No rejected payments."}
+          />
         ) : (
           <ul>
             {queue.data.map((row) => (
-              <CheckRow key={row.id} row={row} onDone={queue.reload} />
+              <CheckRow key={row.id} row={row} onDone={queue.reload} decided={decided} />
             ))}
           </ul>
         )}

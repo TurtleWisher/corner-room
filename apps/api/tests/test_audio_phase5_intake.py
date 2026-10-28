@@ -68,7 +68,11 @@ async def test_staff_prepare_catalog_only_and_cannot_submit(client: AsyncClient)
     assert detail["intake"]["mode"] == "ASSISTED"
     # Exact catalog-only shapes (design 3.5): nothing else can leak through these responses.
     # cover_url: a signed link to the accepted cover, or null (OD-05, 2026-10-23); no storage key.
-    assert set(detail) == {"release", "cover_url", "profile", "viewer_role", "display_state", "tracks", "readiness", "proposals", "intake", "history"}
+    assert set(detail) == {
+        "release", "cover_url", "profile", "viewer_role", "display_state", "tracks", "readiness", "proposals", "intake", "history",
+        # Catalog fields added 2026-10-28: a waiting cover (D-COVER-01) and changes to released music (D-CHANGES-01).
+        "cover_waiting", "pending_cover_url", "cover_review_note", "change_request", "last_change_decision",
+    }
     assert set(detail["profile"]) == {"kind", "id", "display_name"}
     assert set(detail["release"]) == {
         "id", "title", "release_type", "status", "release_at", "release_timezone", "cover_asset_id", "language_code",

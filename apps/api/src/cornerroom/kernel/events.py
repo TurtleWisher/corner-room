@@ -107,6 +107,13 @@ TRACK_TAKEN_DOWN = "TrackTakenDown"
 TRACK_LYRICS_SUBMITTED = "TrackLyricsSubmitted"
 TRACK_LYRICS_REJECTED = "TrackLyricsRejected"
 TRACK_LYRICS_CHANGED = "TrackLyricsChanged"
+# D-COVER-01: a new cover for an approved or released release waits for staff (cover_review.py).
+# D-CHANGES-01: changes to released music wait for staff (music/application/changes.py).
+RELEASE_CHANGES_SUBMITTED = "ReleaseChangesSubmitted"
+RELEASE_CHANGES_REJECTED = "ReleaseChangesRejected"
+RELEASE_COVER_SUBMITTED = "ReleaseCoverSubmitted"
+RELEASE_COVER_REJECTED = "ReleaseCoverRejected"
+RELEASE_COVER_CHANGED = "ReleaseCoverChanged"
 RELEASE_STAGE_CHANGED = "ReleaseStageChanged"
 RELEASE_RELEASED = "ReleaseReleased"
 METADATA_CORRECTED = "MetadataCorrected"

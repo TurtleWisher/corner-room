@@ -51,6 +51,40 @@ export function creditPerson(
   return instrument ? `${name} (${instrument})` : name;
 }
 
+export type CreditLine = { key: string; role: string; name: string; artistId: string | null };
+export type PlayedLine = { key: string; name: string; plays: string; artistId: string | null };
+
+/**
+ * Song page credits (owner, 2026-10-28): the main credits list each person once per role (no
+ * instruments), and "Track credit details" says who played what: band members with their role in
+ * the band, then credited performers with their instrument (each person once).
+ */
+export function creditDetails(
+  credits: { id: string; credit_role: string; artist_id?: string | null; display_name?: string | null; instrument?: string | null }[],
+  artists: Pick<ArtistRecord, "id" | "stage_name">[],
+  lineup: { id: string; name: string; role_label?: string | null; artist_id?: string | null }[],
+  roleLabel: (role: string) => string,
+): { main: CreditLine[]; played: PlayedLine[] } {
+  const main: CreditLine[] = [];
+  const played: PlayedLine[] = [];
+  const seen = new Set<string>();
+  for (const m of lineup) {
+    played.push({ key: `m-${m.id}`, name: m.name, plays: (m.role_label || "").trim() || "Band member", artistId: m.artist_id ?? null });
+    seen.add(m.name.trim().toLowerCase());
+  }
+  for (const c of credits) {
+    const name = creditPerson({ artist_id: c.artist_id, display_name: c.display_name }, artists);
+    if (!name) continue;
+    main.push({ key: c.id, role: roleLabel(c.credit_role), name, artistId: c.artist_id ?? null });
+    const instrument = (c.instrument || "").trim();
+    if (instrument && !seen.has(name.toLowerCase())) {
+      played.push({ key: `c-${c.id}`, name, plays: instrument, artistId: c.artist_id ?? null });
+      seen.add(name.toLowerCase());
+    }
+  }
+  return { main, played };
+}
+
 /**
  * Whether this person reviews and releases music (staff), as opposed to the song's own artist, who
  * also gets the management box but only for their song (owner, 2026-10-27: "Manage this song").
