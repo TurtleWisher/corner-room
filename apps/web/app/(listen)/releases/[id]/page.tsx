@@ -14,6 +14,7 @@ import { Button, ButtonLink, DateTime, EmptyState, ErrorState, Field, Input, Mon
 import { TrackBuyControl, useCustomerCommerce, type CustomerCommerce } from "@/components/music/commerce";
 import { BandLineup } from "@/components/artists/band-lineup";
 import { CreditFace } from "@/components/music/credit-face";
+import { GiftNote } from "@/components/music/gift-note";
 import { useCredits } from "@/components/music/credits";
 import { usePlayer, type PlayOptions } from "@/components/music/player";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
@@ -357,6 +358,7 @@ export default function ReleasePage() {
             <TrackList rows={rows} playable={playable} signedIn={signedIn} artist={artist} commerce={commerce} playFrom={playFrom} releaseId={release.id} />
           )}
         </section>
+        <GiftNote releaseId={release.id} className="max-w-xl" />
         {release.primary_band_id ? <BandLineup bandId={release.primary_band_id} /> : null}
         {canStaff && !canModerateMusic(user?.permissions) ? <ReleaseArtistTools release={release} /> : null}
         {canStaff && canModerateMusic(user?.permissions) ? (

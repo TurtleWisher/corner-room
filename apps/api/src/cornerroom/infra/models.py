@@ -81,6 +81,7 @@ from cornerroom.modules.commerce.domain.models import (
     RefundEntitlementPolicy,
     TaxLine,
 )
+from cornerroom.modules.commerce.domain.gifts import GiftCampaign, GiftCampaignPeriod, GiftRecipient
 from cornerroom.modules.entitlements.domain.models import Entitlement
 from cornerroom.modules.finance.domain.models import (
     Adjustment,
@@ -216,6 +217,9 @@ __all__ = [
     "OrderDeliveryAddress",
     "OrderItem",
     "PresaleClaim",
+    "GiftCampaign",
+    "GiftCampaignPeriod",
+    "GiftRecipient",
     "OutboxEvent",
     "Payment",
     "PaymentAttempt",

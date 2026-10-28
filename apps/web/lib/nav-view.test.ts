@@ -119,7 +119,7 @@ describe("filterNavForUser", () => {
 
 describe("studioNavSections", () => {
   it("lists only real Studio places, with plays for artist profiles", () => {
-    expect(studioNavSections([]).map((s) => s.items.map((i) => i.href))).toEqual([["/studio", "/studio/profile", "/studio/sales", "/royalties"]]);
+    expect(studioNavSections([]).map((s) => s.items.map((i) => i.href))).toEqual([["/studio", "/studio/profile", "/studio/sales", "/studio/gifts", "/royalties"]]);
     const both = studioNavSections([
       { kind: "artist", id: "a1", display_name: "Rumi" },
       { kind: "band", id: "b1", display_name: "Kaal Bela" },
