@@ -345,24 +345,20 @@ export async function revokeAllSessions(): Promise<void> {
 // --- Delivery address for gifts (D-ADDR-01). Personal data: only the owner reads it. ---
 
 export type DeliveryAddress = {
-  /** ISO country code (D-ADDR-02); "BD" uses division to house/road, others address lines to region. */
+  /** ISO country code (D-ADDR-02). Every country uses the same fields (D-ADDR-03). */
   country_code: string;
   recipient_name: string;
   /** The country of the phone number, for its calling code. */
   phone_country?: string | null;
   /** International form, like +8801712345678 or +447700900123. */
   phone: string;
-  division: string | null;
-  district: string | null;
-  upazila: string | null;
-  area: string | null;
-  house_road: string | null;
-  address_line1?: string | null;
-  address_line2?: string | null;
-  city?: string | null;
-  region?: string | null;
+  /** Detailed address: house, road, area. */
+  address_line1: string | null;
+  /** District or city. */
+  city: string | null;
+  /** Division, state or region. */
+  region: string | null;
   postcode: string | null;
-  landmark: string | null;
   updated_at?: string | null;
 };
 

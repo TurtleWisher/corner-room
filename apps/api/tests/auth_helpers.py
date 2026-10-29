@@ -61,16 +61,14 @@ async def activate_user(client: AsyncClient, user_id: str) -> None:
 TEST_ADDRESS = {
     "recipient_name": "Test Buyer",
     "phone": "01712345678",
-    "division": "Dhaka",
-    "district": "Dhaka",
-    "upazila": "Dhanmondi",
-    "area": "Road 27",
-    "house_road": "House 12, Road 27",
+    "address_line1": "House 12, Road 27, Dhanmondi",
+    "city": "Dhaka",
+    "region": "Dhaka",
 }
 
 
 async def save_delivery_address(client: AsyncClient, token: str, address: dict | None = None) -> dict:
-    """D-ADDR-01: every buyer needs a Bangladesh delivery address before paying."""
+    """D-ADDR-01: every buyer needs a delivery address before paying."""
     saved = await client.put("/api/v1/me/delivery-address", headers=bearer(token), json=address or TEST_ADDRESS)
     assert saved.status_code == 200, saved.text
     return saved.json()

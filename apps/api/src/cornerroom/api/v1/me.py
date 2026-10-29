@@ -200,28 +200,21 @@ async def revoke_all_my_sessions(
     await svc.revoke_all_sessions(ctx, keep_current=False)
 
 
-# --- Delivery address for gifts (D-ADDR-01, anywhere in the world since D-ADDR-02) ----------
+# --- Delivery address for gifts (D-ADDR-01; anywhere in the world, D-ADDR-02; one shape, D-ADDR-03)
 
 
 class DeliveryAddressIn(BaseModel):
-    """Bangladesh (the default) fills division to house/road; other countries fill the address
-    lines, city, region. Phones come with their country (`phone_country`) or a leading +."""
+    """The same fields for every country (D-ADDR-03): detailed address, district or city, division,
+    state or region, postcode. Phones come with their country (`phone_country`) or a leading +."""
 
     country_code: str = Field(default="BD", max_length=2)
     recipient_name: str = Field(max_length=200)
     phone_country: str | None = Field(default=None, max_length=2)
     phone: str = Field(max_length=32)
-    division: str | None = Field(default=None, max_length=64)
-    district: str | None = Field(default=None, max_length=64)
-    upazila: str | None = Field(default=None, max_length=200)
-    area: str | None = Field(default=None, max_length=200)
-    house_road: str | None = Field(default=None, max_length=300)
-    address_line1: str | None = Field(default=None, max_length=300)
-    address_line2: str | None = Field(default=None, max_length=300)
+    address_line1: str | None = Field(default=None, max_length=400)
     city: str | None = Field(default=None, max_length=200)
     region: str | None = Field(default=None, max_length=200)
     postcode: str | None = Field(default=None, max_length=16)
-    landmark: str | None = Field(default=None, max_length=300)
 
 
 class DeliveryAddressOut(BaseModel):
@@ -229,17 +222,10 @@ class DeliveryAddressOut(BaseModel):
     recipient_name: str
     phone_country: str | None
     phone: str
-    division: str | None
-    district: str | None
-    upazila: str | None
-    area: str | None
-    house_road: str | None
     address_line1: str | None
-    address_line2: str | None
     city: str | None
     region: str | None
     postcode: str | None
-    landmark: str | None
     updated_at: datetime | None = None
 
 

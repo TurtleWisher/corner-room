@@ -1,4 +1,4 @@
-"""The user's delivery address for gifts, anywhere in the world (D-ADDR-01, D-ADDR-02).
+"""The user's delivery address for gifts, anywhere in the world (D-ADDR-01, -02, -03).
 
 Only the owner reads or changes it. It is personal data: the audit row records that it was saved,
 never its contents, and nothing here logs it.
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.audit.application.service import AuditService
-from cornerroom.modules.identity.domain.bd_address import ADDRESS_FIELDS, clean_address
+from cornerroom.modules.identity.domain.bd_address import ADDRESS_FIELDS, LEGACY_FIELDS, clean_address
 from cornerroom.modules.identity.domain.models import DeliveryAddress
 
 
@@ -36,6 +36,8 @@ class DeliveryAddressService:
         else:
             for field in ADDRESS_FIELDS:
                 setattr(row, field, cleaned[field])
+            for field in LEGACY_FIELDS:
+                setattr(row, field, None)
         await self.session.flush()
         # Load the server-set timestamps now; reading them later would lazy-load outside async.
         await self.session.refresh(row)

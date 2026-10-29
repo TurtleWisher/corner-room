@@ -1,12 +1,13 @@
 """D-ADDR-02 (owner, 2026-10-27): gift addresses anywhere in the world, phone numbers with their
-country code. Bangladesh addresses keep their own shape and a Bangladesh mobile."""
+country code. D-ADDR-03 (owner, 2026-10-29): one simple shape for every country; a Bangladesh
+number must still be a mobile and a Bangladesh postcode has 4 digits."""
 
 from __future__ import annotations
 
 import pytest
 from httpx import AsyncClient
 
-from cornerroom.modules.identity.domain.bd_address import clean_address, normalize_phone, phone_country_for
+from cornerroom.modules.identity.domain.bd_address import ADDRESS_FIELDS, clean_address, normalize_phone, phone_country_for
 from cornerroom.modules.identity.domain.countries import BY_CODE, COUNTRIES
 from cornerroom.infra.errors import AppError
 from tests.auth_helpers import TEST_ADDRESS, bearer, register_and_login
@@ -16,8 +17,7 @@ UK = {
     "recipient_name": "Nadia Rahman",
     "phone_country": "GB",
     "phone": "07700 900123",
-    "address_line1": "12 Brick Lane",
-    "address_line2": "Flat 3",
+    "address_line1": "Flat 3, 12 Brick Lane",
     "city": "London",
     "region": "",
     "postcode": "e1 6ra",
@@ -50,9 +50,12 @@ def test_phone_numbers_become_international() -> None:
 def test_address_shapes() -> None:
     uk = clean_address(UK)
     assert uk["country_code"] == "GB" and uk["phone"] == "+447700900123" and uk["postcode"] == "E1 6RA"
-    assert uk["division"] is None and uk["region"] is None
+    assert uk["region"] is None and set(uk) == set(ADDRESS_FIELDS)
     bd = clean_address(TEST_ADDRESS)
-    assert bd["country_code"] == "BD" and bd["address_line1"] is None and bd["phone_country"] == "BD"
+    assert bd["country_code"] == "BD" and bd["city"] == "Dhaka" and bd["phone_country"] == "BD"
+    # Same fields everywhere: a Bangladesh address no longer needs upazila, area or house/road.
+    assert clean_address(TEST_ADDRESS | {"region": None})["region"] is None
+    assert clean_address(UK | {"postcode": "1209"})["postcode"] == "1209"
     for over, field in (
         ({"country_code": "ZZ"}, "country_code"),
         ({"address_line1": " "}, "address_line1"),
@@ -77,9 +80,49 @@ async def test_international_address_saved_and_shown(client: AsyncClient) -> Non
     assert saved.status_code == 200, saved.text
     body = saved.json()
     assert body["country_code"] == "GB" and body["phone"] == "+447700900123" and body["city"] == "London"
-    assert body["division"] is None
+    assert "division" not in body
 
-    # Switching back to Bangladesh clears the international fields.
+    # Switching to Bangladesh uses the same fields.
     back = await client.put("/api/v1/me/delivery-address", headers=bearer(token), json=TEST_ADDRESS)
     assert back.status_code == 200, back.text
-    assert back.json()["country_code"] == "BD" and back.json()["city"] is None and back.json()["address_line1"] is None
+    assert back.json()["country_code"] == "BD" and back.json()["city"] == "Dhaka" and back.json()["postcode"] is None
+
+
+def test_address_text_for_staff_lists() -> None:
+    from types import SimpleNamespace
+
+    from cornerroom.modules.commerce.application.customers import _address_text
+
+    bd = SimpleNamespace(country_code="BD", address_line1="House 12, Road 27", city="Dhaka", region="Dhaka", postcode="1209")
+    assert _address_text(bd) == "House 12, Road 27, Dhaka, Dhaka, 1209"
+    uk = SimpleNamespace(country_code="GB", address_line1="12 Brick Lane", city="London", region=None, postcode="E1 6RA")
+    assert _address_text(uk) == "12 Brick Lane, London, E1 6RA, United Kingdom"
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_saving_again_clears_the_old_shape(client: AsyncClient) -> None:
+    from sqlalchemy import select, update
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    from cornerroom.infra.db import get_engine
+    from cornerroom.modules.identity.domain.models import DeliveryAddress
+
+    token = (await register_and_login(client, "address-old-shape@example.com", delivery_address=False))["access_token"]
+    mine = TEST_ADDRESS | {"recipient_name": "Old Shape Buyer"}
+    assert (await client.put("/api/v1/me/delivery-address", headers=bearer(token), json=mine)).status_code == 200
+    factory = async_sessionmaker(get_engine(), expire_on_commit=False)
+    async with factory() as session:
+        # An address from before D-ADDR-03, already copied into the new fields by migration 0041.
+        await session.execute(
+            update(DeliveryAddress)
+            .where(DeliveryAddress.recipient_name == "Old Shape Buyer")
+            .values(upazila="Dhanmondi", area="Road 27", landmark="Lake")
+        )
+        await session.commit()
+
+    saved = await client.put("/api/v1/me/delivery-address", headers=bearer(token), json=mine | {"city": "Gazipur"})
+    assert saved.status_code == 200, saved.text
+    async with factory() as session:
+        row = (await session.execute(select(DeliveryAddress).where(DeliveryAddress.recipient_name == "Old Shape Buyer"))).scalar_one()
+    assert row.upazila is None and row.area is None and row.landmark is None
