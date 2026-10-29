@@ -203,7 +203,8 @@ class OrderDeliveryAddress(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     order_id: Mapped[UUID] = mapped_column(ForeignKey("commerce.orders.id"), nullable=False)
-    # D-ADDR-02: anywhere in the world; Bangladesh fills division to house/road, elsewhere lines to region.
+    # D-ADDR-02: anywhere in the world. D-ADDR-03: one shape, address_line1 to postcode; the other
+    # columns are from earlier shapes and filled only on old orders (copied into address_line1 by 0041).
     country_code: Mapped[str] = mapped_column(String(2), nullable=False, default="BD", server_default="BD")
     recipient_name: Mapped[str] = mapped_column(String(120), nullable=False)
     phone_country: Mapped[str | None] = mapped_column(String(2), nullable=True)
@@ -213,7 +214,7 @@ class OrderDeliveryAddress(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     upazila: Mapped[str | None] = mapped_column(String(80), nullable=True)
     area: Mapped[str | None] = mapped_column(String(120), nullable=True)
     house_road: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    address_line1: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    address_line1: Mapped[str | None] = mapped_column(Text, nullable=True)
     address_line2: Mapped[str | None] = mapped_column(String(200), nullable=True)
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)
     region: Mapped[str | None] = mapped_column(String(120), nullable=True)

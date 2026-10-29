@@ -2,11 +2,11 @@
 
 /*
  * Delivery address for gifts (D-ADDR-01), anywhere in the world (owner, 2026-10-27, D-ADDR-02).
- * Used on the account page and inside checkout. A Bangladesh address keeps its division and
- * district lists; elsewhere it is the usual international layout. The phone has its own country
- * picker, so a buyer abroad can give a Bangladesh address and number, or the other way round.
- * The API validates and normalises everything; this form lays the fields out and points at the
- * field the API names in an error.
+ * Used on the account page and inside checkout. One simple shape for every country (owner,
+ * 2026-10-29, D-ADDR-03): detailed address, district or city, division/state/region, postcode.
+ * The phone has its own country picker, so a buyer abroad can give a Bangladesh address and
+ * number, or the other way round. The API validates and normalises everything; this form lays
+ * the fields out and points at the field the API names in an error.
  */
 
 import { FormEvent, useEffect, useRef, useState } from "react";
@@ -14,7 +14,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Button, Field, Input, Select } from "@/components/ds";
 import { useAsync } from "@/components/use-async";
 import { fetchAddressOptions, saveMyDeliveryAddress, type DeliveryAddress, type DeliveryAddressDraft } from "@/features/identity/api";
-import { districtsFor, draftFrom, isBangladesh, toPayload, withCountry, withDivision } from "@/lib/address-view";
+import { draftFrom, toPayload, withCountry } from "@/lib/address-view";
 import { ApiError } from "@/lib/api/client";
 
 type FieldName = keyof DeliveryAddressDraft;
@@ -44,7 +44,6 @@ export function DeliveryAddressForm({
   }, [loadedCountries, initial]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ field: FieldName | null; message: string } | null>(null);
-  const bd = isBangladesh(draft);
   const phoneBd = (draft.phone_country || draft.country_code) === "BD";
 
   function set(field: FieldName, value: string) {
@@ -125,66 +124,17 @@ export function DeliveryAddressForm({
             </div>
           )}
         </Field>
-        {bd ? (
-          <>
-            <Field label="Division" required error={fieldError("division")}>
-              {(c) => (
-                <Select {...c} value={value("division")} onChange={(e) => setDraft((d) => withDivision(d, e.target.value, opts))} disabled={!opts}>
-                  <option value="">{opts ? "Choose a division" : "Loading"}</option>
-                  {opts?.divisions.map((d) => (
-                    <option key={d.name} value={d.name}>
-                      {d.name}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-            <Field label="District" required error={fieldError("district")}>
-              {(c) => (
-                <Select {...c} value={value("district")} onChange={(e) => set("district", e.target.value)} disabled={!draft.division}>
-                  <option value="">{draft.division ? "Choose a district" : "Choose a division first"}</option>
-                  {districtsFor(opts, value("division")).map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-            <Field label="Upazila or thana" required error={fieldError("upazila")}>
-              {(c) => <Input {...c} value={value("upazila")} onChange={(e) => set("upazila", e.target.value)} maxLength={80} />}
-            </Field>
-            <Field label="Area" required hint="Neighbourhood, union or village." error={fieldError("area")}>
-              {(c) => <Input {...c} value={value("area")} onChange={(e) => set("area", e.target.value)} maxLength={120} />}
-            </Field>
-            <Field label="House and road" required className="sm:col-span-2" error={fieldError("house_road")}>
-              {(c) => <Input {...c} autoComplete="address-line1" value={value("house_road")} onChange={(e) => set("house_road", e.target.value)} maxLength={200} />}
-            </Field>
-            <Field label="Postcode" hint="Optional. 4 digits." error={fieldError("postcode")}>
-              {(c) => <Input {...c} inputMode="numeric" autoComplete="postal-code" value={value("postcode")} onChange={(e) => set("postcode", e.target.value)} maxLength={4} />}
-            </Field>
-          </>
-        ) : (
-          <>
-            <Field label="Address" required hint="Street and number, or P.O. box." className="sm:col-span-2" error={fieldError("address_line1")}>
-              {(c) => <Input {...c} autoComplete="address-line1" value={value("address_line1")} onChange={(e) => set("address_line1", e.target.value)} maxLength={200} />}
-            </Field>
-            <Field label="Apartment, suite, building" hint="Optional." className="sm:col-span-2" error={fieldError("address_line2")}>
-              {(c) => <Input {...c} autoComplete="address-line2" value={value("address_line2")} onChange={(e) => set("address_line2", e.target.value)} maxLength={200} />}
-            </Field>
-            <Field label="City or town" required error={fieldError("city")}>
-              {(c) => <Input {...c} autoComplete="address-level2" value={value("city")} onChange={(e) => set("city", e.target.value)} maxLength={120} />}
-            </Field>
-            <Field label="State, province or region" hint="If the address has one." error={fieldError("region")}>
-              {(c) => <Input {...c} autoComplete="address-level1" value={value("region")} onChange={(e) => set("region", e.target.value)} maxLength={120} />}
-            </Field>
-            <Field label="Postal code" hint="If the address has one." error={fieldError("postcode")}>
-              {(c) => <Input {...c} autoComplete="postal-code" value={value("postcode")} onChange={(e) => set("postcode", e.target.value)} maxLength={12} />}
-            </Field>
-          </>
-        )}
-        <Field label="Landmark" hint="Optional. Something nearby that helps the courier." error={fieldError("landmark")}>
-          {(c) => <Input {...c} value={value("landmark")} onChange={(e) => set("landmark", e.target.value)} maxLength={200} />}
+        <Field label="Detailed address" required hint="House, road and area." className="sm:col-span-2" error={fieldError("address_line1")}>
+          {(c) => <Input {...c} autoComplete="street-address" value={value("address_line1")} onChange={(e) => set("address_line1", e.target.value)} maxLength={300} />}
+        </Field>
+        <Field label="District or city" required error={fieldError("city")}>
+          {(c) => <Input {...c} autoComplete="address-level2" value={value("city")} onChange={(e) => set("city", e.target.value)} maxLength={120} />}
+        </Field>
+        <Field label="Division, state or region" hint="Optional." error={fieldError("region")}>
+          {(c) => <Input {...c} autoComplete="address-level1" value={value("region")} onChange={(e) => set("region", e.target.value)} maxLength={120} />}
+        </Field>
+        <Field label="Postcode" hint="Optional." error={fieldError("postcode")}>
+          {(c) => <Input {...c} autoComplete="postal-code" value={value("postcode")} onChange={(e) => set("postcode", e.target.value)} maxLength={12} />}
         </Field>
       </div>
       {error && !error.field ? (

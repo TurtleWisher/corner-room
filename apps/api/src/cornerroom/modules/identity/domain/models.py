@@ -287,7 +287,9 @@ class ExternalIdentity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class DeliveryAddress(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """The address where a user can receive gifts, anywhere in the world (D-ADDR-01, D-ADDR-02).
-    One per user. A Bangladesh address fills division to house/road; elsewhere address lines to region.
+    One per user. Every country uses one shape since D-ADDR-03: detailed address (address_line1),
+    district or city, division/state/region and postcode. The Bangladesh-only columns, address_line2
+    and landmark are from earlier shapes, kept on old rows and cleared on the next save.
 
     Personal data: only the owner reads it through the API; it is never logged or audited in
     full. Checkout copies it onto each order (commerce.order_delivery_addresses).
@@ -298,12 +300,7 @@ class DeliveryAddress(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("user_id", name="uq_delivery_addresses_user_id"),
         CheckConstraint("phone ~ '^\\+[1-9][0-9]{6,14}$'", name="phone_e164"),
         CheckConstraint("country_code ~ '^[A-Z]{2}$'", name="country_code_format"),
-        CheckConstraint(
-            "(country_code = 'BD' AND division IS NOT NULL AND district IS NOT NULL AND upazila IS NOT NULL"
-            " AND area IS NOT NULL AND house_road IS NOT NULL)"
-            " OR (country_code <> 'BD' AND address_line1 IS NOT NULL AND city IS NOT NULL)",
-            name="address_shape",
-        ),
+        CheckConstraint("address_line1 IS NOT NULL AND city IS NOT NULL", name="address_shape"),
         {"schema": "identity"},
     )
 
@@ -317,7 +314,7 @@ class DeliveryAddress(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     upazila: Mapped[str | None] = mapped_column(String(80), nullable=True)
     area: Mapped[str | None] = mapped_column(String(120), nullable=True)
     house_road: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    address_line1: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    address_line1: Mapped[str | None] = mapped_column(Text, nullable=True)
     address_line2: Mapped[str | None] = mapped_column(String(200), nullable=True)
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)
     region: Mapped[str | None] = mapped_column(String(120), nullable=True)

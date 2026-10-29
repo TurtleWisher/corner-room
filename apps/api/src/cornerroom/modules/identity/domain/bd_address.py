@@ -1,11 +1,14 @@
-"""Delivery addresses and phone numbers (D-ADDR-01, D-ADDR-02). Pure rules, no I/O.
+"""Delivery addresses and phone numbers (D-ADDR-01, D-ADDR-02, D-ADDR-03). Pure rules, no I/O.
 
 Owner, 2026-10-27 (D-ADDR-02): an address can be anywhere in the world, the buyer's own or a gift
-destination, and phone numbers carry their country code. A Bangladesh address keeps its own shape:
-division and district from Bangladesh's official list (8 divisions, 64 districts), typed
-upazila/thana, area and house/road, and a Bangladesh mobile for the courier. Elsewhere it is the
-usual international shape: two address lines, city, state/province/region and postal code.
-Phones are stored in international (E.164) form, like +8801712345678 or +447700900123.
+destination, and phone numbers carry their country code. Phones are stored in international
+(E.164) form, like +8801712345678 or +447700900123.
+
+Owner, 2026-10-29 (D-ADDR-03): one simple shape for every country, so people outside Bangladesh
+can fill it in as easily: a detailed address (house, road, area), district or city, division,
+state or region, and postcode. A Bangladesh number must still be a mobile (the courier calls it).
+The old Bangladesh-only fields (upazila, area, house/road, landmark) and the second address line
+are no longer asked for; migration 0041 copied them into the detailed address.
 """
 
 from __future__ import annotations
@@ -50,12 +53,7 @@ _E164 = re.compile(r"^[1-9]\d{6,14}$")
 
 LIMITS = {
     "recipient_name": 120,
-    "upazila": 80,
-    "area": 120,
-    "house_road": 200,
-    "landmark": 200,
-    "address_line1": 200,
-    "address_line2": 200,
+    "address_line1": 300,
     "city": 120,
     "region": 120,
 }
@@ -138,67 +136,46 @@ def clean_address(data: dict[str, object]) -> dict[str, str | None]:
             if phone_country == "BD"
             else "Enter a phone number we can call, with its country code",
         )
-    out: dict[str, str | None] = {f: None for f in ADDRESS_FIELDS}
-    out.update(
-        country_code=country,
-        recipient_name=recipient_name,
-        phone=phone,
-        phone_country=phone_country_for(phone, phone_country),
-    )
-    if country == "BD":
-        division = text("division", required=True)
-        if division not in DIVISIONS:
-            raise _invalid("division", "Choose a division of Bangladesh")
-        district = text("district", required=True)
-        if district not in DIVISIONS[division]:
-            raise _invalid("district", f"Choose a district in {division} division")
-        postcode = text("postcode", required=False)
-        if postcode is not None and not _POSTCODE.match(postcode):
+    address_line1 = text("address_line1", required=True)
+    city = text("city", required=True)
+    region = text("region", required=False)
+    postcode = text("postcode", required=False)
+    if postcode is not None:
+        if country == "BD" and not _POSTCODE.match(postcode):
             raise _invalid("postcode", "A Bangladesh postcode has 4 digits")
-        out.update(
-            division=division,
-            district=district,
-            upazila=text("upazila", required=True),
-            area=text("area", required=True),
-            house_road=text("house_road", required=True),
-            postcode=postcode,
-        )
-    else:
-        postcode = text("postcode", required=False)
-        if postcode is not None and not _POSTAL_CODE.match(postcode):
-            raise _invalid("postcode", "Check the postal code")
-        out.update(
-            address_line1=text("address_line1", required=True),
-            address_line2=text("address_line2", required=False),
-            city=text("city", required=True),
-            region=text("region", required=False),
-            postcode=postcode.upper() if postcode else None,
-        )
-    out["landmark"] = text("landmark", required=False)
-    return out
+        if not _POSTAL_CODE.match(postcode):
+            raise _invalid("postcode", "Check the postcode")
+    return {
+        "country_code": country,
+        "recipient_name": recipient_name,
+        "phone_country": phone_country_for(phone, phone_country),
+        "phone": phone,
+        "address_line1": address_line1,
+        "city": city,
+        "region": region,
+        "postcode": postcode.upper() if postcode else None,
+    }
 
 
 LABELS = {
     "recipient_name": "Recipient's name",
-    "address_line1": "Address",
-    "city": "City or town",
-    "house_road": "House and road",
+    "address_line1": "Detailed address",
+    "city": "District or city",
+    "region": "Division, state or region",
 }
 
+# What the form asks for and what orders copy (D-ADDR-03).
 ADDRESS_FIELDS = (
     "country_code",
     "recipient_name",
     "phone_country",
     "phone",
-    "division",
-    "district",
-    "upazila",
-    "area",
-    "house_road",
     "address_line1",
-    "address_line2",
     "city",
     "region",
     "postcode",
-    "landmark",
 )
+
+# Columns from the earlier shapes. Kept on old rows (migration 0041 copied them into the fields
+# above); cleared when an address is saved again so no stale copy stays behind.
+LEGACY_FIELDS = ("division", "district", "upazila", "area", "house_road", "address_line2", "landmark")

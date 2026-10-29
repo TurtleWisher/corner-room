@@ -66,13 +66,9 @@ def overall_status(statuses: list[str]) -> str | None:
 def _address_text(row: Any) -> str:
     from cornerroom.modules.identity.domain.countries import country_name
 
+    # D-ADDR-03: one shape; migration 0041 copied older addresses' parts into these fields.
     country = getattr(row, "country_code", None) or "BD"
-    parts = [
-        row.house_road, row.area, row.upazila, row.district, row.division,
-        getattr(row, "address_line1", None), getattr(row, "address_line2", None), getattr(row, "city", None),
-        getattr(row, "region", None), getattr(row, "postcode", None),
-        country_name(country) if country != "BD" else None,
-    ]
+    parts = [row.address_line1, row.city, row.region, row.postcode, country_name(country) if country != "BD" else None]
     return ", ".join(p.strip() for p in parts if p and p.strip())
 
 

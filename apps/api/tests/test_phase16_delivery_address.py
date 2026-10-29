@@ -1,8 +1,9 @@
-"""D-ADDR-01 (owner, 2026-10-18): a Bangladesh delivery address before every payment.
+"""D-ADDR-01 (owner, 2026-10-18): a delivery address before every payment.
 
-Required: recipient name, Bangladesh mobile, division, district, upazila/thana, area, house/road;
-optional postcode and landmark. Saved to the account, confirmed for each order and copied onto
-it, so a later change does not rewrite past orders. Personal data: owner-only, never audited in full.
+Required since D-ADDR-03 (owner, 2026-10-29), the same for every country: recipient name, phone
+(a mobile in Bangladesh), detailed address, district or city; optional division/state/region and
+postcode. Saved to the account, confirmed for each order and copied onto it, so a later change
+does not rewrite past orders. Personal data: owner-only, never audited in full.
 """
 
 from __future__ import annotations
@@ -34,19 +35,19 @@ async def test_phase16_delivery_address_rules(client: AsyncClient) -> None:
     for over, field in (
         ({"phone": "12345"}, "phone"),
         ({"phone": "01212345678"}, "phone"),  # 012 is not a Bangladesh mobile prefix
-        ({"district": "Sylhet"}, "district"),  # Sylhet district is not in Dhaka division
-        ({"division": "Atlantis"}, "division"),
-        ({"postcode": "120"}, "postcode"),
-        ({"upazila": "  "}, "upazila"),
+        ({"postcode": "120"}, "postcode"),  # a Bangladesh postcode has 4 digits
+        ({"address_line1": "  "}, "address_line1"),
+        ({"city": ""}, "city"),
     ):
         bad = await put(**over)
         assert bad.status_code == 422, (over, bad.text)
         assert bad.json()["field"] == field
         assert bad.json()["detail"] != field  # a sentence for people, not the field name
 
-    saved = await put(phone="+880 1812-345678", postcode="1209", landmark="Opposite the lake")
+    saved = await put(phone="+880 1812-345678", postcode="1209", region="")
     assert saved.status_code == 200, saved.text
-    assert saved.json()["phone"] == "+8801812345678"
+    assert saved.json()["phone"] == "+8801812345678" and saved.json()["region"] is None
+    assert "upazila" not in saved.json() and "landmark" not in saved.json()
     assert (await client.get("/api/v1/me/delivery-address", headers=bearer(token))).json()["postcode"] == "1209"
 
     # The audit row says it was saved, never what the address is.
@@ -77,18 +78,18 @@ async def test_phase16_no_payment_without_a_confirmed_address(client: AsyncClien
     missing = await order("addr-1", True)
     assert missing.status_code == 409 and missing.json()["code"] == "DELIVERY_ADDRESS_REQUIRED"
 
-    first = TEST_ADDRESS | {"area": "Kalabagan"}
+    first = TEST_ADDRESS | {"address_line1": "House 5, Kalabagan"}
     assert (await client.put("/api/v1/me/delivery-address", headers=bearer(buyer), json=first)).status_code == 200
     unconfirmed = await order("addr-2", False)
     assert unconfirmed.status_code == 422 and unconfirmed.json()["code"] == "DELIVERY_ADDRESS_CONFIRMATION_REQUIRED"
 
     placed = await order("addr-3", True)
     assert placed.status_code == 201, placed.text
-    assert placed.json()["delivery_address"]["area"] == "Kalabagan"
+    assert placed.json()["delivery_address"]["address_line1"] == "House 5, Kalabagan"
     assert placed.json()["delivery_address"]["phone"] == "+8801712345678"
 
     # Changing the saved address later does not rewrite the order's copy.
-    moved = TEST_ADDRESS | {"division": "Chattogram", "district": "Cox's Bazar", "upazila": "Ukhia", "area": "Inani"}
+    moved = TEST_ADDRESS | {"region": "Chattogram", "city": "Cox's Bazar", "address_line1": "Inani, Ukhia"}
     assert (await client.put("/api/v1/me/delivery-address", headers=bearer(buyer), json=moved)).status_code == 200
     again = (await client.get(f"/api/v1/orders/{placed.json()['id']}", headers=bearer(buyer))).json()
-    assert again["delivery_address"]["area"] == "Kalabagan" and again["delivery_address"]["district"] == "Dhaka"
+    assert again["delivery_address"]["address_line1"] == "House 5, Kalabagan" and again["delivery_address"]["city"] == "Dhaka"
