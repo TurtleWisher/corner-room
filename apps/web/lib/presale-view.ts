@@ -119,3 +119,33 @@ export function parsePresaleList(text: string): ParsedPresales {
 export function presaleTotal(rows: PresaleDraft[]): number {
   return rows.reduce((sum, r) => sum + r.amount_minor, 0);
 }
+
+/* Pre-orders on Corner Room (D-PRESALE-02), apart from the imported list above. Display only: the
+ * API decides when pre-orders open, what they cost, and when the music unlocks. */
+
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+
+/** How long until a pre-ordered release is out, in words ("Out in 3 days"). */
+export function presaleCountdown(releaseAt: string, now: Date = new Date()): string {
+  const left = new Date(releaseAt).getTime() - now.getTime();
+  if (!Number.isFinite(left) || left <= 0) return "Out now";
+  if (left < HOUR) return "Out within the hour";
+  if (left < DAY) {
+    const hours = Math.floor(left / HOUR);
+    return `Out in ${hours} ${hours === 1 ? "hour" : "hours"}`;
+  }
+  const days = Math.floor(left / DAY);
+  return `Out in ${days} ${days === 1 ? "day" : "days"}`;
+}
+
+/** The pre-order button's words for a release type. */
+export function preorderLabel(releaseType: string | null | undefined): string {
+  const noun = releaseType === "SINGLE" ? "single" : releaseType === "EP" ? "EP" : releaseType === "ALBUM" ? "album" : "release";
+  return `Pre-order the ${noun}`;
+}
+
+/** What an order line says when it was a pre-order: locked until release day, then just music. */
+export function preorderNote(order: { is_presale?: boolean | null }): string | null {
+  return order.is_presale ? "Pre-order · unlocks on release day" : null;
+}

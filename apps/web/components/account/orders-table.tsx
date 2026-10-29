@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Money, StatusChip, Table, TBody, TD, TH, THead, TR } from "@/components/ds";
 import type { OrderRecord } from "@/lib/api";
 import { humanizeStatus } from "@/lib/format/status";
+import { preorderNote } from "@/lib/presale-view";
 import { ORDER_STATUS, PAYMENT_STATUS } from "@/lib/status-maps";
 
 /** commerce order purposes: TICKET, TRACK, RELEASE; SUBSCRIPTION only on old orders (D-COMMERCE-01). */
@@ -26,7 +27,10 @@ export function OrdersTable({ orders }: { orders: OrderRecord[] }) {
       <TBody>
         {orders.map((row) => (
           <TR key={row.id}>
-            <TD>{row.purpose ? (PURPOSE[row.purpose] ?? humanizeStatus(row.purpose)) : "Order"}</TD>
+            <TD>
+              {row.purpose ? (PURPOSE[row.purpose] ?? humanizeStatus(row.purpose)) : "Order"}
+              {preorderNote(row) ? <span className="block text-xs text-fg-muted">{preorderNote(row)}</span> : null}
+            </TD>
             <TD>
               <StatusChip value={row.status} map={ORDER_STATUS} />
             </TD>

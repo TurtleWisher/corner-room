@@ -408,7 +408,9 @@ class ReleaseReview(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "release_reviews"
     __table_args__ = (
         CheckConstraint(
-            "action IN ('start_review','approve','request_changes','schedule','release','takedown')", name="action"
+            "action IN ('start_review','approve','request_changes','schedule','release','takedown',"
+            "'cancel_presale')",
+            name="action",
         ),
         Index("ix_release_reviews_release", "release_id", "created_at"),
         {"schema": "music"},

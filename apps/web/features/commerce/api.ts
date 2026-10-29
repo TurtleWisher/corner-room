@@ -15,7 +15,8 @@ export type OfferRecord = {
   currency_code: string;
   status: string;
   version: number | null;
-  /** EVERYONE, or OWNS_PART_OF_RELEASE for the price fans who already own some songs pay (D-AUDIO-11). */
+  /** EVERYONE, OWNS_PART_OF_RELEASE for the price fans who already own some songs pay (D-AUDIO-11),
+   * or PRESALE for pre-orders before release day (D-PRESALE-02). */
   audience?: string;
 };
 
@@ -83,7 +84,7 @@ export type OfferProposalRecord = {
   subject_type: "TRACK" | "RELEASE";
   subject_id: string;
   subject_title: string;
-  audience: "EVERYONE" | "OWNS_PART_OF_RELEASE";
+  audience: "EVERYONE" | "OWNS_PART_OF_RELEASE" | "PRESALE";
   amount_minor: number;
   currency_code: string;
   note: string | null;

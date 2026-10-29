@@ -133,8 +133,10 @@ class ReviewService:
                 if move(t, {"IN_REVIEW"}, "APPROVED"):
                     await self._event(ctx, TRACK_APPROVED, "Track", t.id, {"status": "APPROVED", "previous_status": "IN_REVIEW"}, org)
         elif action == "schedule":
-            if release.status != "APPROVED":
+            # A scheduled release can move to a new date (D-PRESALE-02: pre-order buyers are told).
+            if release.status not in {"APPROVED", "SCHEDULED"}:
                 raise AppError("INVALID_TRANSITION", "Approve the release before scheduling it", 409)
+            moved_from = release.release_at if release.status == "SCHEDULED" else None
             if release_at is None or release_at <= self.clock.now():
                 raise AppError("VALIDATION_ERROR", "Choose a release date in the future", 422)
             release.status = "SCHEDULED"
@@ -173,6 +175,11 @@ class ReviewService:
             ReleaseReview(release_id=release.id, reviewer_id=ctx.user_id, action=action, note=text, from_status=previous, to_status=release.status)
         )
         await self.session.flush()
+        if action == "schedule" and previous == "SCHEDULED" and moved_from is not None and moved_from != release.release_at:
+            from cornerroom.kernel.events import PRESALE_DATE_CHANGED
+            from cornerroom.modules.commerce.application.onsite_presale import PresaleService
+
+            await PresaleService(self.session, self.settings, self.clock).tell_buyers(release, PRESALE_DATE_CHANGED, actor=ctx.user_id)
         if action == "release":
             event_type = RELEASE_RELEASED
         elif action == "request_changes":
@@ -191,6 +198,48 @@ class ReviewService:
             organization_id=org,
         )
         return release
+
+    async def system_release(self, release: Release, *, actor: UUID) -> bool:
+        """The scheduler releases music whose date has come (owner, 2026-10-28, D-PRESALE-02), the
+        same way as "Release now": every song needs verified audio, else it waits for staff."""
+        if release.status != "SCHEDULED":
+            return False
+        tracks = await self._tracks(release.id)
+        for t in tracks:
+            if await self.music._current_ready_version(t.id) is None:
+                return False
+        org = release.primary_org_id
+        release.status = "RELEASED"
+        for t in tracks:
+            if t.status in {"APPROVED", "SCHEDULED"}:
+                prev = t.status
+                t.status = "RELEASED"
+                await self._system_event(TRACK_RELEASED, "Track", t.id, {"status": "RELEASED", "previous_status": prev}, org)
+        await self.music._flush_versioned()
+        self.session.add(
+            ReleaseReview(release_id=release.id, reviewer_id=actor, action="release", note="Released on its scheduled date",
+                          from_status="SCHEDULED", to_status="RELEASED")
+        )
+        await self.session.flush()
+        await self._system_event(
+            RELEASE_RELEASED, "Release", release.id,
+            {"status": "RELEASED", "previous_status": "SCHEDULED", "release_type": release.release_type, "review_action": "release"}, org,
+        )
+        await self.audit.record(
+            action="release.review.release", entity_type="Release", entity_id=release.id,
+            actor_id="system:scheduler", actor_type="system",
+            previous_state={"status": "SCHEDULED"}, new_state={"status": "RELEASED"},
+        )
+        return True
+
+    async def _system_event(self, event_type: str, agg: str, agg_id: UUID, payload: dict[str, Any], org: UUID | None) -> None:
+        await enqueue_outbox(
+            self.session,
+            DomainEvent(
+                event_type=event_type, producer="music", aggregate_type=agg, aggregate_id=agg_id, payload=payload,
+                occurred_at=self.clock.now(), actor_id=None, organization_id=org,
+            ),
+        )
 
     async def history(self, release_id: UUID) -> list[dict[str, Any]]:
         rows = (

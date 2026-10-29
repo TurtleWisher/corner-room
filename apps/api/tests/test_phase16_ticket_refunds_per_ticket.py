@@ -57,6 +57,7 @@ async def test_phase16_refund_chosen_tickets_and_resell_seats(client: AsyncClien
     reasons = (await client.get("/api/v1/refund-reasons", headers=bearer(staff))).json()
     assert [r["reason_code"] for r in reasons] == [
         "CUSTOMER_REQUEST", "EVENT_CANCELLED", "EVENT_POSTPONED", "LATE_PAYMENT", "DUPLICATE_PAYMENT", "GOODWILL",
+        "PRESALE_CANCELLED",
     ]
     assert all(r["requires_finance_approve"] for r in reasons)
 

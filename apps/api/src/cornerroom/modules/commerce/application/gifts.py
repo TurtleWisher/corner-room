@@ -448,6 +448,9 @@ class GiftCampaignService:
                 )).scalars()
             )
         claimed_orders = {c.order_id for c in claims if getattr(c, "order_id", None)}
+        # Pre-orders on Corner Room are pre-sale buyers too (D-PRESALE-02).
+        if campaign.include_presale:
+            claimed_orders |= {o.id for o in orders if o.is_presale}
         for order in orders:
             user = users.get(order.user_id)
             if user is None or user.deleted_at is not None:

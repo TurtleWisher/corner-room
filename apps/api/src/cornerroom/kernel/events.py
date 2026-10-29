@@ -108,6 +108,10 @@ TRACK_LYRICS_SUBMITTED = "TrackLyricsSubmitted"
 TRACK_LYRICS_REJECTED = "TrackLyricsRejected"
 TRACK_LYRICS_CHANGED = "TrackLyricsChanged"
 # D-COVER-01: a new cover for an approved or released release waits for staff (cover_review.py).
+# D-PRESALE-02: pre-orders on Corner Room (commerce/application/onsite_presale.py); one per buyer.
+PRESALE_RELEASED = "PresaleReleased"
+PRESALE_DATE_CHANGED = "PresaleDateChanged"
+PRESALE_CANCELLED = "PresaleCancelled"
 # D-CAMPAIGN-01/02: artists' gift campaigns (commerce/application/gifts.py).
 GIFT_CAMPAIGN_SUBMITTED = "GiftCampaignSubmitted"
 GIFT_CAMPAIGN_APPROVED = "GiftCampaignApproved"

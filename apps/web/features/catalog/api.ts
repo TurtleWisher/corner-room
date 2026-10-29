@@ -162,6 +162,24 @@ export async function fetchTrackCredits(id: string, opts?: { skipAuth?: boolean 
   });
 }
 
+/** A release on pre-sale, as fans see it before it is out (D-PRESALE-02). Public; 404 when not on pre-sale. */
+export type PresalePageRecord = {
+  id: string;
+  title: string;
+  release_type: string;
+  release_at: string;
+  artist: string | null;
+  artist_kind: string | null;
+  artist_id: string | null;
+  cover_url: string | null;
+  tracks: { position: number; title: string }[];
+  offer: { id: string; amount_minor: number; currency_code: string };
+};
+
+export async function fetchPresale(id: string): Promise<PresalePageRecord> {
+  return apiFetch<PresalePageRecord>(`/api/v1/presales/releases/${id}`, { retry: false, skipAuth: true, skipRefresh: true });
+}
+
 export async function fetchReleases(opts?: { skipAuth?: boolean }): Promise<Page<ReleaseRecord>> {
   return apiFetch<Page<ReleaseRecord>>("/api/v1/releases", {
     retry: false,
