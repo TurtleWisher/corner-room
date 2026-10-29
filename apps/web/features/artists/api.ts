@@ -1,6 +1,7 @@
 /* Artists, bands, applications, members and event lineup. Split from lib/api.ts (Phase 16, Stage 5). */
 
 import { type Page } from "@/features/identity/api";
+import { fetchAllPages, pagePath } from "@/lib/api/all-pages";
 import { apiFetch } from "@/lib/api/client";
 
 export type ArtistRecord = {
@@ -67,12 +68,12 @@ export type LineupRecord = {
   version?: number;
 };
 
+/** Every artist the viewer may see, across all pages. */
 export async function fetchArtists(opts?: { skipAuth?: boolean }): Promise<Page<ArtistRecord>> {
-  return apiFetch<Page<ArtistRecord>>("/api/v1/artists", {
-    retry: false,
-    skipAuth: opts?.skipAuth,
-    skipRefresh: opts?.skipAuth,
-  });
+  const items = await fetchAllPages((cursor) =>
+    apiFetch<Page<ArtistRecord>>(pagePath("/api/v1/artists", cursor), { retry: false, skipAuth: opts?.skipAuth, skipRefresh: opts?.skipAuth }),
+  );
+  return { items, next_cursor: null };
 }
 
 export async function fetchArtist(id: string, opts?: { skipAuth?: boolean }): Promise<ArtistRecord> {
@@ -233,12 +234,12 @@ export async function unfollowArtist(id: string): Promise<{ status: string }> {
   return apiFetch(`/api/v1/artists/${id}/follow`, { method: "DELETE", retry: false });
 }
 
+/** Every band the viewer may see, across all pages. */
 export async function fetchBands(opts?: { skipAuth?: boolean }): Promise<Page<BandRecord>> {
-  return apiFetch<Page<BandRecord>>("/api/v1/bands", {
-    retry: false,
-    skipAuth: opts?.skipAuth,
-    skipRefresh: opts?.skipAuth,
-  });
+  const items = await fetchAllPages((cursor) =>
+    apiFetch<Page<BandRecord>>(pagePath("/api/v1/bands", cursor), { retry: false, skipAuth: opts?.skipAuth, skipRefresh: opts?.skipAuth }),
+  );
+  return { items, next_cursor: null };
 }
 
 export async function fetchBand(id: string, opts?: { skipAuth?: boolean }): Promise<BandRecord> {

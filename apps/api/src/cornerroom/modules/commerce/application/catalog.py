@@ -543,6 +543,15 @@ class CatalogCommerceService:
             if not (product.product_type == "TRACK" and product.subject_id in blocked) and offer.id not in closed
         ], next_cursor
 
+    async def release_types(self, release_ids: list[UUID]) -> dict[UUID, str]:
+        """Single, EP, album ... for the releases these prices sell."""
+        from cornerroom.modules.music.domain.models import Release
+
+        if not release_ids:
+            return {}
+        rows = await self.session.execute(select(Release.id, Release.release_type).where(Release.id.in_(release_ids)))
+        return {r.id: r.release_type for r in rows}
+
     async def list_org_products(
         self,
         ctx: AuthContext,

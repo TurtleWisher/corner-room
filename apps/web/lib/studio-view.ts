@@ -42,6 +42,18 @@ export function releaseToContinue<T extends { display_state: string; updated_at:
   return best;
 }
 
+/** "3 releases · 1 out now · 2 in progress", from the releases the API returned (nothing guessed). */
+export function releasesGlance(releases: { display_state: string }[]): string {
+  const n = releases.length;
+  if (n === 0) return "No releases yet";
+  const out = releases.filter((r) => r.display_state === "RELEASED").length;
+  const working = releases.filter((r) => r.display_state !== "RELEASED" && r.display_state !== "TAKEN_DOWN" && r.display_state !== "ARCHIVED").length;
+  const parts = [`${n} ${n === 1 ? "release" : "releases"}`];
+  if (out > 0) parts.push(`${out} out now`);
+  if (working > 0) parts.push(`${working} in progress`);
+  return parts.join(" · ");
+}
+
 export const RELEASE_TYPE_LABEL: Record<string, string> = {
   SINGLE: "Single",
   EP: "EP",

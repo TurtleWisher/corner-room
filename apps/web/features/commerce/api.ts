@@ -1,6 +1,7 @@
 /* Offers, products, old subscriptions and entitlements (no plans or whole-catalog pass, D-COMMERCE-01). Split from lib/api.ts (Phase 16, Stage 5). */
 
 import { type Page } from "@/features/identity/api";
+import { fetchAllPages, pagePath } from "@/lib/api/all-pages";
 import { apiFetch } from "@/lib/api/client";
 
 export type OfferRecord = {
@@ -18,6 +19,8 @@ export type OfferRecord = {
   /** EVERYONE, OWNS_PART_OF_RELEASE for the price fans who already own some songs pay (D-AUDIO-11),
    * or PRESALE for pre-orders before release day (D-PRESALE-02). */
   audience?: string;
+  /** SINGLE, EP, ALBUM ... when the price is for a whole release, so buttons can say "Buy the album". */
+  release_type?: string | null;
 };
 
 export type ProductRecord = {
@@ -48,8 +51,12 @@ export type EntitlementRecord = {
   expires_at: string | null;
 };
 
+/** Every price on sale, across all pages (a first page alone hid older music once there were more). */
 export async function fetchOffers(): Promise<Page<OfferRecord>> {
-  return apiFetch<Page<OfferRecord>>("/api/v1/offers", { retry: false, skipAuth: true, skipRefresh: true });
+  const items = await fetchAllPages((cursor) =>
+    apiFetch<Page<OfferRecord>>(pagePath("/api/v1/offers", cursor), { retry: false, skipAuth: true, skipRefresh: true }),
+  );
+  return { items, next_cursor: null };
 }
 
 export async function fetchMySubscription(): Promise<SubscriptionRecord> {

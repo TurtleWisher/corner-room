@@ -78,6 +78,9 @@ class OfferOut(BaseModel):
     version: int | None = None
     # EVERYONE, or OWNS_PART_OF_RELEASE for the price fans who own some songs pay (D-AUDIO-11).
     audience: str = "EVERYONE"
+    # SINGLE, EP, ALBUM ... for a release's price, so every page can say "Buy the album" (owner,
+    # 2026-10-30: a song page said "Release ৳115", which read as the price of that one song).
+    release_type: str | None = None
 
 
 class OfferPage(BaseModel):
@@ -179,7 +182,7 @@ def _product_out(row: Product) -> ProductOut:
     )
 
 
-def _offer_out(row: Offer, product: Product | None = None, *, staff: bool) -> OfferOut:
+def _offer_out(row: Offer, product: Product | None = None, *, staff: bool, release_type: str | None = None) -> OfferOut:
     return OfferOut(
         id=row.id,
         organization_id=row.organization_id,
@@ -192,6 +195,7 @@ def _offer_out(row: Offer, product: Product | None = None, *, staff: bool) -> Of
         status=row.status,
         version=row.version if staff else None,
         audience=getattr(row, "audience", None) or "EVERYONE",
+        release_type=release_type,
     )
 
 
@@ -226,8 +230,9 @@ async def list_public_offers(
     limit: int = Query(default=50, ge=1, le=100),
 ) -> OfferPage:
     rows, next_cursor = await svc.list_public_offers(cursor=cursor, limit=limit)
+    types = await svc.release_types([p.subject_id for _o, p in rows if p.product_type == "RELEASE"])
     return OfferPage(
-        items=[_offer_out(offer, product, staff=False) for offer, product in rows],
+        items=[_offer_out(offer, product, staff=False, release_type=types.get(product.subject_id)) for offer, product in rows],
         next_cursor=next_cursor,
     )
 

@@ -980,6 +980,16 @@ class StudioService:
             line.update(self._sale_subject(line["subject_type"], line["subject_id"], tracks, releases))
         return {"items": lines, "next_cursor": next_cursor}
 
+    async def sales_buyers(self, ctx: AuthContext, kind: str, pid: UUID) -> dict[str, Any]:
+        """Buyers' names per song and release (D-BUYERS-01): names only, nothing else about them."""
+        _name, tracks, releases = await self._sales_scope(ctx, kind, pid)
+        groups = await CatalogSales(self.session).buyer_names(tracks.keys(), releases.keys())
+        for group in groups:
+            group.update(self._sale_subject(group["subject_type"], group["subject_id"], tracks, releases))
+        # Releases first (single, EP, album), then songs sold on their own; then A to Z.
+        groups.sort(key=lambda g: (g["subject_type"] != "RELEASE", g["title"].lower()))
+        return {"items": groups}
+
     # --- staff intake (design 3.5, 10.3; D-AUDIO-09) ------------------------------------------------
 
     async def _require_staff_workspace(self, ctx: AuthContext, permission: str = "music.intake_assist") -> UUID:

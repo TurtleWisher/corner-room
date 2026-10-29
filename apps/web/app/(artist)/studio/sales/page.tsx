@@ -1,44 +1,118 @@
 "use client";
 
-/* Studio sales (HANDOFF 0.2 step 2): what fans paid for each profile's songs and releases. The API
- * counts, sums and decides who may see it; this page only shows the numbers. Earnings are not
- * worked out here: they come in royalty statements. */
+/* Studio sales (HANDOFF 0.2 step 2): what fans paid for each profile's songs and releases, and who
+ * bought them by name only (owner, 2026-10-30, D-BUYERS-01). The API counts, sums and decides who
+ * may see it; this page only shows the results. Earnings are not worked out here: they come in
+ * royalty statements. */
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, FileText, ListMusic, ReceiptText, ShieldCheck, UsersRound, Wallet } from "lucide-react";
 
 import { Button, ButtonLink, Card, DateTime, EmptyState, ErrorState, Money, Skeleton, StatusChip, Table, TBody, TD, TH, THead, TR } from "@/components/ds";
 import { AccountPage } from "@/components/shell/account-page";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
-import { fetchMyProfiles, fetchProfileSaleLines, fetchProfileSales, type CatalogProfile, type SaleLine, type SalesTotal } from "@/features/studio/api";
+import {
+  fetchMyProfiles,
+  fetchProfileBuyers,
+  fetchProfileSaleLines,
+  fetchProfileSales,
+  type BuyerGroup,
+  type CatalogProfile,
+  type SaleLine,
+  type SalesTotal,
+} from "@/features/studio/api";
 import { friendlyError } from "@/lib/error-copy";
 import { ORDER_STATUS } from "@/lib/status-maps";
-import { money, saleKindLabel, salesCountText } from "@/lib/studio-sales-view";
+import { buyersSummary, money, namesToShow, saleKindLabel, salesCountText } from "@/lib/studio-sales-view";
 
 function Totals({ total }: { total: SalesTotal }) {
-  const figures = [
-    { label: "Fans paid", value: total.gross_amount_minor },
-    { label: "Refunded", value: total.refunded_amount_minor },
-    { label: "After refunds", value: total.net_amount_minor },
-  ];
   return (
-    <Card className="p-5">
-      <p className="text-sm text-fg-muted">
-        All time · {total.currency_code} · {salesCountText(total.sold_count, total.refunded_count)}
-      </p>
-      <dl className="mt-3 grid gap-4 sm:grid-cols-3">
-        {figures.map((f) => (
-          <div key={f.label}>
-            <dt className="text-sm text-fg-muted">{f.label}</dt>
-            <dd className="mt-1 text-2xl font-bold text-fg">
-              <Money value={money(f.value, total.currency_code)} variant="display" minorDigits="always" />
+    <Card className="p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-5">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-semibold text-fg">
+            <Wallet aria-hidden="true" className="size-4 text-highlight" /> After refunds
+          </p>
+          <p className="mt-1 text-3xl font-bold text-fg sm:text-4xl">
+            <Money value={money(total.net_amount_minor, total.currency_code)} variant="display" minorDigits="always" />
+          </p>
+          <p className="mt-1 text-sm text-fg-muted">
+            All time · {total.currency_code} · {salesCountText(total.sold_count, total.refunded_count)}
+          </p>
+        </div>
+        <dl className="grid grid-cols-2 gap-x-8 gap-y-2">
+          <div>
+            <dt className="text-sm text-fg-muted">Fans paid</dt>
+            <dd className="mt-0.5 text-lg font-semibold text-fg">
+              <Money value={money(total.gross_amount_minor, total.currency_code)} minorDigits="always" />
             </dd>
           </div>
-        ))}
-      </dl>
+          <div>
+            <dt className="text-sm text-fg-muted">Refunded</dt>
+            <dd className="mt-0.5 text-lg font-semibold text-fg">
+              <Money value={money(total.refunded_amount_minor, total.currency_code)} minorDigits="always" />
+            </dd>
+          </div>
+        </dl>
+      </div>
     </Card>
+  );
+}
+
+function SectionHeading({ icon: Icon, children, hint }: { icon: typeof Wallet; children: React.ReactNode; hint?: string }) {
+  return (
+    <div className="mt-10">
+      <h3 className="flex items-center gap-2 text-lg font-bold text-fg">
+        <Icon aria-hidden="true" className="size-5 text-highlight" /> {children}
+      </h3>
+      {hint ? <p className="mt-1 text-sm text-fg-muted">{hint}</p> : null}
+    </div>
+  );
+}
+
+function BuyerCard({ group }: { group: BuyerGroup }) {
+  const [open, setOpen] = useState(false);
+  const { shown, hidden } = namesToShow(group.names, open);
+  const id = `buyers-${group.subject_type}-${group.subject_id}`;
+  return (
+    <Card as="section" aria-labelledby={id} className="p-5">
+      <h4 id={id} className="break-words font-semibold text-fg">
+        {group.title}
+      </h4>
+      <p className="text-sm text-fg-muted">{buyersSummary(group)}</p>
+      <ul className="mt-3 flex flex-wrap gap-2" aria-label={`People who bought ${group.title}`}>
+        {shown.map((name, i) => (
+          <li key={`${name}-${i}`} className="border border-line bg-surface-sunken px-2.5 py-1 text-sm text-fg">
+            {name}
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 || open ? (
+        <Button variant="ghost" size="sm" className="mt-2" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          {open ? "Show fewer" : `Show all ${group.names.length} names`}
+        </Button>
+      ) : null}
+    </Card>
+  );
+}
+
+function Buyers({ profile }: { profile: CatalogProfile }) {
+  const buyers = useAsync(() => fetchProfileBuyers(profile.kind, profile.id), [profile.kind, profile.id]);
+  if (buyers.status === "loading") return <Skeleton className="h-28 w-full" />;
+  if (buyers.status === "error") {
+    return <ErrorState title="Buyers unavailable" message={loadErrorMessage(buyers.error, "your buyers")} action={<RetryButton onClick={buyers.reload} />} />;
+  }
+  if (buyers.data.items.length === 0) {
+    return <p className="text-sm text-fg-muted">Buyers&apos; names show here once their payment is confirmed.</p>;
+  }
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {buyers.data.items.map((g) => (
+        <BuyerCard key={`${g.subject_type}-${g.subject_id}`} group={g} />
+      ))}
+    </div>
   );
 }
 
@@ -136,7 +210,13 @@ function ProfileSales({ profile }: { profile: CatalogProfile }) {
                 <Totals key={t.currency_code} total={t} />
               ))}
             </div>
-            <h3 className="mt-8 text-lg font-bold text-fg">By song and release</h3>
+            <SectionHeading icon={UsersRound} hint="Names only. Corner Room never shares a buyer's email, phone or address.">
+              Who bought your music
+            </SectionHeading>
+            <div className="mt-4">
+              <Buyers profile={profile} />
+            </div>
+            <SectionHeading icon={ListMusic}>By song and release</SectionHeading>
             <div className="mt-3">
               <Table label={`Sales by song and release for ${profile.display_name}`}>
                 <THead>
@@ -170,7 +250,7 @@ function ProfileSales({ profile }: { profile: CatalogProfile }) {
                 </TBody>
               </Table>
             </div>
-            <h3 className="mt-8 text-lg font-bold text-fg">Recent sales</h3>
+            <SectionHeading icon={ReceiptText}>Recent sales</SectionHeading>
             <div className="mt-3">
               <RecentSales profile={profile} />
             </div>
@@ -200,9 +280,12 @@ function Sales() {
   }
   return (
     <div>
-      <p className="max-w-2xl text-sm text-fg">
-        What fans paid for your music, and what was refunded, since your first sale. A sale counts once its payment is confirmed. These are
-        sales, not your earnings: your share is worked out in your royalty statements.
+      <p className="max-w-2xl text-fg">
+        What fans paid for your music and who bought it, since your first sale. A sale counts once its payment is confirmed.
+      </p>
+      <p className="mt-2 flex max-w-2xl items-start gap-2 text-sm text-fg-muted">
+        <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        These are sales, not your earnings: your share is worked out in your royalty statements.
       </p>
       <div className="mt-8">
         {profiles.data.map((p) => (
@@ -225,11 +308,11 @@ export default function StudioSalesPage() {
     <AccountPage
       audience="artist"
       eyebrow="Studio"
-      title="Sales"
+      title="Sales and buyers"
       what="your sales"
       actions={
         <ButtonLink href="/studio" variant="secondary">
-          <ArrowLeft aria-hidden="true" /> Your music
+          <ArrowLeft aria-hidden="true" /> Studio home
         </ButtonLink>
       }
     >

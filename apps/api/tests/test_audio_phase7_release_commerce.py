@@ -60,6 +60,8 @@ async def test_release_purchase_from_proposal_to_listening(client: AsyncClient) 
     offers = (await client.get("/api/v1/offers")).json()["items"]
     offer = next(o for o in offers if o.get("subject_id") == release_id)
     assert offer["product_type"] == "RELEASE" and offer["amount_minor"] == 3000 and offer["audience"] == "EVERYONE"
+    # The price says what it sells, so song pages say "Buy the single", not "Release" (owner, 2026-10-30).
+    assert offer["release_type"] == "SINGLE"
 
     # The test master has no playback copies, so delivery would stop at TRACK_AUDIO_UNAVAILABLE before
     # the entitlement check; ask the entitlement service directly (delivery itself is Phase 3's tests).
