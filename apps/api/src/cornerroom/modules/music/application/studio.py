@@ -870,7 +870,13 @@ class StudioService:
                 raise AppError("VALIDATION_ERROR", "That track isn't on this release", 422)
         else:
             raise AppError("VALIDATION_ERROR", "Price a track or the release", 422)
-        if audience not in {"EVERYONE", "OWNS_PART_OF_RELEASE"} or (
+        if audience == "PRESALE":
+            # D-PRESALE-02: a pre-sale price is for the whole release, before it is out.
+            if subject_type != "RELEASE":
+                raise AppError("VALIDATION_ERROR", "A pre-sale price is for the whole release", 422)
+            if release.status in {"RELEASED", "TAKEN_DOWN", "ARCHIVED"}:
+                raise AppError("INVALID_TRANSITION", "Pre-sale is only before the release is out", 409)
+        elif audience not in {"EVERYONE", "OWNS_PART_OF_RELEASE"} or (
             audience != "EVERYONE" and (subject_type != "RELEASE" or release.release_type == "SINGLE")
         ):
             raise AppError("VALIDATION_ERROR", "Invalid audience", 422)

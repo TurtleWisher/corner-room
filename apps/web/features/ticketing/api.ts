@@ -78,6 +78,8 @@ export type OrderRecord = {
   delivery_address?: Record<string, string | null> | null;
   /** The buyer's latest Bangla QR payment report and what staff decided (Q-PAY-01/05). */
   payment_submission?: PaymentSubmission | null;
+  /** A pre-order made before the release was out; the music unlocks on release day (D-PRESALE-02). */
+  is_presale?: boolean;
 };
 
 export type TicketRecord = {

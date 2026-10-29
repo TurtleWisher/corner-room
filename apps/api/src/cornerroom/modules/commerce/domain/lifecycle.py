@@ -17,7 +17,8 @@ def assert_sellable_type(product_type: str) -> None:
             "Corner Room sells songs and releases, not subscriptions or the whole catalog",
             422,
         )
-OFFER_AUDIENCES = frozenset({"EVERYONE", "OWNS_PART_OF_RELEASE"})
+# D-PRESALE-02: PRESALE is the price before a scheduled release is out.
+OFFER_AUDIENCES = frozenset({"EVERYONE", "OWNS_PART_OF_RELEASE", "PRESALE"})
 CATALOG_STATUSES = frozenset({"DRAFT", "ACTIVE", "RETIRED"})
 
 PRODUCT_TRANSITIONS: dict[tuple[str, str], str] = {

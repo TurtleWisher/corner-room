@@ -10,7 +10,7 @@ import { CircleAlert } from "lucide-react";
 import { Button, Card, Protected } from "@/components/staff/kit";
 import { ChangesReview } from "@/components/staff/changes-review";
 import { ReleaseEditor } from "@/components/studio/release-editor";
-import { reviewRelease, setManagedMode } from "@/features/studio/api";
+import { cancelPresale, reviewRelease, setManagedMode } from "@/features/studio/api";
 import { friendlyError } from "@/lib/error-copy";
 
 function ManagedMode({ releaseId }: { releaseId: string }) {
@@ -135,6 +135,36 @@ function ReviewPanel({ releaseId }: { releaseId: string }) {
         <input id="release-at" type="datetime-local" className="rounded border px-2 py-1 text-sm" value={when} onChange={(e) => setWhen(e.target.value)} />
         <Button variant="outline" disabled={busy !== null || !when} onClick={() => void act("schedule", false, new Date(when).toISOString())}>
           Schedule
+        </Button>
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">
+        A scheduled release goes public by itself at that time. Scheduling it again moves the date, and everyone who pre-ordered is emailed the
+        new date.
+      </p>
+      <div className="mt-3 rounded border p-3">
+        <p className="text-sm font-semibold">Cancel pre-sale</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          For a scheduled release that won&apos;t come out. It goes back to approved without a date, pre-orders stop, every pre-order is sent to
+          finance for a full refund, and buyers are emailed. Needs catalog and finance rights in this release&apos;s workspace.
+        </p>
+        <Button
+          variant="outline"
+          className="mt-2"
+          disabled={busy !== null}
+          onClick={() => {
+            if (!window.confirm("Cancel the pre-sale and refund everyone who pre-ordered?")) return;
+            setBusy("cancel_presale");
+            setError(null);
+            cancelPresale(releaseId, note)
+              .then((out) => {
+                setResult(`Pre-sale cancelled: ${out.refunds_requested} refunds sent to finance, ${out.buyers_told} buyers emailed. Reload to see the details.`);
+                setNote("");
+              })
+              .catch((err) => setError(friendlyError(err, "The pre-sale couldn't be cancelled.")))
+              .finally(() => setBusy(null));
+          }}
+        >
+          <CircleAlert aria-hidden="true" className="size-4 text-red-600" /> Cancel pre-sale and refund buyers
         </Button>
       </div>
       {result ? <p className="mt-2 text-sm">{result}</p> : null}

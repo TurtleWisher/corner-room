@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import BigInteger, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 from cornerroom.infra.base import ActorMixin, Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin, VersionMixin
@@ -35,6 +35,8 @@ class Order(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ba
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     purpose: Mapped[str] = mapped_column(String(32), nullable=False, default="TICKET")
+    # D-PRESALE-02: bought at the pre-sale price before the release was out (unlocks on release day).
+    is_presale: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
 
 class OrderItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -119,7 +121,7 @@ class Offer(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ve
     __table_args__ = (
         CheckConstraint("status IN ('DRAFT','ACTIVE','RETIRED')", name="status"),
         CheckConstraint("amount_minor >= 0", name="amount_non_negative"),
-        CheckConstraint("audience IN ('EVERYONE','OWNS_PART_OF_RELEASE')", name="audience"),
+        CheckConstraint("audience IN ('EVERYONE','OWNS_PART_OF_RELEASE','PRESALE')", name="audience"),
         Index("ix_offers_product_status", "product_id", "status"),
         Index("ix_offers_org_status", "organization_id", "status"),
         {"schema": "commerce"},
@@ -167,7 +169,7 @@ class OfferProposal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "offer_proposals"
     __table_args__ = (
         CheckConstraint("subject_type IN ('TRACK','RELEASE')", name="subject_type"),
-        CheckConstraint("audience IN ('EVERYONE','OWNS_PART_OF_RELEASE')", name="audience"),
+        CheckConstraint("audience IN ('EVERYONE','OWNS_PART_OF_RELEASE','PRESALE')", name="audience"),
         CheckConstraint("status IN ('PROPOSED','ACCEPTED','COUNTERED','WITHDRAWN')", name="status"),
         CheckConstraint("amount_minor >= 0", name="amount_non_negative"),
         Index("ix_offer_proposals_subject", "subject_type", "subject_id"),

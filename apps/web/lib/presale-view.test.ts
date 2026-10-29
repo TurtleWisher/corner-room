@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parsePaidOn, parsePresaleList, presaleTotal, splitLine } from "./presale-view";
+import { parsePaidOn, parsePresaleList, preorderLabel, preorderNote, presaleCountdown, presaleTotal, splitLine } from "./presale-view";
 
 describe("pre-sale list", () => {
   it("reads a Notion CSV export in any column order and ignores extra columns", () => {
@@ -60,5 +60,30 @@ describe("pre-sale contact details (owner, 2026-10-27)", () => {
   it("reads Notion's Phone and Place columns", () => {
     const { rows } = parsePresaleList('Customer Name,Email,Payment Amount,Phone,Purchase Date,Place\nSabuj,s@example.com,100,01303-290669,10/10/2025,"Flat 3D,  Dhanmondi"');
     expect(rows[0]).toMatchObject({ phone: "01303-290669", address: "Flat 3D, Dhanmondi", paid_on: "2025-10-10" });
+  });
+});
+
+const NOW = new Date("2026-10-28T12:00:00Z");
+
+describe("pre-orders on Corner Room (D-PRESALE-02)", () => {
+  it("counts down to release day in words", () => {
+    expect(presaleCountdown("2026-10-31T12:00:00Z", NOW)).toBe("Out in 3 days");
+    expect(presaleCountdown("2026-10-29T13:00:00Z", NOW)).toBe("Out in 1 day");
+    expect(presaleCountdown("2026-10-28T17:30:00Z", NOW)).toBe("Out in 5 hours");
+    expect(presaleCountdown("2026-10-28T12:20:00Z", NOW)).toBe("Out within the hour");
+    expect(presaleCountdown("2026-10-28T11:00:00Z", NOW)).toBe("Out now");
+    expect(presaleCountdown("not a date", NOW)).toBe("Out now");
+  });
+
+  it("names the pre-order", () => {
+    expect(preorderLabel("SINGLE")).toBe("Pre-order the single");
+    expect(preorderLabel("ALBUM")).toBe("Pre-order the album");
+    expect(preorderLabel(null)).toBe("Pre-order the release");
+  });
+
+  it("marks pre-orders on orders", () => {
+    expect(preorderNote({ is_presale: true })).toBe("Pre-order · unlocks on release day");
+    expect(preorderNote({ is_presale: false })).toBeNull();
+    expect(preorderNote({})).toBeNull();
   });
 });

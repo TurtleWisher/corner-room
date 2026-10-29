@@ -305,7 +305,7 @@ class SubmitIn(BaseModel):
 class ProposalIn(BaseModel):
     subject_type: Literal["TRACK", "RELEASE"]
     subject_id: UUID
-    audience: Literal["EVERYONE", "OWNS_PART_OF_RELEASE"] = "EVERYONE"
+    audience: Literal["EVERYONE", "OWNS_PART_OF_RELEASE", "PRESALE"] = "EVERYONE"
     amount_minor: int = Field(ge=0)
     currency_code: str = Field(default="BDT", min_length=3, max_length=3)
     note: str | None = Field(default=None, max_length=500)
@@ -768,3 +768,58 @@ async def release_changes(release_id: UUID, ctx: Ctx, svc: StudioDep) -> ChangeR
 @router.post("/catalog-intake/releases/{release_id}/changes/review", response_model=ChangeRequestOut)
 async def review_changes(release_id: UUID, body: ChangeReviewIn, ctx: Ctx, svc: StudioDep) -> ChangeRequestOut:
     return ChangeRequestOut(**await _changes(svc).review(ctx, release_id, approve=body.action == "approve", note=body.note))
+
+
+# --- Pre-sales on Corner Room (D-PRESALE-02) ------------------------------------------------------
+
+
+class PresaleTrackOut(BaseModel):
+    position: int
+    title: str
+
+
+class PresaleOfferOut(BaseModel):
+    id: UUID
+    amount_minor: int
+    currency_code: str
+
+
+class PresaleViewOut(BaseModel):
+    """A release taking pre-orders: what fans see before it is out."""
+
+    id: UUID
+    title: str
+    release_type: str
+    release_at: datetime
+    artist: str | None
+    artist_kind: str | None
+    artist_id: UUID | None
+    cover_url: str | None
+    tracks: list[PresaleTrackOut]
+    offer: PresaleOfferOut
+
+
+class PresaleCancelIn(BaseModel):
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class PresaleCancelOut(BaseModel):
+    status: str
+    refunds_requested: int
+    buyers_told: int
+
+
+@router.get("/presales/releases/{release_id}", response_model=PresaleViewOut)
+async def presale_view(release_id: UUID, svc: StudioDep) -> PresaleViewOut:
+    """Public: a release on pre-sale (404 once pre-orders close or for anything else)."""
+    from cornerroom.modules.commerce.application.onsite_presale import PresaleService
+
+    return PresaleViewOut(**await PresaleService(svc.session, svc.settings, svc.clock).public_view(release_id))
+
+
+@router.post("/catalog-intake/releases/{release_id}/presale/cancel", response_model=PresaleCancelOut)
+async def cancel_presale(release_id: UUID, body: PresaleCancelIn, ctx: Ctx, svc: StudioDep) -> PresaleCancelOut:
+    """Staff: cancel a pre-sale; every pre-order goes to finance for a full refund and buyers are told."""
+    from cornerroom.modules.commerce.application.onsite_presale import PresaleService
+
+    return PresaleCancelOut(**await PresaleService(svc.session, svc.settings, svc.clock).cancel(ctx, release_id, body.note))

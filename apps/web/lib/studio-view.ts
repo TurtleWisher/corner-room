@@ -121,6 +121,7 @@ const REVIEW_TEXT: Record<string, string> = {
   schedule: "Scheduled",
   release: "Released",
   takedown: "Taken down",
+  cancel_presale: "Pre-sale cancelled",
 };
 
 /** Words for one review event; the reviewer's identity is never part of it. */
@@ -142,8 +143,26 @@ export function reviewEventText(action: string): string {
 export function proposalWords(p: { subject_type: string; subject_title?: string | null; audience: string }): { subject: string; audience: string } {
   return {
     subject: p.subject_type === "RELEASE" ? "Whole release" : `Track: ${p.subject_title?.trim() || "untitled"}`,
-    audience: p.audience === "OWNS_PART_OF_RELEASE" ? "Fans who already own some of its songs" : "Everyone",
+    audience:
+      p.audience === "OWNS_PART_OF_RELEASE"
+        ? "Fans who already own some of its songs"
+        : p.audience === "PRESALE"
+          ? "Pre-orders before release day"
+          : "Everyone",
   };
+}
+
+/** A pre-sale price can be proposed until the release is out (D-PRESALE-02). */
+export function canProposePresale(status: string): boolean {
+  return !["RELEASED", "TAKEN_DOWN", "ARCHIVED"].includes(status);
+}
+
+/** What the pre-sale price row tells the artist about when pre-orders open. */
+export function presaleHint(status: string, releaseAt: string | null | undefined): string {
+  if (status === "SCHEDULED" && releaseAt) {
+    return "Pre-orders are open at this price until release day. Fans who pre-order can play the music from release day.";
+  }
+  return "Fans can pre-order at this price once Corner Room sets the release date. The music unlocks for them on release day.";
 }
 /** Asset states after a cover upload: still being checked, usable, or turned down. */
 const COVER_ACCEPTED = new Set(["ACCEPTED", "READY"]);

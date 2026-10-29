@@ -211,6 +211,20 @@ def _redis_settings() -> RedisSettings:
     return RedisSettings.from_dsn(settings.redis_url)
 
 
+async def release_scheduled(ctx: dict) -> int:
+    """Releases whose scheduled date has come go public by themselves, and pre-order buyers are
+    told (owner, 2026-10-28, D-PRESALE-02)."""
+    from cornerroom.modules.commerce.application.onsite_presale import PresaleService
+
+    factory = get_session_factory()
+    async with factory() as session:
+        released = await PresaleService(session).release_due()
+        await session.commit()
+    if released:
+        log.info("scheduled_releases_released", released=released, operation="music.scheduled_release")
+    return released
+
+
 class WorkerSettings:
     functions = [
         drain_outbox,
@@ -221,6 +235,7 @@ class WorkerSettings:
         expire_ticket_holds,
         expire_upload_intents,
         run_media_jobs,
+        release_scheduled,
     ]
     on_startup = startup
     on_shutdown = shutdown
@@ -229,6 +244,7 @@ class WorkerSettings:
         cron(drain_outbox, second={0, 15, 30, 45}),
         cron(process_notification_delivery, second={5, 20, 35, 50}),
         cron(expire_ticket_holds, second={10, 40}),
+        cron(release_scheduled, second={30}),
         cron(expire_upload_intents, minute=set(range(0, 60, 10)), second=25),
         # Media jobs can run for minutes (long masters); their own timeout, not the 120 s default.
         cron(run_media_jobs, second={0, 15, 30, 45}, timeout=get_settings().media_job_timeout_seconds * 3, unique=True),

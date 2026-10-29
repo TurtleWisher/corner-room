@@ -45,6 +45,7 @@ REGISTERED_JOBS = (
     "expire_ticket_holds",
     "expire_upload_intents",
     "run_media_jobs",
+    "release_scheduled",
 )
 
 

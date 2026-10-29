@@ -15,6 +15,7 @@ import { TrackBuyControl, useCustomerCommerce, type CustomerCommerce } from "@/c
 import { BandLineup } from "@/components/artists/band-lineup";
 import { CreditFace } from "@/components/music/credit-face";
 import { GiftNote } from "@/components/music/gift-note";
+import { PresaleView } from "@/components/music/presale-view";
 import { useCredits } from "@/components/music/credits";
 import { usePlayer, type PlayOptions } from "@/components/music/player";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
@@ -32,6 +33,7 @@ import {
   type ReleaseRecord,
   type TrackRecord,
 } from "@/lib/api";
+import { fetchPresale, type PresalePageRecord } from "@/features/catalog/api";
 import { coverUrl } from "@/lib/cover-view";
 import { canModerateMusic, creditName, formatDuration, playQueue, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
 import { ownsTrack, releaseBuyLabel, releaseBuyState } from "@/lib/ownership";
@@ -225,7 +227,18 @@ export default function ReleasePage() {
   const data = useAsync(async () => {
     if (status === "loading") return null;
     const opts = { skipAuth: !signedIn };
-    const [release, composed] = await Promise.all([fetchRelease(id, opts), fetchReleaseTracks(id, opts)]);
+    let release: ReleaseRecord;
+    try {
+      release = await fetchRelease(id, opts);
+    } catch (err) {
+      // Not out yet: fans see the pre-order page while the release is on pre-sale (D-PRESALE-02).
+      if (err instanceof ApiError && err.status === 404) {
+        const presale = await fetchPresale(id).catch(() => null);
+        if (presale) return { presale };
+      }
+      throw err;
+    }
+    const composed = await fetchReleaseTracks(id, opts);
     const ordered = [...composed.items].sort((a, b) => a.position - b.position);
     const tracks = await Promise.all(ordered.map((r) => fetchTrack(r.track_id, opts).catch(() => null)));
     const rows: Row[] = ordered.map((r, i) => ({ position: r.position, trackId: r.track_id, track: tracks[i] }));
@@ -233,7 +246,7 @@ export default function ReleasePage() {
     const playable = new Map<string, PlayableTrackRecord>();
     const catalog = await fetchPlayableCatalog(opts).catch(() => null);
     for (const item of catalog?.items ?? []) playable.set(item.id, item);
-    return { release, rows, playable };
+    return { release, rows, playable, presale: null as PresalePageRecord | null };
   }, [id, status]);
 
   if (data.status === "loading" || (data.status === "ok" && !data.data)) {
@@ -260,8 +273,9 @@ export default function ReleasePage() {
     );
   }
 
-  const { rows, playable } = data.data!;
-  const release = override ?? data.data!.release;
+  if (data.data!.presale) return <PresaleView presale={data.data!.presale} />;
+  const { rows, playable } = data.data! as { rows: Row[]; playable: Map<string, PlayableTrackRecord> };
+  const release = override ?? (data.data! as { release: ReleaseRecord }).release;
   const artist = creditName(release, credits.artists, credits.bands);
   const durations = rows.map((r) => playable.get(r.trackId)?.duration_ms);
   const canStaff = signedIn && typeof release.version === "number";

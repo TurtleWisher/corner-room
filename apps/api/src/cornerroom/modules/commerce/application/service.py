@@ -259,6 +259,7 @@ class CheckoutService:
             currency_code=money.currency_code,
             idempotency_key=idempotency_key,
             purpose=purpose,
+            is_presale=offer.audience == "PRESALE",
             created_by=ctx.user_id,
             updated_by=ctx.user_id,
         )
@@ -314,6 +315,15 @@ class CheckoutService:
         if product.product_type != "RELEASE":
             return
         release = await self.session.get(Release, product.subject_id)
+        if offer.audience == "PRESALE":
+            # D-PRESALE-02: the pre-sale price, only while the release is scheduled and not out yet.
+            from cornerroom.modules.commerce.application.onsite_presale import presale_open
+
+            if not presale_open(release, self.clock.now()):
+                raise AppError("PRESALE_CLOSED", "Pre-orders for this release are closed", 409)
+            if await self.entitlements.find_active_release(ctx.user_id, release.id) is not None:
+                raise AppError("ALREADY_OWNED", "You already pre-ordered this release", 409)
+            return
         if release is None or release.deleted_at is not None or release.status != "RELEASED":
             raise AppError("RELEASE_NOT_AVAILABLE", "This release isn't on sale", 409)
         if await self.entitlements.find_active_release(ctx.user_id, release.id) is not None:

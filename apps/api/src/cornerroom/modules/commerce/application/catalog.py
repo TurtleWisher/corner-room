@@ -529,10 +529,18 @@ class CatalogCommerceService:
         blocked = await self.tracks_not_sold_separately(
             [product.subject_id for _offer, product in rows if product.product_type == "TRACK"]
         )
+        # D-PRESALE-02: a pre-sale price shows only while that release takes pre-orders.
+        from cornerroom.modules.commerce.application.onsite_presale import presale_open
+        from cornerroom.modules.music.domain.models import Release
+
+        closed: set[UUID] = set()
+        for offer, product in rows:
+            if offer.audience == "PRESALE" and not presale_open(await self.session.get(Release, product.subject_id), self.clock.now()):
+                closed.add(offer.id)
         return [
             (offer, product)
             for offer, product in rows
-            if not (product.product_type == "TRACK" and product.subject_id in blocked)
+            if not (product.product_type == "TRACK" and product.subject_id in blocked) and offer.id not in closed
         ], next_cursor
 
     async def list_org_products(

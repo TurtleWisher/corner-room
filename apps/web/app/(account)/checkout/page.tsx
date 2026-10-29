@@ -79,7 +79,8 @@ async function loadSummary(item: CheckoutItem): Promise<Summary | null> {
       title: offerTitle(offer),
       kind: productKind(offer.product_type),
       price: { amount_minor: offer.amount_minor, currency_code: offer.currency_code },
-      note: null,
+      // D-PRESALE-02: a pre-order is paid now and unlocks on release day.
+      note: offer.audience === "PRESALE" ? "Pre-order. The music unlocks for you on release day, and we'll email you when it's out." : null,
       tone: "sky",
       offer: { product_type: offer.product_type, subject_id: offer.subject_id },
     };

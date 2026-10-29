@@ -12,6 +12,8 @@ import {
   readinessRows,
   submitPanelMode,
   releaseToContinue,
+  canProposePresale,
+  presaleHint,
   proposalWords,
   reviewEventText,
 } from "./studio-view";
@@ -78,6 +80,16 @@ describe("price proposals", () => {
     expect(proposalWords({ subject_type: "RELEASE", subject_title: "Monsoon", audience: "EVERYONE" })).toEqual({ subject: "Whole release", audience: "Everyone" });
     expect(proposalWords({ subject_type: "TRACK", subject_title: " Tin Roof ", audience: "EVERYONE" }).subject).toBe("Track: Tin Roof");
     expect(proposalWords({ subject_type: "RELEASE", audience: "OWNS_PART_OF_RELEASE" }).audience).toBe("Fans who already own some of its songs");
+    expect(proposalWords({ subject_type: "RELEASE", audience: "PRESALE" }).audience).toBe("Pre-orders before release day");
+  });
+
+  it("offers a pre-sale price only before release", () => {
+    expect(canProposePresale("QC")).toBe(true);
+    expect(canProposePresale("SCHEDULED")).toBe(true);
+    expect(canProposePresale("RELEASED")).toBe(false);
+    expect(canProposePresale("TAKEN_DOWN")).toBe(false);
+    expect(presaleHint("APPROVED", null)).toContain("once Corner Room sets the release date");
+    expect(presaleHint("SCHEDULED", "2026-11-05T14:00:00Z")).toContain("open at this price");
   });
 });
 

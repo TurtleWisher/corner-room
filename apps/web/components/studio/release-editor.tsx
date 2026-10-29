@@ -47,12 +47,14 @@ import { lyricsMode } from "@/lib/lyrics-view";
 import {
   EDITABLE_STATUSES,
   RELEASE_TYPE_LABEL,
+  canProposePresale,
   currentAudio,
   displayStateLabel,
   displayStateTone,
   missingCount,
   moveItem,
   parsePriceToMinor,
+  presaleHint,
   readinessRows,
   reviewEventText,
   submitPanelMode,
@@ -594,7 +596,7 @@ function TrackCard({
   );
 }
 
-function PriceRow({ detail, subjectType, subjectId, label, audience, reload }: { detail: StudioReleaseDetail; subjectType: "TRACK" | "RELEASE"; subjectId: string; label: string; audience: "EVERYONE" | "OWNS_PART_OF_RELEASE"; reload: Reload }) {
+function PriceRow({ detail, subjectType, subjectId, label, hint, audience, reload }: { detail: StudioReleaseDetail; subjectType: "TRACK" | "RELEASE"; subjectId: string; label: string; hint?: string; audience: "EVERYONE" | "OWNS_PART_OF_RELEASE" | "PRESALE"; reload: Reload }) {
   const mine = detail.proposals
     .filter((p) => p.subject_type === subjectType && p.subject_id === subjectId && p.audience === audience && p.status !== "WITHDRAWN")
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -608,6 +610,7 @@ function PriceRow({ detail, subjectType, subjectId, label, audience, reload }: {
     <div className="grid gap-2 border-b border-line py-3 md:grid-cols-[1fr_14rem] md:items-end">
       <div>
         <p className="font-semibold text-fg">{label}</p>
+        {hint ? <p className="text-sm text-fg-muted">{hint}</p> : null}
         <p className="text-sm text-fg-muted">
           {current ? (
             <>
@@ -959,6 +962,26 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
           <PriceRow detail={detail} subjectType="RELEASE" subjectId={detail.release.id} label={`The whole ${RELEASE_TYPE_LABEL[detail.release.release_type]?.toLowerCase() ?? "release"}`} audience="EVERYONE" reload={reload} />
           {detail.release.release_type !== "SINGLE" ? (
             <PriceRow detail={detail} subjectType="RELEASE" subjectId={detail.release.id} label="For fans who already own some songs (optional)" audience="OWNS_PART_OF_RELEASE" reload={reload} />
+          ) : null}
+          {canProposePresale(detail.release.status) ? (
+            <PriceRow
+              detail={detail}
+              subjectType="RELEASE"
+              subjectId={detail.release.id}
+              label="Pre-sale price (optional)"
+              hint={presaleHint(detail.release.status, detail.release.release_at)}
+              audience="PRESALE"
+              reload={reload}
+            />
+          ) : null}
+          {detail.release.status === "SCHEDULED" && detail.proposals.some((p) => p.audience === "PRESALE" && p.status === "ACCEPTED") ? (
+            <p className="pt-3 text-sm text-fg">
+              Fans pre-order on your release&apos;s page:{" "}
+              <a href={`/releases/${detail.release.id}`} className="cr-focus font-semibold text-link underline">
+                open the pre-order page
+              </a>
+              . Share that link.
+            </p>
           ) : null}
           {sellsTracks
             ? detail.tracks.map((t) => <PriceRow key={t.id} detail={detail} subjectType="TRACK" subjectId={t.id} label={`${t.position}. ${t.title}`} audience="EVERYONE" reload={reload} />)

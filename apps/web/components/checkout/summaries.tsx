@@ -185,6 +185,8 @@ export function MusicReceipt({
 }) {
   const title = release?.title ?? track?.title ?? "Your track";
   const playHref = release ? `/releases/${release.id}` : track ? `/tracks/${track.id}` : null;
+  // A pre-order unlocks on release day (D-PRESALE-02): nothing to play or save yet.
+  const preorder = Boolean(order.is_presale);
   return (
     <Card as="section" aria-labelledby="done-title" className="overflow-hidden p-0">
       <div className="grid gap-0 sm:grid-cols-[14rem_1fr]">
@@ -195,7 +197,7 @@ export function MusicReceipt({
         />
         <div className="p-6">
           <p className="flex items-center gap-2 text-sm font-semibold text-success">
-            <CircleCheck aria-hidden="true" className="size-4" /> In your library
+            <CircleCheck aria-hidden="true" className="size-4" /> {preorder ? "Pre-ordered" : "In your library"}
           </p>
           <h2 id="done-title" className="mt-2 text-2xl font-bold text-fg">
             {title}
@@ -220,15 +222,19 @@ export function MusicReceipt({
           <div className="mt-5 flex flex-wrap gap-3">
             {playHref ? (
               <ButtonLink href={playHref}>
-                <Music aria-hidden="true" /> Play now
+                <Music aria-hidden="true" /> {preorder ? "See the release" : "Play now"}
               </ButtonLink>
             ) : null}
             <ButtonLink href="/library" variant="secondary">
               <Library aria-hidden="true" /> Your library
             </ButtonLink>
-            {track && !release ? <SaveOfflineButton trackId={track.id} title={title} size="md" /> : null}
+            {track && !release && !preorder ? <SaveOfflineButton trackId={track.id} title={title} size="md" /> : null}
           </div>
-          {release ? <p className="mt-3 text-sm text-fg-muted">Save each song for offline listening from the release page.</p> : null}
+          {preorder ? (
+            <p className="mt-3 text-sm text-fg-muted">It unlocks for you on release day. We&apos;ll email you when it&apos;s out.</p>
+          ) : release ? (
+            <p className="mt-3 text-sm text-fg-muted">Save each song for offline listening from the release page.</p>
+          ) : null}
         </div>
       </div>
     </Card>

@@ -104,7 +104,7 @@ export type PriceProposal = {
   id: string;
   subject_type: "TRACK" | "RELEASE";
   subject_id: string;
-  audience: "EVERYONE" | "OWNS_PART_OF_RELEASE";
+  audience: "EVERYONE" | "OWNS_PART_OF_RELEASE" | "PRESALE";
   amount_minor: number;
   currency_code: string;
   note?: string | null;
@@ -403,6 +403,16 @@ export function reviewRelease(
     method: "POST",
     headers: json,
     body: JSON.stringify({ action, note: note || null, release_at: releaseAt || null, takedown_kind: takedownKind ?? null }),
+    retry: false,
+  });
+}
+
+/** Staff: cancel a release's pre-sale (D-PRESALE-02). Every pre-order goes to finance for a full refund. */
+export function cancelPresale(releaseId: string, note?: string): Promise<{ status: string; refunds_requested: number; buyers_told: number }> {
+  return apiFetch(`/api/v1/catalog-intake/releases/${releaseId}/presale/cancel`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify({ note: note || null }),
     retry: false,
   });
 }

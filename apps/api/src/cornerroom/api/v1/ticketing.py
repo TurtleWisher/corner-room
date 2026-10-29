@@ -144,6 +144,8 @@ class OrderOut(BaseModel):
     purpose: str
     total_amount_minor: int
     currency_code: str
+    # D-PRESALE-02: a pre-order; the music unlocks on release day.
+    is_presale: bool = False
     payment: PaymentOut | None = None
     # Present on single-order reads (create, get, confirm); omitted in lists.
     items: list[OrderItemOut] | None = None
@@ -259,6 +261,7 @@ def _order_out(row: Order, payment: Payment | None, details: dict[str, Any] | No
         purpose=row.purpose,
         total_amount_minor=row.total_amount_minor,
         currency_code=row.currency_code,
+        is_presale=bool(getattr(row, "is_presale", False)),
         payment=_payment_out(payment) if payment else None,
     )
     if details is not None:

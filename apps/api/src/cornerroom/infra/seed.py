@@ -243,6 +243,10 @@ async def seed_foundation(session: AsyncSession, settings: Settings) -> None:
         ("order.cancelled", "Your reservation ran out before your payment was confirmed, so your order was cancelled. If money already left your account, our team will refund it in full."),
         ("payment.failed", "A payment attempt failed."),
         ("payment.rejected", "We couldn't confirm your payment: {reason}. Please check the details and send them again from your order."),
+        # D-PRESALE-02 (owner, 2026-10-28): pre-orders on Corner Room.
+        ("presale.released", "{title} is out now. The music you pre-ordered is ready to play on Corner Room."),
+        ("presale.date_changed", "The release of {title} has moved to {release_date}. Your pre-order stays in place. If you'd rather have a refund, ask from your order."),
+        ("presale.cancelled", "The release of {title} was cancelled, so your pre-order is cancelled too. A full refund of your payment is on its way."),
         # D-CAMPAIGN-02 (owner, 2026-10-28): when an artist dispatches a gift campaign's gifts.
         ("gift.dispatched", "Good news from {artist}: a gift for buying {music} is on its way to you ({gift}). It should reach you in the next few days."),
         ("refund.completed", "Your refund is complete."),
@@ -280,6 +284,8 @@ async def seed_foundation(session: AsyncSession, settings: Settings) -> None:
         ("LATE_PAYMENT", "Payment arrived late, order cancelled"),
         ("DUPLICATE_PAYMENT", "Duplicate payment"),
         ("GOODWILL", "Goodwill / service issue"),
+        # D-PRESALE-02 (owner, 2026-10-28): a cancelled pre-sale refunds every pre-order in full.
+        ("PRESALE_CANCELLED", "Pre-sale cancelled"),
     ):
         found = (
             await session.execute(
