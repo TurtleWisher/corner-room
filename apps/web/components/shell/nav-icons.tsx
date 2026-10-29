@@ -86,6 +86,7 @@ export function hasNavIcon(href: string): boolean {
 }
 
 export function NavIcon({ href, className }: { href: string; className?: string }) {
-  const Icon = ICONS[href];
+  // An artist's own plays page has an id in its path, so it can't be a fixed key.
+  const Icon = ICONS[href] ?? (/^\/artists\/[^/]+\/analytics$/.test(href) ? ChartLine : undefined);
   return Icon ? <Icon aria-hidden="true" className={className ?? "size-4 shrink-0"} /> : null;
 }

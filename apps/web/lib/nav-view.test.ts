@@ -119,14 +119,20 @@ describe("filterNavForUser", () => {
 
 describe("studioNavSections", () => {
   it("lists only real Studio places, with plays for artist profiles", () => {
-    expect(studioNavSections([]).map((s) => s.items.map((i) => i.href))).toEqual([["/studio", "/studio/profile", "/studio/sales", "/studio/gifts", "/royalties"]]);
+    expect(studioNavSections([]).map((s) => s.items.map((i) => i.href))).toEqual([
+      ["/studio", "/studio/profile"],
+      ["/studio/sales", "/studio/gifts", "/royalties"],
+    ]);
+    // Plain words, a hint under each (owner, 2026-10-30), and nothing removed.
+    expect(studioNavSections([]).map((s) => s.label)).toEqual(["Your music", "Fans and money"]);
+    expect(studioNavSections([]).flatMap((s) => s.items).every((i) => i.hint)).toBe(true);
     const both = studioNavSections([
       { kind: "artist", id: "a1", display_name: "Rumi" },
       { kind: "band", id: "b1", display_name: "Kaal Bela" },
     ]);
-    expect(both[1]).toEqual({ label: "Plays", items: [{ href: "/artists/a1/analytics", label: "Rumi" }] });
-    expect(staffBreadcrumb("/studio/sales", both)).toEqual(["Studio", "Sales"]);
-    expect(staffBreadcrumb("/studio/releases/x", both)).toEqual(["Studio", "Your music"]);
+    expect(both[2]).toEqual({ label: "Plays", items: [{ href: "/artists/a1/analytics", label: "Rumi", hint: "Plays and listeners" }] });
+    expect(staffBreadcrumb("/studio/sales", both)).toEqual(["Fans and money", "Sales and buyers"]);
+    expect(staffBreadcrumb("/studio/releases/x", both)).toEqual(["Your music", "Studio home"]);
     expect(isStudioAuthPath("/studio/sign-in")).toBe(true);
     expect(isStudioAuthPath("/studio/join")).toBe(true);
     expect(isStudioAuthPath("/studio")).toBe(false);

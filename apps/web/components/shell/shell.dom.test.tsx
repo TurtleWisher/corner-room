@@ -159,7 +159,10 @@ describe("StudioShell", () => {
     expect(container.querySelector("aside")?.getAttribute("data-theme")).toBe("artist-studio");
     expect(container.querySelector('img[src$="corner-room-logo-artist-mint.svg"]')).toBeTruthy();
     const nav = screen.getAllByRole("navigation", { name: "Studio" })[0];
-    expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe("Sales");
+    // Plain label with a short hint under it (owner, 2026-10-30).
+    const current = nav.querySelector('[aria-current="page"]');
+    expect(current?.textContent).toContain("Sales and buyers");
+    expect(current?.textContent).toContain("What sold and who bought it");
     expect(await screen.findAllByText("Kaal Bela")).toBeTruthy();
     // Plays exist for artist profiles only.
     expect(nav.querySelector('a[href="/artists/a1/analytics"]')).toBeTruthy();

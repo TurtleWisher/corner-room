@@ -63,6 +63,16 @@ describe("TrackBuyControl", () => {
     expect(screen.getByRole("link", { name: "Locked. Buy the release with Night Bus to play it" }).getAttribute("href")).toBe("/checkout?offer=o2");
   });
 
+  it("on a song's own page, an album song says 'Buy the album', never a bare 'Release' price (owner, 2026-10-30)", () => {
+    auth.status = "authenticated";
+    const album = { ...offer, id: "o3", product_type: "RELEASE", subject_id: "r2", name: "Between Midnight & Dawn", release_type: "ALBUM", amount_minor: 11500 };
+    render(<TrackBuyControl track={track} commerce={{ offers: [album], entitlements: [], ready: true, reload: () => {} }} releaseIds={["r2"]} />);
+    const link = screen.getByRole("link", { name: "Locked. Buy the album with Night Bus to play it" });
+    expect(link.textContent?.trim()).toMatch(/^Buy the album/);
+    expect(link.textContent).not.toContain("Release");
+    expect(link.getAttribute("title")).toBe("Night Bus is sold as part of Between Midnight & Dawn");
+  });
+
   it("lets owners play (no player here, so it links to the song)", () => {
     auth.status = "authenticated";
     const owned = [{ id: "e1", scope: "TRACK", ref_id: "t1", status: "ACTIVE" }] as unknown as CustomerCommerce["entitlements"];

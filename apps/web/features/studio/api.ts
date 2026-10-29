@@ -464,6 +464,19 @@ export function fetchProfileSaleLines(kind: ProfileKind, id: string, cursor?: st
   return apiFetch<{ items: SaleLine[]; next_cursor: string | null }>(`/api/v1/studio/profiles/${kind}/${id}/sales/lines${query}`);
 }
 
+/** Who bought one song or release: names only (D-BUYERS-01), never contact details. */
+export type BuyerGroup = {
+  subject_type: "TRACK" | "RELEASE";
+  subject_id: string;
+  title: string;
+  release_type: string | null;
+  names: string[];
+};
+
+export function fetchProfileBuyers(kind: ProfileKind, id: string): Promise<{ items: BuyerGroup[] }> {
+  return apiFetch<{ items: BuyerGroup[] }>(`/api/v1/studio/profiles/${kind}/${id}/sales/buyers`);
+}
+
 /* Cover checks: the latest cover upload for a release and what the checks found (null before any). */
 
 export type CoverReport = ArtworkReport;

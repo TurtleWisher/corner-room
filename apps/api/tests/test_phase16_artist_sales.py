@@ -107,3 +107,55 @@ async def test_owner_sees_paid_sales_and_refunds_without_buyers(client: AsyncCli
     other = await register_and_login(client, "sales-other@example.com")
     await _artist_for(other["user"]["id"], label, name="Someone Else")
     assert (await client.get(url, headers=bearer(other["access_token"]))).status_code == 404
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_owner_sees_buyers_names_only(client: AsyncClient) -> None:
+    """D-BUYERS-01 (owner, 2026-10-30): artists see who bought their music, by name only."""
+    admin, orgs = await _orgs(client)
+    label = orgs["LABEL"]
+    release_id, _track, owner, artist_id = await _released(client, admin, label, "buyers-owner@example.com", "Buyers Act")
+    ops = await _staff_with(client, admin, "buyers-ops@example.com", "finance_manager", label)
+    queue = (await client.get("/api/v1/offer-proposals", headers=bearer(ops))).json()
+    pid = next(p["id"] for p in queue if p["release_id"] == release_id)
+    assert (await client.post(f"/api/v1/offer-proposals/{pid}/decision", headers=bearer(ops), json={"decision": "accept"})).status_code == 200
+    offer_id = next(o["id"] for o in (await client.get("/api/v1/offers")).json()["items"] if o.get("subject_id") == release_id)
+
+    url = f"/api/v1/studio/profiles/artist/{artist_id}/sales/buyers"
+    assert (await client.get(url, headers=bearer(owner["access_token"]))).json() == {"items": []}
+
+    fans = {}
+    for email, name in (("buyers-zara@example.com", "Zara Ahmed"), ("buyers-arif@example.com", "Arif Hossain"), ("buyers-unpaid@example.com", "Never Paid")):
+        fan = await register_and_login(client, email, display_name=name)
+        order = await _order(client, fan["access_token"], offer_id)
+        if name != "Never Paid":
+            paid = await client.post(f"/api/v1/payments/{order['payment']['id']}/sandbox-confirm", headers=bearer(fan["access_token"]))
+            assert paid.status_code == 200, paid.text
+        fans[name] = (fan, order)
+
+    res = await client.get(url, headers=bearer(owner["access_token"]))
+    assert res.status_code == 200, res.text
+    [group] = res.json()["items"]
+    assert group["subject_id"] == release_id and group["release_type"] == "SINGLE" and group["title"] == "Review Me"
+    # A to Z, paid buyers only, and nothing but names.
+    assert group["names"] == ["Arif Hossain", "Zara Ahmed"]
+    assert set(group) == {"subject_type", "subject_id", "title", "release_type", "names"}
+    for fan, order in fans.values():
+        assert fan["user"]["id"] not in res.text and fan["user"]["email"] not in res.text and order["id"] not in res.text
+
+    # A fully refunded buyer no longer has it, so is not listed.
+    from cornerroom.infra.db import get_session_factory
+    from cornerroom.modules.commerce.domain.models import Order
+
+    async with get_session_factory()() as session:
+        row = await session.get(Order, UUID(fans["Zara Ahmed"][1]["id"]))
+        row.status = "REFUNDED"
+        await session.commit()
+    assert (await client.get(url, headers=bearer(owner["access_token"]))).json()["items"][0]["names"] == ["Arif Hossain"]
+
+    # Same access as the sales figures: buyers and other artists get 404.
+    assert (await client.get(url, headers=bearer(fans["Arif Hossain"][0]["access_token"]))).status_code == 404
+    other = await register_and_login(client, "buyers-other@example.com")
+    await _artist_for(other["user"]["id"], label, name="Another Act")
+    assert (await client.get(url, headers=bearer(other["access_token"]))).status_code == 404

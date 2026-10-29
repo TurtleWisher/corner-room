@@ -19,3 +19,18 @@ export function salesCountText(sold: number, refunded: number): string {
 export function money(amount_minor: number, currency_code: string): MoneyValue {
   return { amount_minor, currency_code };
 }
+
+/** "Single · 2 buyers", "Song · 1 buyer". */
+export function buyersSummary(group: { subject_type: string; release_type: string | null; names: string[] }): string {
+  const n = group.names.length;
+  return `${saleKindLabel(group)} · ${n} ${n === 1 ? "buyer" : "buyers"}`;
+}
+
+/** How many names show before "Show all". */
+export const NAMES_SHOWN = 12;
+
+/** The names to show: the first few, or all once opened. */
+export function namesToShow(names: string[], expanded: boolean, limit = NAMES_SHOWN): { shown: string[]; hidden: number } {
+  if (expanded || names.length <= limit) return { shown: names, hidden: 0 };
+  return { shown: names.slice(0, limit), hidden: names.length - limit };
+}

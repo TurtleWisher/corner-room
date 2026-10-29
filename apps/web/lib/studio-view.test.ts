@@ -16,6 +16,7 @@ import {
   presaleHint,
   proposalWords,
   reviewEventText,
+  releasesGlance,
 } from "./studio-view";
 
 describe("studio view", () => {
@@ -130,3 +131,13 @@ describe("submitPanelMode", () => {
     expect(submitPanelMode("SOMETHING_NEW")).toBe("past_review");
   });
 });
+
+describe("releasesGlance", () => {
+  it("counts only what the API returned", () => {
+    expect(releasesGlance([])).toBe("No releases yet");
+    expect(releasesGlance([{ display_state: "RELEASED" }])).toBe("1 release · 1 out now");
+    expect(releasesGlance([{ display_state: "RELEASED" }, { display_state: "DRAFT" }, { display_state: "IN_REVIEW" }])).toBe("3 releases · 1 out now · 2 in progress");
+    expect(releasesGlance([{ display_state: "TAKEN_DOWN" }])).toBe("1 release");
+  });
+});
+

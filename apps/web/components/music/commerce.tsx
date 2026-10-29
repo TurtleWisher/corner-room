@@ -9,7 +9,7 @@ import { SaveOfflineButton } from "@/components/music/save-offline-button";
 import { useOptionalPlayer, type PlayOptions, type PlayerTrack } from "@/components/music/player";
 import { useAsync } from "@/components/use-async";
 import { fetchMyEntitlements, fetchOffers, fetchPlayableCatalog, type EntitlementRecord, type OfferRecord, type PlayableTrackRecord } from "@/lib/api";
-import { offerForRelease, trackBuyState } from "@/lib/ownership";
+import { offerForRelease, releaseBuyLabel, trackBuyState } from "@/lib/ownership";
 
 export type CustomerCommerce = { offers: OfferRecord[]; entitlements: EntitlementRecord[]; ready: boolean; reload: () => void };
 
@@ -115,9 +115,16 @@ export function TrackBuyControl({
     );
   }
   if (release) {
+    // "Buy the album ৳115", never a bare "Release ৳115" that reads as this one song's price (owner, 2026-10-30).
     return (
-      <ButtonLink href={`/checkout?offer=${release.id}`} size={size} aria-label={`Locked. Buy the release with ${track.title} to play it`} title="Buy to play">
-        <Lock aria-hidden="true" /> Release <Money value={{ amount_minor: release.amount_minor, currency_code: release.currency_code }} />
+      <ButtonLink
+        href={`/checkout?offer=${release.id}`}
+        size={size}
+        aria-label={`Locked. ${releaseBuyLabel(release.release_type, release)} with ${track.title} to play it`}
+        title={`${track.title} is sold as part of ${release.name ?? "a release"}`}
+      >
+        <Lock aria-hidden="true" /> {releaseBuyLabel(release.release_type, release)}{" "}
+        <Money value={{ amount_minor: release.amount_minor, currency_code: release.currency_code }} />
       </ButtonLink>
     );
   }

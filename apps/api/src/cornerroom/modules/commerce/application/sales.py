@@ -2,8 +2,11 @@
 
 Read-only, straight from the operational tables (orders, order lines, payments, refunds), never
 from analytics. Only what was paid counts: an order is a sale once it reached PAID (later
-FULFILLED or refunded). Refunds count when COMPLETED. No buyer identity ever leaves here, and no
-share, fee or royalty is applied: what an artist earns comes from royalty statements.
+FULFILLED or refunded). Refunds count when COMPLETED. No share, fee or royalty is applied: what an
+artist earns comes from royalty statements.
+
+Buyers: only their names, in `buyer_names` (owner, 2026-10-30, D-BUYERS-01). Never an email,
+phone, address, account id or anything else that identifies or reaches them.
 """
 
 from __future__ import annotations
@@ -21,6 +24,10 @@ from cornerroom.modules.finance.domain.models_payments import Payment, Refund
 
 # Orders whose payment was taken. Later refunds keep the sale and show the refund beside it.
 SOLD_ORDER_STATUSES = ("PAID", "FULFILLED", "PARTIALLY_REFUNDED", "REFUNDED")
+# Buyers who still have what they bought (a fully refunded order is no longer theirs).
+KEPT_ORDER_STATUSES = ("PAID", "FULFILLED", "PARTIALLY_REFUNDED")
+# A buyer whose name Corner Room doesn't have.
+NO_NAME = "Name not given"
 
 
 class CatalogSales:
@@ -145,4 +152,47 @@ class CatalogSales:
             }
             for r in page
         ], next_cursor
+
+    async def buyer_names(self, track_ids: Collection[UUID], release_ids: Collection[UUID]) -> list[dict[str, Any]]:
+        """Who bought each song or release: names only (D-BUYERS-01), one per buyer, A to Z.
+
+        Paid orders the buyer still has, plus pre-sale buyers from before launch who have not
+        claimed their purchase yet (a claimed one is already an order).
+        """
+        from cornerroom.modules.commerce.domain.models import PresaleClaim, Product
+        from cornerroom.modules.identity.domain.models import CustomerProfile
+
+        subjects = self._subjects(track_ids, release_ids)
+        if subjects is None:
+            return []
+        bought = (
+            await self.session.execute(
+                select(OrderItem.item_type, OrderItem.ref_id, Order.user_id, CustomerProfile.display_name)
+                .join(Order, Order.id == OrderItem.order_id)
+                .outerjoin(
+                    CustomerProfile,
+                    and_(CustomerProfile.user_id == Order.user_id, CustomerProfile.deleted_at.is_(None)),
+                )
+                .where(subjects, Order.status.in_(KEPT_ORDER_STATUSES), Order.deleted_at.is_(None))
+                .distinct()
+            )
+        ).all()
+        groups: dict[tuple[str, UUID], dict[object, str]] = {}
+        for r in bought:
+            groups.setdefault((r.item_type, r.ref_id), {})[r.user_id] = (r.display_name or "").strip() or NO_NAME
+        wanted = {("TRACK", t) for t in track_ids} | {("RELEASE", r) for r in release_ids}
+        waiting = (
+            await self.session.execute(
+                select(PresaleClaim.id, PresaleClaim.buyer_name, Product.product_type, Product.subject_id)
+                .join(Product, Product.id == PresaleClaim.product_id)
+                .where(PresaleClaim.status == "WAITING", Product.product_type.in_(("TRACK", "RELEASE")))
+            )
+        ).all()
+        for c in waiting:
+            if (c.product_type, c.subject_id) in wanted:
+                groups.setdefault((c.product_type, c.subject_id), {})[c.id] = (c.buyer_name or "").strip() or NO_NAME
+        return [
+            {"subject_type": kind, "subject_id": ref, "names": sorted(names.values(), key=str.lower)}
+            for (kind, ref), names in groups.items()
+        ]
 

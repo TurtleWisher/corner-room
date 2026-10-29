@@ -5,7 +5,8 @@ import { staffNavFlags } from "@/lib/auth-view";
  * every permission. Every destination of the pre-Stage 5 header is still linked somewhere here.
  */
 
-export type NavItem = { href: string; label: string };
+/** `hint` is a short line under the label, where a menu has room for one (Artist Studio). */
+export type NavItem = { href: string; label: string; hint?: string };
 export type NavSection = { label: string; items: NavItem[] };
 
 /** Public header (1024 px and up). "Events" is the public What's on list. */
@@ -52,21 +53,29 @@ export const ARTIST_NAV: NavItem[] = [
 /**
  * Artist Studio navigation (ARTIST_STUDIO_DESIGN_GUIDE section 6): only real routes. Plays are per
  * artist profile (bands have no play page yet). UX only: every page still asks the API.
+ * Owner, 2026-10-30: a simpler menu, every place kept, grouped in plain words with a short hint.
  */
 export function studioNavSections(profiles: { kind: string; id: string; display_name: string }[]): NavSection[] {
   const sections: NavSection[] = [
     {
-      label: "Studio",
+      label: "Your music",
       items: [
-        { href: "/studio", label: "Your music" },
-        { href: "/studio/profile", label: "Profile" },
-        { href: "/studio/sales", label: "Sales" },
-        { href: "/studio/gifts", label: "Gifts" },
-        { href: "/royalties", label: "Royalties" },
+        { href: "/studio", label: "Studio home", hint: "Your releases and next steps" },
+        { href: "/studio/profile", label: "Profile", hint: "What fans see about you" },
+      ],
+    },
+    {
+      label: "Fans and money",
+      items: [
+        { href: "/studio/sales", label: "Sales and buyers", hint: "What sold and who bought it" },
+        { href: "/studio/gifts", label: "Gifts", hint: "Thank-you gifts for buyers" },
+        { href: "/royalties", label: "Royalties", hint: "Your earnings statements" },
       ],
     },
   ];
-  const plays = profiles.filter((p) => p.kind === "artist").map((p) => ({ href: `/artists/${p.id}/analytics`, label: p.display_name }));
+  const plays = profiles
+    .filter((p) => p.kind === "artist")
+    .map((p) => ({ href: `/artists/${p.id}/analytics`, label: p.display_name, hint: "Plays and listeners" }));
   if (plays.length > 0) sections.push({ label: "Plays", items: plays });
   return sections;
 }

@@ -521,6 +521,20 @@ class SaleLinePage(BaseModel):
     next_cursor: str | None
 
 
+class BuyersOut(BaseModel):
+    """Names only (D-BUYERS-01): never an email, phone, address or account id."""
+
+    subject_type: str
+    subject_id: UUID
+    title: str
+    release_type: str | None
+    names: list[str]
+
+
+class BuyersPage(BaseModel):
+    items: list[BuyersOut]
+
+
 @router.get("/studio/profiles/{kind}/{profile_id}/sales", response_model=SalesOut)
 async def profile_sales(kind: Literal["artist", "band"], profile_id: UUID, ctx: Ctx, svc: StudioDep) -> SalesOut:
     return SalesOut(**await svc.sales(ctx, kind, profile_id))
@@ -536,6 +550,12 @@ async def profile_sale_lines(
     limit: Annotated[int | None, Query(ge=1, le=100)] = None,
 ) -> SaleLinePage:
     return SaleLinePage(**await svc.sales_lines(ctx, kind, profile_id, cursor=cursor, limit=limit))
+
+
+@router.get("/studio/profiles/{kind}/{profile_id}/sales/buyers", response_model=BuyersPage)
+async def profile_sale_buyers(kind: Literal["artist", "band"], profile_id: UUID, ctx: Ctx, svc: StudioDep) -> BuyersPage:
+    """Who bought this profile's music, by name only. Same access as the sales figures."""
+    return BuyersPage(**await svc.sales_buyers(ctx, kind, profile_id))
 
 
 # --- Staff catalog intake (music.intake_assist / music.intake_manage) ---------------------------

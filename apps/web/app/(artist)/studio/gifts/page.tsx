@@ -110,7 +110,7 @@ export default function StudioGiftsPage() {
       what="your gift campaigns"
       actions={
         <ButtonLink href="/studio" variant="secondary">
-          <ArrowLeft aria-hidden="true" /> Your music
+          <ArrowLeft aria-hidden="true" /> Studio home
         </ButtonLink>
       }
     >
