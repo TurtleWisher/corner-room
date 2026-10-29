@@ -6,22 +6,33 @@ import { fetchArtists, fetchBands, type ArtistRecord, type BandRecord } from "@/
 
 export type Credits = { artists: ArtistRecord[]; bands: BandRecord[] };
 
-let cache: Promise<Credits> | null = null;
+/*
+ * The app is never reloaded while music plays (the player sits above every page), so a list kept
+ * for the whole visit went stale: an artist approved after the first page, or one failed request,
+ * showed "Artist not available" until a hard reload (owner, 2026-10-29). Each page now refreshes the
+ * lists, showing the last good ones meanwhile, and a failure never replaces a good list.
+ */
+let last: Credits | null = null;
+let inFlight: Promise<Credits> | null = null;
 
-/** Public artist and band lists, loaded once per page view, for naming release and track credits. */
+/** Public artist and band lists for naming release and track credits; one request at a time. */
 function loadCredits(): Promise<Credits> {
-  if (!cache) {
-    cache = Promise.all([
-      fetchArtists({ skipAuth: true }).then((p) => p.items).catch(() => [] as ArtistRecord[]),
-      fetchBands({ skipAuth: true }).then((p) => p.items).catch(() => [] as BandRecord[]),
-    ]).then(([artists, bands]) => ({ artists, bands }));
+  if (!inFlight) {
+    inFlight = Promise.all([
+      fetchArtists({ skipAuth: true }).then((p) => p.items).catch(() => last?.artists ?? []),
+      fetchBands({ skipAuth: true }).then((p) => p.items).catch(() => last?.bands ?? []),
+    ])
+      .then(([artists, bands]) => (last = { artists, bands }))
+      .finally(() => {
+        inFlight = null;
+      });
   }
-  return cache;
+  return inFlight;
 }
 
 /** Names fall back to "Not available" in the UI when a list fails; it never blocks the page. */
 export function useCredits(): Credits {
-  const [credits, setCredits] = useState<Credits>({ artists: [], bands: [] });
+  const [credits, setCredits] = useState<Credits>(() => last ?? { artists: [], bands: [] });
   useEffect(() => {
     let alive = true;
     void loadCredits().then((c) => alive && setCredits(c));
@@ -30,4 +41,10 @@ export function useCredits(): Credits {
     };
   }, []);
   return credits;
+}
+
+/** Test hook: forget the lists between tests. */
+export function resetCreditsForTest(): void {
+  last = null;
+  inFlight = null;
 }
