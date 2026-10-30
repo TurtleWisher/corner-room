@@ -2,7 +2,8 @@
 
 MIZULS launched as a solo artist profile because no band could have an admin then. This moves the
 public identity to a band in one transaction: a new active band with the same name, bio and
-picture; the account that ran the artist becomes the band's admin member; songs, releases,
+picture; the account that ran the artist becomes the band's admin member and owner (its managers
+come along); songs, releases,
 followers, event bookings, Studio uploads and intake records point at the band; credits that named
 the artist keep its name. The solo profile is then soft-deleted so it disappears from public
 pages, search and Studio.
@@ -54,7 +55,15 @@ async def move_artist_to_band(
         await svc._require_active_org(org_id)
     if artist.status != "ACTIVE":
         raise AppError("INVALID_TRANSITION", "Only an active artist profile can become a band", 409)
-    if artist.claimed_user_id is None:
+    from cornerroom.modules.artists.application.team import (
+        add_active_manager,
+        make_owner,
+        owner_user_id,
+        team_user_ids,
+    )
+
+    owner = await owner_user_id(session, artist.id) or artist.claimed_user_id
+    if owner is None:
         raise AppError("VALIDATION_ERROR", "This profile has no account to make the band's admin", 422)
     if (artist.extra_metadata or {}).get("moved_to_band_id"):
         raise ConflictError("This profile has already become a band")
@@ -74,7 +83,7 @@ async def move_artist_to_band(
     session.add(
         BandMember(
             band_id=band.id,
-            user_id=artist.claimed_user_id,
+            user_id=owner,
             artist_id=artist.id,
             status="ACTIVE",
             is_admin=True,
@@ -83,6 +92,13 @@ async def move_artist_to_band(
             updated_by=ctx.user_id,
         )
     )
+
+    # The same people run the band: the owner, and any managers (D-ARTIST-UNIFY-01).
+    managers = await team_user_ids(session, artist.id) - {owner}
+    await session.flush()
+    await make_owner(session, band.id, owner, by=ctx.user_id)
+    for user_id in managers:
+        await add_active_manager(session, band.id, user_id, by=ctx.user_id)
 
     from cornerroom.modules.documents.domain.models import MediaAsset
     from cornerroom.modules.events.domain.models import EventLineup

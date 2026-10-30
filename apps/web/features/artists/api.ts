@@ -6,6 +6,8 @@ import { apiFetch } from "@/lib/api/client";
 
 export type ArtistRecord = {
   id: string;
+  /** Every band is an artist too (owner, 2026-10-30, D-ARTIST-UNIFY-01); a band's page is /bands/{id}. */
+  kind?: "SOLO" | "BAND";
   stage_name: string;
   legal_name?: string | null;
   bio: string | null;
@@ -68,10 +70,15 @@ export type LineupRecord = {
   version?: number;
 };
 
-/** Every artist the viewer may see, across all pages. */
-export async function fetchArtists(opts?: { skipAuth?: boolean }): Promise<Page<ArtistRecord>> {
+/**
+ * Every artist the viewer may see, across all pages. Solo artists unless asked otherwise: bands are
+ * artists too (D-ARTIST-UNIFY-01), and `kind: "ALL"` lists both in one go.
+ */
+export async function fetchArtists(opts?: { skipAuth?: boolean; kind?: "SOLO" | "BAND" | "ALL" }): Promise<Page<ArtistRecord>> {
+  const kind = opts?.kind ?? "SOLO";
+  const base = kind === "ALL" ? "/api/v1/artists" : `/api/v1/artists?kind=${kind}`;
   const items = await fetchAllPages((cursor) =>
-    apiFetch<Page<ArtistRecord>>(pagePath("/api/v1/artists", cursor), { retry: false, skipAuth: opts?.skipAuth, skipRefresh: opts?.skipAuth }),
+    apiFetch<Page<ArtistRecord>>(pagePath(base, cursor), { retry: false, skipAuth: opts?.skipAuth, skipRefresh: opts?.skipAuth }),
   );
   return { items, next_cursor: null };
 }

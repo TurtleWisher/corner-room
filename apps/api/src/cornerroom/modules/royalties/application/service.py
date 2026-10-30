@@ -201,17 +201,15 @@ class RoyaltyService:
         return True
 
     async def claimed_artist_ids(self, user_id: UUID) -> list[UUID]:
-        rows = (
-            await self.session.execute(
-                select(Artist.id).where(
-                    Artist.claimed_user_id == user_id,
-                    Artist.deleted_at.is_(None),
-                )
-            )
-        ).scalars().all()
-        return list(rows)
+        """Profiles this account runs as owner or manager: managers see the money too (owner,
+        2026-10-30, D-ARTIST-UNIFY-01)."""
+        from cornerroom.modules.artists.application.team import artist_ids_run_by
+
+        return await artist_ids_run_by(self.session, user_id)
 
     async def _is_payee(self, user_id: UUID, payee_type: str, payee_id: UUID) -> bool:
+        from cornerroom.modules.artists.application.team import team_user_ids
+
         if payee_type == "USER" and payee_id == user_id:
             return True
         if payee_type == "ARTIST":
@@ -219,7 +217,7 @@ class RoyaltyService:
             return (
                 artist is not None
                 and artist.deleted_at is None
-                and artist.claimed_user_id == user_id
+                and user_id in await team_user_ids(self.session, artist.id)
             )
         return False
 
@@ -1072,9 +1070,9 @@ class RoyaltyService:
         if payee_type == "USER":
             return payee_id
         if payee_type == "ARTIST":
-            artist = await self.session.get(Artist, payee_id)
-            if artist is not None:
-                return artist.claimed_user_id
+            from cornerroom.modules.artists.application.team import owner_user_id
+
+            return await owner_user_id(self.session, payee_id)
         return None
 
     async def transition_statement(self, ctx: AuthContext, statement_id: UUID, action: str) -> RoyaltyStatement:

@@ -25,20 +25,19 @@ ARTIST_PROFILE_STATES = ("APPROVED", "CONTRACT_PENDING", "SIGNED", "ACTIVE", "SU
 async def _roles_for_menu(svc: IdentityService, user_id: UUID, permission_keys: frozenset[str] | set[str]) -> dict[str, bool]:
     from sqlalchemy import exists, select
 
-    from cornerroom.modules.artists.domain.models import Artist, BandMember
+    from cornerroom.modules.artists.domain.models import Artist, ArtistTeamMember
     from cornerroom.modules.identity.domain.models import OrganizationMembership
 
     session = svc.session
+    # Owner or approved manager of a solo or band profile past approval (D-ARTIST-UNIFY-01).
     is_artist = await session.scalar(
         select(
             exists().where(
-                Artist.claimed_user_id == user_id, Artist.deleted_at.is_(None), Artist.status.in_(ARTIST_PROFILE_STATES)
-            )
-        )
-    ) or await session.scalar(
-        select(
-            exists().where(
-                BandMember.user_id == user_id, BandMember.status == "ACTIVE", BandMember.is_admin.is_(True), BandMember.deleted_at.is_(None)
+                ArtistTeamMember.user_id == user_id,
+                ArtistTeamMember.status == "ACTIVE",
+                ArtistTeamMember.artist_id == Artist.id,
+                Artist.deleted_at.is_(None),
+                Artist.status.in_(ARTIST_PROFILE_STATES),
             )
         )
     )

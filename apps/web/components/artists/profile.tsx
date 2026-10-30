@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { ChartLine, Heart, HeartOff } from "lucide-react";
 
@@ -172,8 +173,8 @@ function Lifecycle({ kind, entity, onChanged }: { kind: Kind; entity: Entity; on
                   <MemberLineupName bandId={entity.id} member={m} busy={busy} run={run} />
                   <span className="flex items-center gap-2">
                     <StatusChip value={m.status} />
-                    {m.is_admin ? <span className="text-xs font-semibold text-highlight">Band admin</span> : null}
-                    {/* A band admin manages the band in Studio (owner, 2026-10-27, D-BAND-01). */}
+                    {m.is_admin ? <span className="text-xs font-semibold text-highlight">Manager</span> : null}
+                    {/* Staff making a member an admin makes them a manager of the band (D-BAND-01, D-ARTIST-UNIFY-01). */}
                     {m.status === "ACTIVE" && m.user_id ? (
                       <Button
                         variant="ghost"
@@ -181,7 +182,7 @@ function Lifecycle({ kind, entity, onChanged }: { kind: Kind; entity: Entity; on
                         busy={busy === `admin-${m.id}`}
                         onClick={() => void run(`admin-${m.id}`, () => setBandMemberAdmin(entity.id, m.id, !m.is_admin))}
                       >
-                        {m.is_admin ? "Remove admin" : "Make admin"}
+                        {m.is_admin ? "Remove as manager" : "Make manager"}
                       </Button>
                     ) : null}
                     {m.status !== "REMOVED" && m.status !== "LEFT" ? (
@@ -276,14 +277,23 @@ function FollowButton({ kind, id, signedIn }: { kind: "artist" | "band"; id: str
  */
 export function ProfilePage({ kind, id }: { kind: Kind; id: string }) {
   const { status } = useAuth();
+  const router = useRouter();
   const signedIn = status === "authenticated";
   const data = useAsync(async () => {
     if (status === "loading") return null;
     const opts = { skipAuth: !signedIn };
-    const entity: Entity =
-      kind === "artist"
-        ? await fetchArtist(id, opts).then((a) => ({ id: a.id, name: a.stage_name, bio: a.bio, status: a.status, version: a.version, picture: a.portrait_asset_id }))
-        : await fetchBand(id, opts).then((b) => ({ id: b.id, name: b.name, bio: b.bio, status: b.status, version: b.version, picture: b.portrait_asset_id }));
+    let entity: Entity;
+    if (kind === "artist") {
+      const a = await fetchArtist(id, opts);
+      // Every band is an artist (D-ARTIST-UNIFY-01): a band reached as an artist opens its band page.
+      if (a.kind === "BAND") {
+        router.replace(`/bands/${id}`);
+        return null;
+      }
+      entity = { id: a.id, name: a.stage_name, bio: a.bio, status: a.status, version: a.version, picture: a.portrait_asset_id };
+    } else {
+      entity = await fetchBand(id, opts).then((b) => ({ id: b.id, name: b.name, bio: b.bio, status: b.status, version: b.version, picture: b.portrait_asset_id }));
+    }
     const releases = await fetchReleases({ skipAuth: true })
       .then((p) => sortReleases(p.items.filter((r) => (kind === "artist" ? r.primary_artist_id === id : r.primary_band_id === id))))
       .catch(() => []);

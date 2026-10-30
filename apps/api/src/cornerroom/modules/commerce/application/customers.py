@@ -200,15 +200,25 @@ class CustomerService:
     async def _profiles_and_types(self, user_ids: list[UUID]) -> tuple[dict[UUID, list[str]], dict[UUID, list[str]]]:
         """The artist and band names each account manages, and its types: "staff" (holds a role
         with permissions), "artist" (an artist page or a band), "fan" otherwise."""
-        from cornerroom.modules.artists.domain.models import Artist, Band, BandMember
+        from cornerroom.modules.artists.domain.models import Artist, ArtistTeamMember, Band, BandMember
         from cornerroom.modules.authorization.domain.models import RoleAssignment, RolePermission
 
         ids = user_ids or [UUID(int=0)]
         manages: dict[UUID, list[str]] = defaultdict(list)
-        for artist in (
-            await self.session.execute(select(Artist).where(Artist.claimed_user_id.in_(ids), Artist.deleted_at.is_(None)))
-        ).scalars():
-            manages[artist.claimed_user_id].append(artist.stage_name)
+        # Owners and managers of solo and band profiles (D-ARTIST-UNIFY-01), then band members.
+        for member, artist in (
+            await self.session.execute(
+                select(ArtistTeamMember, Artist)
+                .join(Artist, Artist.id == ArtistTeamMember.artist_id)
+                .where(
+                    ArtistTeamMember.user_id.in_(ids),
+                    ArtistTeamMember.status == "ACTIVE",
+                    Artist.deleted_at.is_(None),
+                )
+            )
+        ).all():
+            if artist.stage_name not in manages[member.user_id]:
+                manages[member.user_id].append(artist.stage_name)
         for member, band in (
             await self.session.execute(
                 select(BandMember, Band)

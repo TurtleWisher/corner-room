@@ -15,6 +15,7 @@ import { Check, CircleAlert, Copy } from "lucide-react";
 import { DateTime, StatusChip } from "@/components/ds";
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
 import { ProfileReviews } from "@/components/staff/profile-reviews";
+import { TeamReviews } from "@/components/staff/team-reviews";
 import { useWorkspace } from "@/components/workspace-provider";
 import {
   createJoinLink,
@@ -288,6 +289,7 @@ function Applications() {
         </p>
       </div>
       <ProfileReviews />
+      <TeamReviews />
       <JoinLinks />
       <h2 className="pt-2 text-lg font-semibold">Applications</h2>
       <div role="group" aria-label="Show" className="flex flex-wrap gap-2">

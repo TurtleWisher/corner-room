@@ -31,7 +31,7 @@ from cornerroom.kernel.events import (
     DomainEvent,
 )
 from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
-from cornerroom.modules.artists.domain.models import Artist, Band, BandMember
+from cornerroom.modules.artists.domain.models import Artist, Band
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.documents.domain.models import MediaAsset
@@ -138,33 +138,21 @@ class MusicService:
     ) -> set[UUID]:
         """Who may self-publish this profile's music (D-AUDIO-05, design S1).
 
-        Solo artist: the claimed user, artist ACTIVE. Band: ACTIVE band admins with an account,
-        band ACTIVE. Anything else owns nothing (fail closed).
+        The profile's team (owner and approved managers, D-ARTIST-UNIFY-01), while the profile
+        (solo artist or band) is ACTIVE. Anything else owns nothing (fail closed).
         """
+        from cornerroom.modules.artists.application.team import team_user_ids
+
         if primary_artist_id is not None:
             artist = await self.session.get(Artist, primary_artist_id)
-            if (
-                artist is None
-                or artist.deleted_at is not None
-                or artist.status != "ACTIVE"
-                or artist.claimed_user_id is None
-            ):
+            if artist is None or artist.deleted_at is not None or artist.status != "ACTIVE":
                 return set()
-            return {artist.claimed_user_id}
+            return await team_user_ids(self.session, artist.id)
         if primary_band_id is not None:
             band = await self.session.get(Band, primary_band_id)
             if band is None or band.deleted_at is not None or band.status != "ACTIVE":
                 return set()
-            rows = await self.session.execute(
-                select(BandMember.user_id).where(
-                    BandMember.band_id == band.id,
-                    BandMember.status == "ACTIVE",
-                    BandMember.is_admin.is_(True),
-                    BandMember.user_id.is_not(None),
-                    BandMember.deleted_at.is_(None),
-                )
-            )
-            return {user_id for user_id in rows.scalars().all() if user_id is not None}
+            return await team_user_ids(self.session, band.id)
         return set()
 
     async def _owner_user_id(

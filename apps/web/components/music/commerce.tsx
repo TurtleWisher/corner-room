@@ -79,12 +79,22 @@ export function TrackBuyControl({
   const player = useOptionalPlayer();
   const pathname = usePathname();
   if (status !== "authenticated") {
-    // Sign in, then come back to this page. The price shows when it is known and on sale.
+    // Sign in, then come back to this page. The price shows when it is known and on sale: the
+    // song's own, else the release it is sold with (visitors saw no price for those before).
     const guest = commerce.ready ? trackBuyState([], commerce.offers, track.id, releaseIds) : null;
+    const guestRelease =
+      commerce.ready && guest?.kind !== "buy" && !onReleasePage
+        ? releaseIds.map((id) => offerForRelease([], commerce.offers, id, [track.id])).find(Boolean)
+        : undefined;
     return (
       <span className="inline-flex items-center gap-3">
         {guest?.kind === "buy" ? (
           <Money value={{ amount_minor: guest.offer.amount_minor, currency_code: guest.offer.currency_code }} className="text-sm text-fg-muted" />
+        ) : guestRelease ? (
+          <span className="whitespace-nowrap text-sm text-fg-muted">
+            {releaseBuyLabel(guestRelease.release_type, guestRelease)}{" "}
+            <Money value={{ amount_minor: guestRelease.amount_minor, currency_code: guestRelease.currency_code }} />
+          </span>
         ) : null}
         <ButtonLink href={`/login?next=${encodeURIComponent(pathname || `/tracks/${track.id}`)}`} variant="secondary" size={size} aria-label={`Sign in to play ${track.title}`}>
           <LogIn aria-hidden="true" /> Sign in

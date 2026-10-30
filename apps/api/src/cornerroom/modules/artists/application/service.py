@@ -50,6 +50,13 @@ from cornerroom.modules.artists.domain.models import (
     Follow,
 )
 from cornerroom.modules.artists.application.band_move import move_artist_to_band, wants_band
+from cornerroom.modules.artists.application.team import (
+    acting_owner,
+    add_active_manager,
+    make_owner,
+    take_off_team,
+    team_user_ids,
+)
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.documents.domain.models import MediaAsset
@@ -167,7 +174,8 @@ class ArtistService:
         return row
 
     async def list_ids_for_projection(self) -> list[UUID]:
-        stmt = select(Artist.id).where(Artist.deleted_at.is_(None))
+        # Bands are indexed as bands (their artist rows mirror them, D-ARTIST-UNIFY-01).
+        stmt = select(Artist.id).where(Artist.deleted_at.is_(None), Artist.kind == "SOLO")
         return list((await self.session.execute(stmt)).scalars().all())
 
     async def list_ids_for_projection_bands(self) -> list[UUID]:
@@ -246,7 +254,7 @@ class ArtistService:
             resource_type="artist",
             resource_id=artist.id,
             organization_id=artist.primary_org_id,
-            owner_user_id=artist.claimed_user_id,
+            owner_user_id=await acting_owner(self.session, artist.id, ctx.user_id),
         )
         if allowed:
             return
@@ -349,6 +357,12 @@ class ArtistService:
             raise NotFoundError("Artist not found")
         return artist
 
+    @staticmethod
+    def _refuse_band_row(artist: Artist) -> None:
+        """A band's artist row mirrors the band; it changes through the band (D-ARTIST-UNIFY-01)."""
+        if artist.kind == "BAND":
+            raise AppError("BAND_PROFILE", "This artist is a band", 409, "Change it from the band's page")
+
     async def get_band_row(self, band_id: UUID) -> Band:
         band = await self.session.get(Band, band_id)
         if band is None or band.deleted_at is not None:
@@ -409,6 +423,7 @@ class ArtistService:
             await self.session.flush()
         except IntegrityError as exc:
             raise ConflictError("An application is already outstanding") from exc
+        await make_owner(self.session, artist.id, ctx.user_id, by=ctx.user_id)
         await self._emit(
             event_type=ARTIST_APPLICATION_SUBMITTED,
             aggregate_type="ArtistApplication",
@@ -465,6 +480,8 @@ class ArtistService:
             await self.session.flush()
         except IntegrityError as exc:
             raise ConflictError("Claimed user already has an artist") from exc
+        if claimed_user_id is not None:
+            await make_owner(self.session, artist.id, claimed_user_id, by=ctx.user_id)
         await self.audit.record_from_auth(
             ctx,
             action="artist.created",
@@ -498,7 +515,7 @@ class ArtistService:
             resource_type="artist",
             resource_id=artist.id,
             organization_id=artist.primary_org_id,
-            owner_user_id=artist.claimed_user_id,
+            owner_user_id=await acting_owner(self.session, artist.id, ctx.user_id),
         )
         if allowed:
             return artist, False
@@ -512,9 +529,16 @@ class ArtistService:
         *,
         cursor: str | None = None,
         limit: int | None = None,
+        kind: str | None = None,
     ) -> tuple[list[Artist], str | None, bool]:
+        """Solo artists and bands alike (every band is an artist, D-ARTIST-UNIFY-01); `kind`
+        narrows to SOLO or BAND."""
         page = clamp_limit(limit)
         stmt: Select[tuple[Artist]] = select(Artist).where(Artist.deleted_at.is_(None))
+        if kind is not None:
+            if kind not in {"SOLO", "BAND"}:
+                raise AppError("VALIDATION_ERROR", "kind must be SOLO or BAND", 422)
+            stmt = stmt.where(Artist.kind == kind)
         public_only = True
         if ctx is not None and ctx.organization_id is not None:
             if await self._can_staff_manage_workspace(ctx, ctx.organization_id):
@@ -547,6 +571,7 @@ class ArtistService:
         expected_version: int | None = None,
     ) -> Artist:
         artist = await self.get_artist_row(artist_id)
+        self._refuse_band_row(artist)
         # Owner, 2026-10-23: an artist's own changes wait for staff (Studio, profile_changes.py);
         # only label staff edit the public profile directly.
         is_staff = await self._is_allowed(
@@ -554,7 +579,7 @@ class ArtistService:
             organization_id=artist.primary_org_id,
         )
         if not is_staff:
-            if artist.claimed_user_id == ctx.user_id:
+            if ctx.user_id in await team_user_ids(self.session, artist.id):
                 raise AppError(
                     "PROFILE_REVIEW_REQUIRED", "Profile changes are reviewed by staff", 403,
                     "Send your changes for review from Artist Studio",
@@ -604,6 +629,7 @@ class ArtistService:
         expected_version: int | None = None,
     ) -> Artist:
         artist = await self.get_artist_row(artist_id)
+        self._refuse_band_row(artist)
         staff = await self._is_allowed(
             ctx.user_id,
             "artist.manage",
@@ -1217,6 +1243,13 @@ class ArtistService:
         member.is_admin = is_admin
         member.updated_by = ctx.user_id
         await self.session.flush()
+        # Staff made them an admin: they run the band as a manager (D-ARTIST-UNIFY-01). Taking the
+        # flag off takes them off the band's team, even as its owner (staff can name a new one).
+        if member.user_id is not None:
+            if is_admin:
+                await add_active_manager(self.session, band.id, member.user_id, by=ctx.user_id)
+            else:
+                await take_off_team(self.session, band.id, member.user_id, by=ctx.user_id)
         await self._emit(
             event_type=BAND_ADMIN_CHANGED,
             aggregate_type="Band",
@@ -1239,7 +1272,7 @@ class ArtistService:
     async def _follow_target(self, target_type: str, target_id: UUID) -> tuple[str, UUID | None]:
         if target_type == "ARTIST":
             artist = await self.get_artist_row(target_id)
-            if artist.status not in PUBLIC_ARTIST_STATUSES:
+            if artist.status not in PUBLIC_ARTIST_STATUSES or artist.kind == "BAND":
                 raise NotFoundError("Artist not found")
             return "Artist", artist.primary_org_id
         if target_type == "BAND":

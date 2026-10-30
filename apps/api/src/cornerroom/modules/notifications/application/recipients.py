@@ -131,7 +131,9 @@ async def resolve_recipient(session: AsyncSession, event: DomainEvent) -> UUID |
             artist = await ArtistService(session).get_artist_row(track.primary_artist_id)
         except NotFoundError:
             return None
-        return artist.claimed_user_id
+        from cornerroom.modules.artists.application.team import owner_user_id
+
+        return await owner_user_id(session, artist.id)
 
     if event_type in {SUBSCRIPTION_STARTED, SUBSCRIPTION_PAST_DUE, SUBSCRIPTION_CANCELLED}:
         sub_id = _uuid(payload.get("subscription_id")) or event.aggregate_id
@@ -168,7 +170,9 @@ async def _payee_user(session: AsyncSession, payee_type: object, payee_id: UUID 
             artist = await ArtistService(session).get_artist_row(payee_id)
         except NotFoundError:
             return None
-        return artist.claimed_user_id
+        from cornerroom.modules.artists.application.team import owner_user_id
+
+        return await owner_user_id(session, artist.id)
     # ORGANIZATION → do not fan out to members (Q-P13-04).
     return None
 

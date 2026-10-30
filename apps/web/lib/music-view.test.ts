@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PlayableTrackRecord } from "@/lib/api";
 
-import { canModerateMusic, creditDetails, creditPerson, creditPicture, playQueue } from "./music-view";
+import { canModerateMusic, creditDetails, creditLink, creditPerson, creditPicture, playQueue } from "./music-view";
 
 function rec(id: string, ok = true): PlayableTrackRecord {
   return { id, title: `T-${id}`, catalog_playable: ok, audio_deliverable: ok, duration_ms: 1000, reason: ok ? null : "NO_AUDIO" } as PlayableTrackRecord;
@@ -36,6 +36,7 @@ describe("creditPerson", () => {
     expect(creditPerson({ display_name: "Rafi Ahmed", instrument: "Guitar" }, artists)).toBe("Rafi Ahmed (Guitar)");
     // A linked profile that is not loaded still shows the typed name.
     expect(creditPerson({ artist_id: "gone", display_name: "Nadia" }, artists)).toBe("Nadia");
+    expect(creditPerson({ artist_id: "b1" }, artists, [{ id: "b1", name: "Kaal Bela" }])).toBe("Kaal Bela");
   });
 
   it("names nobody only when there is no profile and no name", () => {
@@ -95,5 +96,41 @@ describe("creditDetails (owner, 2026-10-30)", () => {
 
   it("is empty without credits", () => {
     expect(creditDetails([], artists, label)).toEqual({ main: [], played: [] });
+  });
+
+  it("links names that have a Corner Room page, and only those (owner, 2026-10-31)", () => {
+    const out = creditDetails(credits, artists, label, [{ id: "b1", name: "Tuli" }]);
+    expect(out.main.map((m) => m.href)).toEqual(["/artists/a1", null, "/artists/a1", null]);
+    expect(out.played.map((p) => p.href)).toEqual([null, "/bands/b1", "/artists/a1", null]);
+  });
+});
+
+describe("creditLink", () => {
+  const artists = [
+    { id: "a1", stage_name: "MIZULS" },
+    { id: "a2", stage_name: "Rafi  Ahmed" },
+    { id: "a3", stage_name: "Twin" },
+  ];
+  const bands = [
+    { id: "b1", name: "NASH MUSIC" },
+    { id: "b2", name: "twin" },
+  ];
+
+  it("opens the linked artist's or band's page", () => {
+    expect(creditLink({ artist_id: "a1", display_name: "anything" }, artists, bands)).toBe("/artists/a1");
+    expect(creditLink({ artist_id: "b1" }, artists, bands)).toBe("/bands/b1");
+  });
+
+  it("opens the one profile with exactly a typed name, ignoring case and spacing", () => {
+    expect(creditLink({ display_name: " rafi ahmed " }, artists, bands)).toBe("/artists/a2");
+    expect(creditLink({ display_name: "Nash Music" }, artists, bands)).toBe("/bands/b1");
+  });
+
+  it("leaves names with no Corner Room page, or shared by two, as plain text", () => {
+    expect(creditLink({ display_name: "Nadia" }, artists, bands)).toBeNull();
+    expect(creditLink({ display_name: "Twin" }, artists, bands)).toBeNull();
+    expect(creditLink({ display_name: "Rafi" }, artists, bands)).toBeNull();
+    expect(creditLink({ artist_id: "hidden" }, artists, bands)).toBeNull();
+    expect(creditLink({}, artists, bands)).toBeNull();
   });
 });

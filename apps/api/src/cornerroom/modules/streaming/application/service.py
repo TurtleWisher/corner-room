@@ -1029,7 +1029,9 @@ class StreamingService:
         return rows[:size], next_cursor
 
     async def _can_read_artist_aggregates(self, ctx: AuthContext, artist: Artist) -> bool:
-        if artist.claimed_user_id == ctx.user_id:
+        from cornerroom.modules.artists.application.team import owner_user_id, team_user_ids
+
+        if ctx.user_id in await team_user_ids(self.session, artist.id):
             return True
         try:
             await self.authz.authorize(
@@ -1037,7 +1039,7 @@ class StreamingService:
                 "analytics.read",
                 resource_type="artist",
                 resource_id=artist.id,
-                owner_user_id=artist.claimed_user_id,
+                owner_user_id=await owner_user_id(self.session, artist.id),
                 scope_organization_id=artist.primary_org_id,
             )
             return True

@@ -48,6 +48,7 @@ from cornerroom.modules.analytics.domain.metrics import (
     unique_listeners_metric,
 )
 from cornerroom.modules.artists.application.service import ArtistService
+from cornerroom.modules.artists.application.team import acting_owner
 from cornerroom.modules.campaigns.application.service import CampaignService
 from cornerroom.modules.events.application.service import EventService
 from cornerroom.modules.music.application.service import MusicService
@@ -679,7 +680,7 @@ class AnalyticsService:
             resource_type="artist",
             resource_id=artist.id,
             organization_id=artist.primary_org_id,
-            owner_user_id=artist.claimed_user_id,
+            owner_user_id=await acting_owner(self.session, artist.id, ctx.user_id),
         ):
             raise NotFoundError("Not found")
         return {
@@ -711,7 +712,7 @@ class AnalyticsService:
             resource_type="artist",
             resource_id=artist.id,
             organization_id=artist.primary_org_id,
-            owner_user_id=artist.claimed_user_id,
+            owner_user_id=await acting_owner(self.session, artist.id, ctx.user_id),
         )
 
     async def _allowed(

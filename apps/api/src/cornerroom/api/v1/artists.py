@@ -19,6 +19,8 @@ router = APIRouter(tags=["artists"])
 
 class ArtistOut(BaseModel):
     id: UUID
+    # SOLO or BAND: every band is an artist (D-ARTIST-UNIFY-01); a band's page is /bands/{id}.
+    kind: str = "SOLO"
     stage_name: str
     legal_name: str | None
     bio: str | None
@@ -32,6 +34,7 @@ class ArtistOut(BaseModel):
 
 class PublicArtistOut(BaseModel):
     id: UUID
+    kind: str = "SOLO"
     stage_name: str
     bio: str | None
     status: str
@@ -129,6 +132,7 @@ class FollowOut(BaseModel):
 def _artist_out(row: Artist) -> ArtistOut:
     return ArtistOut(
         id=row.id,
+        kind=row.kind,
         stage_name=row.stage_name,
         legal_name=row.legal_name,
         bio=row.bio,
@@ -144,6 +148,7 @@ def _artist_out(row: Artist) -> ArtistOut:
 def _public_artist(row: Artist) -> PublicArtistOut:
     return PublicArtistOut(
         id=row.id,
+        kind=row.kind,
         stage_name=row.stage_name,
         bio=row.bio,
         status=row.status,
@@ -190,8 +195,9 @@ async def list_artists(
     ctx: Annotated[AuthContext | None, Depends(get_optional_auth_context)],
     cursor: str | None = None,
     limit: int = Query(default=50, ge=1, le=100),
+    kind: Literal["SOLO", "BAND"] | None = None,
 ) -> ArtistPage | PublicArtistPage:
-    rows, next_cursor, public_only = await svc.list_artists(ctx, cursor=cursor, limit=limit)
+    rows, next_cursor, public_only = await svc.list_artists(ctx, cursor=cursor, limit=limit, kind=kind)
     if public_only:
         return PublicArtistPage(items=[_public_artist(r) for r in rows], next_cursor=next_cursor)
     return ArtistPage(items=[_artist_out(r) for r in rows], next_cursor=next_cursor)

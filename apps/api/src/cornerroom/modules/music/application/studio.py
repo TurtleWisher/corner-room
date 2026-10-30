@@ -31,7 +31,7 @@ from cornerroom.kernel.events import (
     TRACK_CREATED,
     DomainEvent,
 )
-from cornerroom.modules.artists.domain.models import Artist, Band, BandMember
+from cornerroom.modules.artists.domain.models import Artist, Band
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.commerce.application.sales import CatalogSales
 from cornerroom.modules.documents.application.covers import CoverService, latest_artwork_report
@@ -81,30 +81,22 @@ class StudioService:
     # --- profiles and access ---------------------------------------------------------------
 
     async def my_profiles(self, ctx: AuthContext) -> list[dict[str, Any]]:
-        """Artists and bands this account may publish for, with whether it can right now (S1)."""
+        """Profiles (solo or band) this account runs as owner or manager, with whether it can
+        publish right now (S1, D-ARTIST-UNIFY-01)."""
+        from cornerroom.modules.artists.application.team import artist_ids_run_by
+
         out: list[dict[str, Any]] = []
-        artists = (
-            await self.session.execute(
-                select(Artist).where(Artist.claimed_user_id == ctx.user_id, Artist.deleted_at.is_(None))
-            )
-        ).scalars().all()
-        for artist in artists:
-            out.append(self._profile_card("artist", artist.id, artist.stage_name, artist.status, artist.primary_org_id))
-        bands = (
-            await self.session.execute(
-                select(Band)
-                .join(BandMember, BandMember.band_id == Band.id)
-                .where(
-                    BandMember.user_id == ctx.user_id,
-                    BandMember.is_admin.is_(True),
-                    BandMember.status == "ACTIVE",
-                    BandMember.deleted_at.is_(None),
-                    Band.deleted_at.is_(None),
-                )
-            )
-        ).scalars().all()
-        for band in bands:
-            out.append(self._profile_card("band", band.id, band.name, band.status, band.primary_org_id))
+        for pid in await artist_ids_run_by(self.session, ctx.user_id):
+            artist = await self.session.get(Artist, pid)
+            if artist is None:
+                continue
+            if artist.kind == "BAND":
+                band = await self.session.get(Band, pid)
+                if band is None or band.deleted_at is not None:
+                    continue
+                out.append(self._profile_card("band", band.id, band.name, band.status, band.primary_org_id))
+            else:
+                out.append(self._profile_card("artist", artist.id, artist.stage_name, artist.status, artist.primary_org_id))
         return out
 
     @staticmethod
@@ -119,7 +111,8 @@ class StudioService:
     async def _profile(self, kind: str, pid: UUID) -> tuple[Artist | Band, UUID | None, str]:
         if kind == "artist":
             artist = await self.session.get(Artist, pid)
-            if artist is None or artist.deleted_at is not None:
+            # A band's artist row is reached as a band (D-ARTIST-UNIFY-01).
+            if artist is None or artist.deleted_at is not None or artist.kind == "BAND":
                 raise NotFoundError("Profile not found")
             return artist, artist.primary_org_id, artist.stage_name
         if kind == "band":
@@ -1008,7 +1001,9 @@ class StudioService:
         """Catalog profile cards in the staff member's workspace. Stage or band name only (3.5)."""
         org = await self._require_staff_workspace(ctx)
         text = (query or "").strip()
-        artists_stmt = select(Artist).where(Artist.primary_org_id == org, Artist.deleted_at.is_(None))
+        artists_stmt = select(Artist).where(
+            Artist.primary_org_id == org, Artist.deleted_at.is_(None), Artist.kind == "SOLO"
+        )
         bands_stmt = select(Band).where(Band.primary_org_id == org, Band.deleted_at.is_(None))
         if text:
             artists_stmt = artists_stmt.where(Artist.stage_name.ilike(f"%{text}%"))

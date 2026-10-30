@@ -25,24 +25,27 @@ async def _label_org(client: AsyncClient) -> str:
 
 async def _artist_for(user_id: str, org_id: str | None, *, status: str = "ACTIVE", name: str = "Mizuls") -> str:
     from cornerroom.infra.db import get_session_factory
-    from cornerroom.modules.artists.domain.models import Artist
+    from cornerroom.modules.artists.domain.models import Artist, ArtistTeamMember
 
     async with get_session_factory()() as session:
         artist = Artist(stage_name=name, status=status, claimed_user_id=UUID(user_id), primary_org_id=UUID(org_id) if org_id else None, legal_name="Private Legal Name")
         session.add(artist)
+        await session.flush()
+        session.add(ArtistTeamMember(artist_id=artist.id, user_id=UUID(user_id), role="OWNER", status="ACTIVE"))
         await session.commit()
         return str(artist.id)
 
 
 async def _band_with(admin_user: str, member_user: str, org_id: str) -> str:
     from cornerroom.infra.db import get_session_factory
-    from cornerroom.modules.artists.domain.models import Band, BandMember
+    from cornerroom.modules.artists.domain.models import ArtistTeamMember, Band, BandMember
 
     async with get_session_factory()() as session:
         band = Band(name="Night Shift", status="ACTIVE", primary_org_id=UUID(org_id))
         session.add(band)
         await session.flush()
         session.add(BandMember(band_id=band.id, user_id=UUID(admin_user), status="ACTIVE", is_admin=True))
+        session.add(ArtistTeamMember(artist_id=band.id, user_id=UUID(admin_user), role="OWNER", status="ACTIVE"))
         session.add(BandMember(band_id=band.id, user_id=UUID(member_user), status="ACTIVE", is_admin=False))
         await session.commit()
         return str(band.id)
