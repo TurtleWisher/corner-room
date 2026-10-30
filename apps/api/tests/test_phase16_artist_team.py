@@ -173,3 +173,51 @@ async def test_staff_make_someone_else_the_owner(client: AsyncClient) -> None:
     assert [p["id"] for p in await _profiles(client, first["access_token"])] == [band_id]
     view = (await client.get(f"/api/v1/studio/profiles/band/{band_id}/team", headers=bearer(official["access_token"]))).json()
     assert view["can_pick_managers"] is True
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_owner_hands_the_profile_to_an_approved_manager(client: AsyncClient) -> None:
+    """Owner, 2026-10-31: the current owner can change the owner (for example to a band's official
+    email account). Only an approved manager can be handed the profile; the old owner stays on."""
+    admin, orgs = await _orgs(client)
+    label = orgs["LABEL"]
+    first = await register_and_login(client, "hand-first@example.com")
+    official = await register_and_login(client, "hand-official@example.com")
+    member = await register_and_login(client, "hand-member@example.com")
+    band_id = await _band_with(first["user"]["id"], member["user"]["id"], label)
+    staff = await _staff_with(client, admin, "hand-staff@example.com", "label_manager", label)
+    team_url = f"/api/v1/studio/profiles/band/{band_id}/team"
+
+    picked = (await client.post(team_url, headers=bearer(first["access_token"]), json={"email": "hand-official@example.com"})).json()
+    waiting = next(m for m in picked["members"] if m["email"] == "hand-official@example.com")
+    # Not approved yet: it can't be handed over.
+    early = await client.put(f"{team_url}/{waiting['id']}/owner", headers=bearer(first["access_token"]))
+    assert early.status_code == 409 and early.json()["code"] == "MANAGER_NOT_APPROVED"
+    approved = await client.post(
+        f"/api/v1/artist-team-requests/{waiting['id']}/review", headers=bearer(staff), json={"action": "approve"}
+    )
+    assert approved.status_code == 200, approved.text
+
+    # A manager can't hand the profile over, even to themselves.
+    by_manager = await client.put(f"{team_url}/{waiting['id']}/owner", headers=bearer(official["access_token"]))
+    assert by_manager.status_code == 403 and by_manager.json()["code"] == "OWNER_ONLY"
+    # Someone with nothing to do with the profile sees nothing.
+    stranger = await register_and_login(client, "hand-stranger@example.com")
+    assert (await client.put(f"{team_url}/{waiting['id']}/owner", headers=bearer(stranger["access_token"]))).status_code == 404
+
+    handed = await client.put(f"{team_url}/{waiting['id']}/owner", headers=bearer(first["access_token"]))
+    assert handed.status_code == 200, handed.text
+    roles = {m["email"]: (m["role"], m["status"]) for m in handed.json()["members"]}
+    assert roles == {
+        "hand-official@example.com": ("OWNER", "ACTIVE"),
+        "hand-first@example.com": ("MANAGER", "ACTIVE"),
+    }
+    assert handed.json()["can_pick_managers"] is False
+
+    # The new owner runs the team now and can take the old owner off.
+    view = (await client.get(team_url, headers=bearer(official["access_token"]))).json()
+    assert view["my_role"] == "OWNER" and view["can_pick_managers"] is True
+    old = next(m for m in view["members"] if m["email"] == "hand-first@example.com")
+    assert (await client.delete(f"{team_url}/{old['id']}", headers=bearer(official["access_token"]))).status_code == 200
+    assert (await client.get("/api/v1/me/catalog-profiles", headers=bearer(first["access_token"]))).json() == []

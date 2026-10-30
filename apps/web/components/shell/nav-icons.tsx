@@ -33,6 +33,7 @@ import {
   Ticket,
   UserRound,
   Users,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -63,6 +64,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/royalties": Coins,
   "/studio": LayoutDashboard,
   "/studio/profile": UserRoundPen,
+  "/studio/team": UsersRound,
   "/studio/sales": ChartNoAxesColumn,
   "/studio/gifts": Gift,
   "/staff/catalog": Disc3,

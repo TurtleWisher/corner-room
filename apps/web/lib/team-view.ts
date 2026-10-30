@@ -53,4 +53,9 @@ export function takeOffAction(m: Pick<TeamMember, "role" | "status" | "user_id">
   return null;
 }
 
+/** The owner can hand the profile to a manager staff have approved (owner, 2026-10-31). */
+export function canHandOver(m: Pick<TeamMember, "role" | "status">, team: Pick<Team, "my_role">): boolean {
+  return team.my_role === "OWNER" && m.role === "MANAGER" && m.status === "ACTIVE";
+}
+
 export const TAKE_OFF_LABEL = { remove: "Remove", withdraw: "Withdraw", leave: "Leave this team" } as const;

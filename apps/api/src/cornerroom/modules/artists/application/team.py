@@ -6,7 +6,8 @@
 - Solo or band, a profile has one owner and any number of managers. Managers do and see what the
   owner does: music, files, sales, buyer names, payouts. Only the owner picks a manager, and the
   new manager waits for staff approval. The owner (or staff) can take a manager off at any time
-  and a manager can leave; staff set or change the owner. Reviewers are staff with artist.manage
+  and a manager can leave. The owner can hand ownership to an approved manager (owner,
+  2026-10-31), and staff can set or change the owner; the previous owner stays on as a manager. Reviewers are staff with artist.manage
   in the profile's label, in that workspace, who are not on the profile's team (the same
   two-person rule as profile changes).
 """
@@ -275,7 +276,7 @@ class TeamService:
 
     async def take_off(self, ctx: AuthContext, kind: str, pid: UUID, member_id: UUID) -> dict[str, Any]:
         """The owner takes a manager off or withdraws a waiting pick; a manager leaves; staff may
-        take any manager off. The owner is changed by staff, never removed."""
+        take any manager off. The owner is handed over (hand_over, set_owner), never removed."""
         artist = await self._profile(kind, pid)
         row = await self.session.get(ArtistTeamMember, member_id)
         if row is None or row.artist_id != artist.id or row.status not in OPEN_STATUSES:
@@ -285,12 +286,39 @@ class TeamService:
         if not allowed:
             raise NotFoundError("Team member not found")
         if row.role == OWNER:
-            raise AppError("OWNER_STAYS", "The owner can't be taken off", 409, "Staff can make someone else the owner")
+            raise AppError(
+                "OWNER_STAYS", "The owner can't be taken off", 409,
+                "Make a manager the owner first, then that person can take you off",
+            )
         previous = row.status
         row.status = "REMOVED" if previous == "ACTIVE" else "WITHDRAWN"
         row.ended_by, row.ended_at, row.updated_by = ctx.user_id, self.clock.now(), ctx.user_id
         await self.session.flush()
         await self._record(ctx, artist, row, f"artist.team_member_{row.status.lower()}", previous)
+        return await self._team_view(artist, ctx)
+
+    async def hand_over(self, ctx: AuthContext, kind: str, pid: UUID, member_id: UUID) -> dict[str, Any]:
+        """The owner makes one of the profile's approved managers the owner (owner, 2026-10-31).
+        Only someone staff already approved can be handed the profile; the previous owner stays on
+        as a manager, and the new owner can take them off."""
+        artist = await self._profile(kind, pid)
+        owner = await owner_user_id(self.session, artist.id)
+        if owner != ctx.user_id:
+            if ctx.user_id in await team_user_ids(self.session, artist.id):
+                raise AppError("OWNER_ONLY", "Only the owner can hand over the profile", 403)
+            raise NotFoundError("Profile not found")
+        row = await self.session.get(ArtistTeamMember, member_id)
+        if row is None or row.artist_id != artist.id or row.status not in OPEN_STATUSES:
+            raise NotFoundError("Team member not found")
+        if row.role == OWNER:
+            raise AppError("INVALID_TRANSITION", "This person is already the owner", 409)
+        if row.status != "ACTIVE":
+            raise AppError(
+                "MANAGER_NOT_APPROVED", "Staff haven't approved this manager yet", 409,
+                "Hand the profile over once staff approve them",
+            )
+        new_owner = await make_owner(self.session, artist.id, row.user_id, by=ctx.user_id)
+        await self._record(ctx, artist, new_owner, "artist.team_owner_handed_over", str(ctx.user_id))
         return await self._team_view(artist, ctx)
 
     async def queue(self, ctx: AuthContext) -> list[dict[str, Any]]:

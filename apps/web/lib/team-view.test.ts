@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { memberBadge, memberName, orderTeam, takeOffAction, type TeamMember } from "./team-view";
+import { canHandOver, memberBadge, memberName, orderTeam, takeOffAction, type TeamMember } from "./team-view";
 
 const member = (over: Partial<TeamMember> = {}): TeamMember => ({
   id: "m1",
@@ -43,5 +43,13 @@ describe("artist team (D-ARTIST-UNIFY-01)", () => {
     expect(takeOffAction(member({ role: "OWNER", user_id: "u0" }), owner, "u0")).toBeNull();
     expect(takeOffAction(member({ user_id: "u1" }), manager, "u1")).toBe("leave");
     expect(takeOffAction(member({ user_id: "u2" }), manager, "u1")).toBeNull();
+  });
+
+  it("lets only the owner hand the profile to an approved manager (owner, 2026-10-31)", () => {
+    expect(canHandOver(member(), { my_role: "OWNER" })).toBe(true);
+    expect(canHandOver(member({ status: "PENDING" }), { my_role: "OWNER" })).toBe(false);
+    expect(canHandOver(member({ role: "OWNER" }), { my_role: "OWNER" })).toBe(false);
+    expect(canHandOver(member(), { my_role: "MANAGER" })).toBe(false);
+    expect(canHandOver(member(), { my_role: null })).toBe(false);
   });
 });

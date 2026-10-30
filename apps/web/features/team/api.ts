@@ -26,6 +26,11 @@ export async function takeOffTeam(kind: ProfileKind, id: string, memberId: strin
   return apiFetch<Team>(`/api/v1/studio/profiles/${kind}/${id}/team/${memberId}`, { method: "DELETE", retry: false });
 }
 
+/** The owner makes an approved manager the owner; the previous owner stays on as a manager. */
+export async function handOverTeam(kind: ProfileKind, id: string, memberId: string): Promise<Team> {
+  return apiFetch<Team>(`/api/v1/studio/profiles/${kind}/${id}/team/${memberId}/owner`, { method: "PUT", retry: false });
+}
+
 /** Staff: managers waiting for approval in the active workspace. */
 export async function fetchTeamRequests(): Promise<TeamRequest[]> {
   return apiFetch<TeamRequest[]>("/api/v1/artist-team-requests", { retry: false });
