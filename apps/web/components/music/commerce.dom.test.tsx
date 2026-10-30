@@ -43,6 +43,20 @@ describe("TrackBuyControl", () => {
     expect(document.body.textContent).toContain("50");
   });
 
+  it("shows visitors the price of the release a song is sold with (owner, 2026-10-30)", () => {
+    auth.status = "anonymous";
+    const single = { ...offer, id: "o2", product_type: "RELEASE", subject_id: "r1", amount_minor: 3000, release_type: "SINGLE" };
+    const onlyRelease: CustomerCommerce = { offers: [single], entitlements: [], ready: true, reload: () => {} };
+    render(<TrackBuyControl track={track} commerce={onlyRelease} releaseIds={["r1"]} />);
+    expect(document.body.textContent).toContain("Buy the single");
+    expect(document.body.textContent).toContain("30");
+    expect(screen.getByRole("link", { name: "Sign in to play Night Bus" })).toBeTruthy();
+    cleanup();
+    // Not on the release's own page, which shows the price once already.
+    render(<TrackBuyControl track={track} commerce={onlyRelease} releaseIds={["r1"]} onReleasePage="r1" />);
+    expect(document.body.textContent).not.toContain("Buy the single");
+  });
+
   it("shows signed-in people who don't own it a lock to the purchase page", () => {
     auth.status = "authenticated";
     render(<TrackBuyControl track={track} commerce={commerce()} releaseIds={[]} />);

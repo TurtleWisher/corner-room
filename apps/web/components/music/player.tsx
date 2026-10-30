@@ -831,7 +831,12 @@ export function PlayerBar() {
         className="cr-scope cr-player-dock fixed inset-x-0 z-40 border-t border-cr-sky/60"
       >
         <div className="cr-glass mx-auto flex h-20 max-w-[90rem] items-center gap-3 px-3 md:gap-5 md:px-6">
-          <Link href={`/listen/${p.track.id}`} aria-label={`Open the listening room for ${label}`} className="cr-focus size-12 shrink-0 bg-cr-sky">
+          {/* cr-now-cover: grows into the room's front card on the way in (room-transition.tsx). */}
+          <Link
+            href={`/listen/${p.track.id}`}
+            aria-label={`Open the listening room for ${label}`}
+            className="cr-focus size-12 shrink-0 bg-cr-sky [view-transition-name:cr-now-cover]"
+          >
             <CoverArt
               src={coverUrl({ track: p.track.id }, 160)}
               fallback={<RoomCube front={label} side={p.track.artist || label} tone="sky" size="front" label="" className="size-full" />}

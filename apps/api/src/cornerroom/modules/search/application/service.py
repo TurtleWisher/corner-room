@@ -15,6 +15,7 @@ from cornerroom.kernel.clock import Clock
 from cornerroom.kernel.events import DomainEvent
 from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
 from cornerroom.modules.artists.application.service import ArtistService
+from cornerroom.modules.artists.application.team import acting_owner
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.identity.application.rate_limit import enforce_auth_rate_limit
 from cornerroom.modules.search.application.indexer import SearchIndexer
@@ -178,7 +179,7 @@ class SearchService:
         if row.entity_type == ENTITY_ARTIST:
             try:
                 artist = await self.artists.get_artist_row(row.entity_id)
-                owner_user_id = artist.claimed_user_id
+                owner_user_id = await acting_owner(self.session, artist.id, ctx.user_id)
             except NotFoundError:
                 owner_user_id = None
         try:

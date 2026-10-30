@@ -4,13 +4,14 @@ import Link from "next/link";
 import { Guitar, Users } from "lucide-react";
 
 import { FoldOut } from "@/components/music/fold-out";
-import type { ArtistRecord, CreditRecord } from "@/lib/api";
+import type { ArtistRecord, BandRecord, CreditRecord } from "@/lib/api";
 import { humanizeStatus } from "@/lib/format/status";
 import { creditDetails } from "@/lib/music-view";
 
-function Person({ name, artistId }: { name: string; artistId: string | null }) {
-  return artistId ? (
-    <Link href={`/artists/${artistId}`} className="cr-focus font-semibold text-fg hover:text-highlight hover:underline">
+/** A name with a Corner Room page links to it; anyone else is plain text (owner, 2026-10-31). */
+function Person({ name, href }: { name: string; href: string | null }) {
+  return href ? (
+    <Link href={href} className="cr-focus font-semibold text-fg underline decoration-line-strong underline-offset-4 hover:text-highlight hover:decoration-current">
       {name}
     </Link>
   ) : (
@@ -26,13 +27,15 @@ function Person({ name, artistId }: { name: string; artistId: string | null }) {
 export function SongCredits({
   credits,
   artists,
+  bands = [],
   className,
 }: {
   credits: CreditRecord[];
   artists: Pick<ArtistRecord, "id" | "stage_name">[];
+  bands?: Pick<BandRecord, "id" | "name">[];
   className?: string;
 }) {
-  const { main, played } = creditDetails(credits, artists, (role) => humanizeStatus(role));
+  const { main, played } = creditDetails(credits, artists, (role) => humanizeStatus(role), bands);
   return (
     <FoldOut title="Credits" icon={Users} count={main.length || undefined} className={className}>
       {main.length === 0 ? (
@@ -42,7 +45,7 @@ export function SongCredits({
           {main.map((c) => (
             <li key={c.key} className="flex justify-between gap-4 border-b border-line py-2.5 text-sm">
               <span className="text-fg-muted">{c.role}</span>
-              <Person name={c.name} artistId={c.artistId} />
+              <Person name={c.name} href={c.href} />
             </li>
           ))}
         </ul>
@@ -55,7 +58,7 @@ export function SongCredits({
             {played.map((p) => (
               <li key={p.key} className="flex justify-between gap-4 border-b border-line py-2.5 text-sm">
                 <span className="text-fg-muted">{p.plays}</span>
-                <Person name={p.name} artistId={p.artistId} />
+                <Person name={p.name} href={p.href} />
               </li>
             ))}
           </ul>

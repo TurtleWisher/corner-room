@@ -10,6 +10,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -37,7 +38,9 @@ class Artist(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, B
             "'SIGNED','ACTIVE','SUSPENDED','TERMINATED','REJECTED')",
             name="status",
         ),
+        CheckConstraint("kind IN ('SOLO','BAND')", name="kind"),
         Index("ix_artists_status", "status"),
+        Index("ix_artists_kind", "kind"),
         Index("ix_artists_stage_name", "stage_name"),
         Index("ix_artists_primary_org_id", "primary_org_id"),
         Index(
@@ -49,6 +52,11 @@ class Artist(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, B
         {"schema": "artists"},
     )
 
+    # D-ARTIST-UNIFY-01: every band is an artist too. A band's row here has the band's own id and
+    # kind BAND, and mirrors the band's name, bio, picture and state (team.py keeps it in step);
+    # what only a band has (its lineup) stays on `bands`.
+    kind: Mapped[str] = mapped_column(String(8), nullable=False, default="SOLO", server_default="SOLO")
+    # Who first claimed the profile. Who runs it now is the team (ArtistTeamMember).
     claimed_user_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("identity.users.id"),
         nullable=True,
@@ -144,6 +152,8 @@ class Band(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Bas
         Index("ix_bands_status", "status"),
         Index("ix_bands_name", "name"),
         Index("ix_bands_primary_org_id", "primary_org_id"),
+        # Every band is an artist with the same id (D-ARTIST-UNIFY-01).
+        ForeignKeyConstraint(["id"], ["artists.artists.id"], name="fk_bands_id_artists"),
         {"schema": "artists"},
     )
 
@@ -212,6 +222,49 @@ class BandMember(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixi
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class ArtistTeamMember(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
+    """Who runs an artist profile, solo or band (owner, 2026-10-30, D-ARTIST-UNIFY-01).
+
+    One OWNER and any number of MANAGERs. Managers can do and see what the owner can (music,
+    files, sales, buyer names, payouts); only the owner picks managers, and a new manager is
+    PENDING until staff approve. Rows are kept as history (REJECTED, WITHDRAWN, REMOVED).
+    """
+
+    __tablename__ = "artist_team_members"
+    __table_args__ = (
+        CheckConstraint("role IN ('OWNER','MANAGER')", name="role"),
+        CheckConstraint("status IN ('PENDING','ACTIVE','REJECTED','WITHDRAWN','REMOVED')", name="status"),
+        Index("ix_artist_team_members_artist_id", "artist_id"),
+        Index("ix_artist_team_members_user_id", "user_id"),
+        Index("ix_artist_team_members_status", "status"),
+        Index(
+            "uq_artist_team_members_open",
+            "artist_id",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status IN ('PENDING','ACTIVE')"),
+        ),
+        Index(
+            "uq_artist_team_members_owner",
+            "artist_id",
+            unique=True,
+            postgresql_where=text("role = 'OWNER' AND status = 'ACTIVE'"),
+        ),
+        {"schema": "artists"},
+    )
+
+    artist_id: Mapped[UUID] = mapped_column(ForeignKey("artists.artists.id"), nullable=False)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("identity.users.id"), nullable=False)
+    role: Mapped[str] = mapped_column(String(8), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
+    requested_by: Mapped[UUID | None] = mapped_column(ForeignKey("identity.users.id"), nullable=True)
+    reviewed_by: Mapped[UUID | None] = mapped_column(ForeignKey("identity.users.id"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ended_by: Mapped[UUID | None] = mapped_column(ForeignKey("identity.users.id"), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Follow(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Base):
     __tablename__ = "follows"
     __table_args__ = (
@@ -275,3 +328,7 @@ class ProfileChangeRequest(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base
     reviewed_by: Mapped[UUID | None] = mapped_column(ForeignKey("identity.users.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+# Registers the before-flush step that keeps every band's artist row in step (D-ARTIST-UNIFY-01).
+from cornerroom.modules.artists.domain import band_mirror as _band_mirror  # noqa: E402,F401

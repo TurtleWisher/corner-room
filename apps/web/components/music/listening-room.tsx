@@ -520,7 +520,7 @@ function Carousel({ onFocus, frontRef }: { onFocus: () => void; frontRef: React.
               onClick={() => (front ? onFocus() : void p.play(item))}
               className={cn("lr-card cr-cut cr-glass-card cr-focus", front && p.status === "loading" && "lr-card-loading")}
             >
-              <span className="lr-cover">
+              <span className={cn("lr-cover", front && "[view-transition-name:cr-now-cover]")}>
                 <Cover id={item.id} title={title} artist={item.artist || title} />
               </span>
               <span className="lr-caption">

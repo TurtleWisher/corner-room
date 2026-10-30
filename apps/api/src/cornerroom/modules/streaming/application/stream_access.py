@@ -38,34 +38,16 @@ class StreamAccess:
         return out
 
     async def owned_profiles(self, user_id: UUID) -> tuple[set[UUID], set[UUID]]:
-        """Artist and band profiles this user manages (the same people who may publish for them)."""
-        from cornerroom.modules.artists.domain.models import Artist, Band, BandMember
+        """Artist and band profiles this user runs (the same people who may publish for them)."""
+        from cornerroom.modules.artists.application.team import artist_ids_run_by
+        from cornerroom.modules.artists.domain.models import Artist
 
-        artists = set(
-            (
-                await self.session.execute(
-                    select(Artist.id).where(
-                        Artist.claimed_user_id == user_id, Artist.status == "ACTIVE", Artist.deleted_at.is_(None)
-                    )
-                )
-            ).scalars()
-        )
-        bands = set(
-            (
-                await self.session.execute(
-                    select(Band.id)
-                    .join(BandMember, BandMember.band_id == Band.id)
-                    .where(
-                        BandMember.user_id == user_id,
-                        BandMember.status == "ACTIVE",
-                        BandMember.is_admin.is_(True),
-                        BandMember.deleted_at.is_(None),
-                        Band.status == "ACTIVE",
-                        Band.deleted_at.is_(None),
-                    )
-                )
-            ).scalars()
-        )
+        artists: set[UUID] = set()
+        bands: set[UUID] = set()
+        for pid in await artist_ids_run_by(self.session, user_id):
+            artist = await self.session.get(Artist, pid)
+            if artist is not None and artist.status == "ACTIVE":
+                (bands if artist.kind == "BAND" else artists).add(pid)
         return artists, bands
 
     async def can_stream(self, user_id: UUID, track_id: UUID) -> bool:

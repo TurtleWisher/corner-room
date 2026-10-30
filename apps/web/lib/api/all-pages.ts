@@ -23,9 +23,9 @@ export async function fetchAllPages<T>(fetchPage: (cursor: string | null) => Pro
   return items;
 }
 
-/** "/api/v1/offers" + page size and cursor. */
+/** "/api/v1/offers" + page size and cursor (kept after any filter already on the path). */
 export function pagePath(path: string, cursor: string | null): string {
   const query = new URLSearchParams({ limit: String(PAGE_SIZE) });
   if (cursor) query.set("cursor", cursor);
-  return `${path}?${query.toString()}`;
+  return `${path}${path.includes("?") ? "&" : "?"}${query.toString()}`;
 }

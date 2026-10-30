@@ -62,6 +62,7 @@ export function studioNavSections(profiles: { kind: string; id: string; display_
       items: [
         { href: "/studio", label: "Studio home" },
         { href: "/studio/profile", label: "Profile" },
+        { href: "/studio/team", label: "Team" },
       ],
     },
     {

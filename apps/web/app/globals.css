@@ -52,6 +52,53 @@ body {
   }
 }
 
+/* Into and out of the listening room (owner, 2026-10-31; components/shell/room-transition.tsx): the
+   page cross-fades with a slight settle, transform and opacity only, and the player bar's cover grows
+   into the room's front card. The bar and the phone tab bar keep their place. Never runs under
+   reduced motion (the component checks too). */
+.cr-player-dock {
+  view-transition-name: cr-player;
+}
+[data-tab-bar] {
+  view-transition-name: cr-tab-bar;
+}
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: cr-room-out var(--cr-dur-component) var(--ease-corner) both;
+  }
+  ::view-transition-new(root) {
+    animation: cr-room-in var(--cr-dur-hero) var(--ease-corner) both;
+  }
+  ::view-transition-group(cr-now-cover) {
+    animation-duration: var(--cr-dur-hero);
+    animation-timing-function: var(--ease-corner);
+  }
+  /* The room's own entrance would play twice; the transition already brings it in. */
+  html:active-view-transition [data-module="music"] .lr-focus,
+  html:active-view-transition [data-module="music"] .lr-focus-art {
+    animation: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+@keyframes cr-room-out {
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+@keyframes cr-room-in {
+  from {
+    opacity: 0;
+    transform: scale(1.015);
+  }
+}
+
 /* Fold-outs on the song page (components/music/fold-out.tsx): the content eases in on opening. */
 .cr-fold[open] > .cr-fold-body {
   animation: cr-fold-in 240ms cubic-bezier(0.22, 0.8, 0.16, 1);

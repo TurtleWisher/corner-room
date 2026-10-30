@@ -23,5 +23,6 @@ describe("fetchAllPages", () => {
   it("builds the page path with the largest page size", () => {
     expect(pagePath("/api/v1/offers", null)).toBe("/api/v1/offers?limit=100");
     expect(pagePath("/api/v1/offers", "a b")).toBe("/api/v1/offers?limit=100&cursor=a+b");
+    expect(pagePath("/api/v1/artists?kind=SOLO", "c")).toBe("/api/v1/artists?kind=SOLO&limit=100&cursor=c");
   });
 });
