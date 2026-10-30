@@ -1,11 +1,13 @@
-# Corner Room production stack (deploy readiness, 2026-10-23). Run on the server from the repo root:
-#   docker compose -f deploy/compose.prod.yml --env-file .env.production up -d
-# Usually through deploy/scripts/deploy.sh, which also backs up and migrates first.
+# Corner Room production stack (deploy readiness, 2026-10-23; zero-downtime colours 2026-10-30).
+# Always run through deploy/scripts/deploy.sh on the server: it builds, backs up, migrates, starts
+# the new release next to the live one, switches the edge proxy over, then stops the old one.
 #
-# nginx on the host is the only way in: web and API listen on 127.0.0.1 only, Postgres and
-# Redis are not published at all. Secrets come from .env.production (never committed).
+# nginx on the host is the only way in. The edge container owns 127.0.0.1:3000 (site) and :8000
+# (API) and forwards to the live colour: api-blue/web-blue or api-green/web-green. Postgres, Redis
+# and the colour containers are not published at all. Secrets come from .env.production (never
+# committed). A staging copy uses its own clone, COMPOSE_PROJECT_NAME and EDGE_*_PORT values.
 
-name: cornerroom
+name: ${COMPOSE_PROJECT_NAME:-cornerroom}
 
 # Container logs are rotated (3 x 20 MB each) so a busy server's disk never fills with logs.
 x-logging: &logging
@@ -68,25 +70,24 @@ services:
       timeout: 3s
       retries: 10
 
-  api:
-    build:
-      context: ..
-      dockerfile: apps/api/Dockerfile
-    image: cornerroom-api:${RELEASE:-latest}
+  # One API and one web app per colour; deploy.sh decides which colour is live. Images are built
+  # by deploy.sh (cornerroom-api:<release>, cornerroom-web:<release>).
+  api-blue: &api
+    image: cornerroom-api:${BLUE_RELEASE:-none}
     command: ["api"]
     restart: unless-stopped
     logging: *logging
     env_file: ../.env.production
-    environment:
+    environment: &api-colour-env
       <<: *api-env
       # Migrations run once in deploy.sh before the new version starts.
       RUN_MIGRATIONS: "0"
+      SENTRY_RELEASE: ${BLUE_RELEASE:-none}
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-3}
-      # Per process: 3 API processes x (8 + 4) + the worker stays far below Postgres' 100 connections.
+      # Per process: 3 API processes x (8 + 4) per colour; two colours overlap for a minute during a
+      # deploy, still well below Postgres' 100 connections with the worker.
       DB_POOL_SIZE: ${DB_POOL_SIZE:-8}
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-4}
-    ports:
-      - "127.0.0.1:8000:8000"
     volumes:
       - storage:/app/var/storage
     depends_on:
@@ -101,8 +102,15 @@ services:
       start_period: 40s
       retries: 3
 
+  api-green:
+    <<: *api
+    image: cornerroom-api:${GREEN_RELEASE:-none}
+    environment:
+      <<: *api-colour-env
+      SENTRY_RELEASE: ${GREEN_RELEASE:-none}
+
   worker:
-    image: cornerroom-api:${RELEASE:-latest}
+    image: cornerroom-api:${RELEASE:-none}
     command: ["worker"]
     restart: unless-stopped
     logging: *logging
@@ -112,32 +120,39 @@ services:
     env_file: ../.env.production
     environment:
       <<: *api-env
+      SENTRY_RELEASE: ${RELEASE:-none}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-8}
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-4}
     # The worker checks and converts uploads: it must see the same files as the API.
     volumes:
       - storage:/app/var/storage
     depends_on:
-      api:
+      postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
-  web:
-    build:
-      context: ../apps/web
-      dockerfile: Dockerfile
-      args:
-        # Empty: the browser calls the API on the site's own address (nginx sends /api/ there).
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
-    image: cornerroom-web:${RELEASE:-latest}
+  web-blue: &web
+    image: cornerroom-web:${BLUE_RELEASE:-none}
     restart: unless-stopped
     logging: *logging
     environment:
       NODE_ENV: production
+
+  web-green:
+    <<: *web
+    image: cornerroom-web:${GREEN_RELEASE:-none}
+
+  # Holds the public ports for the whole life of the server, so a deploy never closes them.
+  edge:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    logging: *logging
     ports:
-      - "127.0.0.1:3000:3000"
-    depends_on:
-      api:
-        condition: service_healthy
+      - "127.0.0.1:${EDGE_API_PORT:-8000}:8000"
+      - "127.0.0.1:${EDGE_WEB_PORT:-3000}:3000"
+    volumes:
+      - ./edge/conf.d:/etc/nginx/conf.d:ro
 
 volumes:
   pgdata:

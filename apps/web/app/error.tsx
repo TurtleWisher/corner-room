@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { ErrorState } from "@/components/async-state";
 import { Button } from "@/components/ui/button";
+import { reportError } from "@/lib/error-report";
 
 export default function Error({
   error,
@@ -10,6 +13,8 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // A page that crashed is reported once (D-ERR-01); the visitor still sees only this message.
+  useEffect(() => reportError("boundary", error), [error]);
   return (
     <div className="space-y-4">
       <ErrorState

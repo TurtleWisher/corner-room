@@ -8,11 +8,12 @@ set -euo pipefail
 
 cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 ENV_FILE=".env.production"
-COMPOSE=(docker compose -f deploy/compose.prod.yml --env-file "$ENV_FILE")
-LOCAL_DIR="/var/backups/cornerroom"
-
 # Read one value from .env.production (values may contain spaces, so it is not sourced).
-envval() { grep -E "^$1=" "$ENV_FILE" | tail -n1 | cut -d= -f2- | tr -d '\r'; }
+# A missing key is empty (its default applies), never a failure under `set -o pipefail`.
+envval() { { grep -E "^$1=" "$ENV_FILE" || true; } | tail -n1 | cut -d= -f2- | tr -d '\r'; }
+PROJECT="$(envval COMPOSE_PROJECT_NAME)"; PROJECT="${PROJECT:-cornerroom}"
+COMPOSE=(docker compose -p "$PROJECT" -f deploy/compose.prod.yml --env-file "$ENV_FILE")
+LOCAL_DIR="/var/backups/$PROJECT"
 
 R2_REMOTE="$(envval R2_REMOTE)"
 KEEP_DAYS="$(envval BACKUP_KEEP_DAYS)"; KEEP_DAYS="${KEEP_DAYS:-14}"
@@ -39,7 +40,7 @@ find "$LOCAL_DIR" -name 'db-*' -mtime +"$KEEP_DAYS" -delete
 if [ "${1:-}" = "--db-only" ]; then exit 0; fi
 
 echo "[$STAMP] stored files"
-VOLUME="$(docker volume inspect -f '{{ .Mountpoint }}' cornerroom_storage)"
+VOLUME="$(docker volume inspect -f '{{ .Mountpoint }}' "${PROJECT}_storage")"
 if [ -n "$R2_REMOTE" ]; then
   # Copies new and changed files; files deleted here move to storage-deleted/<date> instead of vanishing.
   rclone sync "$VOLUME" "$R2_REMOTE/storage/" --backup-dir "$R2_REMOTE/storage-deleted/$STAMP" --exclude "_upload_parts/**"

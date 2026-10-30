@@ -1,0 +1,78 @@
+# Server jobs on demand (2026-10-30), with the same approval and deploy key as deploy.yml:
+#   restore-rehearsal  restore the newest backup into a throwaway database and compare it with live
+#   deploy-staging     deploy a commit to the private staging copy (staging.cornerroom.live)
+#   rollback           switch production back to the previous release in seconds
+# Run from GitHub: Actions > Server jobs > Run workflow. Every run waits for the owner's approval
+# in the "production" environment.
+#
+# Staging lives in a second clone next to production: DEPLOY_PATH with "-staging" added (for
+# example /srv/cornerroom-staging), made once by deploy/scripts/staging-setup.sh on the server.
+name: Server jobs
+
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "What to run"
+        required: true
+        type: choice
+        options: [restore-rehearsal, deploy-staging, rollback]
+      ref:
+        description: "deploy-staging only: commit, tag or branch (default: origin/main)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 45
+    steps:
+      - name: Load the deploy key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Run ${{ inputs.job }} on the server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          JOB: ${{ inputs.job }}
+          REF: ${{ inputs.ref }}
+        run: |
+          # Only plain git names reach the server's shell.
+          case "$REF" in *[!A-Za-z0-9._/-]*) echo "ref may only contain letters, digits and . _ / -" >&2; exit 1 ;; esac
+          case "$JOB" in
+            restore-rehearsal) DIR="$DEPLOY_PATH"; CMD="deploy/scripts/restore-rehearsal.sh" ;;
+            rollback)          DIR="$DEPLOY_PATH"; CMD="deploy/scripts/deploy.sh --rollback" ;;
+            deploy-staging)    DIR="$DEPLOY_PATH-staging"; CMD="deploy/scripts/deploy.sh ${REF:-origin/main}" ;;
+            *) echo "unknown job $JOB" >&2; exit 1 ;;
+          esac
+          # The scripts come from the clone's current commit; fetch first so new scripts exist.
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o BatchMode=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DIR' && git fetch --tags --prune origin && $CMD" | tee job.log
+          {
+            echo "### $JOB"
+            echo '```'
+            tail -n 40 job.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the key from the runner
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

@@ -66,3 +66,8 @@ coverage.xml
 /.mcp.json
 graphify-out/
 .playwright-mcp/
+
+# Edge proxy config written by deploy/scripts/deploy.sh on the server
+deploy/edge/conf.d/
+.deploy-state
+.deployed-release

@@ -24,6 +24,8 @@ dependencies = [
     "structlog>=24.4.0",
     "python-multipart>=0.0.17",
     "httpx>=0.28.0",
+    # Error tracking (D-ERR-01): Sentry, used only when SENTRY_DSN is set.
+    "sentry-sdk[fastapi]>=2.18.0",
     # Media worker (D-AUDIO-04): pinned FFmpeg 7.1 binary for checks and playback copies; Pillow
     # reads cover art. Pinned so every machine produces the same measurements and files.
     # Pillow 13.0.0 (2026-10-25): 11.3.0 had many published image-decoding vulnerabilities, and
