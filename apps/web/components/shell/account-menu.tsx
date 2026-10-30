@@ -59,7 +59,37 @@ export function AccountMenu({ open, onClose }: { open: boolean; onClose: () => v
   const [fanView, setFanView] = useFanView();
 
   return (
-    <Drawer open={open} onClose={onClose} title={title} description={signedIn && user.display_name ? (user.email ?? undefined) : undefined} side="right">
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title={title}
+      description={signedIn && user.display_name ? (user.email ?? undefined) : undefined}
+      side="right"
+      footerAlign="start"
+      // Pinned under the list, so the menu scrolls to a clean end (owner, 2026-10-30).
+      footer={
+        <div className="flex flex-wrap gap-2">
+          {signedIn ? (
+            <button
+              type="button"
+              className="cr-focus inline-flex h-10 items-center gap-2 text-sm font-semibold text-fg hover:text-highlight"
+              onClick={() => void logout().then(onClose)}
+            >
+              <LogOut aria-hidden="true" className="size-4" /> Sign out
+            </button>
+          ) : (
+            <>
+              <ButtonLink href="/login" size="sm" onClick={onClose}>
+                <LogIn aria-hidden="true" /> Sign in
+              </ButtonLink>
+              <ButtonLink href="/register" variant="secondary" size="sm" onClick={onClose}>
+                Create an account
+              </ButtonLink>
+            </>
+          )}
+        </div>
+      }
+    >
       <nav aria-label="Menu" onClick={(e) => (e.target as HTMLElement).closest("a") && onClose()}>
         {signedIn && fanView && (staffEntry || user.is_artist) ? (
           // Fan view (owner, 2026-10-24): say so, and offer the way back. Permissions are unchanged.
@@ -122,26 +152,6 @@ export function AccountMenu({ open, onClose }: { open: boolean; onClose: () => v
           </div>
         ))}
       </nav>
-      <div className="flex flex-wrap gap-2 border-t border-line pt-4">
-        {signedIn ? (
-          <button
-            type="button"
-            className="cr-focus inline-flex h-10 items-center gap-2 text-sm font-semibold text-fg hover:text-highlight"
-            onClick={() => void logout().then(onClose)}
-          >
-            <LogOut aria-hidden="true" className="size-4" /> Sign out
-          </button>
-        ) : (
-          <>
-            <ButtonLink href="/login" size="sm" onClick={onClose}>
-              <LogIn aria-hidden="true" /> Sign in
-            </ButtonLink>
-            <ButtonLink href="/register" variant="secondary" size="sm" onClick={onClose}>
-              Create an account
-            </ButtonLink>
-          </>
-        )}
-      </div>
     </Drawer>
   );
 }

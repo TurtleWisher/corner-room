@@ -90,6 +90,12 @@ CREDIT_ROLES = (
     ("arranger", "Arranger", "সংগীত আয়োজক", False, False),
     ("mixing_engineer", "Mixing engineer", "মিক্সিং প্রকৌশলী", False, False),
     ("mastering_engineer", "Mastering engineer", "মাস্টারিং প্রকৌশলী", False, False),
+    # Who played what on this one song (owner, 2026-10-30, D-CREDITS-02): a typed name, or an artist
+    # on Corner Room, with the instrument or voice ("Guitars", "Bass", "Vocals", "Drums").
+    ("musician", "Musician", "বাদক ও কণ্ঠশিল্পী", False, True),
+    # A role the artist names themselves (owner, 2026-10-30, D-CREDITS-02): the role is typed in
+    # the detail field ("Cover art", "Strings"), the person in the name. Staff check it in the review.
+    ("custom", "Other (name the role)", "অন্যান্য (ভূমিকা লিখুন)", False, True),
 )
 
 # Genre list approved with the design (S10). Data: staff can retire or add rows later.

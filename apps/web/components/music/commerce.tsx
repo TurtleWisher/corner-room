@@ -59,7 +59,7 @@ export function TrackBuyControl({
   commerce,
   size = "sm",
   playFrom,
-  releaseIds = [],
+  releaseIds,
   onReleasePage,
 }: {
   track: PlayerTrack;
@@ -67,8 +67,10 @@ export function TrackBuyControl({
   size?: "sm" | "md" | "lg";
   /** The list this track is shown in: playing it queues the list as Up next. */
   playFrom?: PlayOptions;
-  /** Releases the track is known to be on, so a bought release counts as owning it. */
-  releaseIds?: readonly string[];
+  /** The released albums, EPs and singles the song is on (the API's `release_ids`). Required, so no
+   * list can forget them: without them a song sold as part of a release reads "Not on sale yet" and
+   * a bought release doesn't count as owning it (owner, 2026-10-30). Pass [] only for a song on none. */
+  releaseIds: readonly string[];
   /** The release whose own page this is: it already shows its buy button, so a song sold only as
    * part of it gets a quiet lock here, not a second price button (owner, 2026-10-25). */
   onReleasePage?: string;

@@ -85,10 +85,7 @@ function StudioNav({ sections, onNavigate }: { sections: NavSection[]; onNavigat
                     )}
                   >
                     <NavIcon href={item.href} />
-                    <span className="min-w-0">
-                      <span className="block truncate">{item.label}</span>
-                      {item.hint ? <span className="block truncate text-xs font-normal text-fg-muted">{item.hint}</span> : null}
-                    </span>
+                    <span className="min-w-0 truncate">{item.label}</span>
                   </Link>
                 </li>
               );

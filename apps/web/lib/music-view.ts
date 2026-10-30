@@ -54,33 +54,34 @@ export function creditPerson(
 export type CreditLine = { key: string; role: string; name: string; artistId: string | null };
 export type PlayedLine = { key: string; name: string; plays: string; artistId: string | null };
 
+/** A credit for playing on the song rather than making it (D-CREDITS-02). */
+const roleOf = (c: { credit_role: string; role_key?: string | null }) => (c.role_key || c.credit_role).toLowerCase();
+const isMusician = (c: { credit_role: string; role_key?: string | null }) => roleOf(c) === "musician";
+
 /**
- * Song page credits (owner, 2026-10-28): the main credits list each person once per role (no
- * instruments), and "Track credit details" says who played what: band members with their role in
- * the band, then credited performers with their instrument (each person once).
+ * Song page credits. The main list names who made the song, one line per role (no instruments).
+ * "Track credits" says who played what on this one song, instrument first, in the order they were
+ * entered (owner, 2026-10-30: "guitars this guy, bass this guy ... vocal, drums", per song only,
+ * so the band's lineup is not repeated here). A role the artist named themselves ("Cover art") is a
+ * main credit under that name (D-CREDITS-02).
  */
 export function creditDetails(
-  credits: { id: string; credit_role: string; artist_id?: string | null; display_name?: string | null; instrument?: string | null }[],
+  credits: { id: string; credit_role: string; role_key?: string | null; artist_id?: string | null; display_name?: string | null; instrument?: string | null }[],
   artists: Pick<ArtistRecord, "id" | "stage_name">[],
-  lineup: { id: string; name: string; role_label?: string | null; artist_id?: string | null }[],
   roleLabel: (role: string) => string,
 ): { main: CreditLine[]; played: PlayedLine[] } {
   const main: CreditLine[] = [];
   const played: PlayedLine[] = [];
-  const seen = new Set<string>();
-  for (const m of lineup) {
-    played.push({ key: `m-${m.id}`, name: m.name, plays: (m.role_label || "").trim() || "Band member", artistId: m.artist_id ?? null });
-    seen.add(m.name.trim().toLowerCase());
-  }
   for (const c of credits) {
     const name = creditPerson({ artist_id: c.artist_id, display_name: c.display_name }, artists);
     if (!name) continue;
-    main.push({ key: c.id, role: roleLabel(c.credit_role), name, artistId: c.artist_id ?? null });
     const instrument = (c.instrument || "").trim();
-    if (instrument && !seen.has(name.toLowerCase())) {
-      played.push({ key: `c-${c.id}`, name, plays: instrument, artistId: c.artist_id ?? null });
-      seen.add(name.toLowerCase());
+    if (roleOf(c) === "custom") {
+      main.push({ key: c.id, role: instrument || "Credit", name, artistId: c.artist_id ?? null });
+      continue;
     }
+    if (instrument || isMusician(c)) played.push({ key: `p-${c.id}`, name, plays: instrument || "Played on this song", artistId: c.artist_id ?? null });
+    if (!isMusician(c)) main.push({ key: c.id, role: roleLabel(c.credit_role), name, artistId: c.artist_id ?? null });
   }
   return { main, played };
 }

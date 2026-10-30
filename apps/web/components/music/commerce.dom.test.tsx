@@ -36,7 +36,7 @@ afterEach(cleanup);
 describe("TrackBuyControl", () => {
   it("shows visitors 'Sign in' and the price, and brings them back to this page", () => {
     auth.status = "anonymous";
-    render(<TrackBuyControl track={track} commerce={commerce()} />);
+    render(<TrackBuyControl track={track} commerce={commerce()} releaseIds={[]} />);
     const link = screen.getByRole("link", { name: "Sign in to play Night Bus" });
     expect(link.textContent).toContain("Sign in");
     expect(link.getAttribute("href")).toBe(`/login?next=${encodeURIComponent("/releases/r1")}`);
@@ -45,7 +45,7 @@ describe("TrackBuyControl", () => {
 
   it("shows signed-in people who don't own it a lock to the purchase page", () => {
     auth.status = "authenticated";
-    render(<TrackBuyControl track={track} commerce={commerce()} />);
+    render(<TrackBuyControl track={track} commerce={commerce()} releaseIds={[]} />);
     const lock = screen.getByRole("link", { name: "Locked. Buy Night Bus to play it" });
     expect(lock.getAttribute("href")).toBe("/checkout?offer=o1");
   });
@@ -75,7 +75,7 @@ describe("TrackBuyControl", () => {
 
   it("lets staff and the song's own artist play without buying, but not save it offline (D-STREAM-02)", () => {
     auth.status = "authenticated";
-    render(<TrackBuyControl track={track} commerce={{ ...commerce(), streamable: new Set(["t1"]) }} />);
+    render(<TrackBuyControl track={track} commerce={{ ...commerce(), streamable: new Set(["t1"]) }} releaseIds={[]} />);
     expect(screen.getByRole("link", { name: /Owned/ })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Locked/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /offline/i })).toBeNull();
@@ -84,7 +84,7 @@ describe("TrackBuyControl", () => {
   it("lets owners play (no player here, so it links to the song)", () => {
     auth.status = "authenticated";
     const owned = [{ id: "e1", scope: "TRACK", ref_id: "t1", status: "ACTIVE" }] as unknown as CustomerCommerce["entitlements"];
-    render(<TrackBuyControl track={track} commerce={commerce(owned)} />);
+    render(<TrackBuyControl track={track} commerce={commerce(owned)} releaseIds={[]} />);
     expect(screen.getByRole("link", { name: /Owned/ })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Locked/ })).toBeNull();
   });

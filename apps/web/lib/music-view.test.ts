@@ -63,29 +63,37 @@ describe("creditPicture", () => {
   });
 });
 
-describe("creditDetails (owner, 2026-10-28)", () => {
+describe("creditDetails (owner, 2026-10-30)", () => {
   const artists = [{ id: "a1", stage_name: "MIZULS" }];
   const credits = [
     { id: "c1", credit_role: "PRIMARY_ARTIST", artist_id: "a1" },
     { id: "c2", credit_role: "SONGWRITER", display_name: "Rafi Ahmed" },
-    { id: "c3", credit_role: "PERFORMER", display_name: "Rafi Ahmed", instrument: "Guitar" },
-    { id: "c4", credit_role: "PERFORMER", display_name: "Tuli", instrument: "Flute" },
+    { id: "c3", credit_role: "musician", role_key: "musician", display_name: "Rafi Ahmed", instrument: "Guitars" },
+    { id: "c4", credit_role: "musician", role_key: "musician", display_name: "Tuli", instrument: "Bass" },
+    { id: "c5", credit_role: "PERFORMER", artist_id: "a1", instrument: "Vocals" },
+    { id: "c6", credit_role: "musician", role_key: "musician", display_name: "Mitu" },
+    { id: "c7", credit_role: "custom", role_key: "custom", display_name: "Nadia", instrument: "Cover art" },
   ];
-  const lineup = [{ id: "m1", name: "Rafi Ahmed", role_label: "Vocals, guitar" }, { id: "m2", name: "Mitu", role_label: null }];
   const label = (r: string) => r.toLowerCase();
 
-  it("lists main credits without instruments, and who played what once each", () => {
-    const out = creditDetails(credits, artists, lineup, label);
+  it("lists who made the song, then who played what on it, instrument by instrument", () => {
+    const out = creditDetails(credits, artists, label);
     expect(out.main.map((m) => `${m.role}: ${m.name}`)).toEqual([
       "primary_artist: MIZULS",
       "songwriter: Rafi Ahmed",
-      "performer: Rafi Ahmed",
-      "performer: Tuli",
+      "performer: MIZULS",
+      // A role the artist named themselves (D-CREDITS-02).
+      "Cover art: Nadia",
     ]);
-    expect(out.played.map((p) => `${p.name}: ${p.plays}`)).toEqual(["Rafi Ahmed: Vocals, guitar", "Mitu: Band member", "Tuli: Flute"]);
+    expect(out.played.map((p) => `${p.plays}: ${p.name}`)).toEqual([
+      "Guitars: Rafi Ahmed",
+      "Bass: Tuli",
+      "Vocals: MIZULS",
+      "Played on this song: Mitu",
+    ]);
   });
 
-  it("is empty without credits or a lineup", () => {
-    expect(creditDetails([], artists, [], label)).toEqual({ main: [], played: [] });
+  it("is empty without credits", () => {
+    expect(creditDetails([], artists, label)).toEqual({ main: [], played: [] });
   });
 });

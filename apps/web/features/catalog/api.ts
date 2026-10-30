@@ -1,5 +1,6 @@
 /* Tracks, releases, versions and credits. Split from lib/api.ts (Phase 16, Stage 5). */
 
+import { fetchAllPages, pagePath } from "@/lib/api/all-pages";
 import { type Page } from "@/features/identity/api";
 import { apiFetch } from "@/lib/api/client";
 import type { MediaReport } from "@/lib/media-report-view";
@@ -14,7 +15,7 @@ export type TrackRecord = {
   primary_org_id?: string | null;
   metadata?: Record<string, unknown> | null;
   version?: number;
-  /** Released albums/EPs/singles the song is on (single-track reads, D-AUDIO-12). */
+  /** Released albums/EPs/singles the song is on, in lists and single reads (D-AUDIO-12). */
   release_ids?: string[];
   /** Counted listens (D-LISTEN-01): plays heard for 30 seconds, at most 30 a day per person. */
   listens?: number;
@@ -70,12 +71,12 @@ export type TrackVersionRecord = {
   processing_detail?: string | null;
 };
 
+/** Every song the viewer may see, across all pages. */
 export async function fetchTracks(opts?: { skipAuth?: boolean }): Promise<Page<TrackRecord>> {
-  return apiFetch<Page<TrackRecord>>("/api/v1/tracks", {
-    retry: false,
-    skipAuth: opts?.skipAuth,
-    skipRefresh: opts?.skipAuth,
-  });
+  const items = await fetchAllPages((cursor) =>
+    apiFetch<Page<TrackRecord>>(pagePath("/api/v1/tracks", cursor), { retry: false, skipAuth: opts?.skipAuth, skipRefresh: opts?.skipAuth }),
+  );
+  return { items, next_cursor: null };
 }
 
 /** Staff: the plays a song had before listen counting started (D-LISTEN-02). Audited. */
@@ -180,12 +181,12 @@ export async function fetchPresale(id: string): Promise<PresalePageRecord> {
   return apiFetch<PresalePageRecord>(`/api/v1/presales/releases/${id}`, { retry: false, skipAuth: true, skipRefresh: true });
 }
 
+/** Every release the viewer may see, across all pages. */
 export async function fetchReleases(opts?: { skipAuth?: boolean }): Promise<Page<ReleaseRecord>> {
-  return apiFetch<Page<ReleaseRecord>>("/api/v1/releases", {
-    retry: false,
-    skipAuth: opts?.skipAuth,
-    skipRefresh: opts?.skipAuth,
-  });
+  const items = await fetchAllPages((cursor) =>
+    apiFetch<Page<ReleaseRecord>>(pagePath("/api/v1/releases", cursor), { retry: false, skipAuth: opts?.skipAuth, skipRefresh: opts?.skipAuth }),
+  );
+  return { items, next_cursor: null };
 }
 
 export async function fetchRelease(id: string, opts?: { skipAuth?: boolean }): Promise<ReleaseRecord> {
