@@ -8,7 +8,7 @@ import { LitSurface } from "@/components/brand/corner-light";
 import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, EmptyState, ErrorState, Field, Input, Skeleton, StatusChip, Table, TBody, TD, TH, THead, TR } from "@/components/ds";
-import { TrackBuyControl, useCustomerCommerce } from "@/components/music/commerce";
+import { canPlay, TrackBuyControl, useCustomerCommerce } from "@/components/music/commerce";
 import { useCredits } from "@/components/music/credits";
 import { PageIntro, RetryButton, StaffPanel } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
@@ -16,7 +16,7 @@ import { useWorkspace } from "@/components/workspace-provider";
 import { ApiError, createTrack, fetchPlayableCatalog, fetchTracks, type PlayableTrackRecord } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
 import { creditName, formatDuration, playQueue } from "@/lib/music-view";
-import { ownsTrack, releaseIdsFor } from "@/lib/ownership";
+import { releaseIdsFor } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 import { rowsForActiveOrg } from "@/lib/workspace-view";
 
@@ -112,7 +112,7 @@ export default function TracksPage() {
         ? playQueue(
             data.data.tracks.map((t) => ({ trackId: t.id, title: t.title, artist: creditName(t, people.artists, people.bands) })),
             data.data.playable,
-            (id) => ownsTrack(commerce.entitlements, id, releaseIdsFor(data.data?.playable, id)),
+            (id) => canPlay(commerce, id, releaseIdsFor(data.data?.playable, id)),
           )
         : [],
     source: "Tracks",

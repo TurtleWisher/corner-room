@@ -4,13 +4,13 @@ import Link from "next/link";
 
 import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
-import { TrackBuyControl, type CustomerCommerce } from "@/components/music/commerce";
+import { canPlay, type CustomerCommerce, TrackBuyControl } from "@/components/music/commerce";
 import { usePlayer } from "@/components/music/player";
 import type { ArtistRecord, BandRecord, PlayableTrackRecord } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
 import { creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
 import { formatCount } from "@/lib/format/count";
-import { ownsTrack, releaseIdsFor } from "@/lib/ownership";
+import { releaseIdsFor } from "@/lib/ownership";
 import { cn } from "@/lib/utils";
 
 export type TrackRowItem = {
@@ -48,7 +48,7 @@ export function TrackRows({
       return { trackId: item.trackId, title: item.title || rec?.title, artist: rec ? creditName(rec, people.artists, people.bands) : null };
     }),
     playable,
-    (id) => ownsTrack(commerce.entitlements, id, releaseIdsFor(playable, id)),
+    (id) => canPlay(commerce, id, releaseIdsFor(playable, id)),
   );
   return (
     <ul aria-label={label} className="border-t border-line">

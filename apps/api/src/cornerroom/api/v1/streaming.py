@@ -437,8 +437,29 @@ async def track_availability(
     track_version_id: UUID | None = Query(default=None),
 ) -> AvailabilityOut:
     playability = await svc.availability(ctx, track_id, release_id=release_id, track_version_id=track_version_id)
-    entitled = await svc.entitlements.has_catalog_access(ctx.user_id, track_id)
+    from cornerroom.modules.streaming.application.stream_access import StreamAccess
+
+    entitled = await svc.entitlements.has_catalog_access(ctx.user_id, track_id) or await StreamAccess(
+        svc.session, svc.authz
+    ).can_stream(ctx.user_id, track_id)
     return _availability_out(playability, entitled=entitled)
+
+
+class StreamAccessOut(BaseModel):
+    """Songs this person may listen to without buying (D-STREAM-02): staff of the music's
+    organization, or the artist or band it belongs to. Listening only, never downloads."""
+
+    track_ids: list[UUID]
+
+
+@router.get("/me/stream-access", response_model=StreamAccessOut)
+async def my_stream_access(
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[StreamingService, Depends(streaming_service)],
+) -> StreamAccessOut:
+    from cornerroom.modules.streaming.application.stream_access import StreamAccess
+
+    return StreamAccessOut(track_ids=await StreamAccess(svc.session, svc.authz).track_ids(ctx.user_id))
 
 
 @router.get("/playback/tracks/{track_id}/audio")

@@ -73,6 +73,14 @@ describe("TrackBuyControl", () => {
     expect(link.getAttribute("title")).toBe("Night Bus is sold as part of Between Midnight & Dawn");
   });
 
+  it("lets staff and the song's own artist play without buying, but not save it offline (D-STREAM-02)", () => {
+    auth.status = "authenticated";
+    render(<TrackBuyControl track={track} commerce={{ ...commerce(), streamable: new Set(["t1"]) }} />);
+    expect(screen.getByRole("link", { name: /Owned/ })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Locked/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /offline/i })).toBeNull();
+  });
+
   it("lets owners play (no player here, so it links to the song)", () => {
     auth.status = "authenticated";
     const owned = [{ id: "e1", scope: "TRACK", ref_id: "t1", status: "ACTIVE" }] as unknown as CustomerCommerce["entitlements"];

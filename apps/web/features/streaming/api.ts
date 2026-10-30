@@ -202,3 +202,10 @@ export async function removePlaylistItem(id: string, track_id: string): Promise<
 export async function removeLibraryItem(item_id: string): Promise<void> {
   await apiFetch<null>(`/api/v1/me/library/${item_id}`, { method: "DELETE", retry: false });
 }
+
+/** Songs this person may listen to without buying (D-STREAM-02): catalog staff, or the music's own
+ * artist or band. Listening only; downloads and offline saving still need a purchase. */
+export async function fetchMyStreamAccess(): Promise<string[]> {
+  const res = await apiFetch<{ track_ids: string[] }>("/api/v1/me/stream-access", { retry: false });
+  return res.track_ids;
+}

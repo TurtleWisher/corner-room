@@ -11,7 +11,7 @@ import { CoverArt } from "@/components/brand/cover-art";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
-import { TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
+import { canPlay, TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
 import { CreditFace } from "@/components/music/credit-face";
 import { GiftNote } from "@/components/music/gift-note";
 import { SongCredits } from "@/components/music/song-credits";
@@ -34,7 +34,7 @@ import { coverUrl } from "@/lib/cover-view";
 import { formatCount } from "@/lib/format/count";
 import { humanizeStatus } from "@/lib/format/status";
 import { canModerateMusic, creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
-import { ownsTrack, releaseIdsFor, trackBuyState } from "@/lib/ownership";
+import { releaseIdsFor, trackBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 
 const ACTIONS = ["submit", "start_review", "approve", "reject", "schedule", "release", "takedown", "archive"];
@@ -157,7 +157,7 @@ export default function TrackPage() {
     queue: playQueue(
       catalog.list.map((t) => ({ trackId: t.id, title: t.title, artist: creditName(t, people.artists, people.bands) })),
       catalog.map,
-      (trackId) => ownsTrack(commerce.entitlements, trackId, releaseIdsFor(catalog.map, trackId)),
+      (trackId) => canPlay(commerce, trackId, releaseIdsFor(catalog.map, trackId)),
     ),
     source: "Your music",
   };
@@ -199,7 +199,7 @@ export default function TrackPage() {
   const artist = creditName(track, people.artists, people.bands);
   const play = playState(playable);
   // A song bought as part of its album or EP counts as owned here too (D-AUDIO-12).
-  const buy = trackBuyState(commerce.entitlements, commerce.offers, track.id, track.release_ids ?? []);
+  const buy = trackBuyState(commerce.entitlements, commerce.offers, track.id, track.release_ids ?? [], commerce.streamable);
   const duration = formatDuration(playable?.duration_ms);
   const canStaff = signedIn && typeof track.version === "number";
 
