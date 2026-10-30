@@ -42,8 +42,9 @@ class PublicTrackOut(BaseModel):
     status: str
     primary_artist_id: UUID | None
     primary_band_id: UUID | None
-    # Released albums/EPs/singles the song is on (single-track reads), so a page can tell that
-    # buying one of them already owns the song (D-AUDIO-12).
+    # Released albums/EPs/singles the song is on, in lists too, so every page can offer the release
+    # price and tell that buying one of them already owns the song (D-AUDIO-12; owner, 2026-10-30:
+    # the Tracks list said "Not on sale yet" for songs sold as part of a release).
     release_ids: list[UUID] = []
     # Counted listens (D-LISTEN-01): plays heard for 30 seconds, at most 30 a day per person.
     listens: int = 0
@@ -193,9 +194,13 @@ async def list_tracks(
     limit: int = Query(default=50, ge=1, le=100),
 ) -> TrackPage | PublicTrackPage:
     rows, next_cursor, public_only = await svc.list_tracks(ctx, cursor=cursor, limit=limit)
+    on_releases = await _released_release_ids_for(svc, [r.id for r in rows])
+    items = [_public_track(r) if public_only else _track_out(r) for r in rows]
+    for item in items:
+        item.release_ids = on_releases.get(item.id, [])
     if public_only:
-        return PublicTrackPage(items=[_public_track(r) for r in rows], next_cursor=next_cursor)
-    return TrackPage(items=[_track_out(r) for r in rows], next_cursor=next_cursor)
+        return PublicTrackPage(items=items, next_cursor=next_cursor)
+    return TrackPage(items=items, next_cursor=next_cursor)
 
 
 @router.post("/tracks", response_model=TrackOut, status_code=201)
@@ -266,16 +271,26 @@ async def _listen_count(svc: MusicService, track_id: UUID) -> int:
 
 
 async def _released_release_ids(svc: MusicService, track_id: UUID) -> list[UUID]:
+    return (await _released_release_ids_for(svc, [track_id])).get(track_id, [])
+
+
+async def _released_release_ids_for(svc: MusicService, track_ids: list[UUID]) -> dict[UUID, list[UUID]]:
+    """The released releases each of these songs is on, in one query."""
     from sqlalchemy import select
 
     from cornerroom.modules.music.domain.models import Release, ReleaseTrack
 
+    out: dict[UUID, list[UUID]] = {}
+    if not track_ids:
+        return out
     rows = await svc.session.execute(
-        select(Release.id)
+        select(ReleaseTrack.track_id, Release.id)
         .join(ReleaseTrack, ReleaseTrack.release_id == Release.id)
-        .where(ReleaseTrack.track_id == track_id, Release.deleted_at.is_(None), Release.status == "RELEASED")
+        .where(ReleaseTrack.track_id.in_(track_ids), Release.deleted_at.is_(None), Release.status == "RELEASED")
     )
-    return list(rows.scalars())
+    for track_id, release_id in rows.all():
+        out.setdefault(track_id, []).append(release_id)
+    return out
 
 
 @router.patch("/tracks/{track_id}", response_model=TrackOut)

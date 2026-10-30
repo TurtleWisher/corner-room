@@ -15,6 +15,8 @@ export interface DialogProps {
   footer?: React.ReactNode;
   /** "center" is a dialog; "right" and "bottom" are drawers. */
   placement?: "center" | "right" | "bottom";
+  /** Where the footer's content sits; "end" (buttons on the right) by default. */
+  footerAlign?: "start" | "end";
   className?: string;
 }
 
@@ -22,7 +24,7 @@ export interface DialogProps {
  * Native <dialog> with showModal(): focus trap, Escape, inert background and top layer come
  * from the browser. Focus returns to the opener on close.
  */
-export function Dialog({ open, onClose, title, description, children, footer, placement = "center", className }: DialogProps) {
+export function Dialog({ open, onClose, title, description, children, footer, placement = "center", footerAlign = "end", className }: DialogProps) {
   const ref = React.useRef<HTMLDialogElement>(null);
   const opener = React.useRef<Element | null>(null);
   const titleId = React.useId();
@@ -65,13 +67,16 @@ export function Dialog({ open, onClose, title, description, children, footer, pl
         if (e.target === ref.current) ref.current?.close();
       }}
       className={cn(
-        "cr-scope cr-cut border-0 bg-transparent p-0 text-fg [--cut-fill:var(--cr-surface-raised)] [--cut-border:var(--cr-line-strong)]",
+        // The dialog itself never scrolls: its panel is drawn behind it at its own size, so a scrolling
+        // dialog slid the panel away and left the page showing at the end (owner, 2026-10-30). Only the
+        // body below the title scrolls, and the scroll stops at its ends instead of moving the page.
+        "cr-scope cr-cut overflow-hidden border-0 bg-transparent p-0 text-fg [--cut-fill:var(--cr-surface-raised)] [--cut-border:var(--cr-line-strong)]",
         "backdrop:bg-black/60 backdrop:backdrop-blur-[2px]",
         position,
         className,
       )}
     >
-      <div className="flex max-h-[inherit] flex-col">
+      <div className={cn("flex max-h-[inherit] flex-col", placement === "right" ? "h-full" : "")}>
         <div className="flex items-start justify-between gap-4 p-5 pb-3">
           <div>
             <h2 id={titleId} className="font-ui text-lg font-bold text-fg">
@@ -89,8 +94,10 @@ export function Dialog({ open, onClose, title, description, children, footer, pl
             </svg>
           </IconButton>
         </div>
-        <div className="overflow-y-auto px-5 pb-5 text-sm text-fg">{children}</div>
-        {footer ? <div className="flex justify-end gap-2 border-t border-line p-4">{footer}</div> : null}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 text-sm text-fg [scrollbar-color:var(--cr-line-strong)_transparent] [scrollbar-width:thin]">{children}</div>
+        {footer ? (
+          <div className={cn("flex shrink-0 gap-2 border-t border-line p-4", footerAlign === "start" ? "justify-start" : "justify-end")}>{footer}</div>
+        ) : null}
       </div>
     </dialog>
   );

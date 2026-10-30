@@ -217,7 +217,7 @@ export default function TrackPage() {
             />
             <div className="mt-6 hidden md:block">
               <SongLyrics lyrics={track.lyrics} className="border-t border-line" />
-              <SongCredits credits={credits} artists={people.artists} bandId={track.primary_band_id} className="border-t border-line" />
+              <SongCredits credits={credits} artists={people.artists} className="border-t border-line" />
             </div>
           </div>
           <div className="md:pt-6">
@@ -263,7 +263,7 @@ export default function TrackPage() {
           {/* Phones: the same sections, after the title and buy button. */}
           <div className="md:hidden">
             <SongLyrics lyrics={track.lyrics} className="border-t border-line" />
-            <SongCredits credits={credits} artists={people.artists} bandId={track.primary_band_id} className="border-t border-line" />
+            <SongCredits credits={credits} artists={people.artists} className="border-t border-line" />
           </div>
         </div>
       </LitSurface>

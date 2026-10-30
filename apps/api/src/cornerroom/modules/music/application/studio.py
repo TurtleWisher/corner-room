@@ -504,6 +504,8 @@ class StudioService:
             elif not name:
                 raise AppError("VALIDATION_ERROR", "Enter the person's name", 422, extras={"index": index})
             instrument = _clean(item.get("instrument"), 80) if spec.allows_instrument else None
+            if spec.key == "custom" and not instrument:
+                raise AppError("VALIDATION_ERROR", "Name the role for this credit", 422, extras={"index": index})
             out.append(
                 {
                     "role_key": spec.key,

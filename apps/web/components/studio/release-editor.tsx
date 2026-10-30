@@ -283,7 +283,7 @@ function CreditsEditor({
 
   return (
     <div>
-      <p className="text-sm text-fg-muted">Credits name who made the song. They are attribution only; payments are set up separately.</p>
+      <p className="text-sm text-fg-muted">Credits name who made the song. Add a Musician for each person who played or sang on it (Guitars, Bass, Vocals, Drums); fans see them under Track credits. For any other role, choose "Other" and name the role yourself. Corner Room checks credits before fans see them. Credits are attribution only; payments are set up separately.</p>
       <ul className="mt-3 grid gap-3">
         {rows.map((row, i) => {
           const role = roles.get(row.role_key);
@@ -310,7 +310,10 @@ function CreditsEditor({
                 </Field>
               )}
               {role?.allows_instrument ? (
-                <Field label="Instrument" hint="Optional">
+                <Field
+                  label={row.role_key === "custom" ? "Role" : "Instrument or voice"}
+                  hint={row.role_key === "custom" ? "Name it yourself, for example Cover art, Strings, Choir" : "For example Guitars, Bass, Vocals, Drums"}
+                >
                   {(c) => <Input {...c} value={row.instrument ?? ""} disabled={!editable} maxLength={80} onChange={(e) => update(i, { instrument: e.target.value })} />}
                 </Field>
               ) : (

@@ -101,7 +101,7 @@ export default function ListeningRoomPage() {
                     {title || "Track"}
                   </Display>
                   <div className="mt-6 flex flex-wrap gap-3">
-                    <TrackBuyControl track={{ id: trackId, title, artist }} commerce={commerce} size="lg" />
+                    <TrackBuyControl track={{ id: trackId, title, artist }} commerce={commerce} size="lg" releaseIds={track.status === "ok" && track.data.release_ids?.length ? track.data.release_ids : releaseIdsFor(catalog.map, trackId)} />
                     <ButtonLink href={`/tracks/${trackId}`} variant="secondary" size="lg">
                       Track page
                     </ButtonLink>

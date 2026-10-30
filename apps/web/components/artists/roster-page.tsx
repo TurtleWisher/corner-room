@@ -5,7 +5,8 @@ import { FormEvent, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
-import { Avatar, Button, Card, EmptyState, ErrorState, Field, Input, Skeleton, StatusChip, Table, TBody, TD, TH, THead, TR } from "@/components/ds";
+import { CoverArt } from "@/components/brand/cover-art";
+import { Button, EmptyState, ErrorState, Field, Input, Skeleton, StatusChip, Table, TBody, TD, TH, THead, TR } from "@/components/ds";
 import { coverUrl } from "@/lib/cover-view";
 import { PageIntro, RetryButton, StaffPanel } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
@@ -13,7 +14,56 @@ import { useWorkspace } from "@/components/workspace-provider";
 import { ApiError } from "@/lib/api";
 import { rowsForActiveOrg } from "@/lib/workspace-view";
 
-export type RosterEntry = { id: string; name: string; bio: string | null; status: string; primary_org_id?: string | null; picture?: string | null };
+export type RosterEntry = {
+  id: string;
+  name: string;
+  bio: string | null;
+  status: string;
+  primary_org_id?: string | null;
+  picture?: string | null;
+  /** Solo artist or band, when one list shows both (owner, 2026-10-30); else the page's kind. */
+  kind?: "artist" | "band";
+};
+
+/** Up to two initials, for a card without a picture. */
+function monogram(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join("");
+}
+
+/**
+ * One artist on the roster (owner, 2026-10-30): a glass card filled with their picture and their
+ * name on a frosted strip, nothing else, so it is a pleasure to click. Solo artists and bands look
+ * the same. Without a picture, their initials.
+ */
+function RosterCard({ row, kind }: { row: RosterEntry; kind: "artist" | "band" }) {
+  const own = row.kind ?? kind;
+  return (
+    <Link href={`/${own}s/${row.id}`} className="cr-focus group block" aria-label={row.name}>
+      <div className="cr-cut cr-glass-card cr-hover p-1.5">
+        <div className="relative aspect-[4/5] overflow-hidden">
+          <CoverArt
+            src={coverUrl(own === "band" ? { band: row.id, picture: row.picture } : { artist: row.id, picture: row.picture }, 480)}
+            fallback={
+              <div className="flex size-full items-center justify-center bg-white/[0.04]">
+                <span className="font-ui text-5xl font-extrabold tracking-wide text-highlight">{monogram(row.name)}</span>
+              </div>
+            }
+            className="size-full [&_img]:transition-transform [&_img]:duration-500 motion-safe:group-hover:[&_img]:scale-105"
+          />
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-black/0" />
+          <div className="absolute inset-x-0 bottom-0 border-t border-white/15 bg-black/25 px-4 py-3 backdrop-blur-md">
+            <h2 className="truncate text-lg font-bold text-fg group-hover:text-highlight">{row.name}</h2>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
 
 type Props = {
   kind: "artist" | "band";
@@ -111,8 +161,8 @@ function StaffTools({ kind, loadWorkspace, create }: Pick<Props, "kind" | "loadW
 }
 
 /**
- * Public roster (Artists module, Ember): a grid of portraits (the approved picture, else the
- * monogram), name and the first line of the bio. Staff get the workspace roster and the create form in
+ * Public roster (Artists module, Ember): a grid of glass picture cards with the name only (owner,
+ * 2026-10-30; the bio is on the profile). Staff get the workspace roster and the create form in
  * a separate panel, as the legacy page offered.
  */
 export function RosterPage({ kind, title, lede, loadPublic, loadWorkspace, create }: Props) {
@@ -134,9 +184,9 @@ export function RosterPage({ kind, title, lede, loadPublic, loadWorkspace, creat
       </LitSurface>
       <div className="mx-auto max-w-[90rem] space-y-12 px-4 pb-16 md:px-6">
         {list.status === "loading" ? (
-          <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4 xl:grid-cols-5">
             {Array.from({ length: 5 }, (_, i) => (
-              <Skeleton key={i} className="aspect-square w-full" />
+              <Skeleton key={i} className="aspect-[4/5] w-full" />
             ))}
           </div>
         ) : list.status === "error" ? (
@@ -144,23 +194,10 @@ export function RosterPage({ kind, title, lede, loadPublic, loadWorkspace, creat
         ) : list.data.length === 0 ? (
           <EmptyState title={`No ${title.toLowerCase()} yet`} />
         ) : (
-          <ul className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
+          <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4 xl:grid-cols-5">
             {list.data.map((row) => (
-              <li key={row.id}>
-                <Link href={`/${kind}s/${row.id}`} className="cr-focus group block">
-                  <Card className="flex flex-col items-start gap-4 p-5 group-hover:[--cut-border:var(--cr-line-strong)]">
-                    {/* The approved picture, else the monogram (owner, 2026-10-27: pictures everywhere). */}
-                    <Avatar
-                      name={row.name}
-                      size={88}
-                      src={coverUrl(kind === "band" ? { band: row.id, picture: row.picture } : { artist: row.id, picture: row.picture }, 160)}
-                    />
-                    <div className="min-w-0">
-                      <h2 className="truncate text-lg font-bold text-fg group-hover:text-highlight">{row.name}</h2>
-                      <p className="mt-1 line-clamp-2 text-sm text-fg-muted">{row.bio || (kind === "band" ? "Band" : "Artist")}</p>
-                    </div>
-                  </Card>
-                </Link>
+              <li key={`${row.kind ?? kind}-${row.id}`}>
+                <RosterCard row={row} kind={kind} />
               </li>
             ))}
           </ul>

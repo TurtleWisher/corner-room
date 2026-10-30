@@ -839,7 +839,10 @@ export function PlayerBar() {
             />
           </Link>
           <div className="min-w-0 flex-1 md:flex-none md:basis-56">
-            <p className="truncate text-sm font-bold text-fg">{label}</p>
+            {/* The song's name opens its page (owner, 2026-10-30); the cover opens the listening room. */}
+            <Link href={`/tracks/${p.track.id}`} className="cr-focus block truncate text-sm font-bold text-fg hover:text-highlight hover:underline">
+              {label}
+            </Link>
             <p className="truncate text-xs text-fg-muted">
               {p.status === "playing" && !p.buffering ? (p.track.artist ?? "") : status}
             </p>
