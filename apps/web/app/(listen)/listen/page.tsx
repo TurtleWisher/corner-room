@@ -5,13 +5,13 @@ import { Headphones } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { ComingSoon } from "@/components/brand/coming-soon";
 import { Button, ButtonLink, Card, EmptyState, Skeleton } from "@/components/ds";
-import { usePlayableCatalog, useCustomerCommerce } from "@/components/music/commerce";
+import { canPlay, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
 import { useCredits } from "@/components/music/credits";
 import { ListenPage } from "@/components/music/listen-page";
 import { usePlayer } from "@/components/music/player";
 import { TrackRows } from "@/components/music/track-rows";
 import { creditName, playQueue } from "@/lib/music-view";
-import { hasCatalogAccess, ownsTrack, releaseIdsFor } from "@/lib/ownership";
+import { hasCatalogAccess, releaseIdsFor } from "@/lib/ownership";
 
 /** "More music coming soon" beside the songs while the catalog is just starting (owner, 2026-10-25). */
 function MoreMusicSoon() {
@@ -37,9 +37,9 @@ export default function ListenHome() {
   const queue = playQueue(
     catalog.list.map((t) => ({ trackId: t.id, title: t.title, artist: creditName(t, people.artists, people.bands) })),
     catalog.map,
-    (id) => ownsTrack(commerce.entitlements, id, releaseIdsFor(catalog.map, id)),
+    (id) => canPlay(commerce, id, releaseIdsFor(catalog.map, id)),
   );
-  const firstOwned = playable.find((t) => ownsTrack(commerce.entitlements, t.id, t.release_ids ?? []));
+  const firstOwned = playable.find((t) => canPlay(commerce, t.id, t.release_ids ?? []));
 
   return (
     <ListenPage

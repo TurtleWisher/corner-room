@@ -104,3 +104,15 @@ describe("songs bought with their release (owner, 2026-10-27: pre-sale buyers sa
     expect(trackBuyState(presale, [], "t1", releaseIdsFor(catalog, "t1"))).toEqual({ kind: "owned", via: "release" });
   });
 });
+
+describe("listening without buying (D-STREAM-02)", () => {
+  it("lets staff and the music's own artist play, without counting it as bought", () => {
+    const free = new Set(["t1"]);
+    expect(trackBuyState([], [offer("a", "TRACK", "t1")], "t1", [], free)).toEqual({ kind: "owned", via: "access" });
+    expect(trackBuyState([], [offer("a", "TRACK", "t2")], "t2", [], free)).toMatchObject({ kind: "buy" });
+    // A real purchase still wins (it allows offline saving).
+    expect(trackBuyState([ent("TRACK", "t1")], [], "t1", [], free)).toEqual({ kind: "owned", via: "track" });
+    expect(ownsTrack([], "t1")).toBe(false);
+  });
+});
+

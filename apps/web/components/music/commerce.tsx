@@ -9,24 +9,40 @@ import { SaveOfflineButton } from "@/components/music/save-offline-button";
 import { useOptionalPlayer, type PlayOptions, type PlayerTrack } from "@/components/music/player";
 import { useAsync } from "@/components/use-async";
 import { fetchMyEntitlements, fetchOffers, fetchPlayableCatalog, type EntitlementRecord, type OfferRecord, type PlayableTrackRecord } from "@/lib/api";
-import { offerForRelease, releaseBuyLabel, trackBuyState } from "@/lib/ownership";
+import { fetchMyStreamAccess } from "@/features/streaming/api";
+import { offerForRelease, ownsTrack, releaseBuyLabel, trackBuyState } from "@/lib/ownership";
 
-export type CustomerCommerce = { offers: OfferRecord[]; entitlements: EntitlementRecord[]; ready: boolean; reload: () => void };
+export type CustomerCommerce = {
+  offers: OfferRecord[];
+  entitlements: EntitlementRecord[];
+  /** Songs this person may listen to without buying: catalog staff, or the music's own artist or band (D-STREAM-02). */
+  streamable?: ReadonlySet<string>;
+  ready: boolean;
+  reload: () => void;
+};
+
+/** Can this person play the song now: bought it (or a release it is on), or may listen without buying. */
+export function canPlay(commerce: CustomerCommerce, trackId: string, releaseIds: readonly string[] = []): boolean {
+  return ownsTrack(commerce.entitlements, trackId, releaseIds) || commerce.streamable?.has(trackId) === true;
+}
 
 /** Public offers plus, for signed-in customers, what they already own. */
 export function useCustomerCommerce(): CustomerCommerce {
   const { status } = useAuth();
   const data = useAsync(async () => {
     if (status === "loading") return null;
-    const [offers, entitlements] = await Promise.all([
+    const signedIn = status === "authenticated";
+    const [offers, entitlements, streamable] = await Promise.all([
       fetchOffers().then((p) => p.items).catch(() => [] as OfferRecord[]),
-      status === "authenticated" ? fetchMyEntitlements().then((p) => p.items).catch(() => [] as EntitlementRecord[]) : Promise.resolve([] as EntitlementRecord[]),
+      signedIn ? fetchMyEntitlements().then((p) => p.items).catch(() => [] as EntitlementRecord[]) : Promise.resolve([] as EntitlementRecord[]),
+      signedIn ? fetchMyStreamAccess().catch(() => [] as string[]) : Promise.resolve([] as string[]),
     ]);
-    return { offers, entitlements };
+    return { offers, entitlements, streamable: new Set(streamable) };
   }, [status]);
   return {
     offers: data.status === "ok" && data.data ? data.data.offers : [],
     entitlements: data.status === "ok" && data.data ? data.data.entitlements : [],
+    streamable: data.status === "ok" && data.data ? data.data.streamable : undefined,
     ready: data.status === "ok" && data.data !== null,
     reload: data.reload,
   };
@@ -75,7 +91,7 @@ export function TrackBuyControl({
     );
   }
   if (!commerce.ready) return <span className="inline-block h-9 w-24" aria-hidden="true" />;
-  const state = trackBuyState(commerce.entitlements, commerce.offers, track.id, releaseIds);
+  const state = trackBuyState(commerce.entitlements, commerce.offers, track.id, releaseIds, commerce.streamable);
   if (state.kind === "owned") {
     const current = player?.isCurrent(track.id) && player.status === "playing";
     const main = player ? (
@@ -89,7 +105,8 @@ export function TrackBuyControl({
     );
     // Bought songs can be saved for offline listening in the app (D-AUDIO-18, replaces the file
     // download of D-AUDIO-06); older whole-catalog access can't.
-    if (state.via === "catalog") return main;
+    // Offline saving needs a purchase; whole-catalog access and free listening (D-STREAM-02) don't have one.
+    if (state.via === "catalog" || state.via === "access") return main;
     return (
       <span className="inline-flex items-center gap-1">
         {main}

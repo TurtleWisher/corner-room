@@ -8,7 +8,7 @@ import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { ButtonLink, Skeleton } from "@/components/ds";
-import { TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
+import { canPlay, TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
 import { useCredits } from "@/components/music/credits";
 import { ListeningRoom } from "@/components/music/listening-room";
 import { usePlayer } from "@/components/music/player";
@@ -16,7 +16,7 @@ import { useAsync } from "@/components/use-async";
 import { fetchTrack } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
 import { creditName, playQueue } from "@/lib/music-view";
-import { ownsTrack, releaseIdsFor } from "@/lib/ownership";
+import { releaseIdsFor } from "@/lib/ownership";
 
 /**
  * The listening room for a track (kept at /listen/[trackId] so existing links still work).
@@ -40,7 +40,7 @@ export default function ListeningRoomPage() {
   const track = useAsync(() => fetchTrack(trackId, { skipAuth: status !== "authenticated" }), [trackId, status]);
   const title = track.status === "ok" ? track.data.title : "";
   const artist = track.status === "ok" ? creditName(track.data, people.artists, people.bands) : null;
-  const owns = commerce.ready && ownsTrack(commerce.entitlements, trackId, releaseIdsFor(catalog.map, trackId));
+  const owns = commerce.ready && canPlay(commerce, trackId, releaseIdsFor(catalog.map, trackId));
   const current = player.track?.id === trackId;
 
   // One effect, so the order is fixed: first notice that the player moved on inside the room
@@ -61,10 +61,10 @@ export default function ListeningRoomPage() {
     const queue = playQueue(
       catalog.list.map((t) => ({ trackId: t.id, title: t.title, artist: creditName(t, people.artists, people.bands) })),
       catalog.map,
-      (id) => ownsTrack(commerce.entitlements, id, releaseIdsFor(catalog.map, id)),
+      (id) => canPlay(commerce, id, releaseIdsFor(catalog.map, id)),
     );
     void player.play({ id: trackId, title, artist }, { queue, source: "Your music" });
-  }, [playingId, current, owns, title, artist, trackId, catalog, commerce.entitlements, people, player]);
+  }, [playingId, current, owns, title, artist, trackId, catalog, commerce, people, player]);
 
   // Between the player moving on and the address catching up (one render), keep the room up:
   // swapping it out would rebuild it and lose the corridor's slide and the announcement.

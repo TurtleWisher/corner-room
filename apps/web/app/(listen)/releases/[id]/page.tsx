@@ -11,7 +11,7 @@ import { CoverArt } from "@/components/brand/cover-art";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ButtonLink, DateTime, EmptyState, ErrorState, Field, Input, Money, Skeleton, StatusChip } from "@/components/ds";
-import { TrackBuyControl, useCustomerCommerce, type CustomerCommerce } from "@/components/music/commerce";
+import { canPlay, type CustomerCommerce, TrackBuyControl, useCustomerCommerce } from "@/components/music/commerce";
 import { BandLineup } from "@/components/artists/band-lineup";
 import { CreditFace } from "@/components/music/credit-face";
 import { GiftNote } from "@/components/music/gift-note";
@@ -36,7 +36,7 @@ import {
 import { fetchPresale, type PresalePageRecord } from "@/features/catalog/api";
 import { coverUrl } from "@/lib/cover-view";
 import { canModerateMusic, creditName, formatDuration, playQueue, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
-import { ownsTrack, releaseBuyLabel, releaseBuyState } from "@/lib/ownership";
+import { releaseBuyLabel, releaseBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 import { cn } from "@/lib/utils";
 
@@ -279,7 +279,7 @@ export default function ReleasePage() {
   const artist = creditName(release, credits.artists, credits.bands);
   const durations = rows.map((r) => playable.get(r.trackId)?.duration_ms);
   const canStaff = signedIn && typeof release.version === "number";
-  const owns = (trackId: string) => ownsTrack(commerce.entitlements, trackId, [release.id]);
+  const owns = (trackId: string) => canPlay(commerce, trackId, [release.id]);
   const firstOwned = rows.find((r) => playState(playable.get(r.trackId)).kind === "playable" && owns(r.trackId));
   // A whole-release price (D-AUDIO-10, -11). Shown only once the customer's ownership is known.
   const releaseBuy = commerce.ready ? releaseBuyState(signedIn ? commerce.entitlements : [], commerce.offers, release.id, rows.map((r) => r.trackId)) : null;

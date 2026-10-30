@@ -212,6 +212,11 @@ class StreamingService:
         raise AppError(reason, "Track is not playable", 409)
 
     async def _require_entitlement(self, user_id, track_id) -> None:
+        # D-STREAM-02: catalog staff and the music's own artist or band listen without buying.
+        from cornerroom.modules.streaming.application.stream_access import StreamAccess
+
+        if await StreamAccess(self.session, self.authz).can_stream(user_id, track_id):
+            return
         await self.entitlements.require_catalog_access(user_id, track_id)
 
     async def availability(

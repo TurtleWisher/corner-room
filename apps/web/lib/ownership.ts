@@ -62,7 +62,8 @@ export function offerForRelease(
 }
 
 export type BuyState =
-  | { kind: "owned"; via: "track" | "release" | "catalog" }
+  // "access": may listen without buying, as catalog staff or the music's own artist or band (D-STREAM-02).
+  | { kind: "owned"; via: "track" | "release" | "catalog" | "access" }
   | { kind: "buy"; offer: OfferRecord }
   | { kind: "not_for_sale" };
 
@@ -85,16 +86,19 @@ export function releaseBuyLabel(releaseType: string | null | undefined, offer: P
   return offer.audience === "OWNS_PART_OF_RELEASE" ? `Complete the ${noun}` : `Buy the ${noun}`;
 }
 
-/** What a track's buy control should say. `releaseIds` are the releases the track is known to be on. */
+/** What a track's buy control should say. `releaseIds` are the releases the track is known to be on;
+ * `streamable` the songs this person may listen to without buying (D-STREAM-02). */
 export function trackBuyState(
   entitlements: EntitlementRecord[],
   offers: OfferRecord[],
   trackId: string,
   releaseIds: readonly string[] = [],
+  streamable?: ReadonlySet<string>,
 ): BuyState {
   if (entitlements.some((e) => active(e) && e.scope === "TRACK" && e.ref_id === trackId)) return { kind: "owned", via: "track" };
   if (entitlements.some((e) => active(e) && e.scope === "RELEASE" && releaseIds.includes(e.ref_id))) return { kind: "owned", via: "release" };
   if (hasCatalogAccess(entitlements)) return { kind: "owned", via: "catalog" };
+  if (streamable?.has(trackId)) return { kind: "owned", via: "access" };
   const offer = offerForTrack(offers, trackId);
   return offer ? { kind: "buy", offer } : { kind: "not_for_sale" };
 }
