@@ -2,6 +2,7 @@
 
 import { AuthProvider } from "@/components/auth-provider";
 import { PagePointerLight } from "@/components/brand/pointer-light";
+import { ErrorReporter } from "@/components/error-reporter";
 import { PlayerBar, PlayerProvider } from "@/components/music/player";
 import { NotificationsProvider } from "@/components/notifications-provider";
 import { OfflineSync } from "@/components/offline-sync";
@@ -26,6 +27,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <PlayerBar />
             <PagePointerLight />
             <OfflineSync />
+            <ErrorReporter />
           </PlayerProvider>
         </NotificationsProvider>
       </WorkspaceProvider>

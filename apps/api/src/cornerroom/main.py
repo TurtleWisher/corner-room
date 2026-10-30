@@ -16,6 +16,7 @@ from cornerroom.api.health import router as health_router
 from cornerroom.api.v1.analytics import router as analytics_router
 from cornerroom.api.v1.artists import router as artists_router
 from cornerroom.api.v1.audit import router as audit_router
+from cornerroom.api.v1.client_errors import router as client_errors_router
 from cornerroom.api.v1.auth import router as auth_router
 from cornerroom.api.v1.bands import router as bands_router
 from cornerroom.api.v1.campaigns import router as campaigns_router
@@ -43,6 +44,7 @@ from cornerroom.api.v1.studio import router as studio_router
 from cornerroom.api.v1.covers import router as covers_router
 from cornerroom.api.v1.users import router as users_router
 from cornerroom.api.v1.venues import router as venues_router
+from cornerroom.infra.error_tracking import init_error_tracking
 from cornerroom.infra.db import dispose_engine, get_session_factory, init_engine
 from cornerroom.infra.errors import register_exception_handlers
 from cornerroom.infra.logging import configure_logging
@@ -74,6 +76,8 @@ CORS_EXPOSE_HEADERS = ["X-Correlation-ID", "X-Request-ID", "Content-Range", "Con
 
 def create_app(settings: Settings | None = None, *, enable_lifespan: bool = True) -> FastAPI:
     cfg = settings or get_settings()
+    # Before the app is built, so the FastAPI integration sees it (D-ERR-01; off without a DSN).
+    init_error_tracking(cfg.sentry_dsn, environment=cfg.app_env, service="api")
     register_streaming_handlers()
     register_finance_handlers()
 
@@ -133,6 +137,7 @@ def create_app(settings: Settings | None = None, *, enable_lifespan: bool = True
     register_exception_handlers(app)
     app.include_router(health_router)
     app.include_router(auth_router, prefix="/api/v1")
+    app.include_router(client_errors_router, prefix="/api/v1")
     app.include_router(me_router, prefix="/api/v1")
     app.include_router(users_router, prefix="/api/v1")
     app.include_router(orgs_router, prefix="/api/v1")

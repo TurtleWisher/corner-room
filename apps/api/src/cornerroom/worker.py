@@ -196,6 +196,9 @@ async def startup(ctx: dict) -> None:
 
     settings = get_settings()
     configure_logging(settings.log_level, service="worker", environment=settings.app_env)
+    from cornerroom.infra.error_tracking import init_error_tracking
+
+    init_error_tracking(settings.sentry_dsn, environment=settings.app_env, service="worker")
     register_streaming_handlers()
     register_finance_handlers()
     init_engine(settings)

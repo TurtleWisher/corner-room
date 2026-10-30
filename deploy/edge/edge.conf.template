@@ -1,0 +1,47 @@
+# Corner Room edge proxy (zero-downtime deploys, 2026-10-30). deploy/scripts/deploy.sh renders this
+# into deploy/edge/conf.d/default.conf with the live colour (blue or green) and reloads nginx
+# inside the edge container, so a release switches over without dropping a request. The host's
+# nginx (deploy/nginx/cornerroom.conf) is unchanged: it still sends the site to 127.0.0.1:3000
+# and the API to 127.0.0.1:8000, which this container now owns.
+#
+# The host nginx already set the visitor's address, scheme and limits; pass them on unchanged.
+
+# Idle connections to the apps close after 4 s, before Node and uvicorn close theirs (5 s), as in
+# deploy/nginx/cornerroom.conf; otherwise a reused, already-closed connection shows a random 502.
+upstream app_api { server api-@COLOUR@:8000; keepalive 32; keepalive_timeout 4s; }
+upstream app_web { server web-@COLOUR@:3000; keepalive 32; keepalive_timeout 4s; }
+
+map $http_x_forwarded_proto $edge_proto { "" $scheme; default $http_x_forwarded_proto; }
+
+server {
+    listen 8000;
+    server_tokens off;
+    # The host nginx limits sizes and slow senders; never refuse what it let through.
+    client_max_body_size 0;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $http_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $edge_proto;
+    proxy_set_header X-Real-IP $http_x_real_ip;
+    # Audio and downloads stream with range requests; uploads arrive in parts.
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+    location / { proxy_pass http://app_api; }
+}
+
+server {
+    listen 3000;
+    server_tokens off;
+    client_max_body_size 0;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $http_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $edge_proto;
+    proxy_set_header X-Real-IP $http_x_real_ip;
+    proxy_read_timeout 120s;
+    location / { proxy_pass http://app_web; }
+}

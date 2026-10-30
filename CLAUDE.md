@@ -21,7 +21,7 @@ Corner Room is a Bangladesh-first "unified entertainment operating system": live
 2. **If two documents conflict, STOP.** Cite both and wait for the product owner. Don't silently redesign.
 3. **Never invent business rules:** royalty %, ticket fees, refund rules, tax, contract terms, rate-limit numbers, cloud region, PSP or email vendors, HMAC skew windows. Questions marked OPEN (`Q-P*`, `OD-*`) stay open. Fail-closed code is not an answer to them.
 4. **Don't auto-advance.** Work one phase, gate or stage at a time, then stop and report.
-5. **Never run git commit, push, tag or reset without explicit instruction.**
+5. **Never run git commit, push, tag or reset without explicit instruction.** The owner's Ship button is that instruction for the whole chain (commit, push, PR, merge, deploy). Branches: `feature/<name>` for new features, `fix/<name>` for later fixes, never `claude/`.
 6. **`/docs/` and `/.cursor/` are gitignored on purpose (D-P16-02).** They exist only on this PC. Don't add them to git, and remind the owner to back them up.
 
 ## Architecture
@@ -66,7 +66,7 @@ Migrations: `apps/api/alembic/versions/0001` to `0041`, a linear chain with head
 
 Quickest local start (Windows): `.\scripts\dev-stack.ps1` (add `-Seed` once to load demo data). It builds and serves the web app in production mode (fast clicks); add `-Dev` for live reload while editing (every page compiles on demand, so clicks take seconds). After web changes in production mode, rebuild (`npm run build`) and restart `npm run start`. Demo accounts and secrets live in the gitignored `.env.seed.local`; the email validator rejects `.test` domains, so demo users use `example.com`.
 
-Production (www.cornerroom.live): the runbook is private, `docs/operations/DEPLOYMENT_RUNBOOK.md` (never put server details, paths, user names or bucket names in this public repo). `deploy/scripts/deploy.sh` on the server builds, backs up, migrates and starts `deploy/compose.prod.yml` (nginx in front, settings in the server-only `.env.production` from `deploy/env.production.example`). CI: `.github/workflows/ci.yml`. Never put demo data on production.
+Production (www.cornerroom.live): the runbook is private, `docs/operations/DEPLOYMENT_RUNBOOK.md` (never put server details, paths, user names or bucket names in this public repo). `deploy/scripts/deploy.sh` on the server builds, backs up, migrates and starts `deploy/compose.prod.yml` (nginx in front, settings in the server-only `.env.production` from `deploy/env.production.example`). Deploys have no downtime (2026-10-30): an `edge` nginx container owns ports 8000/3000 and switches between `api-blue`/`web-blue` and `api-green`/`web-green`; `deploy.sh --rollback` goes back in seconds. Rollback, staging deploys (staging.cornerroom.live, set up once with `deploy/scripts/staging-setup.sh`) and restore rehearsals run from Actions > Server jobs (`.github/workflows/ops.yml`). Error tracking is Sentry (D-ERR-01, `infra/error_tracking.py`, browser errors via `POST /api/v1/client-errors`), off until `SENTRY_DSN` is set; never send personal data to it. CI: `.github/workflows/ci.yml`; merging to `main` deploys after the owner approves (`deploy.yml`). Never put demo data on production.
 
 Requires Docker Desktop, Python 3.12+ (the local venv is 3.11.9, which pyproject allows) and Node 22+.
 

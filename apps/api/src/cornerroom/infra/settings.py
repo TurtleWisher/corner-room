@@ -155,6 +155,8 @@ class Settings(BaseSettings):
     # Finance staff inbox told when a buyer sends a Bangla QR transaction ID (D-PAYALERT-01).
     # Empty = no alert.
     payment_alert_email: str = ""
+    # Error tracking (D-ERR-01, Sentry cloud): the project DSN. Empty = off.
+    sentry_dsn: str = ""
     password_recovery_ttl_seconds: int = 0
     # 0 = no expiry. Do not treat a default as product invite policy.
     organization_invitation_ttl_seconds: int = 0
