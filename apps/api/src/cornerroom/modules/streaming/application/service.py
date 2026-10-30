@@ -211,13 +211,16 @@ class StreamingService:
             )
         raise AppError(reason, "Track is not playable", 409)
 
-    async def _require_entitlement(self, user_id, track_id) -> None:
-        # D-STREAM-02: catalog staff and the music's own artist or band listen without buying.
+    async def _require_entitlement(self, user_id, track_id) -> bool:
+        """Raise unless this person may play the song. True when they are catalog staff or the
+        music's own artist or band (D-STREAM-02): they listen without buying, and their plays are
+        not counted as listens (owner, 2026-10-30, D-LISTEN-03)."""
         from cornerroom.modules.streaming.application.stream_access import StreamAccess
 
         if await StreamAccess(self.session, self.authz).can_stream(user_id, track_id):
-            return
+            return True
         await self.entitlements.require_catalog_access(user_id, track_id)
+        return False
 
     async def availability(
         self,
@@ -385,7 +388,7 @@ class StreamingService:
         # The chain is Playability -> Entitlement -> session -> PlaybackEvent (modules/streaming.md).
         # A session is not tied to one track, so without this check a session opened for a song
         # the listener may play could record plays (analytics and royalty input) for any other.
-        await self._require_entitlement(ctx.user_id, track_id)
+        own_people = await self._require_entitlement(ctx.user_id, track_id)
         # Nobody listens longer than the song: clamp to the version's length when it is known.
         if playability.duration_ms is not None and playability.duration_ms > 0:
             duration_ms = min(duration_ms, playability.duration_ms)
@@ -440,7 +443,9 @@ class StreamingService:
             ctx=ctx,
             organization_id=None,
         )
-        await self._count_listen(ctx.user_id, track_id, session_id, duration_ms)
+        # Staff and the music's own artist or band don't add to its listens (D-LISTEN-03).
+        if not own_people:
+            await self._count_listen(ctx.user_id, track_id, session_id, duration_ms)
         return event, True
 
     async def _count_listen(self, user_id: UUID, track_id: UUID, session_id: UUID, heard_ms: int) -> bool:

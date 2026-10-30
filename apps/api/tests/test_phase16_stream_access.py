@@ -65,3 +65,40 @@ async def test_staff_and_the_artist_stream_without_buying(client: AsyncClient) -
     async with get_session_factory()() as session:
         assert await EntitlementService(session).owns_by_purchase(UUID(owner["user"]["id"]), UUID(track_id)) is False
     assert release_id
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_staff_and_artist_plays_are_not_counted_as_listens(client: AsyncClient, monkeypatch) -> None:
+    """D-LISTEN-03 (owner, 2026-10-30): "Staff and artist plays ... shouldn't" count as listens."""
+    from cornerroom.infra.db import get_session_factory
+    from cornerroom.infra.settings import get_settings
+    from cornerroom.modules.entitlements.application.service import EntitlementService
+    from tests.test_phase16_listens import _count, _play
+
+    admin, orgs = await _orgs(client)
+    label = orgs["LABEL"]
+    _release_id, track_id, owner, _artist = await _released(client, admin, label, "count-owner@example.com", "Count Act")
+    staff = await _staff_with(client, admin, "count-staff@example.com", "content_manager", label)
+    fan = await register_and_login(client, "count-fan@example.com")
+    async with get_session_factory()() as session:
+        await EntitlementService(session).grant(
+            None, user_id=UUID(fan["user"]["id"]), entitlement_type="ADMIN_GRANT", ref_id=UUID(track_id), scope="TRACK"
+        )
+        await session.commit()
+    assert await _count(client, track_id) == 0
+
+    # The test song is only seconds long (plays are cut to its length), so count any play here.
+    monkeypatch.setenv("LISTEN_MIN_MS", "1")
+    get_settings.cache_clear()
+    try:
+        # The artist and catalog staff play it: no listens.
+        await _play(client, owner["access_token"], track_id, 90_000)
+        await _play(client, staff, track_id, 90_000)
+        assert await _count(client, track_id) == 0
+        # A fan's play counts as before.
+        await _play(client, fan["access_token"], track_id, 90_000)
+        assert await _count(client, track_id) == 1
+    finally:
+        monkeypatch.undo()
+        get_settings.cache_clear()
