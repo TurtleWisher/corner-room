@@ -80,6 +80,19 @@ def credit_line(c: dict[str, Any], names: dict[str, str]) -> str:
     return f"{line} ({instrument})" if instrument else line
 
 
+def credits_only(changes: dict[str, Any]) -> bool:
+    """A request that changes nothing but songs' credits (D-CHANGES-02)."""
+    if changes.get("release"):
+        return False
+    tracks = changes.get("tracks") or {}
+    if not tracks:
+        return False
+    for entry in tracks.values():
+        if entry.get("fields") or entry.get("audio_version_id") or entry.get("credits") is None:
+            return False
+    return True
+
+
 class ChangeRequestService:
     def __init__(self, session: AsyncSession, settings: Settings | None = None, clock: Clock | None = None) -> None:
         self.session = session
@@ -390,9 +403,14 @@ class ChangeRequestService:
             raise AppError("INVALID_TRANSITION", "No changes are waiting for this release", 409)
         text = " ".join((note or "").split())[:2000] or None
         if approve:
-            await self.music.assert_independent_reviewer(ctx, [release.id])
-            if ctx.user_id in {req.submitted_by, req.created_by}:
-                raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You made these changes")
+            # Owner, 2026-10-31 (D-CHANGES-02): staff may approve credit corrections they made
+            # themselves. Anything else (details, audio), and the profile's own people, still need
+            # someone else (two-person rule, D-AUDIO-09).
+            owners = await self.music.catalog_owner_ids(release.primary_artist_id, release.primary_band_id)
+            if not (credits_only(req.changes or {}) and ctx.user_id not in owners):
+                await self.music.assert_independent_reviewer(ctx, [release.id])
+                if ctx.user_id in {req.submitted_by, req.created_by}:
+                    raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You made these changes")
             await self._apply(req, release, ctx.user_id)
             req.status = "APPROVED"
         else:
