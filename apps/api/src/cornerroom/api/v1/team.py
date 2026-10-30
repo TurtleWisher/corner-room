@@ -86,6 +86,12 @@ async def take_off(kind: Kind, profile_id: UUID, member_id: UUID, ctx: Ctx, svc:
     return TeamOut(**await svc.take_off(ctx, kind, profile_id, member_id))
 
 
+@router.put("/studio/profiles/{kind}/{profile_id}/team/{member_id}/owner", response_model=TeamOut)
+async def hand_over(kind: Kind, profile_id: UUID, member_id: UUID, ctx: Ctx, svc: Svc) -> TeamOut:
+    """The owner makes an approved manager the owner; they stay on as a manager."""
+    return TeamOut(**await svc.hand_over(ctx, kind, profile_id, member_id))
+
+
 @router.get("/artist-team-requests", response_model=list[TeamRequestOut])
 async def team_requests(ctx: Ctx, svc: Svc) -> list[TeamRequestOut]:
     """Staff: managers waiting for approval in the active workspace (artist.manage)."""

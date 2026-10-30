@@ -277,6 +277,7 @@ function CreditsEditor({
   reload: Reload;
 }) {
   const [rows, setRows] = useState<StudioCredit[]>(track.credits.map((c) => ({ ...c })));
+  const [saved, setSaved] = useState(false);
   const { busy, error, run } = useAction(reload);
   const roles = new Map(taxonomy.credit_roles.map((r) => [r.key, r]));
   const update = (i: number, patch: Partial<StudioCredit>) => setRows(rows.map((row, j) => (j === i ? { ...row, ...patch } : row)));
@@ -336,11 +337,26 @@ function CreditsEditor({
           <Button
             size="sm"
             busy={busy === "credits"}
-            onClick={() => void run("credits", () => (changing ? saveCreditChanges(track.id, rows) : setStudioCredits(track.id, rows)))}
+            onClick={() => {
+              setSaved(false);
+              void run("credits", async () => {
+                if (!changing) return setStudioCredits(track.id, rows);
+                const out = await saveCreditChanges(track.id, rows);
+                setSaved(true);
+                return out;
+              });
+            }}
           >
             <Save aria-hidden="true" /> {changing ? "Save credit changes for review" : "Save credits"}
           </Button>
         </div>
+      ) : null}
+      {saved && changing ? (
+        // Saving only adds to the list of changes; nothing reaches staff until it is sent (owner, 2026-10-31).
+        <p role="status" className="mt-3 flex items-start gap-2 text-sm text-fg">
+          <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" />
+          Saved to your changes. Press Send changes for review in the Change this music box at the top of the page to send them to staff.
+        </p>
       ) : null}
       <Problem message={error} />
     </div>

@@ -15,6 +15,20 @@ from tests.test_audio_phase5_intake import _orgs
 from tests.test_audio_phase7_release_commerce import _released
 
 
+def test_change_lists_word_credits_like_the_song_page() -> None:
+    """Owner, 2026-10-31: a change waiting for review said "Custom: MIZULS (Songwriter & Composer)"."""
+    from cornerroom.modules.music.application.changes import credit_line
+
+    names = {"a1": "MIZULS"}
+    assert credit_line({"role_key": "custom", "artist_id": "a1", "instrument": "Songwriter & Composer"}, names) == (
+        "Songwriter & Composer: MIZULS"
+    )
+    assert credit_line({"role_key": "custom", "display_name": "Aryan", "instrument": "Artwork"}, names) == "Artwork: Aryan"
+    assert credit_line({"role_key": "musician", "display_name": "Rafi", "instrument": "Guitars"}, names) == "Guitars: Rafi"
+    assert credit_line({"role_key": "mixing_engineer", "display_name": "M.K."}, names) == "Mixing engineer: M.K."
+    assert credit_line({"role_key": "performer", "artist_id": "a1", "instrument": "Vocals"}, names) == "Performer: MIZULS (Vocals)"
+
+
 @pytest.mark.postgres
 @pytest.mark.asyncio
 async def test_song_lists_say_which_releases_a_song_is_on(client: AsyncClient) -> None:

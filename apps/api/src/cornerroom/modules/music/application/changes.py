@@ -67,9 +67,17 @@ def _text(value: Any) -> str:
 
 
 def credit_line(c: dict[str, Any], names: dict[str, str]) -> str:
-    who = names.get(str(c.get("artist_id"))) if c.get("artist_id") else c.get("display_name")
-    line = f"{(c.get('role_key') or '').replace('_', ' ').capitalize()}: {who or 'Not available'}"
-    return f"{line} ({c['instrument']})" if c.get("instrument") else line
+    """One credit in words, as the song page says it (owner, 2026-10-31): a role the artist named
+    reads "Songwriter & Composer: MIZULS", a musician "Guitars: Rafi", never "Custom: ..."."""
+    who = (names.get(str(c.get("artist_id"))) if c.get("artist_id") else c.get("display_name")) or "Not available"
+    role = (c.get("role_key") or "").lower()
+    instrument = (c.get("instrument") or "").strip()
+    if role == "custom":
+        return f"{instrument or 'Credit'}: {who}"
+    if role == "musician":
+        return f"{instrument or 'Musician'}: {who}"
+    line = f"{role.replace('_', ' ').capitalize()}: {who}"
+    return f"{line} ({instrument})" if instrument else line
 
 
 class ChangeRequestService:
