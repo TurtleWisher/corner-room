@@ -113,6 +113,24 @@ describe("creditDetails (owner, 2026-10-30)", () => {
     ]);
   });
 
+  it("folds every other musician under the song's own artist, typed or linked (owner, 2026-10-31)", () => {
+    // The live song: MIZULS typed as a named role, five musicians saved before "Played as part of".
+    const song = [
+      { id: "c1", credit_role: "custom", role_key: "custom", display_name: "MIZULS", instrument: "Songwriter & Composer" },
+      { id: "c2", credit_role: "custom", role_key: "custom", display_name: "Acoustic Artz", instrument: "Recording" },
+      { id: "m1", credit_role: "musician", role_key: "musician", display_name: "Anupom", instrument: "Vocals & Guitars" },
+      { id: "m2", credit_role: "musician", role_key: "musician", display_name: "Autul", instrument: "Drums (Guest)" },
+      { id: "m3", credit_role: "musician", role_key: "musician", display_name: "Tuli", instrument: "Bass", part_of_name: "Acoustic Artz" },
+    ];
+    const out = creditDetails(song, [], label, [{ id: "b9", name: "MIZULS" }], "b9");
+    expect(out.main.map((m) => `${m.role}: ${m.name} [${m.members.map((p) => `${p.plays} ${p.name}`).join(", ")}]`)).toEqual([
+      "Songwriter & Composer: MIZULS [Vocals & Guitars Anupom, Drums (Guest) Autul]",
+      "Recording: Acoustic Artz [Bass Tuli]",
+    ]);
+    // Without the song's artist credited, they keep their own lines.
+    expect(creditDetails(song, [], label, [], "b9").main).toHaveLength(4);
+  });
+
   it("is empty without credits", () => {
     expect(creditDetails([], artists, label)).toEqual({ main: [] });
   });

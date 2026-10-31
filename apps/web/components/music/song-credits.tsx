@@ -74,23 +74,26 @@ function CreditRow({ line, index }: { line: CreditLine; index: number }) {
 
 /**
  * The song's credits, folded like the lyrics (owner, 2026-10-30): one line per credit in the
- * artist's order. Collaborators (recording, mixing, artwork, a guest player) are lines of their
- * own; the people who played in an act fold under that act's line (owner, 2026-10-31).
+ * artist's order. Collaborators (recording, mixing, artwork) are lines of their own; whoever played
+ * on the song folds under the song's own artist's line, or the act Studio names (owner, 2026-10-31).
  */
 export function SongCredits({
   credits,
   artists,
   bands = [],
+  ownActId = null,
   defaultOpen,
   className,
 }: {
   credits: CreditRecord[];
   artists: Pick<ArtistRecord, "id" | "stage_name">[];
   bands?: Pick<BandRecord, "id" | "name">[];
+  /** The song's own artist or band: musicians fold under its line (owner, 2026-10-31). */
+  ownActId?: string | null;
   defaultOpen?: boolean;
   className?: string;
 }) {
-  const { main } = creditDetails(credits, artists, (role) => humanizeStatus(role), bands);
+  const { main } = creditDetails(credits, artists, (role) => humanizeStatus(role), bands, ownActId);
   return (
     <FoldOut title="Credits" icon={Users} count={main.length || undefined} defaultOpen={defaultOpen} className={className}>
       {main.length === 0 ? (

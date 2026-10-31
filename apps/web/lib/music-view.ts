@@ -118,20 +118,25 @@ type SongCredit = {
 const actKey = (id?: string | null, name?: string | null) => (id ? `id:${id}` : name?.trim() ? `name:${sameName(name)}` : null);
 
 /**
- * Song page credits, one line per credit in the artist's order (owner, 2026-10-31). The people who
- * played in an act (MIZULS' singer, guitarist) fold under that act's line, instrument first; anyone
- * else, including a guest musician, is a line of their own, visible without unfolding. A role the
- * artist named themselves ("Cover art") reads as that role (D-CREDITS-02). Linked names read as the
- * profile's stage name.
+ * Song page credits, one line per credit in the artist's order (owner, 2026-10-31). Who played on
+ * the song (musicians: singer, guitarist, a guest drummer) never get lines of their own: they fold
+ * under the song's own artist's line ("Songwriter & Composer: MIZULS"), or under another act's line
+ * when Studio says they played in that act. Collaborators (recording, mixing, artwork) are lines
+ * of their own. A role the artist named themselves ("Cover art") reads as that role
+ * (D-CREDITS-02). Linked names read as the profile's stage name. Only when the song's artist is
+ * not credited at all do musicians stand on their own lines.
  */
 export function creditDetails(
   credits: SongCredit[],
   artists: Pick<ArtistRecord, "id" | "stage_name">[],
   roleLabel: (role: string) => string,
   bands: Pick<BandRecord, "id" | "name">[] = [],
+  /** The song's own artist or band (the release's profile); musicians fold under its line. */
+  ownActId: string | null = null,
 ): { main: CreditLine[] } {
   const main: CreditLine[] = [];
   const acts = new Map<string, CreditLine>();
+  let ownAct: CreditLine | undefined;
   const named = (c: SongCredit) => {
     const profile = creditProfile(c, artists, bands);
     return { name: profile?.name ?? creditPerson({ artist_id: c.artist_id, display_name: c.display_name }, artists, bands), href: profile?.href ?? null };
@@ -146,8 +151,10 @@ export function creditDetails(
     main.push(line);
     const key = actKey(c.artist_id, c.display_name);
     if (key && !acts.has(key)) acts.set(key, line);
+    // The song's own artist, linked or typed with its stage name (first line wins).
+    if (!ownAct && ownActId && href && href.endsWith(`/${ownActId}`)) ownAct = line;
   }
-  // Musicians: under their act when it is credited here, else a line of their own in their place.
+  // Musicians: under the act Studio names, else under the song's own artist, else their own line.
   const lines: CreditLine[] = [];
   for (const c of credits) {
     if (roleOf(c) !== "musician") {
@@ -158,7 +165,7 @@ export function creditDetails(
     const { name, href } = named(c);
     if (!name) continue;
     const plays = (c.instrument || "").trim() || "Musician";
-    const act = acts.get(actKey(c.part_of_artist_id, c.part_of_name) ?? "");
+    const act = acts.get(actKey(c.part_of_artist_id, c.part_of_name) ?? "") ?? ownAct;
     if (act) act.members.push({ key: c.id, name, plays, href });
     else lines.push({ key: c.id, role: plays, name, href, members: [] });
   }
