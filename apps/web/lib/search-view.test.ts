@@ -69,3 +69,32 @@ describe("searchResultHref for events", () => {
     expect(searchResultHref("/releases/r1", { entity_type: "RELEASE", entity_id: "r1" })).toBe("/releases/r1");
   });
 });
+
+describe("header search (D-MOTION-03)", () => {
+  it("suggests the API's best matches that open somewhere, in order, up to the limit", async () => {
+    const { searchSuggestions } = await import("@/lib/search-view");
+    const hits = [
+      { entity_type: "TRACK", entity_id: "t1", route: "/tracks/t1" },
+      { entity_type: "BAND", entity_id: "b1", route: "/bands/b1" },
+      { entity_type: "USER", entity_id: "u1", route: null },
+      { entity_type: "EVENT", entity_id: "e1", route: "/staff/events/e1" },
+      { entity_type: "RELEASE", entity_id: "r1", route: "/releases/r1" },
+    ];
+    expect(searchSuggestions(hits).map((s) => `${s.kind} ${s.href}`)).toEqual([
+      "Song /tracks/t1",
+      "Artist /bands/b1",
+      "Event /events/e1",
+      "Release /releases/r1",
+    ]);
+    expect(searchSuggestions(hits, 2)).toHaveLength(2);
+  });
+
+  it("opens with / unless the person is typing", async () => {
+    const { isSearchShortcut } = await import("@/lib/search-view");
+    expect(isSearchShortcut("/", { tagName: "BODY" })).toBe(true);
+    expect(isSearchShortcut("/", null)).toBe(true);
+    expect(isSearchShortcut("/", { tagName: "input" })).toBe(false);
+    expect(isSearchShortcut("/", { tagName: "DIV", isContentEditable: true })).toBe(false);
+    expect(isSearchShortcut("k", { tagName: "BODY" })).toBe(false);
+  });
+});

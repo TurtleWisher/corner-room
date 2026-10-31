@@ -178,7 +178,7 @@ function TrackList({
   releaseId: string;
 }) {
   return (
-    <ol aria-label="Track list" className="border-t border-line">
+    <ol aria-label="Track list" className="cr-focus-list border-t border-line">
       {rows.map(({ position, trackId, track }) => {
         const record = playable.get(trackId);
         const state = playState(record);

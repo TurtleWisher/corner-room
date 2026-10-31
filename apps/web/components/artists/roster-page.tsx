@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
+import { ArrowUpRight } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
@@ -36,30 +37,31 @@ function monogram(name: string): string {
 }
 
 /**
- * One artist on the roster (owner, 2026-10-30): a glass card filled with their picture and their
- * name on a frosted strip, nothing else, so it is a pleasure to click. Solo artists and bands look
- * the same. Without a picture, their initials.
+ * One artist on the roster (owner, 2026-11-01): their picture fills the card edge to edge and is
+ * cut at the corner with it, and their name floats on a clear glass plate. Solo artists and bands
+ * look the same. Without a picture, their initials. Styles: `app/styles/modules/artists.css`.
  */
 function RosterCard({ row, kind }: { row: RosterEntry; kind: "artist" | "band" }) {
   const own = row.kind ?? kind;
   return (
-    <Link href={`/${own}s/${row.id}`} className="cr-focus group block" aria-label={row.name}>
-      <div className="cr-cut cr-glass-card cr-hover p-1.5">
-        <div className="relative aspect-[4/5] overflow-hidden">
-          <CoverArt
-            src={coverUrl(own === "band" ? { band: row.id, picture: row.picture } : { artist: row.id, picture: row.picture }, 480)}
-            fallback={
-              <div className="flex size-full items-center justify-center bg-white/[0.04]">
-                <span className="font-ui text-5xl font-extrabold tracking-wide text-highlight">{monogram(row.name)}</span>
-              </div>
-            }
-            className="size-full [&_img]:transition-transform [&_img]:duration-500 motion-safe:group-hover:[&_img]:scale-105"
-          />
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-black/0" />
-          <div className="absolute inset-x-0 bottom-0 border-t border-white/15 bg-black/25 px-4 py-3 backdrop-blur-md">
-            <h2 className="truncate text-lg font-bold text-fg group-hover:text-highlight">{row.name}</h2>
-          </div>
+    <Link href={`/${own}s/${row.id}`} className="cr-focus roster-link" aria-label={row.name}>
+      <div className="roster-card">
+        <CoverArt
+          src={coverUrl(own === "band" ? { band: row.id, picture: row.picture } : { artist: row.id, picture: row.picture }, 480)}
+          fallback={
+            <div className="flex size-full items-center justify-center">
+              <span className="font-ui text-5xl font-extrabold tracking-wide text-highlight">{monogram(row.name)}</span>
+            </div>
+          }
+          className="roster-pic"
+        />
+        <div aria-hidden="true" className="roster-shade" />
+        <div aria-hidden="true" className="roster-sheen" />
+        <div className="roster-glass">
+          <h2 className="min-w-0 truncate text-lg font-bold text-fg">{row.name}</h2>
+          <ArrowUpRight aria-hidden="true" className="roster-arrow size-5" />
         </div>
+        <div aria-hidden="true" className="roster-edge" />
       </div>
     </Link>
   );

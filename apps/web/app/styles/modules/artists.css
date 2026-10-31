@@ -1,0 +1,147 @@
+/*
+ * Artists module (Ember). Roster card (owner, 2026-11-01, D-MOTION-03): the picture fills the
+ * whole card and is cut at the top-left corner with it, so nothing pokes out past the cut. A thin
+ * light edge follows the cut, and the name sits on a frosted glass plate floating over the bottom.
+ * Hover: the card lifts, the picture eases in, a soft sheen crosses it, the edge brightens.
+ */
+[data-module="artists"] .roster-link {
+  --roster-cut: 1.125rem;
+  display: block;
+  filter: drop-shadow(0 22px 28px rgb(0 0 0 / 0.42));
+  transition:
+    translate 520ms var(--ease-corner),
+    filter 520ms var(--ease-corner);
+}
+[data-module="artists"] .roster-card {
+  position: relative;
+  isolation: isolate;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  clip-path: polygon(var(--roster-cut) 0, 100% 0, 100% 100%, 0 100%, 0 var(--roster-cut));
+  background: rgb(255 255 255 / 0.04);
+}
+[data-module="artists"] .roster-pic {
+  position: absolute;
+  inset: 0;
+  transition:
+    scale 900ms var(--ease-corner),
+    filter 900ms var(--ease-corner);
+}
+[data-module="artists"] .roster-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to top, rgb(12 4 4 / 0.82), rgb(12 4 4 / 0.18) 42%, transparent 64%);
+}
+/* A band of light that crosses the picture once on hover. */
+[data-module="artists"] .roster-sheen {
+  position: absolute;
+  inset: -20% -60%;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, rgb(255 255 255 / 0.16) 48%, rgb(255 255 255 / 0.04) 54%, transparent 62%);
+  translate: -60% 0;
+  opacity: 0;
+}
+/* The edge: a 1 px ring that follows the cut, brightest at the cut corner (the lit side). */
+[data-module="artists"] .roster-edge {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.12) 35%, rgb(255 255 255 / 0.06) 70%, rgb(255 255 255 / 0.18));
+  clip-path: polygon(
+    evenodd,
+    var(--roster-cut) 0, 100% 0, 100% 100%, 0 100%, 0 var(--roster-cut), var(--roster-cut) 0,
+    calc(var(--roster-cut) + 0.414px) 1px,
+    calc(100% - 1px) 1px,
+    calc(100% - 1px) calc(100% - 1px),
+    1px calc(100% - 1px),
+    1px calc(var(--roster-cut) + 0.414px),
+    calc(var(--roster-cut) + 0.414px) 1px
+  );
+  opacity: 0.7;
+  transition: opacity 420ms var(--ease-corner);
+}
+/* The glass plate: frosted, nearly clear, with its own small cut so it echoes the card. */
+[data-module="artists"] .roster-glass {
+  --plate-cut: 0.625rem;
+  position: absolute;
+  inset-inline: 0.625rem;
+  bottom: 0.625rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  clip-path: polygon(var(--plate-cut) 0, 100% 0, 100% 100%, 0 100%, 0 var(--plate-cut));
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.04) 60%),
+    rgb(20 7 7 / 0.28);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.22);
+  transition: background-color 420ms var(--ease-corner);
+}
+[data-module="artists"] .roster-arrow {
+  margin-inline-start: auto;
+  flex: none;
+  color: var(--cr-highlight);
+  opacity: 0;
+  translate: -0.375rem 0.375rem;
+  transition:
+    opacity 360ms var(--ease-corner),
+    translate 420ms var(--ease-corner);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-module="artists"] .roster-link:hover {
+    translate: 0 -0.375rem;
+    filter: drop-shadow(0 30px 34px rgb(0 0 0 / 0.55));
+  }
+  [data-module="artists"] .roster-link:hover .roster-pic {
+    scale: 1.06;
+    filter: saturate(1.12);
+  }
+  [data-module="artists"] .roster-link:hover .roster-sheen {
+    animation: roster-sheen 1100ms var(--ease-corner) both;
+  }
+  [data-module="artists"] .roster-link:hover .roster-edge {
+    opacity: 1;
+  }
+}
+[data-module="artists"] .roster-link:is(:hover, :focus-visible) .roster-arrow {
+  opacity: 1;
+  translate: 0 0;
+}
+@keyframes roster-sheen {
+  0% {
+    opacity: 0;
+    translate: -60% 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: 60% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-module="artists"] .roster-link,
+  [data-module="artists"] .roster-pic,
+  [data-module="artists"] .roster-arrow {
+    transition-duration: 0ms;
+  }
+  [data-module="artists"] .roster-link:hover {
+    translate: none;
+  }
+  [data-module="artists"] .roster-link:hover .roster-pic {
+    scale: none;
+  }
+  [data-module="artists"] .roster-link:hover .roster-sheen {
+    animation: none;
+  }
+  [data-module="artists"] .roster-arrow {
+    translate: none;
+  }
+}

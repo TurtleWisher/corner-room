@@ -54,6 +54,7 @@ import {
   type RepeatMode,
 } from "@/lib/player-model";
 import { coverUrl } from "@/lib/cover-view";
+import { DOCK_SETTLE_MS, dockStaysUp, movedEnough } from "@/lib/player-dock-view";
 import { cn } from "@/lib/utils";
 
 export type PlayerTrack = { id: string; title: string; artist?: string | null };
@@ -815,9 +816,54 @@ function BarProgress({ label }: { label: string }) {
  * the listening room. On every page (it lives in the app shell); above the phone tab bar where a
  * page has one; hidden inside the room, which has its own.
  */
+/**
+ * The bar steps aside while you browse (owner, 2026-11-01, D-MOTION-03): scrolling or moving the
+ * pointer tucks it down, and it rises once things are still for a moment. Near the bottom edge, over
+ * the bar, or with focus in it, it stays. Writes one data attribute, so React never re-renders.
+ */
+function useBrowseTuck(ref: React.RefObject<HTMLElement | null>, enabled: boolean) {
+  useEffect(() => {
+    const bar = ref.current;
+    if (!enabled || !bar) return;
+    let timer = 0;
+    let last: { x: number; y: number } | null = null;
+    const show = () => {
+      window.clearTimeout(timer);
+      delete bar.dataset.tucked;
+    };
+    const engaged = () => bar.matches(":hover") || bar.contains(document.activeElement);
+    const activity = (pointerY: number | null) => {
+      if (dockStaysUp({ pointerY, viewportHeight: window.innerHeight, engaged: engaged() })) return show();
+      bar.dataset.tucked = "";
+      window.clearTimeout(timer);
+      timer = window.setTimeout(show, DOCK_SETTLE_MS);
+    };
+    const onScroll = () => activity(null);
+    const onMove = (e: PointerEvent) => {
+      const at = { x: e.clientX, y: e.clientY };
+      const moved = movedEnough(last, at);
+      last = at;
+      if (moved) activity(e.clientY);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("pointermove", onMove, { passive: true });
+    bar.addEventListener("focusin", show);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("pointermove", onMove);
+      bar.removeEventListener("focusin", show);
+      window.clearTimeout(timer);
+      delete bar.dataset.tucked;
+    };
+  }, [ref, enabled]);
+}
+
 export function PlayerBar() {
   const p = usePlayer();
   const pathname = usePathname();
+  const dock = useRef<HTMLElement>(null);
+  const shown = Boolean(p.track) && !isRoomPath(pathname);
+  useBrowseTuck(dock, shown);
   if (!p.track || isRoomPath(pathname)) return null;
   const playing = p.status === "playing";
   const label = p.track.title || "Track";
@@ -826,6 +872,7 @@ export function PlayerBar() {
     <>
       <div className="h-20" aria-hidden="true" />
       <section
+        ref={dock}
         aria-label="Player"
         data-theme="sky"
         className="cr-scope cr-player-dock fixed inset-x-0 z-40 border-t border-cr-sky/60"
