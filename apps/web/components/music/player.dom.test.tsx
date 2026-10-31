@@ -349,39 +349,96 @@ describe("ListeningRoom", () => {
     expect(audioEl().src).toContain("tok-t3");
   });
 
-  it("floats the lyrics in the front cover's own 3D space, in the carousel and in focus", async () => {
-    api.fetchTrack.mockImplementation(async (id: string) => ({
-      id,
+  /** Two animation frames: the lyric ring moves its lines once a frame. */
+  async function frames() {
+    await act(async () => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+  }
+
+  /** The room with a song no earlier test has played (the room keeps lyrics per page view). */
+  async function renderSung(id: string) {
+    api.fetchTrack.mockImplementation(async (trackId: string) => ({
+      id: trackId,
       title: "Night Bus",
       status: "RELEASED",
       lyrics: "one\ntwo\n\nthree\nfour\nfive",
     }));
-    // A song no earlier test has played: the room keeps each song's lyrics for the page view.
-    const sung = { id: "t-sung", title: "Night Bus", artist: "Kaal Bela" };
-    nav.pathname = "/listen/t-sung";
+    const sung = { id, title: "Night Bus", artist: "Kaal Bela" };
+    nav.pathname = `/listen/${id}`;
     render(
       <PlayerProvider>
         <Start track={sung} queue={[QUEUE[0], sung, QUEUE[2]]} />
         <ListeningRoom />
       </PlayerProvider>,
     );
-    await act(async () => screen.getByText("start t-sung").click());
+    await act(async () => screen.getByText(`start ${id}`).click());
     await act(async () => setMedia(10, 20));
+  }
+
+  afterEach(() => {
+    api.fetchTrack.mockImplementation(async (id: string) => ({ id, title: "Last Stop", status: "RELEASED" }));
+    window.localStorage.removeItem("cr.room.lyrics");
+  });
+
+  it("floats the lyrics round the front cover, in its own 3D space, in the carousel and in focus", async () => {
+    await renderSung("t-sung");
     // Off until the listener turns them on.
     expect(document.querySelector(".lr-lyric")).toBeNull();
     await act(async () => (await screen.findByRole("button", { name: "Lyrics" })).click());
-    const orbit = document.querySelector('.lr-slot[data-offset="0"] .lr-orbit') as HTMLElement;
+    // The ring floats with the front card: both sit in the card's float wrapper.
+    const orbit = document.querySelector('.lr-slot[data-offset="0"] .lr-bob > .lr-orbit') as HTMLElement;
     expect(orbit.getAttribute("aria-hidden")).toBe("true");
+    expect(orbit.previousElementSibling?.classList.contains("lr-card")).toBe(true);
     expect(document.querySelectorAll(".lr-slot:not([data-offset='0']) .lr-orbit")).toHaveLength(0);
-    // Two lines leaving, the line now, the next arriving; the line now is in front of the cover.
-    const ages = [...orbit.querySelectorAll<HTMLElement>(".lr-lyric")].map((l) => l.dataset.age);
-    expect(ages).toEqual(["-2", "-1", "0", "1"]);
-    const now = orbit.querySelector<HTMLElement>('.lr-lyric[data-age="0"]')!;
-    expect(now.style.transform).toMatch(/translate3d\(.*, 110px\)/);
+    // Two lines leaving, the line now, the next arriving: at most four elements, never the song.
+    const lines = [...orbit.querySelectorAll<HTMLElement>(".lr-lyric")];
+    expect(lines.map((l) => l.dataset.index)).toEqual(["0", "1", "2", "3"]);
+    await frames();
+    // The line now is in front of the cover and shown.
+    const depth = (el: HTMLElement) => Number(/translate3d\([^,]+,[^,]+, (-?[\d.]+)px\)/.exec(el.style.transform)?.[1]);
+    expect(depth(lines[2])).toBeGreaterThan(0);
+    expect(lines[2].dataset.plane).toBe("front");
+    expect(Number(lines[2].style.opacity)).toBeGreaterThan(0.9);
+    // Half a line early, the next line is still coming round from behind.
+    expect(depth(lines[3])).toBeLessThan(0);
+    expect(lines[3].dataset.plane).not.toBe("front");
     await act(async () => screen.getByRole("button", { name: "Open Night Bus in focus" }).click());
-    expect(document.querySelector(".lr-focus-cover .lr-orbit .lr-lyric")).toBeTruthy();
-    api.fetchTrack.mockImplementation(async (id: string) => ({ id, title: "Last Stop", status: "RELEASED" }));
-    window.localStorage.removeItem("cr.room.lyrics");
+    expect(document.querySelector(".lr-focus-cover .lr-orbit[data-axis=over] .lr-lyric")).toBeTruthy();
+  });
+
+  it("holds and lights a pointed line, and turning lyrics off takes every line away", async () => {
+    await renderSung("t-held");
+    await act(async () => (await screen.findByRole("button", { name: "Lyrics" })).click());
+    await frames();
+    const now = document.querySelector<HTMLElement>('.lr-lyric[data-index="2"]')!;
+    const enter = new MouseEvent("pointerover", { bubbles: true });
+    Object.defineProperty(enter, "pointerType", { value: "mouse" });
+    await act(async () => fireEvent(now, enter));
+    expect(now.hasAttribute("data-focus")).toBe(true);
+    const leave = new MouseEvent("pointerout", { bubbles: true });
+    Object.defineProperty(leave, "pointerType", { value: "mouse" });
+    await act(async () => fireEvent(now, leave));
+    expect(now.hasAttribute("data-focus")).toBe(false);
+    await act(async () => screen.getByRole("button", { name: "Lyrics" }).click());
+    expect(document.querySelector(".lr-orbit")).toBeNull();
+  });
+
+  it("under reduced motion shows only the line now, still", async () => {
+    const before = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes("reduce"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      await renderSung("t-still");
+      await act(async () => (await screen.findByRole("button", { name: "Lyrics" })).click());
+      await frames();
+      const shown = [...document.querySelectorAll<HTMLElement>(".lr-lyric")].filter((l) => Number(l.style.opacity) > 0);
+      expect(shown.map((l) => l.dataset.index)).toEqual(["2"]);
+    } finally {
+      window.matchMedia = before;
+    }
   });
 
   it("seeks from the keyboard in 5 second steps", async () => {

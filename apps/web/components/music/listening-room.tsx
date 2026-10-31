@@ -28,7 +28,6 @@ import { RoomCube } from "@/components/brand/room-cube";
 import { ButtonLink } from "@/components/ds";
 import { roomCameFrom } from "@/components/music/outside-room";
 import { playerStatusText, RepeatButton, ShuffleButton, usePlayer, usePlayerProgress, type PlayerTrack } from "@/components/music/player";
-import { SmokeLyric, stirSmoke } from "@/components/music/smoke-lyric";
 import { TrackActions } from "@/components/music/track-actions";
 import { useAsync } from "@/components/use-async";
 import {
@@ -45,12 +44,12 @@ import { fetchPlayableCatalog, fetchTrack, type PlayableTrackRecord } from "@/li
 import { coverUrl } from "@/lib/cover-view";
 import {
   floatingLines,
+  lyricAgeAt,
   lyricIndexAt,
   lyricLines,
-  lyricStepSeconds,
-  lyricSway,
-  orbitPose,
-  type OrbitLayout,
+  ringPose,
+  type RingAxis,
+  type RingPlane,
 } from "@/lib/lyrics-view";
 import { creditHref } from "@/lib/music-view";
 import { clock, durationLabel } from "@/lib/player-model";
@@ -382,51 +381,189 @@ function useCompactRoom(): boolean {
   );
 }
 
-/** Line speed: one line's share of the song, kept between a glide and a drift. */
-const STEP_MIN_S = 2.2;
-const STEP_MAX_S = 8;
+/** A line's place as drawn, eased towards where the ring says it should be. */
+type LineState = { x: number; y: number; z: number; o: number; plane: RingPlane | ""; w: number; h: number; held: number | null };
+
+/** How quickly a drawn line catches up with its place, per frame at 60 a second. */
+const CATCH_UP = 0.09;
+/** How long a tapped line stays held and lit on touch screens. */
+const TAP_HOLD_MS = 2600;
 
 /**
- * The lyric orbit, drawn inside the cover's own 3D space (the carousel stage, or the focus
- * cover), so the browser keeps every line in true depth order with the cards: a line behind the
- * cover is hidden by the art and softened through the card's glass, a line in front passes over
- * it. Each line is smoke the pointer can blow apart (components/music/smoke-lyric.tsx) and keeps
- * one path (lib/lyrics-view.ts `orbitPose`); the room tilts the orbit a little towards the mouse.
+ * The lyric ring (owner, 2026-11-01, D-LYRICS-02; lib/lyrics-view.ts `ringPose`). Real text, drawn
+ * inside the cover's own 3D space (the floating front card, or the focus cover), so the browser
+ * keeps every line in true depth order with the cards: behind the cover a line is hidden by the
+ * art, in front it passes over it, and it moves with the card as the card floats.
+ *
+ * Layer contract: the cover sits at depth 0; a line is in front when its z is above 0 and behind
+ * when below. Nothing here uses z-index; the shared 3D space (preserve-3d on the stage, the front
+ * slot, the float wrapper and this ring) is the only thing that orders them.
+ *
+ * Motion: React renders only when the line on show changes. One animation frame loop moves the
+ * (at most four) lines with transform and opacity, timing them between the player's progress
+ * reports; it stops when playback pauses and the lines have settled, and the browser stops it in
+ * a hidden tab. Pointing at a line (or tapping it) holds it in place and lights it.
  */
-function LyricOrbit({ layout, focus = false }: { layout: OrbitLayout | "auto"; focus?: boolean }) {
+function LyricOrbit({ axis }: { axis: RingAxis | "auto" }) {
   const lyrics = useContext(LyricsContext);
-  const { position, duration } = usePlayerProgress();
+  const p = usePlayer();
   const compact = useCompactRoom();
-  if (!lyrics.on || lyrics.lines.length === 0) return null;
-  const shape: OrbitLayout = layout === "auto" ? (compact ? "stack" : "beside") : layout;
-  const index = lyricIndexAt(lyrics.lines.length, position, duration);
-  const step = Math.min(STEP_MAX_S, Math.max(STEP_MIN_S, lyricStepSeconds(lyrics.lines.length, duration)));
-  // Wide focus views keep the title and console to the right of the cover: lines drift left.
-  const towards = focus && !compact ? -1 : undefined;
+  const count = lyrics.lines.length;
+  const index = useSyncExternalStore(
+    p.progress.subscribe,
+    () => lyricIndexAt(count, p.progress.get().position, p.progress.get().duration),
+    () => -1,
+  );
+  const shape: RingAxis = axis === "auto" ? (compact ? "over" : "around") : axis;
+  const playing = p.status === "playing";
+  const show = lyrics.on && count > 0;
+  const root = useRef<HTMLDivElement>(null);
+  const lines = useRef(new Map<string, LineState>());
+
+  useEffect(() => {
+    const orbit = root.current;
+    if (!show || !orbit) return;
+    const states = lines.current;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    // The cover the ring goes round: the card (carousel) or the art (focus), just before the ring.
+    const cover = orbit.previousElementSibling as HTMLElement | null;
+    let coverW = cover?.offsetWidth || 300;
+    let coverH = cover?.offsetHeight || coverW;
+    let frame = 0;
+    let last = 0;
+    // Playback time between the player's reports (a few a second), so the motion is continuous.
+    let base = p.progress.get();
+    let baseAt = performance.now();
+
+    const tick = () => {
+      // The page clock, the same one the progress timestamps use.
+      const now = performance.now();
+      frame = 0;
+      const dt = last ? Math.min(3, (now - last) / (1000 / 60)) : 1;
+      last = now;
+      const t = playing ? base.position + Math.min(0.75, (now - baseAt) / 1000) : base.position;
+      const ease = 1 - Math.pow(1 - CATCH_UP, dt);
+      const seen = new Set<string>();
+      let moving = false;
+      for (const el of Array.from(orbit.children) as HTMLElement[]) {
+        const id = el.dataset.line ?? "";
+        const key = Number(el.dataset.index);
+        seen.add(id);
+        const age = lyricAgeAt(key, count, t, base.duration);
+        if (!Number.isFinite(age)) continue;
+        let st = states.get(id);
+        const fresh = !st;
+        if (!st) {
+          st = { x: 0, y: 0, z: 0, o: 0, plane: "", w: 0, h: 0, held: null };
+          states.set(id, st);
+        }
+        // Sizes are read once per line (and again after a resize), never every frame.
+        if (!st.w) {
+          st.w = el.offsetWidth;
+          st.h = el.offsetHeight;
+        }
+        // Reduced motion: only the line now, still, where it is sung.
+        const at = reduced ? 0.5 : (st.held ?? age);
+        const pose = ringPose(key, at, shape, { cover: coverW, coverHeight: coverH, lineWidth: st.w, lineHeight: st.h });
+        const opacity = reduced ? (key === index ? 1 : 0) : pose.opacity;
+        const k = fresh || reduced ? 1 : ease;
+        st.x += (pose.x - st.x) * k;
+        st.y += (pose.y - st.y) * k;
+        st.z += (pose.z - st.z) * k;
+        st.o += (opacity - st.o) * k;
+        if (Math.abs(pose.x - st.x) + Math.abs(pose.y - st.y) + Math.abs(pose.z - st.z) > 0.5 || Math.abs(opacity - st.o) > 0.01) {
+          moving = true;
+        }
+        el.style.transform = `translate3d(${st.x.toFixed(1)}px, ${st.y.toFixed(1)}px, ${st.z.toFixed(1)}px) translate(-50%, -50%)`;
+        el.style.opacity = st.o.toFixed(3);
+        if (st.plane !== pose.plane) {
+          st.plane = pose.plane;
+          el.dataset.plane = pose.plane;
+        }
+      }
+      for (const id of states.keys()) if (!seen.has(id)) states.delete(id);
+      if (!reduced && (playing || moving)) frame = window.requestAnimationFrame(tick);
+    };
+    const start = () => {
+      if (!frame) frame = window.requestAnimationFrame(tick);
+    };
+
+    const unsubscribe = p.progress.subscribe(() => {
+      base = p.progress.get();
+      baseAt = performance.now();
+      start();
+    });
+    const resize =
+      typeof ResizeObserver === "function" && cover
+        ? new ResizeObserver(() => {
+            coverW = cover.offsetWidth || coverW;
+            coverH = cover.offsetHeight || coverH;
+            for (const st of states.values()) st.w = 0;
+            start();
+          })
+        : null;
+    if (cover) resize?.observe(cover);
+    start();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      unsubscribe();
+      resize?.disconnect();
+    };
+  }, [show, index, playing, shape, count, lyrics.trackId, p.progress]);
+
+  if (!show) return null;
+
+  const hold = (el: HTMLElement) => {
+    const st = lines.current.get(el.dataset.line ?? "");
+    const { position, duration } = p.progress.get();
+    if (st && st.held === null) st.held = lyricAgeAt(Number(el.dataset.index), count, position, duration);
+    el.dataset.focus = "";
+  };
+  const release = (el: HTMLElement) => {
+    const st = lines.current.get(el.dataset.line ?? "");
+    if (st) st.held = null;
+    delete el.dataset.focus;
+    el.style.removeProperty("--lx");
+    el.style.removeProperty("--ly");
+  };
+
   return (
-    <div aria-hidden="true" className="lr-orbit" data-layout={shape} style={{ "--step": `${step}s` } as React.CSSProperties}>
+    <div ref={root} aria-hidden="true" className="lr-orbit" data-axis={shape}>
       {floatingLines(lyrics.lines, index).map((line) => {
-        const pose = orbitPose(line.key, line.age, shape, towards);
-        const sway = lyricSway(line.key);
+        const id = `${lyrics.trackId}-${line.key}`;
         return (
           <div
-            key={`${lyrics.trackId}-${line.key}`}
-            data-age={line.age}
+            key={id}
+            data-line={id}
+            data-index={line.key}
             className="lr-lyric"
-            style={
-              {
-                transform: `translate3d(calc(var(--orbit) * ${pose.x}), calc(var(--orbit) * ${pose.y}), ${pose.z}px) rotateY(${pose.turn}deg) translate(-50%, -50%)`,
-                "--o": pose.opacity,
-                "--b": `${pose.blur}px`,
-                "--dx": `${sway.dx}px`,
-                "--dy": `${sway.dy}px`,
-                "--float": `${sway.seconds}s`,
-              } as React.CSSProperties
-            }
+            style={{ opacity: 0 }}
+            onPointerEnter={(e) => {
+              if (e.pointerType === "mouse") hold(e.currentTarget);
+            }}
+            onPointerLeave={(e) => {
+              if (e.pointerType === "mouse") release(e.currentTarget);
+            }}
+            onPointerMove={(e) => {
+              if (e.pointerType !== "mouse") return;
+              // The light on the words follows the pointer, and the line leans a little towards it.
+              const box = e.currentTarget.getBoundingClientRect();
+              const fx = (e.clientX - box.left) / box.width;
+              const fy = (e.clientY - box.top) / box.height;
+              e.currentTarget.style.setProperty("--mx", `${(fx * 100).toFixed(1)}%`);
+              e.currentTarget.style.setProperty("--my", `${(fy * 100).toFixed(1)}%`);
+              e.currentTarget.style.setProperty("--lx", (fx * 2 - 1).toFixed(3));
+              e.currentTarget.style.setProperty("--ly", (fy * 2 - 1).toFixed(3));
+            }}
+            onPointerDown={(e) => {
+              if (e.pointerType === "mouse") return;
+              // Touch: a tap holds and lights the line for a moment.
+              const el = e.currentTarget;
+              hold(el);
+              window.setTimeout(() => release(el), TAP_HOLD_MS);
+            }}
           >
-            <div className="lr-lyric-text">
-              <SmokeLyric text={line.text} dissolve={pose.dissolve} />
-            </div>
+            <span className="lr-lyric-text">{line.text}</span>
           </div>
         );
       })}
@@ -561,25 +698,28 @@ function Carousel({ onFocus, frontRef }: { onFocus: () => void; frontRef: React.
         const front = offset === 0;
         return (
           <div key={queueIndex} data-offset={offset} aria-hidden={shown ? undefined : true} className="lr-slot">
-            <button
-              ref={front ? frontRef : undefined}
-              type="button"
-              tabIndex={shown ? undefined : -1}
-              aria-label={front ? `Open ${title} in focus` : `Play ${title}${item.artist ? ` by ${item.artist}` : ""}`}
-              aria-current={front ? "true" : undefined}
-              onClick={() => (front ? onFocus() : void p.play(item))}
-              className={cn("lr-card cr-cut cr-glass-card cr-focus", front && p.status === "loading" && "lr-card-loading")}
-            >
-              <span className={cn("lr-cover", front && "[view-transition-name:cr-now-cover]")}>
-                <Cover id={item.id} title={title} artist={item.artist || title} />
-              </span>
-              <span className="lr-caption">
-                <span className="block truncate text-sm font-bold text-fg">{title}</span>
-                <span className="block truncate text-xs text-fg-muted">{item.artist || "Artist not available"}</span>
-              </span>
-              <span aria-hidden="true" className="lr-dim" />
-            </button>
-            {front ? <LyricOrbit layout="auto" /> : null}
+            {/* The card floats while music plays; the lyric ring floats with it. */}
+            <div className="lr-bob">
+              <button
+                ref={front ? frontRef : undefined}
+                type="button"
+                tabIndex={shown ? undefined : -1}
+                aria-label={front ? `Open ${title} in focus` : `Play ${title}${item.artist ? ` by ${item.artist}` : ""}`}
+                aria-current={front ? "true" : undefined}
+                onClick={() => (front ? onFocus() : void p.play(item))}
+                className={cn("lr-card cr-cut cr-glass-card cr-focus", front && p.status === "loading" && "lr-card-loading")}
+              >
+                <span className={cn("lr-cover", front && "[view-transition-name:cr-now-cover]")}>
+                  <Cover id={item.id} title={title} artist={item.artist || title} />
+                </span>
+                <span className="lr-caption">
+                  <span className="block truncate text-sm font-bold text-fg">{title}</span>
+                  <span className="block truncate text-xs text-fg-muted">{item.artist || "Artist not available"}</span>
+                </span>
+                <span aria-hidden="true" className="lr-dim" />
+              </button>
+              {front ? <LyricOrbit axis="auto" /> : null}
+            </div>
           </div>
         );
       })}
@@ -684,7 +824,7 @@ function FocusView({ track, edge, keyRef }: { track: PlayerTrack; edge: "left" |
         <div className="lr-focus-art">
           <Cover id={track.id} title={label} artist={track.artist || label} />
         </div>
-        <LyricOrbit layout="stack" focus />
+        <LyricOrbit axis="over" />
       </div>
       <div className="lr-focus-info">
         <p className="cr-eyebrow text-[0.6875rem] text-highlight">
@@ -736,20 +876,6 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
   const focusKey = useRef<HTMLButtonElement>(null);
   const moved = useRef(false);
   const lyrics = useRoomLyrics(track?.id ?? null);
-  const tilt = useRef(0);
-  // The lyric orbit leans a little towards the mouse, once a frame at most.
-  const tiltOrbit = (room: HTMLElement, x: number, y: number) => {
-    if (!lyrics.on || tilt.current) return;
-    tilt.current = window.requestAnimationFrame(() => {
-      tilt.current = 0;
-      const box = room.getBoundingClientRect();
-      for (const orbit of room.querySelectorAll<HTMLElement>(".lr-orbit")) {
-        orbit.style.setProperty("--px", ((x - box.left) / box.width * 2 - 1).toFixed(3));
-        orbit.style.setProperty("--py", ((y - box.top) / box.height * 2 - 1).toFixed(3));
-      }
-    });
-  };
-  useEffect(() => () => window.cancelAnimationFrame(tilt.current), []);
 
   useEffect(() => {
     if (!track || track.id === announced.current || !track.title) return;
@@ -795,10 +921,7 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
       data-mode={track ? mode : "carousel"}
       data-playing={track && p.status === "playing" ? "" : undefined}
       onPointerMove={(e) => {
-        if (lyrics.on) stirSmoke(e.clientX, e.clientY);
-        if (e.pointerType !== "mouse") return;
-        tiltOrbit(e.currentTarget, e.clientX, e.clientY);
-        if (mode !== "focus") return;
+        if (mode !== "focus" || e.pointerType !== "mouse") return;
         const zone = edgeZone(e.clientX, e.currentTarget.clientWidth);
         if (zone !== edge) setEdge(zone);
       }}

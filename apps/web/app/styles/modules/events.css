@@ -15,7 +15,7 @@
   opacity: 0.55;
 }
 [data-module="events"] .ev-whatson:has(.ev-row:hover, .ev-row:focus-within) .ev-row:not(:hover, :focus-within) .ev-cube {
-  filter: blur(2px);
+  filter: blur(1.5px);
 }
 [data-module="events"] .ev-row {
   transition: opacity var(--cr-dur-interaction) var(--ease-corner);

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import * as React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
@@ -13,6 +13,7 @@ import { useCredits } from "@/components/music/credits";
 import { coverUrl } from "@/lib/cover-view";
 import { cityFromTimeZone, stepSlide, type HomeFeature } from "@/lib/home-view";
 import { creditName } from "@/lib/music-view";
+import { cn } from "@/lib/utils";
 
 /** How long each slide stays before the next turns in. The progress line under the cover runs this long. */
 export const AUTOPLAY_MS = 6500;
@@ -231,27 +232,10 @@ export function FeaturedCarousel({ slides }: { slides: HomeFeature[] }) {
         ) : null}
       </div>
 
-      <div key={active} className="home-feature-caption mt-5">
-        <div className="flex items-baseline justify-between gap-4">
-          <span className="cr-eyebrow flex items-center gap-2 text-[0.6875rem] text-fg-muted">
-            {slide.label === "Live now" ? <span aria-hidden="true" className="size-2 bg-cr-red-glow" /> : null}
-            {slide.label}
-          </span>
-          <Link href={href} className="cr-focus truncate text-sm font-semibold text-fg hover:text-highlight">
-            {slideTitle(slide)}
-          </Link>
-        </div>
-        {slide.kind === "event" && slide.event.starts_at ? (
-          <p className="mt-1 text-right text-xs text-fg-muted">
-            <DateTime value={slide.event.starts_at} timeZone={slide.event.timezone} showZone />
-          </p>
-        ) : artist ? (
-          <p className="mt-1 text-right text-xs text-fg-muted">{artist}</p>
-        ) : null}
-      </div>
-
+      {/* The steps sit right under the cover they belong to, then what it is (Spotify-style: what,
+          then who), with a way in beside it. */}
       {count > 1 ? (
-        <div className="home-feature-steps mt-4 flex gap-1.5">
+        <div className="home-feature-steps mt-2.5 flex gap-1.5">
           {slides.map((s, i) => (
             <button
               key={i}
@@ -269,6 +253,28 @@ export function FeaturedCarousel({ slides }: { slides: HomeFeature[] }) {
           ))}
         </div>
       ) : null}
+
+      <div key={active} className={cn("home-feature-caption flex items-end justify-between gap-4", count > 1 ? "mt-1.5" : "mt-4")}>
+        <div className="min-w-0">
+          <span className="cr-eyebrow flex items-center gap-2 text-[0.6875rem] text-highlight">
+            {slide.label === "Live now" ? <span aria-hidden="true" className="size-2 bg-cr-red-glow" /> : null}
+            {slide.label}
+          </span>
+          <Link href={href} className="cr-focus mt-1.5 block truncate text-base font-bold text-fg hover:text-highlight">
+            {slideTitle(slide)}
+          </Link>
+          {slide.kind === "event" && slide.event.starts_at ? (
+            <p className="mt-0.5 truncate text-sm text-fg-muted">
+              <DateTime value={slide.event.starts_at} timeZone={slide.event.timezone} showZone />
+            </p>
+          ) : artist ? (
+            <p className="mt-0.5 truncate text-sm text-fg-muted">{artist}</p>
+          ) : null}
+        </div>
+        <Link href={href} tabIndex={-1} aria-hidden="true" className="home-feature-open cr-cut cr-cut-sm">
+          <ArrowUpRight className="size-4" />
+        </Link>
+      </div>
     </section>
   );
 }

@@ -2,15 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   floatingLines,
+  lyricAgeAt,
   lyricIndexAt,
   lyricLines,
   lyricStepSeconds,
-  lyricSway,
   lyricVerses,
   lyricsMode,
-  orbitPath,
-  orbitPose,
-  type LyricAge,
+  RING_GAP,
+  ringPath,
+  ringPose,
+  type RingSize,
 } from "./lyrics-view";
 
 const SONG = "Chaya pore\n  mone pore  \n\n\nSecond verse\nlast line\n";
@@ -70,60 +71,71 @@ describe("lyricStepSeconds", () => {
   });
 });
 
-describe("orbitPose", () => {
-  const ages: LyricAge[] = [1, 0, -1, -2];
-  it("is fixed per line and puts neighbours on different paths", () => {
-    expect(orbitPose(5, 0, "beside")).toEqual(orbitPose(5, 0, "beside"));
-    for (let i = 0; i < 30; i++) expect(orbitPath(i).path).not.toBe(orbitPath(i + 1).path);
+describe("lyricAgeAt", () => {
+  it("counts in lines from the moment a line starts", () => {
+    // 4 lines over a 100 s song: the first starts at 6 s, one every 22 s.
+    expect(lyricAgeAt(0, 4, 6, 100)).toBeCloseTo(0);
+    expect(lyricAgeAt(1, 4, 6, 100)).toBeCloseTo(-1);
+    expect(lyricAgeAt(0, 4, 39, 100)).toBeCloseTo(1.5);
+    expect(lyricAgeAt(0, 4, 10, 0)).toBeNaN();
   });
+});
 
-  it("arrives behind the cover, is sung in front of it, then leaves nearer or further away", () => {
-    for (const layout of ["beside", "stack"] as const) {
-      for (let i = 0; i < 24; i++) {
-        const front = orbitPath(i).path.startsWith("front");
-        expect(orbitPose(i, 1, layout).z).toBeLessThan(0);
-        expect(orbitPose(i, 0, layout).z).toBeGreaterThan(0);
-        for (const age of [-1, -2] as const) {
-          const z = orbitPose(i, age, layout).z;
-          expect(front ? z > 0 : z < 0).toBe(true);
-        }
-      }
-    }
-  });
+describe("ringPose", () => {
+  const wide: RingSize = { cover: 336, coverHeight: 400, lineWidth: 340, lineHeight: 70 };
+  const phone: RingSize = { cover: 240, coverHeight: 300, lineWidth: 320, lineHeight: 60 };
+  const ages = Array.from({ length: 301 }, (_, i) => -1 + i / 100);
 
-  it("reads clearly while sung, then fades and comes apart before it leaves", () => {
-    for (let i = 0; i < 12; i++) {
-      const now = orbitPose(i, 0, "beside");
-      expect(now.opacity).toBeGreaterThanOrEqual(0.9);
-      expect(now.blur).toBe(0);
-      expect(now.dissolve).toBe(0);
-      const gone = orbitPose(i, -2, "beside");
-      expect(gone.opacity).toBe(0);
-      expect(gone.dissolve).toBe(1);
-      for (const age of ages) expect(orbitPose(i, age, "beside").opacity).toBeLessThanOrEqual(now.opacity);
-    }
-  });
-
-  it("stays over the cover while sung, clear of the title below", () => {
-    for (let i = 0; i < 12; i++) expect(orbitPose(i, 0, "beside").y).toBeLessThanOrEqual(0.15);
-  });
-
-  it("swings less in a stack, and can send every line to one side", () => {
-    for (let i = 0; i < 12; i++) {
+  it("never meets the cover's plane while it overlaps the cover, so it never pops through it", () => {
+    for (let n = 0; n < 12; n++) {
       for (const age of ages) {
-        expect(Math.abs(orbitPose(i, age, "stack").x)).toBeLessThanOrEqual(Math.abs(orbitPose(i, age, "beside").x));
-        expect(orbitPose(i, age, "stack", -1).x).toBeLessThanOrEqual(0);
+        const a = ringPose(n, age, "around", wide);
+        if (Math.abs(a.x) < wide.cover / 2 + wide.lineWidth / 2) expect(Math.abs(a.z)).toBeGreaterThan(40);
+        const o = ringPose(n, age, "over", phone);
+        if (Math.abs(o.y) < phone.coverHeight / 2 + phone.lineHeight / 2) expect(Math.abs(o.z)).toBeGreaterThan(30);
       }
     }
   });
 
-  it("sways a little, always upwards", () => {
-    for (let i = 0; i < 12; i++) {
-      const s = lyricSway(i);
-      expect(Math.abs(s.dx)).toBeLessThanOrEqual(8);
-      expect(s.dy).toBeLessThan(0);
-      expect(s.seconds).toBeGreaterThanOrEqual(7);
+  it("passes the cover's side with room to spare", () => {
+    // At the side of the ring (z = 0) the line's near end clears the cover's edge by the gap.
+    const side = ringPose(0, -0.4, "around", wide);
+    const reach = wide.cover / 2 + wide.lineWidth / 2 + RING_GAP;
+    expect(Math.abs(side.x)).toBeLessThanOrEqual(reach + 0.01);
+    expect(reach - wide.lineWidth / 2 - wide.cover / 2).toBe(RING_GAP);
+  });
+
+  it("comes out from behind, is sung in front and readable, then leaves and fades", () => {
+    for (let n = 0; n < 12; n++) {
+      for (const axis of ["around", "over"] as const) {
+        const size = axis === "around" ? wide : phone;
+        expect(ringPose(n, -1, axis, size).plane).toBe("back");
+        expect(ringPose(n, -1, axis, size).opacity).toBe(0);
+        for (const age of [0, 0.5, 1]) {
+          const p = ringPose(n, age, axis, size);
+          expect(p.plane).toBe("front");
+          expect(p.opacity).toBeGreaterThanOrEqual(0.95);
+        }
+        const gone = ringPose(n, 2, axis, size);
+        expect(gone.opacity).toBe(0);
+        expect(gone.plane).toBe(ringPath(n).exit === "behind" ? "back" : "front");
+      }
     }
+  });
+
+  it("moves smoothly: no jump between nearby moments", () => {
+    for (let n = 0; n < 6; n++) {
+      for (let i = 1; i < ages.length; i++) {
+        const a = ringPose(n, ages[i - 1], "around", wide);
+        const b = ringPose(n, ages[i], "around", wide);
+        expect(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)).toBeLessThan(25);
+      }
+    }
+  });
+
+  it("keeps three lines in a row on the same side, so a leaving line never meets the next", () => {
+    expect([0, 1, 2].map((n) => ringPath(n).dir)).toEqual([1, 1, 1]);
+    expect([3, 4, 5].map((n) => ringPath(n).dir)).toEqual([-1, -1, -1]);
   });
 });
 

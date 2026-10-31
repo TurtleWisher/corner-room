@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { ArrowRight, LayoutGrid, Library, ListMusic, Play, Receipt, Ticket, type LucideIcon } from "lucide-react";
+import { ArrowRight, ArrowUpRight, LayoutGrid, Library, ListMusic, Play, Receipt, Ticket, type LucideIcon } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { ComingSoon } from "@/components/brand/coming-soon";
@@ -112,6 +112,13 @@ function FeaturedEvent({
     </figure>
   );
 }
+
+/** The hero's quieter links: the parts of the room the two big actions do not already open. */
+const EXPLORE: { href: string; label: string }[] = [
+  { href: "/artists", label: "Artists" },
+  { href: "/releases", label: "Releases" },
+  { href: "/store", label: "Store" },
+];
 
 /* ---------- You ---------- */
 
@@ -329,7 +336,7 @@ export function HomeView() {
       <LitSurface as="section" theme="ember" aria-labelledby="home-title">
         {/* The whole hero fits the first screen, short laptop screens included (owner, 2026-11-01):
             spacing and the headline scale with the screen's height as well as its width (home.css). */}
-        <div className="home-hero mx-auto grid max-w-[90rem] items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-12">
+        <div className="home-hero mx-auto grid max-w-[96rem] items-center gap-10 px-4 md:px-6 lg:grid-cols-[auto_auto] lg:justify-center">
           <div className="home-depth-near">
             <Eyebrow className="home-in" style={{ ["--i" as string]: 0 }}>
               Events · Music · Store
@@ -342,7 +349,7 @@ export function HomeView() {
                 The music&apos;s room.
               </span>
             </Display>
-            <p lang="bn" className="home-in home-tagline mt-5 font-bangla text-xl leading-[1.6] text-fg md:text-2xl" style={{ ["--i" as string]: 3 }}>
+            <p lang="bn" className="home-in home-tagline mt-5 font-bangla text-xl leading-[1.6] text-fg md:text-2xl lg:text-[1.625rem]" style={{ ["--i" as string]: 3 }}>
               {TAGLINE_BN}
             </p>
             <div className="home-in home-cta mt-8 flex flex-wrap gap-3" style={{ ["--i" as string]: 4 }}>
@@ -353,8 +360,18 @@ export function HomeView() {
                 <Play aria-hidden="true" /> Start listening
               </ButtonLink>
             </div>
+            {/* The rest of the room, one step away: every part of the site is a tap from the hero. */}
+            <nav aria-label="Explore" className="home-in home-explore mt-6 flex flex-wrap items-center gap-2" style={{ ["--i" as string]: 5 }}>
+              <span className="cr-eyebrow mr-1 text-[0.6875rem] text-fg-muted">Explore</span>
+              {EXPLORE.map(({ href, label }) => (
+                <Link key={href} href={href} className="home-chip cr-cut cr-cut-sm cr-focus">
+                  {label} <ArrowUpRight aria-hidden="true" className="size-3.5" />
+                </Link>
+              ))}
+            </nav>
           </div>
-          <div className="home-depth-far flex justify-center lg:justify-end">
+          <div className="home-depth-far relative isolate flex justify-center lg:justify-start">
+            <div aria-hidden="true" className="home-feature-glow" />
             <Featured events={events} releases={releases} />
           </div>
         </div>

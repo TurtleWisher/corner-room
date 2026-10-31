@@ -16,7 +16,10 @@
 /* ---------- M0 hero fit (owner, 2026-11-01) ----------
    The whole hero sits on the first screen, a short laptop screen included (1280 x 588 at 150 %
    scaling measured 771 px of hero in 523 px). Spacing, the headline and the featured cover scale
-   with the screen's height as well as its width; on tall screens they are the sizes they were. */
+   with the screen's height as well as its width.
+   Wide screens (owner, later 2026-11-01): the words and the cover are one composition, centred
+   together with a measured gap, never pushed to opposite edges. Each headline sentence stays on
+   one line, sized so both columns always fit the width and the height. */
 [data-module="home"] .home-hero {
   padding-top: clamp(1.75rem, 4.5svh, 3rem);
   padding-bottom: clamp(2.5rem, 7svh, 4rem);
@@ -26,11 +29,19 @@
 }
 @media (min-width: 1024px) {
   [data-module="home"] .home-hero {
+    column-gap: clamp(3rem, 6vw, 6.5rem);
     padding-top: clamp(1.75rem, 6svh, 4rem);
     padding-bottom: clamp(2.5rem, 8svh, 5rem);
   }
+  [data-module="home"] .home-title {
+    font-size: clamp(3.5rem, min(7.4vw, 16.5svh), 8.5rem);
+  }
+  [data-module="home"] .home-title > span {
+    white-space: nowrap;
+  }
   [data-module="home"] .home-feature-size {
-    max-width: min(28rem, calc(100svh - 14.5rem));
+    width: min(28rem, calc(100svh - 14rem), 33vw);
+    max-width: none;
   }
 }
 /* The actions answer the pointer: the arrow leans on, the play mark swells. */
@@ -47,8 +58,85 @@
 [data-module="home"] .home-cta-go:focus-visible .lucide-play {
   scale: 1.15;
 }
+/* Explore: small glass links to the rest of the room. */
+[data-module="home"] .home-chip {
+  --cut-fill: rgb(246 236 230 / 0.06);
+  --cut-border: rgb(246 236 230 / 0.16);
+  display: inline-flex;
+  height: 2.25rem;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cr-fg);
+  transition: color var(--cr-dur-interaction) var(--ease-corner);
+}
+[data-module="home"] .home-chip svg {
+  transition: translate var(--cr-dur-interaction) var(--ease-corner);
+}
+[data-module="home"] .home-chip:hover,
+[data-module="home"] .home-chip:focus-visible {
+  --cut-fill: rgb(252 244 117 / 0.1);
+  --cut-border: rgb(252 244 117 / 0.55);
+  color: var(--cr-highlight);
+}
+[data-module="home"] .home-chip:hover svg,
+[data-module="home"] .home-chip:focus-visible svg {
+  translate: 2px -2px;
+}
+/* The featured cover's own light: warm, behind it, breathing slowly (never across the art). */
+[data-module="home"] .home-feature-glow {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  z-index: -1;
+  width: min(40rem, 120%);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgb(252 244 117 / 0.16), rgb(255 90 78 / 0.18) 45%, transparent 72%);
+}
+@media (min-width: 1024px) {
+  [data-module="home"] .home-feature-glow {
+    left: calc(min(28rem, 100svh - 14rem, 33vw) / 2);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-module="home"] .home-feature-glow {
+    animation: home-glow 7s ease-in-out infinite alternate;
+  }
+}
+@keyframes home-glow {
+  from {
+    opacity: 0.7;
+    scale: 0.94;
+  }
+  to {
+    opacity: 1;
+    scale: 1.04;
+  }
+}
+/* A way into the featured item, beside its caption. */
+[data-module="home"] .home-feature-open {
+  --cut-fill: rgb(246 236 230 / 0.06);
+  --cut-border: rgb(246 236 230 / 0.18);
+  display: inline-grid;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  color: var(--cr-fg);
+  transition: color var(--cr-dur-interaction) var(--ease-corner);
+}
+[data-module="home"] .home-feature-open:hover {
+  --cut-fill: var(--cr-accent);
+  --cut-border: var(--cr-accent);
+  color: var(--cr-on-accent, #140707);
+}
 @media (prefers-reduced-motion: reduce) {
-  [data-module="home"] .home-cta-go svg {
+  [data-module="home"] .home-cta-go svg,
+  [data-module="home"] .home-chip svg {
     transition: none;
   }
 }

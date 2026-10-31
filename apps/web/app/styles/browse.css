@@ -17,7 +17,7 @@
 @media (hover: hover) and (pointer: fine) {
   .cr-focus-list:has(> :hover) > :not(:hover),
   .cr-focus-list:has(> * :focus-visible) > :not(:has(:focus-visible)) {
-    filter: blur(2.5px) saturate(0.6);
+    filter: blur(1.8px) saturate(0.6);
     opacity: 0.42;
   }
   .cr-focus-list:has(> :hover) > :hover {
