@@ -51,8 +51,45 @@ export function pickFeaturedEvent(events: EventRecord[], now: Date = new Date())
 }
 
 export type HomeFeature =
-  | { kind: "event"; event: EventRecord; label: "Live now" | "Next up" }
+  | { kind: "event"; event: EventRecord; label: "Live now" | "Next up" | "Coming up" }
   | { kind: "release"; release: ReleaseRecord; label: "New release" };
+
+/** How many of each kind the hero carousel features at most. */
+export const FEATURED_PER_KIND = 3;
+
+/**
+ * The hero carousel's slides (owner, 2026-10-31): events that are LIVE now first, then the next
+ * upcoming events and the newest released music, taking turns, at most FEATURED_PER_KIND of each.
+ * Display selection only; the API's public lists already decided what is public.
+ */
+export function featuredSlides(events: EventRecord[], releases: ReleaseRecord[], now: Date = new Date(), perKind = FEATURED_PER_KIND): HomeFeature[] {
+  const live = events.filter((e) => e.status === "LIVE").slice(0, perKind);
+  const upcoming = upcomingEvents(
+    events.filter((e) => e.status !== "LIVE"),
+    now,
+    perKind - live.length,
+  );
+  const eventSlides: HomeFeature[] = [
+    ...live.map((event) => ({ kind: "event" as const, event, label: "Live now" as const })),
+    ...upcoming.map((event, i) => ({ kind: "event" as const, event, label: i === 0 && live.length === 0 ? ("Next up" as const) : ("Coming up" as const) })),
+  ];
+  const releaseSlides: HomeFeature[] = sortReleases(releases.filter((r) => r.status === "RELEASED"))
+    .slice(0, perKind)
+    .map((release) => ({ kind: "release" as const, release, label: "New release" as const }));
+  const liveFirst = eventSlides.slice(0, live.length);
+  const rest = eventSlides.slice(live.length);
+  const turns: HomeFeature[] = [];
+  for (let i = 0; i < Math.max(rest.length, releaseSlides.length); i++) {
+    if (rest[i]) turns.push(rest[i]);
+    if (releaseSlides[i]) turns.push(releaseSlides[i]);
+  }
+  return [...liveFirst, ...turns];
+}
+
+/** The slide `delta` steps from `index`, wrapping round both ends. */
+export function stepSlide(index: number, delta: number, count: number): number {
+  return count > 0 ? (((index + delta) % count) + count) % count : 0;
+}
 
 /**
  * What the home hero features (owner, 2026-10-25: the newest real thing, never demo data): an event
