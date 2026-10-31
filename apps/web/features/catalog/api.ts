@@ -57,6 +57,9 @@ export type CreditRecord = {
   display_name?: string | null;
   instrument?: string | null;
   position?: number;
+  /** D-CREDITS-05: the act a musician played in, by profile or typed name. */
+  part_of_artist_id?: string | null;
+  part_of_name?: string | null;
 };
 
 export type TrackVersionRecord = {

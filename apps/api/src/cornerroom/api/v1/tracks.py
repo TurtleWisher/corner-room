@@ -130,6 +130,9 @@ class CreditOut(BaseModel):
     display_name: str | None = None
     instrument: str | None = None
     position: int = 0
+    # D-CREDITS-05: a musician's act (folds under that credit on the song page).
+    part_of_artist_id: UUID | None = None
+    part_of_name: str | None = None
 
 
 def _track_out(row: Track) -> TrackOut:
@@ -183,6 +186,8 @@ def _credit_out(row: Credit) -> CreditOut:
         display_name=row.display_name,
         instrument=row.instrument,
         position=row.position,
+        part_of_artist_id=row.part_of_artist_id,
+        part_of_name=row.part_of_name,
     )
 
 

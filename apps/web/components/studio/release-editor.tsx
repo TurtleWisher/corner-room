@@ -8,7 +8,9 @@ import { ArrowDown, ArrowUp, CircleAlert, CircleCheck, GripVertical, Plus, Save,
 
 import { Button, Card, DateTime, ErrorState, Field, Input, Money, Select, Skeleton } from "@/components/ds";
 import { Textarea } from "@/components/ds/input";
+import { useCredits } from "@/components/music/credits";
 import { MediaReport } from "@/components/music/media-report";
+import { CreditsNote, CreditsPreview, PartOfField, PersonField } from "@/components/studio/credit-parts";
 import { ArtworkReport } from "@/components/uploads/artwork-report";
 import { UploadCard } from "@/components/uploads/upload-card";
 import {
@@ -42,6 +44,15 @@ import {
 } from "@/features/studio/api";
 import { coverUrl } from "@/lib/cover-view";
 import { dropIndex, makeRoom, moveTo, onlyCreditOrderChanged } from "@/lib/credit-order-view";
+import {
+  actOptions,
+  isChanged,
+  keepActsValid,
+  partOfFields,
+  partOfValue,
+  profilesFrom,
+  type CreditsStage,
+} from "@/lib/credit-editor-view";
 import { friendlyError } from "@/lib/error-copy";
 import { formatCount } from "@/lib/format/count";
 import { changeMode, pendingAudio, proposedRelease, proposedTrack, type ChangeMode } from "@/lib/changes-view";
@@ -266,6 +277,12 @@ function DetailsForm({
 
 type CreditRow = StudioCredit & { rowKey: string };
 
+/**
+ * A song's credits in Studio (owner, 2026-10-31, D-CREDITS-07). Each credit is a card: its role,
+ * who (a Corner Room profile picked by stage name, or a typed name), the instrument or the role's
+ * own name, and for a musician the act they played in. A note above says where changes go, and a
+ * preview below shows the credits as fans will. Dragging the handle changes the order (D-CREDITS-04).
+ */
 function CreditsEditor({
   track,
   live,
@@ -286,9 +303,11 @@ function CreditsEditor({
   changing?: boolean;
   reload: Reload;
 }) {
+  const people = useCredits();
+  const profiles = profilesFrom(people.artists, people.bands);
   const nextKey = useRef(track.credits.length);
   const listRef = useRef<HTMLUListElement>(null);
-  const [rows, setRows] = useState<CreditRow[]>(track.credits.map((c, i) => ({ ...c, rowKey: String(i) })));
+  const [rows, setRowsRaw] = useState<CreditRow[]>(track.credits.map((c, i) => ({ ...c, rowKey: String(i) })));
   const [saved, setSaved] = useState<"changes" | "order" | null>(null);
   // While dragging, rows stay where they are in the page (moving the element would drop the
   // pointer): the dragged one follows the pointer, the others slide aside, and the drop reorders.
@@ -297,15 +316,21 @@ function CreditsEditor({
   const [moved, setMoved] = useState("");
   const { busy, error, run } = useAction(reload);
   const roles = new Map(taxonomy.credit_roles.map((r) => [r.key, r]));
+  // A musician's act must still be credited on the song (D-CREDITS-05).
+  const setRows = (next: CreditRow[]) => {
+    setRowsRaw(keepActsValid(next, profiles));
+    setSaved(null);
+  };
   const update = (i: number, patch: Partial<StudioCredit>) => setRows(rows.map((row, j) => (j === i ? { ...row, ...patch } : row)));
   const direct = editable && !changing;
   const orderOnly = !direct && onlyCreditOrderChanged(rows, live);
+  const stage: CreditsStage = direct ? "draft" : changing ? "changing" : orderable ? "live" : "locked";
+  const acts = actOptions(rows, profiles);
   const who = (row: StudioCredit) => row.artist_name || row.display_name || "this credit";
 
   const move = (from: number, to: number) => {
     if (to < 0 || to >= rows.length || to === from) return;
     setRows(moveTo(rows, from, to));
-    setSaved(null);
     setMoved(`${who(rows[from])} moved to place ${to + 1} of ${rows.length}.`);
   };
   const startDrag = (i: number, pointerY: number) => {
@@ -327,82 +352,100 @@ function CreditsEditor({
 
   return (
     <div>
-      <p className="text-sm text-fg-muted">Credits name who made the song. Add a Musician for each person who played or sang on it (Guitars, Bass, Vocals, Drums); fans see them under Track credits. For any other role, choose Other and name the role yourself. Corner Room checks credits before fans see them. Credits are attribution only; payments are set up separately.</p>
-      {orderable && rows.length > 1 ? (
-        <p className="mt-1 text-sm text-fg-muted">Drag a credit by its handle to change the order fans see. A new order needs no review.</p>
-      ) : null}
+      <CreditsNote stage={stage} />
+      <p className="mt-3 text-sm text-fg-muted">
+        One card per credit, in the order fans see them. Pick a person&apos;s Corner Room profile when they have one, so their name links to their page and the song
+        shows on their profile. Credits are attribution only; payments are set up separately.
+      </p>
+      {rows.length === 0 ? <p className="mt-3 text-sm text-fg-muted">No credits yet.</p> : null}
       <ul ref={listRef} className="mt-3 grid gap-3">
         {rows.map((row, i) => {
           const role = roles.get(row.role_key);
+          const musician = row.role_key === "musician";
+          const changed = changing && isChanged(row, live);
           return (
             <li
               key={row.rowKey}
               style={drag ? { transform: `translateY(${drag.from === i ? drag.dy : makeRoom(i, drag.from, drag.to, drag.size)}px)` } : undefined}
-              className={`relative grid gap-2 border p-3 md:items-end ${orderable ? "md:grid-cols-[auto_12rem_1fr_10rem_auto]" : "md:grid-cols-[12rem_1fr_10rem_auto]"} ${drag?.from === i ? "z-10 border-accent bg-surface shadow-lg" : "border-line"} ${drag && drag.from !== i ? "transition-transform duration-150 ease-out motion-reduce:transition-none" : ""}`}
+              className={`credit-card relative border p-3 ${drag?.from === i ? "z-10 border-accent bg-surface shadow-lg" : changed ? "border-accent/60" : "border-line"} ${drag && drag.from !== i ? "transition-transform duration-150 ease-out motion-reduce:transition-none" : ""}`}
             >
-              {orderable ? (
-                <button
-                  type="button"
-                  data-row={row.rowKey}
-                  aria-label={`Move ${who(row)}, place ${i + 1} of ${rows.length}. Drag, or use the up and down arrow keys.`}
-                  className="flex size-10 cursor-grab touch-none items-center justify-center text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:cursor-grabbing"
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    e.currentTarget.setPointerCapture(e.pointerId);
-                    startDrag(i, e.clientY);
-                  }}
-                  onPointerMove={(e) => {
-                    if (drag?.from !== i) return;
-                    setDrag({ ...drag, dy: e.clientY - drag.startY, to: dropIndex(drag.middles, i, e.clientY) });
-                  }}
-                  onPointerUp={endDrag}
-                  onPointerCancel={() => setDrag(null)}
-                  onKeyDown={(e) => {
-                    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+              <div className="mb-2 flex items-center gap-2">
+                {orderable ? (
+                  <button
+                    type="button"
+                    data-row={row.rowKey}
+                    aria-label={`Move ${who(row)}, place ${i + 1} of ${rows.length}. Drag, or use the up and down arrow keys.`}
+                    className="-ml-1 flex size-8 cursor-grab touch-none items-center justify-center text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:cursor-grabbing"
+                    onPointerDown={(e) => {
                       e.preventDefault();
-                      move(i, e.key === "ArrowUp" ? i - 1 : i + 1);
-                      setFocusRow(row.rowKey);
-                    }
-                  }}
-                >
-                  <GripVertical aria-hidden="true" className="size-5" />
-                </button>
-              ) : null}
-              <Field label="Role">
-                {(c) => (
-                  <Select {...c} value={row.role_key} disabled={!editable} onChange={(e) => update(i, { role_key: e.target.value })}>
-                    {taxonomy.credit_roles.map((r) => (
-                      <option key={r.key} value={r.key}>
-                        {r.label_en}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-              {role?.performer || row.artist_id ? (
-                <Field label="Artist on Corner Room" hint={row.artist_name ?? "Artist profile ID"}>
-                  {(c) => <Input {...c} value={row.artist_id ?? ""} disabled={!editable} onChange={(e) => update(i, { artist_id: e.target.value, display_name: null })} />}
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      startDrag(i, e.clientY);
+                    }}
+                    onPointerMove={(e) => {
+                      if (drag?.from !== i) return;
+                      setDrag({ ...drag, dy: e.clientY - drag.startY, to: dropIndex(drag.middles, i, e.clientY) });
+                    }}
+                    onPointerUp={endDrag}
+                    onPointerCancel={() => setDrag(null)}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                        e.preventDefault();
+                        move(i, e.key === "ArrowUp" ? i - 1 : i + 1);
+                        setFocusRow(row.rowKey);
+                      }
+                    }}
+                  >
+                    <GripVertical aria-hidden="true" className="size-5" />
+                  </button>
+                ) : null}
+                <span className="cr-num text-xs font-semibold text-fg-muted">{i + 1}</span>
+                {changed ? <span className="credit-badge">New or edited</span> : null}
+                {editable ? (
+                  <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setRows(rows.filter((_, j) => j !== i))} aria-label={`Remove ${who(row)}`}>
+                    <Trash2 aria-hidden="true" /> Remove
+                  </Button>
+                ) : null}
+              </div>
+              <div
+                className={`grid gap-3 md:items-start ${
+                  musician
+                    ? "md:grid-cols-2 2xl:grid-cols-[11rem_minmax(0,1fr)_10rem_13rem]"
+                    : role?.allows_instrument
+                      ? "md:grid-cols-[11rem_minmax(0,1fr)] xl:grid-cols-[11rem_minmax(0,1fr)_13rem]"
+                      : "md:grid-cols-[11rem_minmax(0,1fr)]"
+                }`}
+              >
+                <Field label="Role">
+                  {(c) => (
+                    <Select {...c} value={row.role_key} disabled={!editable} onChange={(e) => update(i, { role_key: e.target.value })}>
+                      {taxonomy.credit_roles.map((r) => (
+                        <option key={r.key} value={r.key}>
+                          {r.label_en}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
                 </Field>
-              ) : (
-                <Field label="Name">
-                  {(c) => <Input {...c} value={row.display_name ?? ""} disabled={!editable} maxLength={200} onChange={(e) => update(i, { display_name: e.target.value, artist_id: null })} />}
-                </Field>
-              )}
-              {role?.allows_instrument ? (
-                <Field
-                  label={row.role_key === "custom" ? "Role" : "Instrument or voice"}
-                  hint={row.role_key === "custom" ? "Name it yourself, for example Cover art, Strings, Choir" : "For example Guitars, Bass, Vocals, Drums"}
-                >
-                  {(c) => <Input {...c} value={row.instrument ?? ""} disabled={!editable} maxLength={80} onChange={(e) => update(i, { instrument: e.target.value })} />}
-                </Field>
-              ) : (
-                <span />
-              )}
-              {editable ? (
-                <Button variant="ghost" size="sm" onClick={() => setRows(rows.filter((_, j) => j !== i))}>
-                  <Trash2 aria-hidden="true" /> Remove
-                </Button>
-              ) : null}
+                <PersonField
+                  row={row}
+                  profiles={profiles}
+                  mustLink={!!role?.performer}
+                  disabled={!editable}
+                  onType={(name) => update(i, { display_name: name, artist_id: null, artist_name: null })}
+                  onLink={(p) =>
+                    update(i, p ? { artist_id: p.id, artist_name: p.name, display_name: null } : { artist_id: null, artist_name: null, display_name: who(row) === "this credit" ? "" : who(row) })
+                  }
+                />
+                {role?.allows_instrument ? (
+                  <Field
+                    label={row.role_key === "custom" ? "Their role" : "Instrument or voice"}
+                    hint={row.role_key === "custom" ? "For example Cover art, Recording, Mixing & Mastering" : "For example Guitars, Bass, Vocals, Drums"}
+                  >
+                    {(c) => <Input {...c} value={row.instrument ?? ""} disabled={!editable} maxLength={80} onChange={(e) => update(i, { instrument: e.target.value })} />}
+                  </Field>
+                ) : null}
+                {musician ? <PartOfField value={partOfValue(row)} options={acts} disabled={!editable} onChange={(v) => update(i, partOfFields(v, acts))} /> : null}
+              </div>
             </li>
           );
         })}
@@ -450,6 +493,7 @@ function CreditsEditor({
         </p>
       ) : null}
       <Problem message={error} />
+      {rows.length > 0 ? <CreditsPreview rows={rows} artists={people.artists} bands={people.bands} /> : null}
     </div>
   );
 }

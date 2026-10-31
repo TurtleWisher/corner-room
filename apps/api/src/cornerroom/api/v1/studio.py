@@ -120,6 +120,8 @@ class CreditOut(BaseModel):
     display_name: str | None
     instrument: str | None
     position: int
+    part_of_artist_id: UUID | None = None
+    part_of_name: str | None = None
 
 
 class StudioTrackOut(BaseModel):
@@ -292,6 +294,9 @@ class CreditIn(BaseModel):
     artist_id: UUID | None = None
     display_name: str | None = Field(default=None, max_length=200)
     instrument: str | None = Field(default=None, max_length=80)
+    # D-CREDITS-05: the act a Musician played in (another credit on the song).
+    part_of_artist_id: UUID | None = None
+    part_of_name: str | None = Field(default=None, max_length=200)
 
 
 class CreditsIn(BaseModel):

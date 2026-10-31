@@ -8,7 +8,7 @@ import type { StudioCredit } from "@/features/studio/api";
 
 function creditKey(c: StudioCredit): string {
   const text = (v?: string | null) => (v ?? "").trim() || null;
-  return JSON.stringify([c.role_key, c.artist_id || null, text(c.display_name), text(c.instrument)]);
+  return JSON.stringify([c.role_key, c.artist_id || null, text(c.display_name), text(c.instrument), c.part_of_artist_id || null, c.part_of_artist_id ? null : text(c.part_of_name)]);
 }
 
 /** True when `rows` are exactly the live credits, listed in another order. */

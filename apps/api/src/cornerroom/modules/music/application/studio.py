@@ -471,7 +471,9 @@ class StudioService:
 
     async def clean_credits(self, credits: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Credits as they will be stored (D-AUDIO-16): performer roles link to an artist profile;
-        other roles may be a typed name. Checked the same way for a draft and a change request."""
+        other roles may be a typed name. Checked the same way for a draft and a change request.
+        A Musician may name the act they played in (D-CREDITS-05): another credit on this song that
+        is not a Musician, by its profile or its typed name."""
         roles = {r.key: r for r in (await self.session.execute(select(CreditRole))).scalars()}
         if len(credits) > 50:
             raise AppError("VALIDATION_ERROR", "At most 50 credits per track", 422)
@@ -505,8 +507,28 @@ class StudioService:
                     "artist_id": str(artist_id) if artist_id is not None else None,
                     "display_name": name,
                     "instrument": instrument,
+                    "part_of_artist_id": None,
+                    "part_of_name": None,
                 }
             )
+        # Who a musician played with must be an act credited on this song (not another musician).
+        acts = [c for c in out if c["role_key"] != "musician"]
+        for index, (item, credit) in enumerate(zip(credits, out)):
+            part_id = item.get("part_of_artist_id")
+            part_name = _clean(item.get("part_of_name"), 200)
+            if not part_id and not part_name:
+                continue
+            if credit["role_key"] != "musician":
+                raise AppError("VALIDATION_ERROR", "Only a Musician is part of another credit", 422, extras={"index": index})
+            if part_id:
+                if not any(a["artist_id"] == str(part_id) for a in acts):
+                    raise AppError("VALIDATION_ERROR", "Choose an act credited on this song", 422, extras={"index": index})
+                credit["part_of_artist_id"] = str(part_id)
+            else:
+                match = next((a for a in acts if not a["artist_id"] and (a["display_name"] or "").casefold() == part_name.casefold()), None)
+                if match is None:
+                    raise AppError("VALIDATION_ERROR", "Choose an act credited on this song", 422, extras={"index": index})
+                credit["part_of_name"] = match["display_name"]
         return out
 
     async def replace_credits(self, track: Track, cleaned: list[dict[str, Any]], actor: UUID) -> list[Credit]:
@@ -523,6 +545,8 @@ class StudioService:
                 credit_role=c["role_key"],
                 role_key=c["role_key"],
                 instrument=c.get("instrument"),
+                part_of_artist_id=UUID(c["part_of_artist_id"]) if c.get("part_of_artist_id") else None,
+                part_of_name=c.get("part_of_name"),
                 position=index,
                 created_by=actor,
             )
@@ -564,7 +588,7 @@ class StudioService:
             )
         ).scalars().all()
         artist_names: dict[UUID, str] = {}
-        ids = {c.artist_id for c in credits if c.artist_id}
+        ids = {c.artist_id for c in credits if c.artist_id} | {c.part_of_artist_id for c in credits if c.part_of_artist_id}
         if ids:
             for a in (await self.session.execute(select(Artist).where(Artist.id.in_(ids)))).scalars():
                 artist_names[a.id] = a.stage_name
@@ -593,7 +617,8 @@ class StudioService:
             "credits": [
                 {"id": c.id, "role_key": c.role_key or c.credit_role, "artist_id": c.artist_id,
                  "artist_name": artist_names.get(c.artist_id) if c.artist_id else None,
-                 "display_name": c.display_name, "instrument": c.instrument, "position": c.position}
+                 "display_name": c.display_name, "instrument": c.instrument, "position": c.position,
+                 "part_of_artist_id": c.part_of_artist_id, "part_of_name": c.part_of_name}
                 for c in credits
             ],
         }

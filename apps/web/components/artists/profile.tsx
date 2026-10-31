@@ -10,6 +10,7 @@ import { LitSurface } from "@/components/brand/corner-light";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { Avatar, Button, ButtonLink, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
 import { BandLineup } from "@/components/artists/band-lineup";
+import { CreditedOn } from "@/components/artists/credited-on";
 import { ReleaseCard } from "@/components/music/release-card";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
@@ -358,9 +359,10 @@ export function ProfilePage({ kind, id }: { kind: Kind; id: string }) {
       <div className="mx-auto max-w-[90rem] space-y-12 px-4 py-14 md:px-6">
         {kind === "band" ? <BandLineup bandId={entity.id} /> : null}
         <section aria-labelledby="releases-title">
-          <h2 id="releases-title" className="mb-5 text-xl font-bold text-fg">
+          <h2 id="releases-title" className="text-xl font-bold text-fg">
             Releases
           </h2>
+          <p className="mb-5 mt-1 text-sm text-fg-muted">Music {entity.name} released.</p>
           {releases.length === 0 ? (
             <p className="text-sm text-fg-muted">No releases yet.</p>
           ) : (
@@ -375,17 +377,14 @@ export function ProfilePage({ kind, id }: { kind: Kind; id: string }) {
             </LitSurface>
           )}
         </section>
+        {/* Songs by others they worked on, apart from their own music (D-CREDITS-06). */}
+        <CreditedOn id={entity.id} name={entity.name} />
         {canManage ? <Lifecycle kind={kind} entity={entity} onChanged={data.reload} /> : null}
         <p className="text-sm text-fg-muted">
-          {kind === "artist" ? (
-            <Link href="/artists" className="cr-focus font-semibold text-link underline">
-              All artists
-            </Link>
-          ) : (
-            <Link href="/bands" className="cr-focus font-semibold text-link underline">
-              All bands
-            </Link>
-          )}
+          {/* One Artists list for solo artists and bands (D-ARTIST-UNIFY-01). */}
+          <Link href="/artists" className="cr-focus font-semibold text-link underline">
+            All artists
+          </Link>
         </p>
       </div>
     </main>

@@ -12,6 +12,7 @@ import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
 import { canPlay, TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
+import { CoverTilt } from "@/components/music/cover-tilt";
 import { CreditFace } from "@/components/music/credit-face";
 import { GiftNote } from "@/components/music/gift-note";
 import { SongCredits } from "@/components/music/song-credits";
@@ -36,6 +37,9 @@ import { humanizeStatus } from "@/lib/format/status";
 import { canModerateMusic, creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
 import { releaseIdsFor, trackBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
+
+/** Entrance order for the song page (D-MOTION-02, app/styles/modules/music.css). */
+const rise = (i: number) => ({ "--i": i }) as React.CSSProperties;
 
 const ACTIONS = ["submit", "start_review", "approve", "reject", "schedule", "release", "takedown", "archive"];
 
@@ -204,37 +208,40 @@ export default function TrackPage() {
   const canStaff = signedIn && typeof track.version === "number";
 
   return (
-    <main id="main" data-theme="sky" className="cr-scope">
+    <main id="main" data-theme="sky" data-module="music" className="cr-scope">
       {/* Owner, 2026-10-28: under the cover, the lyrics fold-out, then the credits ending in the
           "Track credit details" fold-out; the title, artist and buying stay beside the cover. */}
       <LitSurface as="section" theme="sky" aria-labelledby="track-title">
         <div className="mx-auto grid max-w-[90rem] items-start gap-x-12 gap-y-8 px-4 py-12 md:grid-cols-[minmax(0,24rem)_1fr] md:px-6 md:py-16">
           <div className="md:row-span-2">
-            <CoverArt
-              src={coverUrl({ track: track.id }, 1200)}
-              fallback={<RoomCube front={track.title} side={artist ?? track.title} tone="sky" label="" animate className="w-full" />}
-              className="w-full"
-            />
+            {/* Owner, 2026-10-31 (D-MOTION-02): the cover leans toward the mouse with light behind it. */}
+            <CoverTilt className="music-cover-in">
+              <CoverArt
+                src={coverUrl({ track: track.id }, 1200)}
+                fallback={<RoomCube front={track.title} side={artist ?? track.title} tone="sky" label="" animate className="w-full" />}
+                className="w-full"
+              />
+            </CoverTilt>
             <div className="mt-6 hidden md:block">
               <SongLyrics lyrics={track.lyrics} className="border-t border-line" />
               <SongCredits credits={credits} artists={people.artists} bands={people.bands} className="border-t border-line" />
             </div>
           </div>
           <div className="md:pt-6">
-            <Eyebrow>{["Track", artist, duration].filter(Boolean).join(" · ")}</Eyebrow>
-            <Display as="h1" id="track-title" size="lg" className="mt-4">
+            <Eyebrow className="music-rise" style={rise(1)}>{["Track", artist, duration].filter(Boolean).join(" · ")}</Eyebrow>
+            <Display as="h1" id="track-title" size="lg" className="music-rise mt-4" style={rise(2)}>
               {track.title}
             </Display>
-            <p className="mt-4 text-lg text-fg">
+            <p className="music-rise mt-4 text-lg text-fg" style={rise(3)}>
               <CreditFace record={track} people={people} />
             </p>
             {typeof track.listens === "number" ? (
-              <p className="mt-2 text-sm text-fg-muted">
+              <p className="music-rise mt-2 text-sm text-fg-muted" style={rise(4)}>
                 <span className="cr-num font-semibold text-fg">{formatCount(track.listens)}</span> {track.listens === 1 ? "listen" : "listens"}
               </p>
             ) : null}
             {play.kind === "unavailable" ? <p className="mt-2 text-sm text-fg-muted">{play.reason}</p> : null}
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <div className="music-rise mt-8 flex flex-wrap items-center gap-3" style={rise(5)}>
               {play.kind === "unavailable" ? null : (
                 <TrackBuyControl
                   track={{ id: track.id, title: track.title, artist }}

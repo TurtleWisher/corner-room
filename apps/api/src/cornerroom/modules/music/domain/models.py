@@ -227,6 +227,8 @@ class Credit(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, B
         CheckConstraint(
             "artist_id IS NOT NULL OR user_id IS NOT NULL OR display_name IS NOT NULL", name="credit_party"
         ),
+        # 0043: a musician names the act they played in by profile or by typed name (D-CREDITS-05).
+        CheckConstraint("part_of_artist_id IS NULL OR part_of_name IS NULL", name="part_of_one"),
         Index("ix_credits_track_id", "track_id"),
         Index("ix_credits_release_id", "release_id"),
         {"schema": "music"},
@@ -241,6 +243,8 @@ class Credit(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, B
     display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     instrument: Mapped[str | None] = mapped_column(String(80), nullable=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    part_of_artist_id: Mapped[UUID | None] = mapped_column(ForeignKey("artists.artists.id"), nullable=True)
+    part_of_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class RenditionProfile(TimestampMixin, Base):

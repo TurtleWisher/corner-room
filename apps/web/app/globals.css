@@ -6,6 +6,7 @@
 @import "./styles/modules/account.css";
 @import "./styles/modules/home.css";
 @import "./styles/modules/listen.css";
+@import "./styles/modules/music.css";
 @import "./styles/player-controls.css";
 @import "./styles/purchase.css";
 @import "./styles/coming-soon.css";
@@ -116,8 +117,26 @@ body {
     transform: none;
   }
 }
+/* Where the browser can (owner, 2026-10-31, D-MOTION-02): the fold-out also opens and closes to
+   its own height instead of jumping. Others keep the ease-in above. */
+@supports (interpolate-size: allow-keywords) {
+  .cr-fold {
+    interpolate-size: allow-keywords;
+  }
+  .cr-fold::details-content {
+    block-size: 0;
+    overflow: clip;
+    transition: block-size 320ms var(--ease-corner), content-visibility 320ms allow-discrete;
+  }
+  .cr-fold[open]::details-content {
+    block-size: auto;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .cr-fold[open] > .cr-fold-body {
     animation: none;
+  }
+  .cr-fold::details-content {
+    transition: none;
   }
 }

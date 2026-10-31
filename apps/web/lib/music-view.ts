@@ -55,68 +55,114 @@ export function creditPerson(
   return instrument ? `${name} (${instrument})` : name;
 }
 
-export type CreditLine = { key: string; role: string; name: string; href: string | null };
 export type PlayedLine = { key: string; name: string; plays: string; href: string | null };
+/** One credit line; an act's line carries the people who played in it (D-CREDITS-05). */
+export type CreditLine = { key: string; role: string; name: string; href: string | null; members: PlayedLine[] };
 
 const sameName = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
 
 /**
+ * The Corner Room profile a credit names, if any (owner, 2026-10-31): a credit linked to an artist
+ * or band, or a typed name that is exactly one public profile's stage name (case and spacing
+ * ignored). Its name is always the profile's public stage name, never what was typed.
+ */
+export function creditProfile(
+  credit: { artist_id?: string | null; display_name?: string | null },
+  artists: Pick<ArtistRecord, "id" | "stage_name">[],
+  bands: Pick<BandRecord, "id" | "name">[] = [],
+): { href: string; name: string } | null {
+  if (credit.artist_id) {
+    const artist = artists.find((a) => a.id === credit.artist_id);
+    if (artist) return { href: `/artists/${artist.id}`, name: artist.stage_name };
+    // Every band is an artist too (D-ARTIST-UNIFY-01): a credit may point at a band.
+    const band = bands.find((b) => b.id === credit.artist_id);
+    if (band) return { href: `/bands/${band.id}`, name: band.name };
+  }
+  const typed = sameName(credit.display_name || "");
+  if (!typed) return null;
+  const matches = [
+    ...artists.filter((a) => sameName(a.stage_name) === typed).map((a) => ({ href: `/artists/${a.id}`, name: a.stage_name })),
+    ...bands.filter((b) => sameName(b.name) === typed).map((b) => ({ href: `/bands/${b.id}`, name: b.name })),
+  ];
+  return matches.length === 1 ? matches[0] : null;
+}
+
+/**
  * Where a credited person's name links (owner, 2026-10-31): to their Corner Room page when they
- * have one, so every artist can be found from the songs they worked on. A credit linked to an artist
- * or band opens that page; a typed name opens the one public artist or band with exactly that name.
- * Anyone else (or a name two profiles share) stays plain text.
+ * have one, so every artist can be found from the songs they worked on. Anyone else (or a name two
+ * profiles share) stays plain text.
  */
 export function creditLink(
   credit: { artist_id?: string | null; display_name?: string | null },
   artists: Pick<ArtistRecord, "id" | "stage_name">[],
   bands: Pick<BandRecord, "id" | "name">[] = [],
 ): string | null {
-  if (credit.artist_id) {
-    if (artists.some((a) => a.id === credit.artist_id)) return `/artists/${credit.artist_id}`;
-    // Every band is an artist too (D-ARTIST-UNIFY-01): a credit may point at a band.
-    if (bands.some((b) => b.id === credit.artist_id)) return `/bands/${credit.artist_id}`;
-  }
-  const typed = sameName(credit.display_name || "");
-  if (!typed) return null;
-  const matches = [
-    ...artists.filter((a) => sameName(a.stage_name) === typed).map((a) => `/artists/${a.id}`),
-    ...bands.filter((b) => sameName(b.name) === typed).map((b) => `/bands/${b.id}`),
-  ];
-  return matches.length === 1 ? matches[0] : null;
+  return creditProfile(credit, artists, bands)?.href ?? null;
 }
 
 /** A credit for playing on the song rather than making it (D-CREDITS-02). */
 const roleOf = (c: { credit_role: string; role_key?: string | null }) => (c.role_key || c.credit_role).toLowerCase();
-const isMusician = (c: { credit_role: string; role_key?: string | null }) => roleOf(c) === "musician";
+
+type SongCredit = {
+  id: string;
+  credit_role: string;
+  role_key?: string | null;
+  artist_id?: string | null;
+  display_name?: string | null;
+  instrument?: string | null;
+  part_of_artist_id?: string | null;
+  part_of_name?: string | null;
+};
+
+/** Who an act credit is, to match the musicians who name it (D-CREDITS-05). */
+const actKey = (id?: string | null, name?: string | null) => (id ? `id:${id}` : name?.trim() ? `name:${sameName(name)}` : null);
 
 /**
- * Song page credits. The main list names who made the song, one line per role (no instruments).
- * "Track credits" says who played what on this one song, instrument first, in the order they were
- * entered (owner, 2026-10-30: "guitars this guy, bass this guy ... vocal, drums", per song only,
- * so the band's lineup is not repeated here). A role the artist named themselves ("Cover art") is a
- * main credit under that name (D-CREDITS-02).
+ * Song page credits, one line per credit in the artist's order (owner, 2026-10-31). The people who
+ * played in an act (MIZULS' singer, guitarist) fold under that act's line, instrument first; anyone
+ * else, including a guest musician, is a line of their own, visible without unfolding. A role the
+ * artist named themselves ("Cover art") reads as that role (D-CREDITS-02). Linked names read as the
+ * profile's stage name.
  */
 export function creditDetails(
-  credits: { id: string; credit_role: string; role_key?: string | null; artist_id?: string | null; display_name?: string | null; instrument?: string | null }[],
+  credits: SongCredit[],
   artists: Pick<ArtistRecord, "id" | "stage_name">[],
   roleLabel: (role: string) => string,
   bands: Pick<BandRecord, "id" | "name">[] = [],
-): { main: CreditLine[]; played: PlayedLine[] } {
+): { main: CreditLine[] } {
   const main: CreditLine[] = [];
-  const played: PlayedLine[] = [];
+  const acts = new Map<string, CreditLine>();
+  const named = (c: SongCredit) => {
+    const profile = creditProfile(c, artists, bands);
+    return { name: profile?.name ?? creditPerson({ artist_id: c.artist_id, display_name: c.display_name }, artists, bands), href: profile?.href ?? null };
+  };
   for (const c of credits) {
-    const name = creditPerson({ artist_id: c.artist_id, display_name: c.display_name }, artists, bands);
+    if (roleOf(c) === "musician") continue;
+    const { name, href } = named(c);
     if (!name) continue;
     const instrument = (c.instrument || "").trim();
-    const href = creditLink(c, artists, bands);
-    if (roleOf(c) === "custom") {
-      main.push({ key: c.id, role: instrument || "Credit", name, href });
+    const role = roleOf(c) === "custom" ? instrument || "Credit" : [roleLabel(c.credit_role), instrument].filter(Boolean).join(" · ");
+    const line: CreditLine = { key: c.id, role, name, href, members: [] };
+    main.push(line);
+    const key = actKey(c.artist_id, c.display_name);
+    if (key && !acts.has(key)) acts.set(key, line);
+  }
+  // Musicians: under their act when it is credited here, else a line of their own in their place.
+  const lines: CreditLine[] = [];
+  for (const c of credits) {
+    if (roleOf(c) !== "musician") {
+      const line = main.find((m) => m.key === c.id);
+      if (line) lines.push(line);
       continue;
     }
-    if (instrument || isMusician(c)) played.push({ key: `p-${c.id}`, name, plays: instrument || "Played on this song", href });
-    if (!isMusician(c)) main.push({ key: c.id, role: roleLabel(c.credit_role), name, href });
+    const { name, href } = named(c);
+    if (!name) continue;
+    const plays = (c.instrument || "").trim() || "Musician";
+    const act = acts.get(actKey(c.part_of_artist_id, c.part_of_name) ?? "");
+    if (act) act.members.push({ key: c.id, name, plays, href });
+    else lines.push({ key: c.id, role: plays, name, href, members: [] });
   }
-  return { main, played };
+  return { main: lines };
 }
 
 /**
