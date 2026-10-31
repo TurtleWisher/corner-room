@@ -285,6 +285,7 @@ type CreditRow = StudioCredit & { rowKey: string };
  */
 function CreditsEditor({
   track,
+  ownAct,
   live,
   taxonomy,
   editable,
@@ -293,6 +294,8 @@ function CreditsEditor({
   reload,
 }: {
   track: StudioTrack;
+  /** The release's own artist or band; musicians show under its credit unless another act is chosen. */
+  ownAct: { id: string; name: string };
   /** The credits fans see now; a new order of exactly these goes live with no review (D-CREDITS-04). */
   live: StudioCredit[];
   taxonomy: Taxonomy;
@@ -444,7 +447,7 @@ function CreditsEditor({
                     {(c) => <Input {...c} value={row.instrument ?? ""} disabled={!editable} maxLength={80} onChange={(e) => update(i, { instrument: e.target.value })} />}
                   </Field>
                 ) : null}
-                {musician ? <PartOfField value={partOfValue(row)} options={acts} disabled={!editable} onChange={(v) => update(i, partOfFields(v, acts))} /> : null}
+                {musician ? <PartOfField value={partOfValue(row)} options={acts} ownAct={ownAct} disabled={!editable} onChange={(v) => update(i, partOfFields(v, acts))} /> : null}
               </div>
             </li>
           );
@@ -493,7 +496,7 @@ function CreditsEditor({
         </p>
       ) : null}
       <Problem message={error} />
-      {rows.length > 0 ? <CreditsPreview rows={rows} artists={people.artists} bands={people.bands} /> : null}
+      {rows.length > 0 ? <CreditsPreview rows={rows} artists={people.artists} bands={people.bands} ownActId={ownAct.id} /> : null}
     </div>
   );
 }
@@ -728,6 +731,7 @@ function TrackCard({
             // Sorted, so a saved new order keeps the editor (and its "saved" note) as it is.
             key={`${shown.credits.map((c) => `${c.id ?? ""}${c.role_key}${c.display_name ?? ""}${c.artist_id ?? ""}`).sort().join()}|${mode}`}
             track={shown}
+            ownAct={{ id: detail.profile.id, name: detail.profile.display_name }}
             live={track.credits}
             taxonomy={taxonomy}
             editable={trackEditable || changing}

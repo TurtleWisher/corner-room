@@ -149,20 +149,24 @@ export function PersonField({
 export function PartOfField({
   value,
   options,
+  ownAct,
   disabled,
   onChange,
 }: {
   value: string;
   options: { value: string; label: string }[];
+  /** The release's own artist or band: where musicians go unless another act is chosen. */
+  ownAct: { id: string; name: string };
   disabled: boolean;
   onChange: (value: string) => void;
 }) {
+  const others = options.filter((o) => o.value !== `id:${ownAct.id}`);
   return (
-    <Field label="Played as part of" hint="Fans see them under that credit. Choose a guest if they are not part of an act here.">
+    <Field label="Shown under" hint="On the song page, fans unfold this credit to see who played. Guests go here too.">
       {(c) => (
-        <Select {...c} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
-          <option value="">A guest (their own line)</option>
-          {options.map((o) => (
+        <Select {...c} value={value === `id:${ownAct.id}` ? "" : value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+          <option value="">{ownAct.name} (the song&apos;s artist)</option>
+          {others.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
@@ -195,10 +199,12 @@ export function CreditsPreview({
   rows,
   artists,
   bands,
+  ownActId,
 }: {
   rows: (StudioCredit & { rowKey: string })[];
   artists: Pick<ArtistRecord, "id" | "stage_name">[];
   bands: Pick<BandRecord, "id" | "name">[];
+  ownActId: string;
 }) {
   const records = rows.map((r) => ({
     id: r.rowKey,
@@ -215,7 +221,7 @@ export function CreditsPreview({
       <p className="flex items-center gap-1.5 pt-2 text-xs font-semibold uppercase tracking-wider text-fg-muted">
         <Eye aria-hidden="true" className="size-3.5" /> How fans will see it
       </p>
-      <SongCredits credits={records} artists={artists} bands={bands} defaultOpen />
+      <SongCredits credits={records} artists={artists} bands={bands} ownActId={ownActId} defaultOpen />
     </div>
   );
 }

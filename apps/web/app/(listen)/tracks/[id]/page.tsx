@@ -201,6 +201,8 @@ export default function TrackPage() {
   const { credits, playable } = data.data!;
   const track = override ?? data.data!.track;
   const artist = creditName(track, people.artists, people.bands);
+  // Musicians fold under the song's own artist's credit line (owner, 2026-10-31).
+  const ownAct = track.primary_artist_id ?? track.primary_band_id ?? null;
   const play = playState(playable);
   // A song bought as part of its album or EP counts as owned here too (D-AUDIO-12).
   const buy = trackBuyState(commerce.entitlements, commerce.offers, track.id, track.release_ids ?? [], commerce.streamable);
@@ -224,7 +226,7 @@ export default function TrackPage() {
             </CoverTilt>
             <div className="mt-6 hidden md:block">
               <SongLyrics lyrics={track.lyrics} className="border-t border-line" />
-              <SongCredits credits={credits} artists={people.artists} bands={people.bands} className="border-t border-line" />
+              <SongCredits credits={credits} artists={people.artists} bands={people.bands} ownActId={ownAct} className="border-t border-line" />
             </div>
           </div>
           <div className="md:pt-6">
@@ -270,7 +272,7 @@ export default function TrackPage() {
           {/* Phones: the same sections, after the title and buy button. */}
           <div className="md:hidden">
             <SongLyrics lyrics={track.lyrics} className="border-t border-line" />
-            <SongCredits credits={credits} artists={people.artists} bands={people.bands} className="border-t border-line" />
+            <SongCredits credits={credits} artists={people.artists} bands={people.bands} ownActId={ownAct} className="border-t border-line" />
           </div>
         </div>
       </LitSurface>
