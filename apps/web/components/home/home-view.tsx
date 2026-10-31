@@ -11,6 +11,7 @@ import { Display, Eyebrow } from "@/components/brand/display";
 import { ButtonLink, Card, DateTime, Skeleton } from "@/components/ds";
 import { EventMedia } from "@/components/events/event-media";
 import { EventRow } from "@/components/events/event-row";
+import { FeaturedCarousel } from "@/components/home/featured-carousel";
 import { MissionBand } from "@/components/home/mission-band";
 import { PosterTilt } from "@/components/home/poster-tilt";
 import { Reveal } from "@/components/ds/reveal";
@@ -19,11 +20,8 @@ import { ReleaseCard } from "@/components/music/release-card";
 import { TAGLINE_BN } from "@/components/shell/site-footer";
 import { useAsync } from "@/components/use-async";
 import { useWorkspace } from "@/components/workspace-provider";
-import { CoverArt } from "@/components/brand/cover-art";
-import { RoomCube } from "@/components/brand/room-cube";
 import { fetchHealth, fetchPublicEvents, fetchReleases, type EventRecord, type ReleaseRecord } from "@/lib/api";
-import { coverUrl } from "@/lib/cover-view";
-import { cityFromTimeZone, pickHomeFeature, upcomingEvents } from "@/lib/home-view";
+import { cityFromTimeZone, featuredSlides, upcomingEvents } from "@/lib/home-view";
 import { creditName, sortReleases } from "@/lib/music-view";
 import { showStaffEntry, staffHomeHref } from "@/lib/nav-view";
 import { checkLabel, healthLabel } from "@/lib/ops-view";
@@ -35,39 +33,9 @@ function cityOrTitle(event: EventRecord): string {
 /* ---------- Hero ---------- */
 
 /**
- * The newest released music, in the hero when there is no live or upcoming event (owner,
- * 2026-10-25): its official cover (or the Sky letter cube), "New release", title and artist.
- */
-function FeaturedRelease({ release }: { release: ReleaseRecord }) {
-  const credits = useCredits();
-  const artist = creditName(release, credits.artists, credits.bands);
-  const href = `/releases/${release.id}`;
-  return (
-    <figure className="home-poster-in w-full max-w-[28rem]">
-      <PosterTilt>
-        <Link href={href} className="cr-focus block" aria-label={`New release: ${release.title}${artist ? ` by ${artist}` : ""}`}>
-          <CoverArt
-            src={coverUrl({ release: release.id, hasCover: !!release.cover_asset_id }, 1200)}
-            fallback={<RoomCube front={release.title} side={artist ?? release.title} tone="sky" label="" className="w-full" />}
-            className="w-full"
-          />
-        </Link>
-      </PosterTilt>
-      <figcaption className="mt-4 flex items-baseline justify-between gap-4">
-        <span className="cr-eyebrow text-[0.6875rem] text-fg-muted">New release</span>
-        <Link href={href} className="cr-focus truncate text-sm font-semibold text-fg hover:text-highlight">
-          {release.title}
-        </Link>
-      </figcaption>
-      {artist ? <p className="mt-1 text-right text-xs text-fg-muted">{artist}</p> : null}
-    </figure>
-  );
-}
-
-/**
- * The hero's feature (lib/home-view.ts `pickHomeFeature`): a LIVE event, else the next upcoming
- * one, else the newest released music. While either list loads, the frame waits; with nothing to
- * feature, or if events fail to load, the same red frame holds the Corner Room cube.
+ * The hero's feature (owner, 2026-10-31, lib/home-view.ts `featuredSlides`): live and upcoming
+ * events and the newest releases, turning in the featured carousel. While either list loads, the
+ * frame waits; with nothing to feature, the same red frame holds the Corner Room cube.
  */
 function Featured({
   events,
@@ -77,11 +45,9 @@ function Featured({
   releases: ReturnType<typeof useAsync<ReleaseRecord[]>>;
 }) {
   const loading = events.status === "loading" || releases.status === "loading";
-  const feature = loading
-    ? null
-    : pickHomeFeature(events.status === "ok" ? events.data : [], releases.status === "ok" ? releases.data : []);
-  if (feature?.kind === "release") return <FeaturedRelease release={feature.release} />;
-  return <FeaturedEvent state={loading ? { status: "loading" } : events} featured={feature?.kind === "event" ? feature : null} />;
+  const slides = loading ? [] : featuredSlides(events.status === "ok" ? events.data : [], releases.status === "ok" ? releases.data : []);
+  if (slides.length > 0) return <FeaturedCarousel slides={slides} />;
+  return <FeaturedEvent state={loading ? { status: "loading" } : events} featured={null} />;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { EventRecord, ReleaseRecord } from "@/lib/api";
-import { cityFromTimeZone, pickFeaturedEvent, pickHomeFeature, pickNextEvent, storeHighlights, upcomingEvents } from "@/lib/home-view";
+import { cityFromTimeZone, featuredSlides, pickFeaturedEvent, pickHomeFeature, pickNextEvent, stepSlide, storeHighlights, upcomingEvents } from "@/lib/home-view";
 
 const ev = (id: string, starts_at: string | null): EventRecord => ({
   id,
@@ -94,5 +94,43 @@ describe("pickHomeFeature (owner, 2026-10-25: feature the newest real thing)", (
 
   it("features nothing when there are no events and no released music", () => {
     expect(pickHomeFeature([ev("past", "2026-01-01T00:00:00Z")], [rel("draft", null, "DRAFT")], now)).toBeNull();
+  });
+});
+
+describe("featuredSlides (owner, 2026-10-31: releases and events take turns in the hero)", () => {
+  const now = new Date("2026-10-26T12:00:00Z");
+  const rel = (id: string, release_at: string | null, status = "RELEASED"): ReleaseRecord => ({ id, title: id, release_type: "SINGLE", status, release_at });
+  const ids = (slides: ReturnType<typeof featuredSlides>) => slides.map((s) => (s.kind === "event" ? s.event.id : s.release.id));
+
+  it("puts live events first, then upcoming events and the newest releases in turn", () => {
+    const live = { ...ev("now", "2026-10-26T11:00:00Z"), status: "LIVE" };
+    const events = [ev("late", "2026-12-01T14:00:00Z"), live, ev("soon", "2026-11-01T14:00:00Z"), ev("past", "2026-01-01T00:00:00Z")];
+    const releases = [rel("older", "2026-10-01T00:00:00Z"), rel("debut", "2026-10-26T06:00:00Z"), rel("draft", null, "DRAFT")];
+    const slides = featuredSlides(events, releases, now);
+    expect(ids(slides)).toEqual(["now", "soon", "debut", "late", "older"]);
+    expect(slides.map((s) => s.label)).toEqual(["Live now", "Coming up", "New release", "Coming up", "New release"]);
+  });
+
+  it("calls the first upcoming event Next up when nothing is live, and keeps at most three of each", () => {
+    const events = ["a", "b", "c", "d"].map((id, i) => ev(id, `2026-11-0${i + 1}T14:00:00Z`));
+    const releases = ["r1", "r2", "r3", "r4"].map((id, i) => rel(id, `2026-10-2${i}T00:00:00Z`));
+    const slides = featuredSlides(events, releases, now);
+    expect(slides).toHaveLength(6);
+    expect(slides[0]).toMatchObject({ kind: "event", label: "Next up", event: { id: "a" } });
+    expect(ids(slides)).toEqual(["a", "r4", "b", "r3", "c", "r2"]);
+  });
+
+  it("features only releases when there are no events, and nothing when there is nothing", () => {
+    expect(ids(featuredSlides([], [rel("debut", "2026-10-26T06:00:00Z")], now))).toEqual(["debut"]);
+    expect(featuredSlides([ev("past", "2026-01-01T00:00:00Z")], [rel("draft", null, "DRAFT")], now)).toEqual([]);
+  });
+});
+
+describe("stepSlide", () => {
+  it("wraps round both ends", () => {
+    expect(stepSlide(0, -1, 4)).toBe(3);
+    expect(stepSlide(3, 1, 4)).toBe(0);
+    expect(stepSlide(1, 1, 4)).toBe(2);
+    expect(stepSlide(0, 1, 0)).toBe(0);
   });
 });
