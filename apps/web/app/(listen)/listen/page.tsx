@@ -4,12 +4,14 @@ import { Headphones } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { ComingSoon } from "@/components/brand/coming-soon";
-import { Button, ButtonLink, Card, EmptyState, Skeleton } from "@/components/ds";
+import { Button, ButtonLink, Card, EmptyState, ErrorState, Skeleton } from "@/components/ds";
+import { CatalogRows, useCatalogEntries } from "@/components/music/catalog-rows";
 import { canPlay, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
 import { useCredits } from "@/components/music/credits";
 import { ListenPage } from "@/components/music/listen-page";
 import { usePlayer } from "@/components/music/player";
-import { TrackRows } from "@/components/music/track-rows";
+import { RetryButton } from "@/components/shell/staff-panel";
+import { loadErrorMessage } from "@/components/use-async";
 import { creditName, playQueue } from "@/lib/music-view";
 import { hasCatalogAccess, releaseIdsFor } from "@/lib/ownership";
 
@@ -25,12 +27,13 @@ function MoreMusicSoon() {
   );
 }
 
-/** Listening room home: what you can play now, and every other song with its price. */
+/** Listening room home: albums and EPs as one row each that opens to its songs, and singles to play (owner, 2026-11-01). */
 export default function ListenHome() {
   const { status } = useAuth();
   const people = useCredits();
   const commerce = useCustomerCommerce();
   const catalog = usePlayableCatalog();
+  const music = useCatalogEntries();
   const player = usePlayer();
   const access = hasCatalogAccess(commerce.entitlements);
   const playable = catalog.list.filter((t) => t.catalog_playable && t.audio_deliverable);
@@ -69,18 +72,12 @@ export default function ListenHome() {
           </Card>
           {/* Every song is visible to visitors too, each with "Sign in" on its play button (owner, 2026-10-24). */}
           <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
-            {catalog.ready && catalog.list.length > 0 ? (
+            {music.status === "ok" && music.data && music.data.entries.length > 0 ? (
               <section aria-labelledby="all-tracks">
                 <h2 id="all-tracks" className="mb-4 text-xl font-bold text-fg">
-                  Tracks
+                  Albums and singles
                 </h2>
-                <TrackRows
-                  label="Tracks"
-                  items={catalog.list.map((t) => ({ key: t.id, trackId: t.id }))}
-                  playable={catalog.map}
-                  people={people}
-                  commerce={commerce}
-                />
+                <CatalogRows label="Albums and singles" entries={music.data.entries} playable={music.data.playable} people={people} commerce={commerce} />
               </section>
             ) : null}
             <MoreMusicSoon />
@@ -90,20 +87,16 @@ export default function ListenHome() {
         <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
           <section aria-labelledby="all-tracks">
             <h2 id="all-tracks" className="mb-4 text-xl font-bold text-fg">
-              {access ? "Everything you can play" : "Tracks"}
+              {access ? "Everything you can play" : "Albums and singles"}
             </h2>
-            {!catalog.ready ? (
+            {music.status === "error" ? (
+              <ErrorState title="Music unavailable" message={loadErrorMessage(music.error, "music")} action={<RetryButton onClick={music.reload} />} />
+            ) : music.status === "loading" || !music.data ? (
               <Skeleton className="h-48 w-full" />
-            ) : catalog.list.length === 0 ? (
+            ) : music.data.entries.length === 0 ? (
               <EmptyState title="Nothing to play yet" />
             ) : (
-              <TrackRows
-                label="Tracks"
-                items={catalog.list.map((t) => ({ key: t.id, trackId: t.id }))}
-                playable={catalog.map}
-                people={people}
-                commerce={commerce}
-              />
+              <CatalogRows label="Albums and singles" entries={music.data.entries} playable={music.data.playable} people={people} commerce={commerce} />
             )}
           </section>
           <MoreMusicSoon />

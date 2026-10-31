@@ -1,0 +1,215 @@
+/*
+ * Browsing polish (owner, 2026-11-01, D-MOTION-03): lists that focus the row under the pointer,
+ * the header search that opens into a bar, and the player bar that steps aside while you browse.
+ * Transform, opacity and filter only. Every motion here has a reduced-motion fallback.
+ */
+
+/* Focus list: put .cr-focus-list on a list of rows (track lists, release lists, search results).
+   The row under the pointer stays sharp and the others soften and blur, like the events list.
+   Rows must touch (borders, not gaps), so the pointer never falls between two rows and flickers.
+   Mouse and trackpad only; a keyboard user gets the same with Tab, through :focus-visible. */
+.cr-focus-list > * {
+  transition:
+    filter 360ms var(--ease-corner),
+    opacity 360ms var(--ease-corner),
+    translate 360ms var(--ease-corner);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cr-focus-list:has(> :hover) > :not(:hover),
+  .cr-focus-list:has(> * :focus-visible) > :not(:has(:focus-visible)) {
+    filter: blur(2.5px) saturate(0.6);
+    opacity: 0.42;
+  }
+  .cr-focus-list:has(> :hover) > :hover {
+    translate: 0.375rem 0;
+  }
+}
+.cr-focus-list:has(> * :focus-visible) > :not(:has(:focus-visible)) {
+  opacity: 0.42;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cr-focus-list > * {
+    transition: opacity var(--cr-dur-interaction) linear;
+  }
+  /* Softening stays (it is not motion); the blur and the slide go. */
+  .cr-focus-list:has(> :hover) > :not(:hover),
+  .cr-focus-list:has(> * :focus-visible) > :not(:has(:focus-visible)) {
+    filter: none;
+  }
+  .cr-focus-list:has(> :hover) > :hover {
+    translate: none;
+  }
+}
+
+/* Header search (components/shell/header-search.tsx): a round lens that opens leftwards into a
+   frosted bar over the main links when the pointer rests on it, when it has focus, or while it
+   holds a query. The slot keeps the icon's width, so nothing in the header moves. */
+.cr-hsearch-slot {
+  position: relative;
+  width: 2.5rem;
+  height: 2.5rem;
+}
+.cr-hsearch {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  width: 2.5rem;
+  border: 1px solid transparent;
+  background: transparent;
+  transition:
+    width 520ms var(--ease-corner),
+    background-color 320ms var(--ease-corner),
+    border-color 320ms var(--ease-corner),
+    box-shadow 520ms var(--ease-corner);
+}
+.cr-hsearch input {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  padding-inline: 0.25rem 0.5rem;
+  background: transparent;
+  color: var(--cr-fg);
+  font-size: 0.9375rem;
+  outline: none;
+  opacity: 0;
+  transition: opacity 260ms var(--ease-corner) 0ms;
+}
+.cr-hsearch input::placeholder {
+  color: var(--cr-fg-muted);
+}
+.cr-hsearch input::-webkit-search-cancel-button {
+  display: none;
+}
+.cr-hsearch-lens {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 100%;
+  color: var(--cr-fg);
+  transition:
+    color 260ms var(--ease-corner),
+    rotate 520ms var(--ease-corner);
+}
+.cr-hsearch-key {
+  flex: none;
+  margin-inline-end: 0.5rem;
+  border: 1px solid var(--cr-line);
+  padding: 0.0625rem 0.375rem;
+  color: var(--cr-fg-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 260ms var(--ease-corner);
+}
+.cr-hsearch:is(:hover, :focus-within, [data-filled]) {
+  width: min(26rem, calc(100vw - 22rem));
+  border-color: var(--cr-line-strong);
+  background: var(--cr-surface-raised);
+  box-shadow:
+    0 18px 40px -24px rgb(0 0 0 / 0.8),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+.cr-hsearch:focus-within {
+  border-color: color-mix(in srgb, var(--cr-highlight) 70%, transparent);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--cr-highlight) 18%, transparent),
+    0 18px 40px -24px rgb(0 0 0 / 0.8);
+}
+.cr-hsearch:is(:hover, :focus-within, [data-filled]) input,
+.cr-hsearch:is(:hover, :focus-within, [data-filled]) .cr-hsearch-key {
+  opacity: 1;
+  transition-delay: 140ms;
+}
+.cr-hsearch:is(:hover, :focus-within, [data-filled]) .cr-hsearch-lens {
+  color: var(--cr-highlight);
+  rotate: -90deg;
+}
+.cr-hsearch:focus-within .cr-hsearch-key {
+  opacity: 0;
+  transition-delay: 0ms;
+}
+
+/* Suggestions under the bar, each row rising into place one after another. */
+.cr-hsearch-panel {
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + 0.5rem);
+  width: min(26rem, calc(100vw - 22rem));
+  max-height: min(28rem, calc(100vh - 6rem));
+  overflow-y: auto;
+  border: 1px solid var(--cr-line-strong);
+  /* Solid: inside the frosted header a second frosting cannot see the page, so it would ghost. */
+  background: var(--cr-surface-raised);
+  box-shadow: 0 30px 60px -30px rgb(0 0 0 / 0.85);
+  transform-origin: top right;
+  animation: cr-hsearch-open 320ms var(--ease-corner) both;
+}
+@keyframes cr-hsearch-open {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+.cr-hsearch-hit {
+  animation: cr-hsearch-hit 380ms var(--ease-corner) both;
+  animation-delay: calc(var(--i, 0) * 35ms);
+}
+@keyframes cr-hsearch-hit {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+.cr-hsearch-hit[data-active],
+.cr-hsearch-hit:hover {
+  background: var(--cr-surface-overlay);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cr-hsearch,
+  .cr-hsearch input,
+  .cr-hsearch-lens,
+  .cr-hsearch-key {
+    transition-duration: 0ms;
+    transition-delay: 0ms;
+  }
+  .cr-hsearch:is(:hover, :focus-within, [data-filled]) .cr-hsearch-lens {
+    rotate: none;
+  }
+  .cr-hsearch-panel,
+  .cr-hsearch-hit {
+    animation: none;
+  }
+}
+
+/* Player bar steps aside while you browse (owner, 2026-11-01): it slides down while the page
+   scrolls or the pointer moves, and rises again once things are still (components/music/player.tsx
+   sets data-tucked). It never tucks while the pointer is near it or a control in it has focus. */
+.cr-player-dock {
+  --dock-drop: 0px;
+  transition:
+    translate 480ms var(--ease-corner),
+    opacity 320ms var(--ease-corner);
+}
+@media (max-width: 1023.98px) {
+  body:has([data-tab-bar]) .cr-player-dock {
+    --dock-drop: calc(4rem + env(safe-area-inset-bottom));
+  }
+}
+.cr-player-dock[data-tucked] {
+  translate: 0 calc(100% + var(--dock-drop) + 0.5rem);
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cr-player-dock {
+    transition: opacity var(--cr-dur-component) linear;
+  }
+  .cr-player-dock[data-tucked] {
+    translate: none;
+  }
+}

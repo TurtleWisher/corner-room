@@ -85,3 +85,30 @@ export function searchResultHref(route: string | null | undefined, hit?: { entit
 export function keepApiSearchOrder<T>(items: T[]): T[] {
   return items;
 }
+
+/** One word for what a hit is, in the header's suggestions. Bands are artists too (owner, 2026-10-31). */
+const HIT_KIND: Record<string, string> = { EVENT: "Event", ARTIST: "Artist", BAND: "Artist", RELEASE: "Release", TRACK: "Song", VENUE: "Venue", CAMPAIGN: "Campaign", USER: "User", ORGANIZATION: "Organization" };
+
+export type SearchSuggestion<T extends { entity_type: string; entity_id: string; route: string | null }> = { hit: T; href: string; kind: string };
+
+/**
+ * The header's live suggestions (D-MOTION-03): the API's best matches in its order, only those that
+ * open somewhere, at most `max`.
+ */
+export function searchSuggestions<T extends { entity_type: string; entity_id: string; route: string | null }>(items: readonly T[], max = 6): SearchSuggestion<T>[] {
+  const out: SearchSuggestion<T>[] = [];
+  for (const hit of items) {
+    const href = searchResultHref(hit.route, hit);
+    if (!href) continue;
+    out.push({ hit, href, kind: HIT_KIND[hit.entity_type] ?? "Result" });
+    if (out.length === max) break;
+  }
+  return out;
+}
+
+/** "/" opens the header search, unless the person is already typing somewhere. */
+export function isSearchShortcut(key: string, target: { tagName?: string; isContentEditable?: boolean } | null): boolean {
+  if (key !== "/") return false;
+  const tag = (target?.tagName ?? "").toUpperCase();
+  return !(tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable);
+}

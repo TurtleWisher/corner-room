@@ -10,6 +10,7 @@ import { BetaTag } from "@/components/brand/beta-tag";
 import { Logo } from "@/components/brand/logo";
 import { ButtonLink } from "@/components/ds";
 import { AccountMenu, AvatarButton } from "@/components/shell/account-menu";
+import { HeaderSearch } from "@/components/shell/header-search";
 import { NavLinks } from "@/components/shell/nav-link";
 import { NavIcon } from "@/components/shell/nav-icons";
 import { ShellBell } from "@/components/shell/shell-bell";
@@ -97,9 +98,13 @@ export function SiteHeader({
         </div>
         <NavLinks items={PUBLIC_NAV} label="Main" className="hidden min-w-0 flex-1 lg:block" />
         <div className="ml-auto flex items-center gap-1">
-          <Link href={SEARCH_HREF} aria-label="Search" title="Search" className={ICON_LINK}>
+          {/* Phones open the search page; wider screens get the bar that opens in place (D-MOTION-03). */}
+          <Link href={SEARCH_HREF} aria-label="Search" title="Search" className={cn(ICON_LINK, "md:hidden")}>
             <Search className="size-5" aria-hidden="true" />
           </Link>
+          <div className="hidden md:block">
+            <HeaderSearch />
+          </div>
           {status === "loading" ? (
             <span className="h-10 w-10" aria-hidden="true" />
           ) : signedIn ? (

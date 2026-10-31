@@ -51,7 +51,7 @@ export function TrackRows({
     (id) => canPlay(commerce, id, releaseIdsFor(playable, id)),
   );
   return (
-    <ul aria-label={label} className="border-t border-line">
+    <ul aria-label={label} className="cr-focus-list border-t border-line">
       {items.map((item) => {
         const rec = playable.get(item.trackId);
         const title = item.title || rec?.title || "Track not available";

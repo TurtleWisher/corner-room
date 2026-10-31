@@ -7,36 +7,17 @@ import { Search as SearchIcon } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
-import { CoverArt } from "@/components/brand/cover-art";
-import { RoomCube } from "@/components/brand/room-cube";
-import { Avatar, Button, EmptyState, ErrorState, Input, Skeleton } from "@/components/ds";
-import { EventMedia } from "@/components/events/event-media";
+import { Button, EmptyState, ErrorState, Input, Skeleton } from "@/components/ds";
+import { SearchThumb } from "@/components/search/search-thumb";
 import { PageIntro, RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import { useWorkspace } from "@/components/workspace-provider";
 import { fetchSearch, type SearchHitRecord } from "@/lib/api";
-import { coverUrl } from "@/lib/cover-view";
 import { humanizeStatus } from "@/lib/format/status";
 import { allowedSearchEntityTypes, buildSearchHref, isGuestLikeSearch, sanitizeSearchEntityType, searchResultHref } from "@/lib/search-view";
 import { cn } from "@/lib/utils";
 
 const TYPE_LABEL: Record<string, string> = { EVENT: "Events", ARTIST: "Artists", BAND: "Bands", RELEASE: "Releases", TRACK: "Tracks", VENUE: "Venues", CAMPAIGN: "Campaigns", USER: "Users", ORGANIZATION: "Organizations" };
-
-function Thumb({ hit }: { hit: SearchHitRecord }) {
-  if (hit.entity_type === "EVENT") return <EventMedia title={hit.title} eventId={hit.entity_id} size="front" />;
-  if (hit.entity_type === "RELEASE" || hit.entity_type === "TRACK") {
-    return (
-      <div className="aspect-square w-full bg-cr-sky">
-        <CoverArt
-          src={coverUrl(hit.entity_type === "RELEASE" ? { release: hit.entity_id } : { track: hit.entity_id }, 160)}
-          fallback={<RoomCube front={hit.title} side={hit.subtitle || hit.title} tone="sky" size="front" label="" className="size-full" />}
-          className="size-full"
-        />
-      </div>
-    );
-  }
-  return <Avatar name={hit.title} size={56} />;
-}
 
 function Results({ q, type }: { q: string; type: string | null }) {
   const [extra, setExtra] = useState<{ items: SearchHitRecord[]; cursor: string | null }>({ items: [], cursor: null });
@@ -64,13 +45,13 @@ function Results({ q, type }: { q: string; type: string | null }) {
           <h2 id={`g-${g.type}`} className="cr-eyebrow border-b border-line pb-3 text-[0.75rem] text-highlight">
             {TYPE_LABEL[g.type] ?? humanizeStatus(g.type)}
           </h2>
-          <ul>
+          <ul className="cr-focus-list">
             {g.hits.map((hit) => {
               const href = searchResultHref(hit.route, hit);
               return (
                 <li key={`${hit.entity_type}-${hit.entity_id}`} className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-4 border-b border-line py-4">
                   <div className="w-14">
-                    <Thumb hit={hit} />
+                    <SearchThumb hit={hit} />
                   </div>
                   <div className="min-w-0">
                     {href ? (
