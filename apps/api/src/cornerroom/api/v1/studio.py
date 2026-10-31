@@ -763,6 +763,15 @@ async def change_track_credits(track_id: UUID, body: CreditsIn, ctx: Ctx, svc: S
     return ChangeRequestOut(**await _changes(svc).save_track_credits(ctx, track_id, [c.model_dump() for c in body.credits]))
 
 
+@router.put("/studio/tracks/{track_id}/credits/order", response_model=StudioTrackOut)
+async def order_credits(track_id: UUID, body: CreditsIn, ctx: Ctx, svc: StudioDep) -> StudioTrackOut:
+    """D-CREDITS-04: a new order for the same credits goes live with no review."""
+    track = await _changes(svc).order_track_credits(ctx, track_id, [c.model_dump() for c in body.credits])
+    _track, release, _role = await svc._track(ctx, track_id)
+    position = next(p for p, t in await svc._tracks_of(release.id) if t.id == track.id)
+    return StudioTrackOut(**await svc._track_view(track, position))
+
+
 @router.post("/studio/releases/{release_id}/changes/submit", response_model=ChangeRequestOut)
 async def submit_changes(release_id: UUID, ctx: Ctx, svc: StudioDep) -> ChangeRequestOut:
     return ChangeRequestOut(**await _changes(svc).submit(ctx, release_id))

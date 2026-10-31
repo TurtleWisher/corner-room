@@ -3,8 +3,8 @@
 /* The Studio release editor (URL-05, design 3 and 5). Every field saves to the API and the page
  * re-renders from the server's answer; nothing here decides permission, readiness or state. */
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, CircleAlert, CircleCheck, Plus, Save, Send, Trash2, Undo2, UserRound } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, CircleAlert, CircleCheck, GripVertical, Plus, Save, Send, Trash2, Undo2, UserRound } from "lucide-react";
 
 import { Button, Card, DateTime, ErrorState, Field, Input, Money, Select, Skeleton } from "@/components/ds";
 import { Textarea } from "@/components/ds/input";
@@ -17,6 +17,7 @@ import {
   fetchStudioRelease,
   fetchTaxonomy,
   newStudioVersion,
+  orderStudioCredits,
   proposeStudioPrice,
   removeStudioTrack,
   reorderStudioTracks,
@@ -40,6 +41,7 @@ import {
   type Taxonomy,
 } from "@/features/studio/api";
 import { coverUrl } from "@/lib/cover-view";
+import { dropIndex, moveTo, onlyCreditOrderChanged } from "@/lib/credit-order-view";
 import { friendlyError } from "@/lib/error-copy";
 import { formatCount } from "@/lib/format/count";
 import { changeMode, pendingAudio, proposedRelease, proposedTrack, type ChangeMode } from "@/lib/changes-view";
@@ -262,34 +264,97 @@ function DetailsForm({
   );
 }
 
+type CreditRow = StudioCredit & { rowKey: string };
+
 function CreditsEditor({
   track,
+  live,
   taxonomy,
   editable,
+  orderable = editable,
   changing = false,
   reload,
 }: {
   track: StudioTrack;
+  /** The credits fans see now; a new order of exactly these goes live with no review (D-CREDITS-04). */
+  live: StudioCredit[];
   taxonomy: Taxonomy;
   editable: boolean;
+  /** Credits can be dragged into a new order (also on music that is out, without starting changes). */
+  orderable?: boolean;
   /** D-CHANGES-01: saves go into the change request for staff. */
   changing?: boolean;
   reload: Reload;
 }) {
-  const [rows, setRows] = useState<StudioCredit[]>(track.credits.map((c) => ({ ...c })));
-  const [saved, setSaved] = useState(false);
+  const nextKey = useRef(track.credits.length);
+  const listRef = useRef<HTMLUListElement>(null);
+  const [rows, setRows] = useState<CreditRow[]>(track.credits.map((c, i) => ({ ...c, rowKey: String(i) })));
+  const [saved, setSaved] = useState<"changes" | "order" | null>(null);
+  const [dragging, setDragging] = useState<number | null>(null);
+  const [moved, setMoved] = useState("");
   const { busy, error, run } = useAction(reload);
   const roles = new Map(taxonomy.credit_roles.map((r) => [r.key, r]));
   const update = (i: number, patch: Partial<StudioCredit>) => setRows(rows.map((row, j) => (j === i ? { ...row, ...patch } : row)));
+  const direct = editable && !changing;
+  const orderOnly = !direct && onlyCreditOrderChanged(rows, live);
+  const who = (row: StudioCredit) => row.artist_name || row.display_name || "this credit";
+
+  const move = (from: number, to: number) => {
+    if (to < 0 || to >= rows.length || to === from) return;
+    setRows(moveTo(rows, from, to));
+    setSaved(null);
+    setMoved(`${who(rows[from])} moved to place ${to + 1} of ${rows.length}.`);
+  };
+  const dragTo = (pointerY: number) => {
+    if (dragging === null || !listRef.current) return;
+    const middles = Array.from(listRef.current.children).map((el) => {
+      const box = el.getBoundingClientRect();
+      return box.top + box.height / 2;
+    });
+    const to = dropIndex(middles, dragging, pointerY);
+    if (to !== dragging) {
+      move(dragging, to);
+      setDragging(to);
+    }
+  };
 
   return (
     <div>
       <p className="text-sm text-fg-muted">Credits name who made the song. Add a Musician for each person who played or sang on it (Guitars, Bass, Vocals, Drums); fans see them under Track credits. For any other role, choose Other and name the role yourself. Corner Room checks credits before fans see them. Credits are attribution only; payments are set up separately.</p>
-      <ul className="mt-3 grid gap-3">
+      {orderable && rows.length > 1 ? (
+        <p className="mt-1 text-sm text-fg-muted">Drag a credit by its handle to change the order fans see. A new order needs no review.</p>
+      ) : null}
+      <ul ref={listRef} className="mt-3 grid gap-3">
         {rows.map((row, i) => {
           const role = roles.get(row.role_key);
           return (
-            <li key={i} className="grid gap-2 border border-line p-3 md:grid-cols-[12rem_1fr_10rem_auto] md:items-end">
+            <li
+              key={row.rowKey}
+              className={`grid gap-2 border p-3 transition-shadow md:items-end ${orderable ? "md:grid-cols-[auto_12rem_1fr_10rem_auto]" : "md:grid-cols-[12rem_1fr_10rem_auto]"} ${dragging === i ? "border-accent shadow-lg" : "border-line"}`}
+            >
+              {orderable ? (
+                <button
+                  type="button"
+                  aria-label={`Move ${who(row)}, place ${i + 1} of ${rows.length}. Drag, or use the up and down arrow keys.`}
+                  className="flex size-10 cursor-grab touch-none items-center justify-center text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:cursor-grabbing"
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    setDragging(i);
+                  }}
+                  onPointerMove={(e) => dragTo(e.clientY)}
+                  onPointerUp={() => setDragging(null)}
+                  onPointerCancel={() => setDragging(null)}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                      e.preventDefault();
+                      move(i, e.key === "ArrowUp" ? i - 1 : i + 1);
+                    }
+                  }}
+                >
+                  <GripVertical aria-hidden="true" className="size-5" />
+                </button>
+              ) : null}
               <Field label="Role">
                 {(c) => (
                   <Select {...c} value={row.role_key} disabled={!editable} onChange={(e) => update(i, { role_key: e.target.value })}>
@@ -329,33 +394,46 @@ function CreditsEditor({
           );
         })}
       </ul>
-      {editable ? (
+      <p aria-live="polite" className="sr-only">
+        {moved}
+      </p>
+      {editable || orderOnly ? (
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" onClick={() => setRows([...rows, { role_key: "songwriter", display_name: "" }])}>
-            <UserRound aria-hidden="true" /> Add a credit
-          </Button>
+          {editable ? (
+            <Button variant="secondary" size="sm" onClick={() => setRows([...rows, { role_key: "songwriter", display_name: "", rowKey: `new-${nextKey.current++}` }])}>
+              <UserRound aria-hidden="true" /> Add a credit
+            </Button>
+          ) : null}
           <Button
             size="sm"
             busy={busy === "credits"}
             onClick={() => {
-              setSaved(false);
+              setSaved(null);
               void run("credits", async () => {
-                if (!changing) return setStudioCredits(track.id, rows);
+                if (direct) return setStudioCredits(track.id, rows);
+                if (orderOnly) {
+                  const out = await orderStudioCredits(track.id, rows);
+                  setSaved("order");
+                  return out;
+                }
                 const out = await saveCreditChanges(track.id, rows);
-                setSaved(true);
+                setSaved("changes");
                 return out;
               });
             }}
           >
-            <Save aria-hidden="true" /> {changing ? "Save credit changes for review" : "Save credits"}
+            <Save aria-hidden="true" /> {direct ? "Save credits" : orderOnly ? "Save the new order" : "Save credit changes for review"}
           </Button>
         </div>
       ) : null}
-      {saved && changing ? (
-        // Saving only adds to the list of changes; nothing reaches staff until it is sent (owner, 2026-10-31).
+      {saved ? (
+        // Saved changes only join the list of changes; nothing reaches staff until it is sent
+        // (owner, 2026-10-31). A new order is live at once (D-CREDITS-04).
         <p role="status" className="mt-3 flex items-start gap-2 text-sm text-fg">
           <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" />
-          Saved to your changes. Press Send changes for review in the Change this music box at the top of the page to send them to staff.
+          {saved === "order"
+            ? "New order saved. Fans see the credits in this order now."
+            : "Saved to your changes. Press Send changes for review in the Change this music box at the top of the page to send them to staff."}
         </p>
       ) : null}
       <Problem message={error} />
@@ -590,10 +668,13 @@ function TrackCard({
         <h4 className="font-semibold text-fg">Credits</h4>
         <div className="mt-2">
           <CreditsEditor
-            key={`${shown.credits.map((c) => `${c.id ?? ""}${c.role_key}${c.display_name ?? ""}${c.artist_id ?? ""}`).join()}|${mode}`}
+            // Sorted, so a saved new order keeps the editor (and its "saved" note) as it is.
+            key={`${shown.credits.map((c) => `${c.id ?? ""}${c.role_key}${c.display_name ?? ""}${c.artist_id ?? ""}`).sort().join()}|${mode}`}
             track={shown}
+            live={track.credits}
             taxonomy={taxonomy}
             editable={trackEditable || changing}
+            orderable={trackEditable || changing || mode === "none"}
             changing={changing}
             reload={reload}
           />
