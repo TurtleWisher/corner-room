@@ -41,7 +41,7 @@ import {
   type Taxonomy,
 } from "@/features/studio/api";
 import { coverUrl } from "@/lib/cover-view";
-import { dropIndex, moveTo, onlyCreditOrderChanged } from "@/lib/credit-order-view";
+import { dropIndex, makeRoom, moveTo, onlyCreditOrderChanged } from "@/lib/credit-order-view";
 import { friendlyError } from "@/lib/error-copy";
 import { formatCount } from "@/lib/format/count";
 import { changeMode, pendingAudio, proposedRelease, proposedTrack, type ChangeMode } from "@/lib/changes-view";
@@ -290,7 +290,10 @@ function CreditsEditor({
   const listRef = useRef<HTMLUListElement>(null);
   const [rows, setRows] = useState<CreditRow[]>(track.credits.map((c, i) => ({ ...c, rowKey: String(i) })));
   const [saved, setSaved] = useState<"changes" | "order" | null>(null);
-  const [dragging, setDragging] = useState<number | null>(null);
+  // While dragging, rows stay where they are in the page (moving the element would drop the
+  // pointer): the dragged one follows the pointer, the others slide aside, and the drop reorders.
+  const [drag, setDrag] = useState<{ from: number; to: number; startY: number; dy: number; middles: number[]; size: number } | null>(null);
+  const [focusRow, setFocusRow] = useState<string | null>(null);
   const [moved, setMoved] = useState("");
   const { busy, error, run } = useAction(reload);
   const roles = new Map(taxonomy.credit_roles.map((r) => [r.key, r]));
@@ -305,18 +308,22 @@ function CreditsEditor({
     setSaved(null);
     setMoved(`${who(rows[from])} moved to place ${to + 1} of ${rows.length}.`);
   };
-  const dragTo = (pointerY: number) => {
-    if (dragging === null || !listRef.current) return;
-    const middles = Array.from(listRef.current.children).map((el) => {
-      const box = el.getBoundingClientRect();
-      return box.top + box.height / 2;
-    });
-    const to = dropIndex(middles, dragging, pointerY);
-    if (to !== dragging) {
-      move(dragging, to);
-      setDragging(to);
-    }
+  const startDrag = (i: number, pointerY: number) => {
+    const items = Array.from(listRef.current?.children ?? []).map((el) => el.getBoundingClientRect());
+    if (!items[i]) return;
+    const gap = items.length > 1 ? Math.abs(items[1].top - items[0].bottom) : 0;
+    setDrag({ from: i, to: i, startY: pointerY, dy: 0, middles: items.map((b) => b.top + b.height / 2), size: items[i].height + gap });
   };
+  const endDrag = () => {
+    if (drag) move(drag.from, drag.to);
+    setDrag(null);
+  };
+  // After a keyboard move the handle is a new element in the page; keep focus on it.
+  useEffect(() => {
+    if (!focusRow) return;
+    listRef.current?.querySelector<HTMLButtonElement>(`[data-row="${focusRow}"]`)?.focus();
+    setFocusRow(null);
+  }, [focusRow]);
 
   return (
     <div>
@@ -330,25 +337,31 @@ function CreditsEditor({
           return (
             <li
               key={row.rowKey}
-              className={`grid gap-2 border p-3 transition-shadow md:items-end ${orderable ? "md:grid-cols-[auto_12rem_1fr_10rem_auto]" : "md:grid-cols-[12rem_1fr_10rem_auto]"} ${dragging === i ? "border-accent shadow-lg" : "border-line"}`}
+              style={drag ? { transform: `translateY(${drag.from === i ? drag.dy : makeRoom(i, drag.from, drag.to, drag.size)}px)` } : undefined}
+              className={`relative grid gap-2 border p-3 md:items-end ${orderable ? "md:grid-cols-[auto_12rem_1fr_10rem_auto]" : "md:grid-cols-[12rem_1fr_10rem_auto]"} ${drag?.from === i ? "z-10 border-accent bg-surface shadow-lg" : "border-line"} ${drag && drag.from !== i ? "transition-transform duration-150 ease-out motion-reduce:transition-none" : ""}`}
             >
               {orderable ? (
                 <button
                   type="button"
+                  data-row={row.rowKey}
                   aria-label={`Move ${who(row)}, place ${i + 1} of ${rows.length}. Drag, or use the up and down arrow keys.`}
                   className="flex size-10 cursor-grab touch-none items-center justify-center text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:cursor-grabbing"
                   onPointerDown={(e) => {
                     e.preventDefault();
                     e.currentTarget.setPointerCapture(e.pointerId);
-                    setDragging(i);
+                    startDrag(i, e.clientY);
                   }}
-                  onPointerMove={(e) => dragTo(e.clientY)}
-                  onPointerUp={() => setDragging(null)}
-                  onPointerCancel={() => setDragging(null)}
+                  onPointerMove={(e) => {
+                    if (drag?.from !== i) return;
+                    setDrag({ ...drag, dy: e.clientY - drag.startY, to: dropIndex(drag.middles, i, e.clientY) });
+                  }}
+                  onPointerUp={endDrag}
+                  onPointerCancel={() => setDrag(null)}
                   onKeyDown={(e) => {
                     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
                       e.preventDefault();
                       move(i, e.key === "ArrowUp" ? i - 1 : i + 1);
+                      setFocusRow(row.rowKey);
                     }
                   }}
                 >

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dropIndex, moveTo, onlyCreditOrderChanged } from "./credit-order-view";
+import { dropIndex, makeRoom, moveTo, onlyCreditOrderChanged } from "./credit-order-view";
 
 const writer = { id: "c1", role_key: "songwriter", display_name: "Mitul", artist_id: null, instrument: null };
 const art = { id: "c2", role_key: "custom", display_name: "Aryan", instrument: "Artwork" };
@@ -36,6 +36,16 @@ describe("moveTo", () => {
     const list = ["a", "b"];
     expect(moveTo(list, 1, 1)).toBe(list);
     expect(moveTo(list, 0, 5)).toBe(list);
+  });
+});
+
+describe("makeRoom", () => {
+  it("slides the rows between the start and the landing place", () => {
+    // Dragging row 0 down to place 2: rows 1 and 2 move up, row 3 stays.
+    expect([0, 1, 2, 3].map((i) => makeRoom(i, 0, 2, 50))).toEqual([0, -50, -50, 0]);
+    // Dragging row 3 up to place 1: rows 1 and 2 move down.
+    expect([0, 1, 2, 3].map((i) => makeRoom(i, 3, 1, 50))).toEqual([0, 50, 50, 0]);
+    expect([0, 1, 2].map((i) => makeRoom(i, 1, 1, 50))).toEqual([0, 0, 0]);
   });
 });
 

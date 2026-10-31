@@ -32,3 +32,14 @@ export function moveTo<T>(list: T[], from: number, to: number): T[] {
 export function dropIndex(middles: number[], from: number, pointerY: number): number {
   return middles.filter((mid, i) => i !== from && mid < pointerY).length;
 }
+
+/**
+ * How far another row slides to make room while one is dragged from `from` towards `to`; `size`
+ * is the dragged row's height plus the gap. Rows stay in place in the page until the drop.
+ */
+export function makeRoom(index: number, from: number, to: number, size: number): number {
+  if (index === from) return 0;
+  if (from < to && index > from && index <= to) return -size;
+  if (from > to && index >= to && index < from) return size;
+  return 0;
+}
