@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, memo, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -28,6 +28,7 @@ import { RoomCube } from "@/components/brand/room-cube";
 import { ButtonLink } from "@/components/ds";
 import { roomCameFrom } from "@/components/music/outside-room";
 import { playerStatusText, RepeatButton, ShuffleButton, usePlayer, usePlayerProgress, type PlayerTrack } from "@/components/music/player";
+import { SmokeLyric, stirSmoke } from "@/components/music/smoke-lyric";
 import { TrackActions } from "@/components/music/track-actions";
 import { useAsync } from "@/components/use-async";
 import {
@@ -42,7 +43,15 @@ import {
 } from "@/lib/listening-room-view";
 import { fetchPlayableCatalog, fetchTrack, type PlayableTrackRecord } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
-import { floatSlot, floatingLines, lyricIndexAt, lyricLines } from "@/lib/lyrics-view";
+import {
+  floatingLines,
+  lyricIndexAt,
+  lyricLines,
+  lyricStepSeconds,
+  lyricSway,
+  orbitPose,
+  type OrbitLayout,
+} from "@/lib/lyrics-view";
 import { creditHref } from "@/lib/music-view";
 import { clock, durationLabel } from "@/lib/player-model";
 import { cn } from "@/lib/utils";
@@ -288,9 +297,9 @@ function ArtistLink({ track }: { track: PlayerTrack }) {
 
 /**
  * Floating lyrics (owner, 2026-10-27, D-LYRICS-01): off until the listener turns them on with the
- * small button by the volume. Lines drift slowly through the open space behind the cards, paced
- * across the song (lyrics carry no timings, so this is an estimate). Decorative here: the song
- * page has the full lyrics for reading and screen readers.
+ * small button by the volume. Lines float in 3D around the playing cover (owner, 2026-11-01),
+ * paced across the song (lyrics carry no timings, so this is an estimate). Decorative here: the
+ * song page has the full lyrics for reading and screen readers.
  */
 type RoomLyrics = { trackId: string | null; lines: string[]; on: boolean; toggle: () => void };
 const LyricsContext = createContext<RoomLyrics>({ trackId: null, lines: [], on: false, toggle: () => {} });
@@ -351,33 +360,74 @@ function LyricsToggle() {
   );
 }
 
-function FloatingLyrics() {
+/** Phones stack the lines above and over the cover; wider rooms float them beside it. */
+const COMPACT_ROOM = "(max-width: 767px)";
+
+// Where media queries are not available, the room keeps its wide layout.
+function compactQuery(): MediaQueryList | null {
+  return typeof window.matchMedia === "function" ? window.matchMedia(COMPACT_ROOM) : null;
+}
+
+function subscribeCompact(change: () => void): () => void {
+  const query = compactQuery();
+  query?.addEventListener("change", change);
+  return () => query?.removeEventListener("change", change);
+}
+
+function useCompactRoom(): boolean {
+  return useSyncExternalStore(
+    subscribeCompact,
+    () => compactQuery()?.matches ?? false,
+    () => false,
+  );
+}
+
+/** Line speed: one line's share of the song, kept between a glide and a drift. */
+const STEP_MIN_S = 2.2;
+const STEP_MAX_S = 8;
+
+/**
+ * The lyric orbit, drawn inside the cover's own 3D space (the carousel stage, or the focus
+ * cover), so the browser keeps every line in true depth order with the cards: a line behind the
+ * cover is hidden by the art and softened through the card's glass, a line in front passes over
+ * it. Each line is smoke the pointer can blow apart (components/music/smoke-lyric.tsx) and keeps
+ * one path (lib/lyrics-view.ts `orbitPose`); the room tilts the orbit a little towards the mouse.
+ */
+function LyricOrbit({ layout, focus = false }: { layout: OrbitLayout | "auto"; focus?: boolean }) {
   const lyrics = useContext(LyricsContext);
   const { position, duration } = usePlayerProgress();
+  const compact = useCompactRoom();
   if (!lyrics.on || lyrics.lines.length === 0) return null;
+  const shape: OrbitLayout = layout === "auto" ? (compact ? "stack" : "beside") : layout;
   const index = lyricIndexAt(lyrics.lines.length, position, duration);
+  const step = Math.min(STEP_MAX_S, Math.max(STEP_MIN_S, lyricStepSeconds(lyrics.lines.length, duration)));
+  // Wide focus views keep the title and console to the right of the cover: lines drift left.
+  const towards = focus && !compact ? -1 : undefined;
   return (
-    <div aria-hidden="true" className="lr-lyrics">
+    <div aria-hidden="true" className="lr-orbit" data-layout={shape} style={{ "--step": `${step}s` } as React.CSSProperties}>
       {floatingLines(lyrics.lines, index).map((line) => {
-        const slot = floatSlot(line.key);
+        const pose = orbitPose(line.key, line.age, shape, towards);
+        const sway = lyricSway(line.key);
         return (
-          <p
+          <div
             key={`${lyrics.trackId}-${line.key}`}
             data-age={line.age}
             className="lr-lyric"
             style={
               {
-                "--x": `${slot.x}%`,
-                "--y": `${slot.y}%`,
-                "--dx": `${slot.dx}px`,
-                "--dy": `${slot.dy}px`,
-                "--tilt": slot.tilt,
-                "--float": `${slot.seconds}s`,
+                transform: `translate3d(calc(var(--orbit) * ${pose.x}), calc(var(--orbit) * ${pose.y}), ${pose.z}px) rotateY(${pose.turn}deg) translate(-50%, -50%)`,
+                "--o": pose.opacity,
+                "--b": `${pose.blur}px`,
+                "--dx": `${sway.dx}px`,
+                "--dy": `${sway.dy}px`,
+                "--float": `${sway.seconds}s`,
               } as React.CSSProperties
             }
           >
-            {line.text}
-          </p>
+            <div className="lr-lyric-text">
+              <SmokeLyric text={line.text} dissolve={pose.dissolve} />
+            </div>
+          </div>
         );
       })}
     </div>
@@ -529,6 +579,7 @@ function Carousel({ onFocus, frontRef }: { onFocus: () => void; frontRef: React.
               </span>
               <span aria-hidden="true" className="lr-dim" />
             </button>
+            {front ? <LyricOrbit layout="auto" /> : null}
           </div>
         );
       })}
@@ -633,6 +684,7 @@ function FocusView({ track, edge, keyRef }: { track: PlayerTrack; edge: "left" |
         <div className="lr-focus-art">
           <Cover id={track.id} title={label} artist={track.artist || label} />
         </div>
+        <LyricOrbit layout="stack" focus />
       </div>
       <div className="lr-focus-info">
         <p className="cr-eyebrow text-[0.6875rem] text-highlight">
@@ -684,6 +736,20 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
   const focusKey = useRef<HTMLButtonElement>(null);
   const moved = useRef(false);
   const lyrics = useRoomLyrics(track?.id ?? null);
+  const tilt = useRef(0);
+  // The lyric orbit leans a little towards the mouse, once a frame at most.
+  const tiltOrbit = (room: HTMLElement, x: number, y: number) => {
+    if (!lyrics.on || tilt.current) return;
+    tilt.current = window.requestAnimationFrame(() => {
+      tilt.current = 0;
+      const box = room.getBoundingClientRect();
+      for (const orbit of room.querySelectorAll<HTMLElement>(".lr-orbit")) {
+        orbit.style.setProperty("--px", ((x - box.left) / box.width * 2 - 1).toFixed(3));
+        orbit.style.setProperty("--py", ((y - box.top) / box.height * 2 - 1).toFixed(3));
+      }
+    });
+  };
+  useEffect(() => () => window.cancelAnimationFrame(tilt.current), []);
 
   useEffect(() => {
     if (!track || track.id === announced.current || !track.title) return;
@@ -729,7 +795,10 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
       data-mode={track ? mode : "carousel"}
       data-playing={track && p.status === "playing" ? "" : undefined}
       onPointerMove={(e) => {
-        if (mode !== "focus" || e.pointerType !== "mouse") return;
+        if (lyrics.on) stirSmoke(e.clientX, e.clientY);
+        if (e.pointerType !== "mouse") return;
+        tiltOrbit(e.currentTarget, e.clientX, e.clientY);
+        if (mode !== "focus") return;
         const zone = edgeZone(e.clientX, e.currentTarget.clientWidth);
         if (zone !== edge) setEdge(zone);
       }}
@@ -738,7 +807,6 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
       <Backdrop track={track} />
       <PointerLightLayer />
       <LyricsContext.Provider value={lyrics}>
-        {track ? <FloatingLyrics /> : null}
         <header className="lr-top">
           <div className="flex items-center gap-3">
             <div className="flex items-end gap-2">

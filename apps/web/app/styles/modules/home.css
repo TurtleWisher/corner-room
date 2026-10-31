@@ -13,6 +13,46 @@
  *                      its CSS lives in tokens.css because the footer uses it too).
  */
 
+/* ---------- M0 hero fit (owner, 2026-11-01) ----------
+   The whole hero sits on the first screen, a short laptop screen included (1280 x 588 at 150 %
+   scaling measured 771 px of hero in 523 px). Spacing, the headline and the featured cover scale
+   with the screen's height as well as its width; on tall screens they are the sizes they were. */
+[data-module="home"] .home-hero {
+  padding-top: clamp(1.75rem, 4.5svh, 3rem);
+  padding-bottom: clamp(2.5rem, 7svh, 4rem);
+}
+[data-module="home"] .home-title {
+  font-size: clamp(3.5rem, min(9vw, 14.5svh), 8.5rem);
+}
+@media (min-width: 1024px) {
+  [data-module="home"] .home-hero {
+    padding-top: clamp(1.75rem, 6svh, 4rem);
+    padding-bottom: clamp(2.5rem, 8svh, 5rem);
+  }
+  [data-module="home"] .home-feature-size {
+    max-width: min(28rem, calc(100svh - 14.5rem));
+  }
+}
+/* The actions answer the pointer: the arrow leans on, the play mark swells. */
+[data-module="home"] .home-cta-go svg {
+  transition:
+    translate var(--cr-dur-interaction) var(--ease-corner),
+    scale var(--cr-dur-interaction) var(--ease-corner);
+}
+[data-module="home"] .home-cta-go:hover .lucide-arrow-right,
+[data-module="home"] .home-cta-go:focus-visible .lucide-arrow-right {
+  translate: 4px 0;
+}
+[data-module="home"] .home-cta-go:hover .lucide-play,
+[data-module="home"] .home-cta-go:focus-visible .lucide-play {
+  scale: 1.15;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-module="home"] .home-cta-go svg {
+    transition: none;
+  }
+}
+
 /* ---------- M1 hero entrance ----------
    It waits until the page is ready to be seen: html.cr-ready, set by the early script in
    app/layout.tsx once the fonts load (0.7 s at most), so it is never spent while the page is

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { ArrowRight, LayoutGrid, Library, ListMusic, Receipt, Ticket, type LucideIcon } from "lucide-react";
+import { ArrowRight, LayoutGrid, Library, ListMusic, Play, Receipt, Ticket, type LucideIcon } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { ComingSoon } from "@/components/brand/coming-soon";
@@ -74,7 +74,7 @@ function FeaturedEvent({
           : "Nothing announced yet";
 
   return (
-    <figure className="home-poster-in w-full max-w-[28rem]" aria-busy={state.status === "loading" || undefined}>
+    <figure className="home-poster-in home-feature-size w-full max-w-[28rem]" aria-busy={state.status === "loading" || undefined}>
       <PosterTilt>
         <Link href={href} className="cr-focus block" aria-label={event ? `${label}: ${event.title}` : "See all events"}>
           {state.status === "loading" ? (
@@ -327,12 +327,14 @@ export function HomeView() {
   return (
     <main id="main" data-theme="ember" data-module="home" className="cr-scope">
       <LitSurface as="section" theme="ember" aria-labelledby="home-title">
-        <div className="mx-auto grid max-w-[90rem] items-center gap-12 px-4 pb-16 pt-12 md:px-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:pb-24 lg:pt-24">
+        {/* The whole hero fits the first screen, short laptop screens included (owner, 2026-11-01):
+            spacing and the headline scale with the screen's height as well as its width (home.css). */}
+        <div className="home-hero mx-auto grid max-w-[90rem] items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-12">
           <div className="home-depth-near">
             <Eyebrow className="home-in" style={{ ["--i" as string]: 0 }}>
               Events · Music · Store
             </Eyebrow>
-            <Display as="h1" id="home-title" size="xl" className="mt-4">
+            <Display as="h1" id="home-title" size="xl" className="home-title mt-3">
               <span className="home-rise block" style={{ ["--i" as string]: 1 }}>
                 The city&apos;s corner.
               </span>
@@ -340,15 +342,15 @@ export function HomeView() {
                 The music&apos;s room.
               </span>
             </Display>
-            <p lang="bn" className="home-in mt-6 font-bangla text-xl leading-[1.6] text-fg md:text-2xl" style={{ ["--i" as string]: 3 }}>
+            <p lang="bn" className="home-in home-tagline mt-5 font-bangla text-xl leading-[1.6] text-fg md:text-2xl" style={{ ["--i" as string]: 3 }}>
               {TAGLINE_BN}
             </p>
-            <div className="home-in mt-10 flex flex-wrap gap-3" style={{ ["--i" as string]: 4 }}>
-              <ButtonLink href="/events" size="lg">
-                See what&apos;s on
+            <div className="home-in home-cta mt-8 flex flex-wrap gap-3" style={{ ["--i" as string]: 4 }}>
+              <ButtonLink href="/events" size="lg" className="home-cta-go">
+                See what&apos;s on <ArrowRight aria-hidden="true" />
               </ButtonLink>
-              <ButtonLink href="/listen" variant="secondary" size="lg">
-                Start listening
+              <ButtonLink href="/listen" variant="secondary" size="lg" className="home-cta-go">
+                <Play aria-hidden="true" /> Start listening
               </ButtonLink>
             </div>
           </div>

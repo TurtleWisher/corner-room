@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { floatSlot, floatingLines, lyricIndexAt, lyricLines, lyricVerses, lyricsMode } from "./lyrics-view";
+import {
+  floatingLines,
+  lyricIndexAt,
+  lyricLines,
+  lyricStepSeconds,
+  lyricSway,
+  lyricVerses,
+  lyricsMode,
+  orbitPath,
+  orbitPose,
+  type LyricAge,
+} from "./lyrics-view";
 
 const SONG = "Chaya pore\n  mone pore  \n\n\nSecond verse\nlast line\n";
 
@@ -36,32 +47,82 @@ describe("lyricIndexAt", () => {
 });
 
 describe("floatingLines", () => {
-  const lines = ["a", "b", "c"];
-  it("shows the leaving, current and arriving lines", () => {
-    expect(floatingLines(lines, 1)).toEqual([
-      { key: 0, text: "a", age: -1 },
-      { key: 1, text: "b", age: 0 },
-      { key: 2, text: "c", age: 1 },
+  const lines = ["a", "b", "c", "d"];
+  it("shows two leaving lines, the current one and the one arriving", () => {
+    expect(floatingLines(lines, 2)).toEqual([
+      { key: 0, text: "a", age: -2 },
+      { key: 1, text: "b", age: -1 },
+      { key: 2, text: "c", age: 0 },
+      { key: 3, text: "d", age: 1 },
     ]);
   });
   it("before the first line only the first one arrives", () => {
     expect(floatingLines(lines, -1)).toEqual([{ key: 0, text: "a", age: 1 }]);
-    expect(floatingLines(lines, 2).map((l) => l.age)).toEqual([-1, 0]);
+    expect(floatingLines(lines, 3).map((l) => l.age)).toEqual([-2, -1, 0]);
   });
 });
 
-describe("floatSlot", () => {
-  it("is fixed per line and puts neighbours apart", () => {
-    expect(floatSlot(3)).toEqual(floatSlot(3));
-    const a = floatSlot(0);
-    const b = floatSlot(1);
-    expect(Math.abs(a.x - b.x) + Math.abs(a.y - b.y)).toBeGreaterThan(20);
-    for (let i = 0; i < 20; i++) {
-      const s = floatSlot(i);
-      expect(s.x).toBeGreaterThanOrEqual(0);
-      expect(s.x).toBeLessThanOrEqual(80);
-      expect(s.seconds).toBeGreaterThanOrEqual(16);
+describe("lyricStepSeconds", () => {
+  it("shares the song between intro and outro across the lines", () => {
+    expect(lyricStepSeconds(44, 500)).toBeCloseTo(10);
+    expect(lyricStepSeconds(0, 500)).toBe(4);
+    expect(lyricStepSeconds(10, 0)).toBe(4);
+  });
+});
+
+describe("orbitPose", () => {
+  const ages: LyricAge[] = [1, 0, -1, -2];
+  it("is fixed per line and puts neighbours on different paths", () => {
+    expect(orbitPose(5, 0, "beside")).toEqual(orbitPose(5, 0, "beside"));
+    for (let i = 0; i < 30; i++) expect(orbitPath(i).path).not.toBe(orbitPath(i + 1).path);
+  });
+
+  it("arrives behind the cover, is sung in front of it, then leaves nearer or further away", () => {
+    for (const layout of ["beside", "stack"] as const) {
+      for (let i = 0; i < 24; i++) {
+        const front = orbitPath(i).path.startsWith("front");
+        expect(orbitPose(i, 1, layout).z).toBeLessThan(0);
+        expect(orbitPose(i, 0, layout).z).toBeGreaterThan(0);
+        for (const age of [-1, -2] as const) {
+          const z = orbitPose(i, age, layout).z;
+          expect(front ? z > 0 : z < 0).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("reads clearly while sung, then fades and comes apart before it leaves", () => {
+    for (let i = 0; i < 12; i++) {
+      const now = orbitPose(i, 0, "beside");
+      expect(now.opacity).toBeGreaterThanOrEqual(0.9);
+      expect(now.blur).toBe(0);
+      expect(now.dissolve).toBe(0);
+      const gone = orbitPose(i, -2, "beside");
+      expect(gone.opacity).toBe(0);
+      expect(gone.dissolve).toBe(1);
+      for (const age of ages) expect(orbitPose(i, age, "beside").opacity).toBeLessThanOrEqual(now.opacity);
+    }
+  });
+
+  it("stays over the cover while sung, clear of the title below", () => {
+    for (let i = 0; i < 12; i++) expect(orbitPose(i, 0, "beside").y).toBeLessThanOrEqual(0.15);
+  });
+
+  it("swings less in a stack, and can send every line to one side", () => {
+    for (let i = 0; i < 12; i++) {
+      for (const age of ages) {
+        expect(Math.abs(orbitPose(i, age, "stack").x)).toBeLessThanOrEqual(Math.abs(orbitPose(i, age, "beside").x));
+        expect(orbitPose(i, age, "stack", -1).x).toBeLessThanOrEqual(0);
+      }
+    }
+  });
+
+  it("sways a little, always upwards", () => {
+    for (let i = 0; i < 12; i++) {
+      const s = lyricSway(i);
+      expect(Math.abs(s.dx)).toBeLessThanOrEqual(8);
       expect(s.dy).toBeLessThan(0);
+      expect(s.seconds).toBeGreaterThanOrEqual(7);
     }
   });
 });
