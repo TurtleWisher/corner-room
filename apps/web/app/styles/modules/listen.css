@@ -16,8 +16,6 @@
   --card: min(64vw, 17rem, 40vh);
   --lr-move: 640ms;
   --lr-ease: cubic-bezier(0.22, 0.8, 0.16, 1);
-  /* The lyric orbit's glide between poses: slow in and out, so a line never stops dead. */
-  --lr-glide: cubic-bezier(0.37, 0, 0.25, 1);
   position: relative;
   isolation: isolate;
   display: flex;
@@ -198,7 +196,6 @@
   --ry: 0deg;
   --s: 1;
   --o: 1;
-  --orbit: var(--card);
   position: absolute;
   left: 50%;
   top: 0;
@@ -319,7 +316,12 @@
 [data-module="music"] .lr-slot:not([data-offset="0"]) .lr-card:focus-visible {
   --cut-border: var(--cr-glass-edge-hover);
 }
-[data-module="music"] .lr[data-playing] .lr-slot[data-offset="0"] .lr-card {
+/* The card and its lyric ring float together, in one 3D space (see the lyric ring below). */
+[data-module="music"] .lr-bob {
+  position: relative;
+  transform-style: preserve-3d;
+}
+[data-module="music"] .lr[data-playing] .lr-slot[data-offset="0"] .lr-bob {
   animation: lr-float 7s ease-in-out infinite;
 }
 @keyframes lr-float {
@@ -650,11 +652,21 @@
   --cut-border: var(--cr-glass-edge-hover);
 }
 
-/* Floating lyrics (owner, 2026-10-27, D-LYRICS-01; 3D orbit 2026-11-01). The orbit sits at the
-   cover's centre inside its 3D space; each line's pose (place, depth, turn, opacity, depth-of-field
-   blur) is written by the room from lib/lyrics-view.ts `orbitPose` and glides to the next pose
-   over one line's share of the song (--step). Lines behind the cover are hidden by its art and
-   blurred where the card's glass shows them; lines in front pass over it. */
+/* Floating lyrics (owner, 2026-10-27, D-LYRICS-01; the lyric ring 2026-11-01, D-LYRICS-02).
+   Each line travels a ring round the cover (components/music/listening-room.tsx `LyricOrbit`,
+   lib/lyrics-view.ts `ringPose`); the room writes only transform and opacity, and the line's
+   depth plane as data-plane.
+
+   Layer contract, in one place: the ring sits at the cover's centre inside the cover's own 3D
+   space (.lr-stage, the front .lr-slot, .lr-bob and .lr-orbit are all preserve-3d; the focus
+   cover is its own). The cover is the plane at depth 0, so a line in front (z > 0) is drawn over
+   it and a line behind (z < 0) is hidden by its art. Nothing here sets z-index, and none of these
+   elements may take opacity below 1, a filter, clipping or a will-change hint for opacity:
+   any of those flattens the space and the order is lost.
+
+   Look: crisp real text, lit from inside (Ice to Cream) with a soft indigo and Sky haze behind
+   it, the room's own colours. Only the far plane is softened. Pointing at a line (or tapping it)
+   holds it, brings it a little closer, and lets the light follow the pointer. */
 [data-module="music"] .lr-orbit {
   position: absolute;
   left: 50%;
@@ -662,54 +674,100 @@
   width: 0;
   height: 0;
   transform-style: preserve-3d;
-  /* Leans a little towards the mouse (--px and --py, -1 to 1, written by the room). */
-  transform: rotateY(calc(var(--px, 0) * 9deg)) rotateX(calc(var(--py, 0) * -6deg));
-  transition: transform 1400ms var(--lr-ease);
   pointer-events: none;
 }
 [data-module="music"] .lr-lyric {
   position: absolute;
   left: 0;
   top: 0;
-  transform-origin: 0 0;
-  /* Big, heavy words: smoke needs mass to read (components/music/smoke-lyric.tsx reads these). */
+  width: max-content;
+  max-width: min(21rem, 27vw);
   font-family: var(--font-ui);
-  font-size: clamp(2.25rem, 4.6vw, 5.25rem);
-  font-weight: 700;
-  line-height: 1.12;
-  transition: transform var(--step, 4s) var(--lr-glide);
+  font-size: clamp(1.25rem, 1.85vw, 2.1rem);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  text-align: center;
+  text-wrap: balance;
+  pointer-events: none;
+  cursor: default;
+  will-change: transform, opacity;
+  transition: translate 520ms var(--lr-ease);
 }
-@media (max-width: 767px) {
-  [data-module="music"] .lr-lyric {
-    font-size: 2rem;
-  }
+[data-module="music"] .lr-orbit[data-axis="over"] .lr-lyric {
+  max-width: min(84vw, 30rem);
+  font-size: clamp(1.15rem, 1.6vw, 1.9rem);
+}
+/* Only lines near or in front of the cover can be pointed at; far ones are scenery. */
+[data-module="music"] .lr-lyric[data-plane="front"],
+[data-module="music"] .lr-lyric[data-plane="side"] {
+  pointer-events: auto;
+}
+[data-module="music"] .lr-lyric[data-focus] {
+  translate: 0 0 36px;
 }
 [data-module="music"] .lr-lyric-text {
-  opacity: var(--o, 0);
-  filter: blur(var(--b, 0px));
+  position: relative;
+  isolation: isolate;
+  display: block;
+  padding: 0.4em 0.75em;
+  color: transparent;
+  background-image: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 30%),
+    #fff 0,
+    rgb(187 237 254) 34%,
+    var(--cr-fg) 64%,
+    rgb(187 237 254 / 0.92) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  transform: rotateX(calc(var(--ly, 0) * -7deg)) rotateY(calc(var(--lx, 0) * 9deg));
   transition:
-    opacity var(--step, 4s) linear,
-    filter var(--step, 4s) var(--lr-glide);
-  animation: lr-lyric-sway var(--float, 9s) ease-in-out infinite alternate;
+    transform 520ms var(--lr-ease),
+    filter 700ms var(--lr-ease);
+}
+[data-module="music"] .lr-lyric[data-focus] .lr-lyric-text {
+  background-image: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 30%),
+    #fff 0,
+    #fff 20%,
+    rgb(187 237 254) 48%,
+    var(--cr-fg) 82%
+  );
+}
+/* The far plane only: a touch of softness, so the cover stays the sharpest thing in the room. */
+[data-module="music"] .lr-lyric[data-plane="back"] .lr-lyric-text {
+  filter: blur(1.2px);
+}
+/* The haze: indigo and Sky light, like stage fog round the words, drifting while music plays.
+   Pre-blurred gradients only (no filter), moved by transform. */
+[data-module="music"] .lr-lyric-text::before {
+  content: "";
+  position: absolute;
+  inset: -35% -14%;
+  z-index: -1;
+  background:
+    radial-gradient(48% 50% at 38% 55%, rgb(79 71 137 / 0.55), transparent 70%),
+    radial-gradient(42% 46% at 64% 45%, rgb(83 200 234 / 0.2), transparent 72%),
+    radial-gradient(closest-side, rgb(11 9 25 / 0.55), transparent);
+  opacity: 0.85;
+  pointer-events: none;
+  transition: opacity 520ms var(--lr-ease);
+  animation: lr-haze 11s ease-in-out infinite alternate;
   animation-play-state: paused;
 }
-@starting-style {
-  [data-module="music"] .lr-lyric-text {
-    opacity: 0;
-  }
-}
-[data-module="music"] .lr[data-playing] .lr-lyric-text {
+[data-module="music"] .lr[data-playing] .lr-lyric-text::before {
   animation-play-state: running;
 }
-[data-module="music"] .lr-smoke canvas {
-  display: block;
+[data-module="music"] .lr-lyric[data-focus] .lr-lyric-text::before {
+  opacity: 1;
 }
-@keyframes lr-lyric-sway {
+@keyframes lr-haze {
   from {
-    transform: translate3d(0, 0, 0);
+    transform: translate3d(-4%, 2%, 0) scale(0.96) rotate(-2deg);
   }
   to {
-    transform: translate3d(var(--dx, 0), var(--dy, -8px), 0);
+    transform: translate3d(4%, -3%, 0) scale(1.06) rotate(2deg);
   }
 }
 
@@ -735,20 +793,21 @@
   [data-module="music"] .lr-focus-cover,
   [data-module="music"] .lr-focus-art,
   [data-module="music"] .lr-halo,
-  [data-module="music"] .lr-lyric-text,
+  [data-module="music"] .lr-bob,
+  [data-module="music"] .lr-lyric-text::before,
   [data-module="music"] .lr-eq i {
     animation: none !important;
   }
-  /* Lines appear and fade where they are; nothing glides, sways or leans. */
-  [data-module="music"] .lr-orbit {
-    transform: none;
+  /* The line now stays still where it is sung; nothing glides or leans. */
+  [data-module="music"] .lr-lyric,
+  [data-module="music"] .lr-lyric-text {
     transition: none;
   }
-  [data-module="music"] .lr-lyric {
-    transition: none;
+  [data-module="music"] .lr-lyric[data-focus] {
+    translate: none;
   }
   [data-module="music"] .lr-lyric-text {
-    transition: opacity 600ms linear;
+    transform: none;
   }
   [data-module="music"] .lr-drift canvas,
   [data-module="music"] .lr-peek {

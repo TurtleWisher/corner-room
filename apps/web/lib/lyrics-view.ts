@@ -43,6 +43,16 @@ export function lyricStepSeconds(count: number, durationS: number): number {
 }
 
 /**
+ * How many lines old line `index` is at `positionS`, as a smooth number: 0 as its singing starts,
+ * 1 as the next line's starts, negative before. NaN while the length is unknown.
+ */
+export function lyricAgeAt(index: number, count: number, positionS: number, durationS: number): number {
+  if (count <= 0 || !(durationS > 0) || !Number.isFinite(positionS)) return Number.NaN;
+  const step = lyricStepSeconds(count, durationS);
+  return (positionS - durationS * INTRO - index * step) / step;
+}
+
+/**
  * A line's age: 1 arriving, 0 the line now, -1 drifting away, -2 gone (faded out, so it can
  * leave the page unseen).
  */
@@ -62,91 +72,108 @@ export function floatingLines(lines: string[], index: number): FloatingLine[] {
 }
 
 /*
- * The lyric orbit (owner, 2026-11-01): big smoke lines float in 3D around the playing cover. Each
- * line arrives from behind the cover (hidden by the art, its ends showing either side), comes out
- * in front of it to be sung, then drifts away towards the edges of the room: some nearer the
- * listener, some back behind the cover. The browser sorts the lines and the cards by real depth.
+ * The lyric ring (owner, 2026-11-01, D-LYRICS-02). Each line travels a ring around the playing
+ * cover: it comes out from behind the cover, is sung in front of it, then either swings across
+ * the front and round behind the far side, or drifts on towards the listener and fades.
+ *
+ * Lines and the cover always face the listener, so their planes are parallel and never cut
+ * through each other. A line changes between behind and in front only at the ring's sides, where
+ * the ring is wide enough (cover, half the line and a gap) to clear the cover's edge, so it never
+ * pops through the art. The browser's depth sorting does the rest.
  */
 
-/** "beside": wide rooms, lines swing far to the sides. "stack": phones and the focus view. */
-export type OrbitLayout = "beside" | "stack";
+/** "around": a flat ring about the vertical axis (wide rooms). "over": up and over the cover's
+ * top edge (phones and the focus view, where the sides belong to other things). */
+export type RingAxis = "around" | "over";
 
-/**
- * Where a line's centre is at one age. x and y are in cover widths from the cover's centre (y
- * down), z in pixels towards the listener, `turn` degrees about the vertical axis, `opacity` 0 to 1
- * and `blur` pixels of depth of field. `dissolve` is how far the words have come apart into smoke
- * (0 the words, 1 all smoke).
- */
-export type OrbitPose = { x: number; y: number; z: number; turn: number; opacity: number; blur: number; dissolve: number };
+/** Sizes in pixels: the cover (width and height), and the line's own box. */
+export type RingSize = { cover: number; coverHeight: number; lineWidth: number; lineHeight: number };
 
-type Path = "front-out" | "front-sweep" | "back-out" | "back-cross";
-const PATHS: readonly Path[] = ["back-out", "front-out", "back-cross", "front-sweep"];
-// Where the sung line sits, over the cover: never low enough to reach the title and the bar.
-const LIFTS = [-0.38, -0.1, -0.26, 0.0, -0.18, -0.32, -0.06];
+/** Depth plane: what the line is near, for blur, contrast and whether it can be pointed at. */
+export type RingPlane = "front" | "side" | "back";
 
-/** A line's path, side and height: fixed per line number, varied so neighbours land apart. */
-export function orbitPath(index: number): { path: Path; side: 1 | -1; lift: number } {
+/** A line's centre relative to the cover's centre (pixels, y down, z towards the listener). */
+export type RingPose = { x: number; y: number; z: number; opacity: number; plane: RingPlane };
+
+/** Room between the cover's edge and the nearest end of a line as it passes the side. */
+export const RING_GAP = 28;
+
+const LANES = [-0.32, 0.1, -0.16, 0.26, -0.24, 0.04];
+
+/** A line's ring: which side it comes from, its height, and how it leaves. Fixed per line. */
+export function ringPath(index: number): { dir: 1 | -1; lane: number; exit: "behind" | "forward" } {
   const n = Math.max(0, Math.floor(index));
   return {
-    path: PATHS[(n * 3) % PATHS.length],
-    side: (n + Math.floor(n / 3)) % 2 === 0 ? 1 : -1,
-    lift: LIFTS[n % LIFTS.length],
+    // Three lines in a row come round the same way, so a leaving line never meets the next one.
+    dir: Math.floor(n / 3) % 2 === 0 ? 1 : -1,
+    lane: LANES[n % LANES.length],
+    exit: n % 3 === 2 ? "forward" : "behind",
   };
 }
 
-type Step = [x: number, y: number, z: number, turn: number, opacity: number, blur: number, dissolve: number];
-
-// Every line: born behind the cover as gathering smoke, sung in front of it as words.
-const ARRIVE: Step = [0.18, 0.06, -280, 10, 0.45, 4, 0.45];
-const SUNG: Step = [0.06, 0, 110, 4, 0.95, 0, 0];
-
-// Then, per path, two steps away (ages -1 and -2) before the side (s) and height are applied. x
-// and turn are mirrored by the side; y is added to the line's height.
-const LEAVE: Record<Path, [Step, Step]> = {
-  // Towards the listener and out to its side, coming apart as it passes.
-  "front-out": [
-    [0.75, -0.3, 420, -8, 0.32, 2.5, 0.3],
-    [1.4, -0.6, 760, -12, 0, 6, 1],
-  ],
-  // Towards the listener and across to the other side.
-  "front-sweep": [
-    [-0.7, 0.12, 400, 10, 0.3, 2.5, 0.3],
-    [-1.3, 0.2, 720, 14, 0, 6, 1],
-  ],
-  // Back behind the cover on its own side, then away into the room.
-  "back-out": [
-    [0.5, -0.2, -420, -14, 0.35, 4, 0.3],
-    [1.1, -0.45, -900, -18, 0, 7, 1],
-  ],
-  // Back behind the cover and out the far side.
-  "back-cross": [
-    [-0.35, -0.1, -380, 12, 0.35, 4, 0.3],
-    [-0.9, -0.25, -860, 16, 0, 7, 1],
-  ],
-};
-
-/** How far sideways the stacked layout swings, against the wide one. */
-const STACK_REACH = 0.6;
-
-/**
- * Where line `index` floats at `age`. `towards` sends every line to one side, where the other
- * side of the cover is taken (the focus view's title and console).
- */
-export function orbitPose(index: number, age: LyricAge, layout: OrbitLayout, towards?: 1 | -1): OrbitPose {
-  const { path, side, lift } = orbitPath(index);
-  const [x, y, z, turn, opacity, blur, dissolve] =
-    age === 1 ? ARRIVE : age === 0 ? SUNG : LEAVE[path][age === -1 ? 0 : 1];
-  const reach = layout === "beside" ? 1 : STACK_REACH;
-  // A forced side puts every pose on that side, crossing paths included.
-  const across = towards ? towards * Math.abs(x) : x * side;
-  return { x: across * reach, y: y + lift, z, turn: turn * (towards ?? side), opacity, blur, dissolve };
+/** Piecewise-linear lookup in sorted [at, value] keys, held flat beyond the ends. */
+function along(keys: ReadonlyArray<readonly [number, number]>, at: number): number {
+  if (at <= keys[0][0]) return keys[0][1];
+  for (let i = 1; i < keys.length; i++) {
+    const [a1, v1] = keys[i];
+    if (at <= a1) {
+      const [a0, v0] = keys[i - 1];
+      return v0 + ((v1 - v0) * (at - a0)) / (a1 - a0);
+    }
+  }
+  return keys[keys.length - 1][1];
 }
 
-/** The slow sway every line has while music plays, fixed per line. */
-export function lyricSway(index: number): { dx: number; dy: number; seconds: number } {
-  const n = Math.max(0, Math.floor(index));
-  const sway = ((n * 37) % 11) - 5; // -5..5
-  return { dx: sway * 1.6, dy: -6 - ((n * 13) % 7), seconds: 7 + ((n * 7) % 6) };
+// The angle round the ring by age (a line is `age` lines old: 0 as its singing starts, 1 as the
+// next one starts). Slow while it is sung, quicker coming and going.
+const ARRIVE: ReadonlyArray<readonly [number, number]> = [
+  [-1, 150],
+  [0, 50],
+  [1, 22],
+];
+const LEAVE_BEHIND: ReadonlyArray<readonly [number, number]> = [
+  [1, 22],
+  [2, -150],
+];
+const LEAVE_OVER: ReadonlyArray<readonly [number, number]> = [
+  [1, 22],
+  [2, 160],
+];
+const FADE: ReadonlyArray<readonly [number, number]> = [
+  [-1, 0],
+  [-0.55, 0.5],
+  [0, 0.96],
+  [1, 0.96],
+  [1.5, 0.5],
+  [2, 0],
+];
+
+/** Where line `index` is when it is `age` lines old. */
+export function ringPose(index: number, age: number, axis: RingAxis, size: RingSize): RingPose {
+  const { dir, lane, exit } = ringPath(index);
+  const leaving = age > 1;
+  const turn =
+    !leaving || exit === "forward"
+      ? along(ARRIVE, Math.min(age, 1))
+      : along(axis === "around" ? LEAVE_BEHIND : LEAVE_OVER, age);
+  const rad = (turn * Math.PI) / 180;
+  const depth = Math.min(280, Math.max(170, size.cover * 0.75));
+  // Leaving forwards: on past the front of the ring, towards the listener.
+  const forward = leaving && exit === "forward" ? (age - 1) * 340 : 0;
+  const z = depth * Math.cos(rad) + forward;
+  let x: number;
+  let y: number;
+  if (axis === "around") {
+    const reach = size.cover / 2 + size.lineWidth / 2 + RING_GAP;
+    x = dir * reach * Math.sin(rad);
+    y = lane * size.cover;
+  } else {
+    const reach = size.coverHeight / 2 + size.lineHeight / 2 + RING_GAP * 0.7;
+    x = dir * size.cover * 0.05;
+    y = -reach * Math.sin(rad);
+  }
+  const plane: RingPlane = z > depth * 0.25 ? "front" : z < -depth * 0.25 ? "back" : "side";
+  return { x, y, z, opacity: along(FADE, age), plane };
 }
 
 export type LyricsMode = "draft" | "review" | "locked";
