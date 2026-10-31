@@ -8,8 +8,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from cornerroom.api.deps import artist_service, get_auth_context, get_optional_auth_context
+from cornerroom.api.deps import artist_service, db_session, get_auth_context, get_optional_auth_context
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.artists.application.service import ArtistService
 from cornerroom.modules.artists.domain.models import Artist, ArtistApplication, Follow
@@ -232,6 +233,30 @@ async def get_artist(
     if public_view:
         return _public_artist(row)
     return _artist_out(row)
+
+
+class CreditedSongOut(BaseModel):
+    track_id: UUID
+    track_title: str
+    release_id: UUID
+    release_title: str
+    release_type: str
+    release_at: datetime | None
+    has_cover: bool
+    by_id: UUID | None
+    by_name: str | None
+    by_kind: str | None
+    roles: list[str]
+
+
+@router.get("/artists/{artist_id}/credited-on", response_model=list[CreditedSongOut])
+async def credited_on(
+    artist_id: UUID, session: Annotated[AsyncSession, Depends(db_session)]
+) -> list[CreditedSongOut]:
+    """D-CREDITS-06: released songs by others that this artist or band is credited on."""
+    from cornerroom.modules.music.application.credited_on import credited_on as songs
+
+    return [CreditedSongOut(**s) for s in await songs(session, artist_id)]
 
 
 @router.patch("/artists/{artist_id}", response_model=ArtistOut)

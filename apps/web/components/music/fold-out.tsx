@@ -14,6 +14,7 @@ export function FoldOut({
   icon: Icon,
   count,
   level = "section",
+  defaultOpen = false,
   className,
   children,
 }: {
@@ -23,11 +24,13 @@ export function FoldOut({
   count?: number;
   /** "section" for a main fold-out, "sub" for one nested inside another section. */
   level?: "section" | "sub";
+  /** Start open (Studio's preview of the credits). */
+  defaultOpen?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <details className={cn("cr-fold group", level === "sub" ? "cr-fold-sub" : "", className)}>
+    <details open={defaultOpen || undefined} className={cn("cr-fold group", level === "sub" ? "cr-fold-sub" : "", className)}>
       <summary
         className={cn(
           "cr-focus flex cursor-pointer list-none items-center gap-2 py-3 text-fg [&::-webkit-details-marker]:hidden",

@@ -76,7 +76,9 @@ def credit_line(c: dict[str, Any], names: dict[str, str]) -> str:
     if role == "custom":
         return f"{instrument or 'Credit'}: {who}"
     if role == "musician":
-        return f"{instrument or 'Musician'}: {who}"
+        part_of = names.get(str(c.get("part_of_artist_id"))) if c.get("part_of_artist_id") else c.get("part_of_name")
+        line = f"{instrument or 'Musician'}: {who}"
+        return f"{line} (with {part_of})" if part_of else line
     line = f"{role.replace('_', ' ').capitalize()}: {who}"
     return f"{line} ({instrument})" if instrument else line
 
@@ -87,6 +89,8 @@ def _credit_dict(c: Credit) -> dict[str, Any]:
         "artist_id": str(c.artist_id) if c.artist_id else None,
         "display_name": c.display_name,
         "instrument": c.instrument,
+        "part_of_artist_id": str(c.part_of_artist_id) if c.part_of_artist_id else None,
+        "part_of_name": c.part_of_name,
     }
 
 
@@ -180,6 +184,7 @@ class ChangeRequestService:
             if t.get("credits") is not None:
                 before = await self._current_credits(track.id)
                 artist_ids |= {c["artist_id"] for c in before if c.get("artist_id")}
+                artist_ids |= {c["part_of_artist_id"] for c in [*before, *t["credits"]] if c.get("part_of_artist_id")}
                 names = {
                     str(a.id): a.stage_name
                     for a in (

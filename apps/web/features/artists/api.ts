@@ -91,6 +91,26 @@ export async function fetchArtist(id: string, opts?: { skipAuth?: boolean }): Pr
   });
 }
 
+/** A released song by someone else that this artist or band is credited on (D-CREDITS-06). */
+export type CreditedSong = {
+  track_id: string;
+  track_title: string;
+  release_id: string;
+  release_title: string;
+  release_type: string;
+  release_at: string | null;
+  has_cover: boolean;
+  by_id: string | null;
+  by_name: string | null;
+  by_kind: "SOLO" | "BAND" | null;
+  /** What they did, as the song page says it: "Mixing & Mastering", "Guitars". */
+  roles: string[];
+};
+
+export async function fetchCreditedOn(id: string): Promise<CreditedSong[]> {
+  return apiFetch<CreditedSong[]>(`/api/v1/artists/${id}/credited-on`, { retry: false, skipAuth: true, skipRefresh: true });
+}
+
 export async function createArtist(body: {
   stage_name: string;
   bio?: string;

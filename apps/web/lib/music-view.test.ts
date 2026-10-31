@@ -77,31 +77,51 @@ describe("creditDetails (owner, 2026-10-30)", () => {
   ];
   const label = (r: string) => r.toLowerCase();
 
-  it("lists who made the song, then who played what on it, instrument by instrument", () => {
+  it("lists every credit in order, guest musicians on their own lines", () => {
     const out = creditDetails(credits, artists, label);
     expect(out.main.map((m) => `${m.role}: ${m.name}`)).toEqual([
       "primary_artist: MIZULS",
       "songwriter: Rafi Ahmed",
-      "performer: MIZULS",
+      "Guitars: Rafi Ahmed",
+      "Bass: Tuli",
+      "performer · Vocals: MIZULS",
+      "Musician: Mitu",
       // A role the artist named themselves (D-CREDITS-02).
       "Cover art: Nadia",
     ]);
-    expect(out.played.map((p) => `${p.plays}: ${p.name}`)).toEqual([
-      "Guitars: Rafi Ahmed",
-      "Bass: Tuli",
-      "Vocals: MIZULS",
-      "Played on this song: Mitu",
+    expect(out.main.every((m) => m.members.length === 0)).toBe(true);
+  });
+
+  it("folds the people who played in an act under that act's line (D-CREDITS-05)", () => {
+    const out = creditDetails(
+      [
+        { id: "m1", credit_role: "musician", role_key: "musician", display_name: "Samiul", instrument: "Vocals", part_of_artist_id: "a1" },
+        { id: "c1", credit_role: "songwriter", role_key: "songwriter", artist_id: "a1" },
+        { id: "c2", credit_role: "mixing_engineer", role_key: "mixing_engineer", display_name: "M.K. Khan" },
+        { id: "m2", credit_role: "musician", role_key: "musician", display_name: "Rafi", instrument: "Guitars", part_of_artist_id: "a1" },
+        { id: "m3", credit_role: "musician", role_key: "musician", display_name: "Tuli", instrument: "Bass", part_of_name: "m.k.  khan" },
+        { id: "m4", credit_role: "musician", role_key: "musician", display_name: "Guest", instrument: "Flute", part_of_name: "Gone" },
+      ],
+      artists,
+      label,
+    );
+    expect(out.main.map((m) => `${m.role}: ${m.name} [${m.members.map((p) => `${p.plays} ${p.name}`).join(", ")}]`)).toEqual([
+      "songwriter: MIZULS [Vocals Samiul, Guitars Rafi]",
+      "mixing_engineer: M.K. Khan [Bass Tuli]",
+      // Their act is not credited on this song: a line of their own.
+      "Flute: Guest []",
     ]);
   });
 
   it("is empty without credits", () => {
-    expect(creditDetails([], artists, label)).toEqual({ main: [], played: [] });
+    expect(creditDetails([], artists, label)).toEqual({ main: [] });
   });
 
-  it("links names that have a Corner Room page, and only those (owner, 2026-10-31)", () => {
+  it("links names that have a Corner Room page, by their stage name (owner, 2026-10-31)", () => {
     const out = creditDetails(credits, artists, label, [{ id: "b1", name: "Tuli" }]);
-    expect(out.main.map((m) => m.href)).toEqual(["/artists/a1", null, "/artists/a1", null]);
-    expect(out.played.map((p) => p.href)).toEqual([null, "/bands/b1", "/artists/a1", null]);
+    expect(out.main.map((m) => m.href)).toEqual(["/artists/a1", null, null, "/bands/b1", "/artists/a1", null, null]);
+    const typed = creditDetails([{ id: "x", credit_role: "producer", display_name: "  mizuls " }], artists, label);
+    expect(typed.main[0]).toMatchObject({ name: "MIZULS", href: "/artists/a1" });
   });
 });
 

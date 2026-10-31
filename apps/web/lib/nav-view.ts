@@ -116,8 +116,8 @@ export function menuSections(signedIn: boolean, flags: NavFlags = {}): NavSectio
       label: "Discover",
       items: [
         { href: "/events", label: "Events" },
+        // Bands are artists too (D-ARTIST-UNIFY-01): one Artists list, no separate Bands entry.
         { href: "/artists", label: "Artists" },
-        { href: "/bands", label: "Bands" },
         { href: "/releases", label: "Releases" },
         { href: "/tracks", label: "Tracks" },
         { href: "/store", label: "Store" },

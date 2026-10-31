@@ -58,8 +58,8 @@ async def test_musician_and_custom_credits(client: AsyncClient) -> None:
             ]
         )
         assert cleaned == [
-            {"role_key": "musician", "artist_id": None, "display_name": "Rafi Ahmed", "instrument": "Guitars"},
-            {"role_key": "custom", "artist_id": None, "display_name": "Nadia", "instrument": "Cover art"},
+            {"role_key": "musician", "artist_id": None, "display_name": "Rafi Ahmed", "instrument": "Guitars", "part_of_artist_id": None, "part_of_name": None},
+            {"role_key": "custom", "artist_id": None, "display_name": "Nadia", "instrument": "Cover art", "part_of_artist_id": None, "part_of_name": None},
         ]
         # An "Other" credit needs its role named.
         with pytest.raises(AppError) as err:

@@ -64,7 +64,22 @@ export type StudioCredit = {
   display_name?: string | null;
   instrument?: string | null;
   position?: number;
+  /** D-CREDITS-05: the act a musician played in (another credit on this song). */
+  part_of_artist_id?: string | null;
+  part_of_name?: string | null;
 };
+
+/** What the API takes for one credit (Studio rows carry display-only fields too). */
+function creditBody(c: StudioCredit) {
+  return {
+    role_key: c.role_key,
+    artist_id: c.artist_id || null,
+    display_name: c.display_name || null,
+    instrument: c.instrument || null,
+    part_of_artist_id: c.part_of_artist_id || null,
+    part_of_name: c.part_of_artist_id ? null : c.part_of_name || null,
+  };
+}
 
 export type StudioAudio = {
   version_id: string;
@@ -177,13 +192,13 @@ export function updateStudioTrack(trackId: string, body: Partial<StudioTrack> & 
 }
 
 export function setStudioCredits(trackId: string, credits: StudioCredit[]): Promise<StudioTrack> {
-  const body = credits.map((c) => ({ role_key: c.role_key, artist_id: c.artist_id || null, display_name: c.display_name || null, instrument: c.instrument || null }));
+  const body = credits.map(creditBody);
   return apiFetch<StudioTrack>(`/api/v1/studio/tracks/${trackId}/credits`, { method: "PUT", headers: json, body: JSON.stringify({ credits: body }), retry: false });
 }
 
 /** D-CREDITS-04: the same credits in a new order; live straight away, no review. */
 export function orderStudioCredits(trackId: string, credits: StudioCredit[]): Promise<StudioTrack> {
-  const body = credits.map((c) => ({ role_key: c.role_key, artist_id: c.artist_id || null, display_name: c.display_name || null, instrument: c.instrument || null }));
+  const body = credits.map(creditBody);
   return apiFetch<StudioTrack>(`/api/v1/studio/tracks/${trackId}/credits/order`, { method: "PUT", headers: json, body: JSON.stringify({ credits: body }), retry: false });
 }
 
@@ -231,7 +246,7 @@ export function saveTrackChanges(trackId: string, fields: ChangeFields): Promise
 }
 
 export function saveCreditChanges(trackId: string, credits: StudioCredit[]): Promise<ChangeRequest> {
-  const body = credits.map((c) => ({ role_key: c.role_key, artist_id: c.artist_id || null, display_name: c.display_name || null, instrument: c.instrument || null }));
+  const body = credits.map(creditBody);
   return apiFetch<ChangeRequest>(`/api/v1/studio/tracks/${trackId}/changes/credits`, {
     method: "PUT",
     headers: json,

@@ -94,7 +94,7 @@ describe("every pre-Stage 5 destination is still linked", () => {
       ),
     );
     const old = [
-      "/search", "/organizations", "/events", "/staff/events", "/staff/venues", "/artists", "/bands", "/releases", "/tracks", "/listen",
+      "/search", "/organizations", "/events", "/staff/events", "/staff/venues", "/artists", "/releases", "/tracks", "/listen",
       "/store", "/purchases", "/library", "/playlists", "/history", "/tickets", "/orders",
       "/staff/commerce", "/royalties", "/staff/royalties", "/staff/finance", "/staff/campaigns", "/staff/analytics",
       "/staff/ops", "/staff/audit", "/staff/users", "/staff/organizations", "/account",
@@ -102,6 +102,8 @@ describe("every pre-Stage 5 destination is still linked", () => {
     for (const href of old) expect(linked).toContain(href);
     // No subscriptions (D-COMMERCE-01): the old page stays for past subscribers, out of the menus.
     expect(linked).not.toContain("/subscriptions");
+    // Bands are listed with everyone under Artists (D-ARTIST-UNIFY-01); /bands pages stay.
+    expect(linked).not.toContain("/bands");
   });
 });
 
