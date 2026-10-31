@@ -144,7 +144,7 @@ export function FeaturedCarousel({ slides }: { slides: HomeFeature[] }) {
     <section
       aria-roledescription="carousel"
       aria-label="Featured"
-      className="home-poster-in home-feature w-full max-w-[28rem]"
+      className="home-poster-in home-feature home-feature-size w-full max-w-[28rem]"
       data-paused={paused || undefined}
       // Touch has its own pause (while a finger is on the cover); mouse and pen pause on hover.
       onPointerEnter={(e) => e.pointerType !== "touch" && setHovering(true)}

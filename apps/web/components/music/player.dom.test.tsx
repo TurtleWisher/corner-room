@@ -349,6 +349,41 @@ describe("ListeningRoom", () => {
     expect(audioEl().src).toContain("tok-t3");
   });
 
+  it("floats the lyrics in the front cover's own 3D space, in the carousel and in focus", async () => {
+    api.fetchTrack.mockImplementation(async (id: string) => ({
+      id,
+      title: "Night Bus",
+      status: "RELEASED",
+      lyrics: "one\ntwo\n\nthree\nfour\nfive",
+    }));
+    // A song no earlier test has played: the room keeps each song's lyrics for the page view.
+    const sung = { id: "t-sung", title: "Night Bus", artist: "Kaal Bela" };
+    nav.pathname = "/listen/t-sung";
+    render(
+      <PlayerProvider>
+        <Start track={sung} queue={[QUEUE[0], sung, QUEUE[2]]} />
+        <ListeningRoom />
+      </PlayerProvider>,
+    );
+    await act(async () => screen.getByText("start t-sung").click());
+    await act(async () => setMedia(10, 20));
+    // Off until the listener turns them on.
+    expect(document.querySelector(".lr-lyric")).toBeNull();
+    await act(async () => (await screen.findByRole("button", { name: "Lyrics" })).click());
+    const orbit = document.querySelector('.lr-slot[data-offset="0"] .lr-orbit') as HTMLElement;
+    expect(orbit.getAttribute("aria-hidden")).toBe("true");
+    expect(document.querySelectorAll(".lr-slot:not([data-offset='0']) .lr-orbit")).toHaveLength(0);
+    // Two lines leaving, the line now, the next arriving; the line now is in front of the cover.
+    const ages = [...orbit.querySelectorAll<HTMLElement>(".lr-lyric")].map((l) => l.dataset.age);
+    expect(ages).toEqual(["-2", "-1", "0", "1"]);
+    const now = orbit.querySelector<HTMLElement>('.lr-lyric[data-age="0"]')!;
+    expect(now.style.transform).toMatch(/translate3d\(.*, 110px\)/);
+    await act(async () => screen.getByRole("button", { name: "Open Night Bus in focus" }).click());
+    expect(document.querySelector(".lr-focus-cover .lr-orbit .lr-lyric")).toBeTruthy();
+    api.fetchTrack.mockImplementation(async (id: string) => ({ id, title: "Last Stop", status: "RELEASED" }));
+    window.localStorage.removeItem("cr.room.lyrics");
+  });
+
   it("seeks from the keyboard in 5 second steps", async () => {
     renderRoom();
     await act(async () => screen.getByText("start t2").click());
