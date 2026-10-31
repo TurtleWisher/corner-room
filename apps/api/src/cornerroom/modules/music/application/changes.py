@@ -13,6 +13,7 @@ release two-person rule). Lyrics (D-LYRICS-01) and covers (D-COVER-01) keep thei
 from __future__ import annotations
 
 import copy
+import json
 from typing import Any
 from uuid import UUID
 
@@ -80,6 +81,24 @@ def credit_line(c: dict[str, Any], names: dict[str, str]) -> str:
     return f"{line} ({instrument})" if instrument else line
 
 
+def _credit_dict(c: Credit) -> dict[str, Any]:
+    return {
+        "role_key": c.role_key or c.credit_role,
+        "artist_id": str(c.artist_id) if c.artist_id else None,
+        "display_name": c.display_name,
+        "instrument": c.instrument,
+    }
+
+
+def _credit_key(c: dict[str, Any]) -> str:
+    return json.dumps(c, sort_keys=True)
+
+
+def same_credits_new_order(new: list[dict[str, Any]], current: list[dict[str, Any]]) -> bool:
+    """The same credits, only listed in another order (D-CREDITS-04)."""
+    return new != current and sorted(map(_credit_key, new)) == sorted(map(_credit_key, current))
+
+
 def credits_only(changes: dict[str, Any]) -> bool:
     """A request that changes nothing but songs' credits (D-CHANGES-02)."""
     if changes.get("release"):
@@ -123,21 +142,17 @@ class ChangeRequestService:
             )
         ).scalar_one_or_none()
 
+    async def _live_credit_rows(self, track_id: UUID) -> list[Credit]:
+        return list(
+            (
+                await self.session.execute(
+                    select(Credit).where(Credit.track_id == track_id, Credit.deleted_at.is_(None)).order_by(Credit.position, Credit.created_at)
+                )
+            ).scalars().all()
+        )
+
     async def _current_credits(self, track_id: UUID) -> list[dict[str, Any]]:
-        rows = (
-            await self.session.execute(
-                select(Credit).where(Credit.track_id == track_id, Credit.deleted_at.is_(None)).order_by(Credit.position, Credit.created_at)
-            )
-        ).scalars().all()
-        return [
-            {
-                "role_key": c.role_key or c.credit_role,
-                "artist_id": str(c.artist_id) if c.artist_id else None,
-                "display_name": c.display_name,
-                "instrument": c.instrument,
-            }
-            for c in rows
-        ]
+        return [_credit_dict(c) for c in await self._live_credit_rows(track_id)]
 
     async def view(self, req: ReleaseChangeRequest, release: Release) -> dict[str, Any]:
         """The request with every change old next to new, for Studio and for staff."""
@@ -310,6 +325,44 @@ class ChangeRequestService:
         self._tidy(changes, track.id)
         await self._save(ctx, req, release, role, changes, "credits")
         return await self.view(req, release)
+
+    async def order_track_credits(self, ctx: AuthContext, track_id: UUID, credits: list[dict[str, Any]]) -> Track:
+        """Put a song's credits in a new order (owner, 2026-10-31, D-CREDITS-04). Only the order may
+        change, so it goes live straight away with no staff review, on drafts and on music that is
+        out. Anything else in the list (a name, a role, a credit added or removed) is refused here
+        and goes through the change request as usual."""
+        track, release, _role = await self.studio._track(ctx, track_id)
+        cleaned = await self.studio.clean_credits(credits)
+        rows = await self._live_credit_rows(track.id)
+        current = [_credit_dict(c) for c in rows]
+        if cleaned == current:
+            return track
+        if not same_credits_new_order(cleaned, current):
+            raise AppError(
+                "NOT_ONLY_ORDER", "Only the order of the credits can change here", 409,
+                "Reload the page, then save other credit changes for review",
+            )
+        waiting: dict[str, list[Credit]] = {}
+        for row in rows:
+            waiting.setdefault(_credit_key(_credit_dict(row)), []).append(row)
+        for position, credit in enumerate(cleaned):
+            waiting[_credit_key(credit)].pop(0).position = position
+        await self.session.flush()
+        req = await self.live_request(release.id)
+        if req is not None and "credits" in (((req.changes or {}).get("tracks") or {}).get(str(track.id)) or {}):
+            # Edits waiting for this song's credits are replaced by the list the artist just put in order.
+            req, release, role = await self._editable(ctx, release.id)
+            changes = copy.deepcopy(req.changes or {})
+            self._track_entry(changes, track.id).pop("credits", None)
+            self._tidy(changes, track.id)
+            await self._save(ctx, req, release, role, changes, "credits")
+        await self.audit.record_from_auth(
+            ctx, action="track.credits_reordered", entity_type="Track", entity_id=track.id,
+            new_state={"credits": [f"{c['role_key']}:{c.get('artist_id') or c.get('display_name')}" for c in cleaned]},
+            organization_id=release.primary_org_id,
+        )
+        await self.studio._event(METADATA_CORRECTED, "Track", track.id, {"credits_reordered": True}, ctx, release.primary_org_id)
+        return track
 
     async def attach_audio(self, ctx: AuthContext, track_id: UUID, version: TrackVersion) -> None:
         """A replacement audio file for released music: held in the change request (Studio calls

@@ -181,7 +181,13 @@ export function setStudioCredits(trackId: string, credits: StudioCredit[]): Prom
   return apiFetch<StudioTrack>(`/api/v1/studio/tracks/${trackId}/credits`, { method: "PUT", headers: json, body: JSON.stringify({ credits: body }), retry: false });
 }
 
-export type ChangeDiff = { scope: string; field: string; before: string; after: string };
+/** D-CREDITS-04: the same credits in a new order; live straight away, no review. */
+export function orderStudioCredits(trackId: string, credits: StudioCredit[]): Promise<StudioTrack> {
+  const body = credits.map((c) => ({ role_key: c.role_key, artist_id: c.artist_id || null, display_name: c.display_name || null, instrument: c.instrument || null }));
+  return apiFetch<StudioTrack>(`/api/v1/studio/tracks/${trackId}/credits/order`, { method: "PUT", headers: json, body: JSON.stringify({ credits: body }), retry: false });
+}
+
+export type ChangeDiff ={ scope: string; field: string; before: string; after: string };
 
 /** Changes to approved or released music (D-CHANGES-01): checked values and old next to new. */
 export type ChangeRequest = {
