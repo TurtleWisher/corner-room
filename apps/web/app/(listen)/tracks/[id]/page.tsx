@@ -251,6 +251,7 @@ export default function TrackPage() {
                   size="lg"
                   playFrom={yourMusic}
                   releaseIds={track.release_ids ?? []}
+                  opensRoom
                 />
               )}
             </div>

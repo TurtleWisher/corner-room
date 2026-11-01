@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PlayableTrackRecord } from "@/lib/api";
 
-import { canModerateMusic, creditDetails, creditLink, creditPerson, creditPicture, playQueue } from "./music-view";
+import { canModerateMusic, creditDetails, creditLink, creditPerson, creditPicture, playQueue, releaseHeroActions } from "./music-view";
 
 function rec(id: string, ok = true): PlayableTrackRecord {
   return { id, title: `T-${id}`, catalog_playable: ok, audio_deliverable: ok, duration_ms: 1000, reason: ok ? null : "NO_AUDIO" } as PlayableTrackRecord;
@@ -170,5 +170,25 @@ describe("creditLink", () => {
     expect(creditLink({ display_name: "Rafi" }, artists, bands)).toBeNull();
     expect(creditLink({ artist_id: "hidden" }, artists, bands)).toBeNull();
     expect(creditLink({}, artists, bands)).toBeNull();
+  });
+});
+
+describe("beside a release's cover (D-SINGLE-01)", () => {
+  it("a single has no second Play or Sign in, and shows its song's credits", () => {
+    expect(releaseHeroActions({ trackCount: 1, signedIn: true, ownsOne: true, onSale: false })).toEqual({ play: false, signIn: false, price: false, notOnSale: false, credits: true });
+    expect(releaseHeroActions({ trackCount: 1, signedIn: false, ownsOne: false, onSale: true })).toMatchObject({ play: false, signIn: false, price: true, credits: true });
+  });
+
+  it("a single still offers to buy it", () => {
+    expect(releaseHeroActions({ trackCount: 1, signedIn: true, ownsOne: false, onSale: true })).toMatchObject({ play: false, price: true, notOnSale: false });
+  });
+
+  it("albums and EPs keep Play from the top and the visitor's Sign in", () => {
+    expect(releaseHeroActions({ trackCount: 5, signedIn: true, ownsOne: true, onSale: false })).toMatchObject({ play: true, credits: false });
+    expect(releaseHeroActions({ trackCount: 5, signedIn: false, ownsOne: false, onSale: false })).toMatchObject({ signIn: true, play: false });
+  });
+
+  it("says when there is nothing to play or buy yet", () => {
+    expect(releaseHeroActions({ trackCount: 1, signedIn: true, ownsOne: false, onSale: false }).notOnSale).toBe(true);
   });
 });
