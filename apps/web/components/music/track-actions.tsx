@@ -11,7 +11,8 @@ import { addLibraryItem, addPlaylistItem, createPlaylist, fetchPlaylistItems, fe
 import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 
-const ICON_BUTTON = "cr-focus inline-flex size-10 items-center justify-center text-fg-muted hover:text-fg disabled:opacity-50";
+// The room's control look (app/styles/player-controls.css): a glass plate rises on hover, lit when on.
+const ICON_BUTTON = "cr-focus cr-pctl inline-flex size-10 items-center justify-center";
 
 function SaveToLibrary({ trackId, title }: { trackId: string; title: string }) {
   const [state, setState] = useState<"idle" | "busy" | "saved" | "error">("idle");
@@ -32,9 +33,10 @@ function SaveToLibrary({ trackId, title }: { trackId: string; title: string }) {
       type="button"
       onClick={() => void save()}
       disabled={state === "busy" || state === "saved"}
+      data-on={state === "saved" ? "" : undefined}
       aria-label={state === "saved" ? `${title} is in your library` : state === "error" ? `Not saved. Try saving ${title} again` : `Save ${title} to your library`}
       title={state === "saved" ? "In your library" : state === "error" ? "Not saved, try again" : "Save to library"}
-      className={cn(ICON_BUTTON, state === "saved" && "text-success disabled:opacity-100", state === "error" && "text-danger")}
+      className={cn(ICON_BUTTON, state === "error" && "text-danger")}
     >
       {state === "busy" ? (
         <Loader2 aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />
@@ -85,7 +87,7 @@ function PlaylistPanel({ trackId, onDone }: { trackId: string; onDone: (message:
   }
 
   return (
-    <div className="cr-glass-card absolute bottom-full right-0 z-10 mb-2 w-64 border border-line p-3 text-left">
+    <div className="cr-cut cr-cut-sm cr-pmenu absolute bottom-full right-0 z-10 mb-2 w-64 p-3 text-left">
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-fg-muted">Add to playlist</p>
       {lists.status === "loading" ? (
         <p className="mt-2 text-sm text-fg-muted">Loading your playlists</p>
@@ -102,7 +104,7 @@ function PlaylistPanel({ trackId, onDone }: { trackId: string; onDone: (message:
                 type="button"
                 disabled={busy !== null}
                 onClick={() => void addTo(l.id, l.title)}
-                className="cr-focus flex w-full items-center justify-between gap-2 px-2 py-1.5 text-sm text-fg hover:bg-[var(--cr-surface-2,transparent)] disabled:opacity-50"
+                className="cr-focus flex w-full items-center justify-between gap-2 px-2 py-1.5 text-sm text-fg hover:bg-[var(--cr-surface-overlay)] hover:text-highlight disabled:opacity-50"
               >
                 <span className="truncate">{l.title}</span>
                 {busy === l.id ? <Loader2 aria-hidden="true" className="size-3.5 animate-spin motion-reduce:animate-none" /> : null}
@@ -125,7 +127,7 @@ function PlaylistPanel({ trackId, onDone }: { trackId: string; onDone: (message:
           maxLength={120}
           placeholder="New playlist"
           aria-label="New playlist name"
-          className="cr-focus min-w-0 flex-1 border border-line bg-transparent px-2 py-1 text-sm text-fg"
+          className="cr-focus min-w-0 flex-1 border border-line bg-[var(--cr-surface-sunken)] px-2 py-1 text-sm text-fg placeholder:text-fg-muted"
         />
         <button type="submit" disabled={busy !== null || !name.trim()} className="cr-focus px-2 text-sm font-semibold text-link disabled:opacity-50">
           {busy === "new" ? "Adding" : "Create"}
@@ -172,6 +174,7 @@ function AddToPlaylist({ trackId, title }: { trackId: string; title: string }) {
         aria-controls={open ? panelId : undefined}
         aria-label={`Add ${title} to a playlist`}
         title="Add to playlist"
+        data-on={open ? "" : undefined}
         className={ICON_BUTTON}
       >
         <ListPlus aria-hidden="true" className="size-4" />
