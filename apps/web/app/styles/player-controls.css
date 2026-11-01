@@ -96,6 +96,19 @@
 .cr-pctl:disabled {
   opacity: 0.35;
 }
+/* Done and switched on (saved to the library): lit, not dimmed, though it can't be pressed again. */
+.cr-pctl[data-on]:disabled {
+  opacity: 1;
+}
+
+/* Menus that open from the controls (add to playlist): a solid, frosted panel that reads over
+   anything behind it, with the cut corner and a lit edge. */
+.cr-pmenu {
+  --cut-fill: linear-gradient(160deg, rgb(187 237 254 / 0.07), rgb(187 237 254 / 0) 60%), rgb(18 15 38 / 0.96);
+  --cut-border: var(--cr-glass-edge-hover);
+  --cut-blur: blur(18px) saturate(1.35);
+  box-shadow: 0 28px 56px -18px rgb(0 0 0 / 0.85);
+}
 
 /* The bar's scrubber: the listening room's thin Sky line and square thumb, with a soft glow. */
 .cr-prange {
