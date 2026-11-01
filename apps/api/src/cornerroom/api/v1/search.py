@@ -24,6 +24,7 @@ class SearchHitOut(BaseModel):
     organization_id: UUID | None
     visibility: str
     route: str | None
+    picture: UUID | None = None
 
 
 class SearchPage(BaseModel):
@@ -65,6 +66,7 @@ async def search(
                 organization_id=hit.organization_id,
                 visibility=hit.visibility,
                 route=hit.route,
+                picture=hit.picture,
             )
             for hit in hits
         ],

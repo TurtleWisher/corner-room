@@ -54,7 +54,7 @@ import {
   type RepeatMode,
 } from "@/lib/player-model";
 import { coverUrl } from "@/lib/cover-view";
-import { DOCK_SETTLE_MS, dockStaysUp, movedEnough } from "@/lib/player-dock-view";
+import { DOCK_IDLE_MS, atPageEdge, dockLook, dockTravel, pointerWantsDock, settleDock, stepDock } from "@/lib/player-dock-view";
 import { cn } from "@/lib/utils";
 
 export type PlayerTrack = { id: string; title: string; artist?: string | null };
@@ -817,43 +817,82 @@ function BarProgress({ label }: { label: string }) {
  * page has one; hidden inside the room, which has its own.
  */
 /**
- * The bar steps aside while you browse (owner, 2026-11-01, D-MOTION-03): scrolling or moving the
- * pointer tucks it down, and it rises once things are still for a moment. Near the bottom edge, over
- * the bar, or with focus in it, it stays. Writes one data attribute, so React never re-renders.
+ * The bar follows the scroll (owner, 2026-11-01, D-MOTION-04; maths in lib/player-dock-view.ts):
+ * reading down fades and slides it away in step with the scroll, scrolling up brings it back, and a
+ * stop halfway settles to the nearer end. It shows at the top and end of the page, while a control
+ * in it has focus or the pointer is over it, and when a mouse nears the bottom edge. One passive
+ * scroll listener and one animation frame write transform and opacity, so React never re-renders.
  */
-function useBrowseTuck(ref: React.RefObject<HTMLElement | null>, enabled: boolean) {
+function useScrollDock(ref: React.RefObject<HTMLElement | null>, enabled: boolean) {
   useEffect(() => {
     const bar = ref.current;
     if (!enabled || !bar) return;
-    let timer = 0;
-    let last: { x: number; y: number } | null = null;
-    const show = () => {
-      window.clearTimeout(timer);
-      delete bar.dataset.tucked;
+    const still = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+    let offset = 0;
+    let lastY = window.scrollY;
+    let frame = 0;
+    let idle = 0;
+    let settling = false;
+    let size = { travel: 0, distance: 0 };
+    const measure = () => {
+      // Out of sight means past its own height plus the phone tab bar it sits on (`bottom`).
+      const drop = parseFloat(getComputedStyle(bar).bottom) || 0;
+      size = { travel: dockTravel(bar.offsetHeight), distance: bar.offsetHeight + drop + 8 };
     };
     const engaged = () => bar.matches(":hover") || bar.contains(document.activeElement);
-    const activity = (pointerY: number | null) => {
-      if (dockStaysUp({ pointerY, viewportHeight: window.innerHeight, engaged: engaged() })) return show();
-      bar.dataset.tucked = "";
-      window.clearTimeout(timer);
-      timer = window.setTimeout(show, DOCK_SETTLE_MS);
+    const paint = () => {
+      const look = dockLook(offset, size.travel, size.distance, Boolean(still?.matches));
+      if (settling && !Boolean(still?.matches)) bar.dataset.settling = "";
+      else delete bar.dataset.settling;
+      bar.style.transform = look.y ? `translate3d(0, ${look.y}px, 0)` : "";
+      bar.style.opacity = look.opacity < 1 ? String(look.opacity) : "";
+      if (look.hidden) bar.dataset.tucked = "";
+      else delete bar.dataset.tucked;
     };
-    const onScroll = () => activity(null);
+    const settleTo = (next: number) => {
+      if (next === offset) return;
+      offset = next;
+      settling = true;
+      paint();
+    };
+    const onFrame = () => {
+      frame = 0;
+      const y = window.scrollY;
+      const delta = y - lastY;
+      lastY = y;
+      const atEdge = atPageEdge(y, window.innerHeight, document.documentElement.scrollHeight);
+      const next = stepDock({ offset, delta, travel: size.travel, atEdge, engaged: engaged() });
+      if (next === offset) return;
+      // A jump to an edge (the end of the page, or a new page at the top) eases in; the rest follows the finger.
+      settling = next === 0 && (atEdge || Math.abs(delta) > size.travel);
+      offset = next;
+      paint();
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(onFrame);
+      window.clearTimeout(idle);
+      idle = window.setTimeout(() => settleTo(settleDock(offset, size.travel)), DOCK_IDLE_MS);
+    };
     const onMove = (e: PointerEvent) => {
-      const at = { x: e.clientX, y: e.clientY };
-      const moved = movedEnough(last, at);
-      last = at;
-      if (moved) activity(e.clientY);
+      if (e.pointerType === "mouse" && offset > 0 && pointerWantsDock(e.clientY, window.innerHeight)) settleTo(0);
     };
+    const onFocus = () => settleTo(0);
+    measure();
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", measure, { passive: true });
     window.addEventListener("pointermove", onMove, { passive: true });
-    bar.addEventListener("focusin", show);
+    bar.addEventListener("focusin", onFocus);
     return () => {
       window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", measure);
       window.removeEventListener("pointermove", onMove);
-      bar.removeEventListener("focusin", show);
-      window.clearTimeout(timer);
+      bar.removeEventListener("focusin", onFocus);
+      cancelAnimationFrame(frame);
+      window.clearTimeout(idle);
+      bar.style.transform = "";
+      bar.style.opacity = "";
       delete bar.dataset.tucked;
+      delete bar.dataset.settling;
     };
   }, [ref, enabled]);
 }
@@ -863,7 +902,7 @@ export function PlayerBar() {
   const pathname = usePathname();
   const dock = useRef<HTMLElement>(null);
   const shown = Boolean(p.track) && !isRoomPath(pathname);
-  useBrowseTuck(dock, shown);
+  useScrollDock(dock, shown);
   if (!p.track || isRoomPath(pathname)) return null;
   const playing = p.status === "playing";
   const label = p.track.title || "Track";

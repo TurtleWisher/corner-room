@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -16,12 +16,14 @@ from cornerroom.kernel.events import DomainEvent
 from cornerroom.kernel.pagination import clamp_limit, decode_cursor, encode_cursor
 from cornerroom.modules.artists.application.service import ArtistService
 from cornerroom.modules.artists.application.team import acting_owner
+from cornerroom.modules.artists.domain.models import Artist, Band
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.identity.application.rate_limit import enforce_auth_rate_limit
 from cornerroom.modules.search.application.indexer import SearchIndexer
 from cornerroom.modules.search.domain.models import SearchDocument
 from cornerroom.modules.search.domain.visibility import (
     ENTITY_ARTIST,
+    ENTITY_BAND,
     GUEST_ENTITY_TYPES,
     SCHEMA_ENTITY_TYPES,
     STAFF_HIT_AUTHZ,
@@ -43,6 +45,8 @@ class SearchHit:
     organization_id: UUID | None
     visibility: str
     route: str | None
+    # An artist's or band's approved picture (its media asset id), so suggestions can show it.
+    picture: UUID | None = None
 
 
 def _like_pattern(q: str) -> str:
@@ -131,11 +135,17 @@ class SearchService:
                 | ((rank == cursor_rank) & (SearchDocument.id < cursor_id))
             )
         rows = list((await self.session.execute(stmt.limit(size + 20))).all())
+        acts = await self._acts(rows)
+        seen: set[tuple[str, UUID]] = set()
         scored: list[tuple[SearchHit, float]] = []
         for row, row_rank in rows:
+            hit = self._act_hit(row, acts)
+            if hit is None or (hit.entity_type, hit.entity_id) in seen:
+                continue
             if not await self._visible(ctx, row):
                 continue
-            scored.append((self._hit(row), float(row_rank or 0.0)))
+            seen.add((hit.entity_type, hit.entity_id))
+            scored.append((hit, float(row_rank or 0.0)))
             if len(scored) >= size + 1:
                 break
         next_cursor = None
@@ -144,6 +154,42 @@ class SearchService:
             next_cursor = encode_cursor(str(last_rank), last_hit.entity_id)
             scored = scored[:size]
         return [hit for hit, _ in scored], next_cursor
+
+    async def _acts(self, rows: list) -> dict[tuple[str, UUID], Artist | Band]:
+        """The live artist and band rows behind the hits, in one read each (not the index's copy)."""
+        artist_ids = {row.entity_id for row, _ in rows if row.entity_type == ENTITY_ARTIST}
+        band_ids = {row.entity_id for row, _ in rows if row.entity_type == ENTITY_BAND}
+        acts: dict[tuple[str, UUID], Artist | Band] = {}
+        for entity_type, model, ids in ((ENTITY_ARTIST, Artist, artist_ids), (ENTITY_BAND, Band, band_ids)):
+            if not ids:
+                continue
+            found = await self.session.execute(
+                select(model).where(model.id.in_(ids), model.deleted_at.is_(None))
+            )
+            for act in found.scalars():
+                acts[(entity_type, act.id)] = act
+        return acts
+
+    def _act_hit(
+        self, row: SearchDocument, acts: dict[tuple[str, UUID], Artist | Band]
+    ) -> SearchHit | None:
+        """One act appears once, with its picture (owner, 2026-11-01). A document whose artist or
+        band is gone (a solo profile moved to a band, D-BAND-01) is skipped; a band's own artist row
+        (D-ARTIST-UNIFY-01) is shown as the band."""
+        hit = self._hit(row)
+        if row.entity_type not in (ENTITY_ARTIST, ENTITY_BAND):
+            return hit
+        act = acts.get((row.entity_type, row.entity_id))
+        if act is None:
+            return None
+        if isinstance(act, Artist) and act.kind == "BAND":
+            return replace(
+                hit,
+                entity_type=ENTITY_BAND,
+                route=route_for(ENTITY_BAND, row.entity_id),
+                picture=act.portrait_asset_id,
+            )
+        return replace(hit, picture=act.portrait_asset_id)
 
     def _hit(self, row: SearchDocument) -> SearchHit:
         return SearchHit(
