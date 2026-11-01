@@ -186,30 +186,15 @@
   }
 }
 
-/* Player bar steps aside while you browse (owner, 2026-11-01): it slides down while the page
-   scrolls or the pointer moves, and rises again once things are still (components/music/player.tsx
-   sets data-tucked). It never tucks while the pointer is near it or a control in it has focus. */
-.cr-player-dock {
-  --dock-drop: 0px;
+/* Player bar follows the scroll (owner, 2026-11-01, D-MOTION-04): components/music/player.tsx
+   writes its transform and opacity each frame from lib/player-dock-view.ts, in step with the scroll.
+   Only the settle to fully shown or hidden after the scroll stops is a transition. Fully hidden, it
+   lets clicks through. Reduced motion: it only fades (the component never moves it). */
+.cr-player-dock[data-settling] {
   transition:
-    translate 480ms var(--ease-corner),
-    opacity 320ms var(--ease-corner);
-}
-@media (max-width: 1023.98px) {
-  body:has([data-tab-bar]) .cr-player-dock {
-    --dock-drop: calc(4rem + env(safe-area-inset-bottom));
-  }
+    transform 260ms var(--ease-corner),
+    opacity 260ms var(--ease-corner);
 }
 .cr-player-dock[data-tucked] {
-  translate: 0 calc(100% + var(--dock-drop) + 0.5rem);
-  opacity: 0;
   pointer-events: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .cr-player-dock {
-    transition: opacity var(--cr-dur-component) linear;
-  }
-  .cr-player-dock[data-tucked] {
-    translate: none;
-  }
 }

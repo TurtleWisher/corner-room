@@ -10,6 +10,7 @@ import {
   keepApiSearchOrder,
   sanitizeSearchEntityType,
   searchEmptyKind,
+  searchHitPicture,
   searchResultHref,
 } from "./search-view";
 
@@ -96,5 +97,18 @@ describe("header search (D-MOTION-03)", () => {
     expect(isSearchShortcut("/", { tagName: "input" })).toBe(false);
     expect(isSearchShortcut("/", { tagName: "DIV", isContentEditable: true })).toBe(false);
     expect(isSearchShortcut("k", { tagName: "BODY" })).toBe(false);
+  });
+});
+
+describe("searchHitPicture (owner, 2026-11-01)", () => {
+  it("uses an artist's or band's approved picture", () => {
+    expect(searchHitPicture({ entity_type: "ARTIST", entity_id: "a1", picture: "p1" })).toEqual({ artist: "a1", picture: "p1" });
+    expect(searchHitPicture({ entity_type: "BAND", entity_id: "b1", picture: "p2" })).toEqual({ band: "b1", picture: "p2" });
+  });
+
+  it("falls back to initials when there is no picture or it is not an act", () => {
+    expect(searchHitPicture({ entity_type: "ARTIST", entity_id: "a1", picture: null })).toBeNull();
+    expect(searchHitPicture({ entity_type: "BAND", entity_id: "b1" })).toBeNull();
+    expect(searchHitPicture({ entity_type: "TRACK", entity_id: "t1", picture: "p3" })).toBeNull();
   });
 });

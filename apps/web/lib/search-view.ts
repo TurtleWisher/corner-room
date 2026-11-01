@@ -106,6 +106,17 @@ export function searchSuggestions<T extends { entity_type: string; entity_id: st
   return out;
 }
 
+/**
+ * Where an artist or band hit's picture comes from (owner, 2026-11-01): its approved picture, as a
+ * cover source. Null for other hits and for acts with no picture, which show their initials.
+ */
+export function searchHitPicture(hit: { entity_type: string; entity_id: string; picture?: string | null }): { artist: string; picture: string } | { band: string; picture: string } | null {
+  if (!hit.picture) return null;
+  if (hit.entity_type === "ARTIST") return { artist: hit.entity_id, picture: hit.picture };
+  if (hit.entity_type === "BAND") return { band: hit.entity_id, picture: hit.picture };
+  return null;
+}
+
 /** "/" opens the header search, unless the person is already typing somewhere. */
 export function isSearchShortcut(key: string, target: { tagName?: string; isContentEditable?: boolean } | null): boolean {
   if (key !== "/") return false;

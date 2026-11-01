@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, true, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.infra.errors import NotFoundError
@@ -114,6 +114,14 @@ class SearchIndexer:
         await self.session.flush()
         return row
 
+    async def hide(self, entity_type: str, entity_id: UUID) -> None:
+        """A source that is gone (deleted, or moved to a band) leaves no public document behind."""
+        await self.session.execute(
+            update(SearchDocument)
+            .where(SearchDocument.entity_type == entity_type, SearchDocument.entity_id == entity_id)
+            .values(visibility=VISIBILITY_UNAVAILABLE, indexed_at=self.clock.now())
+        )
+
     async def ingest_event(self, event: DomainEvent) -> SearchDocument | None:
         if event.event_type not in SEARCH_EVENT_TYPES:
             return None
@@ -149,7 +157,12 @@ class SearchIndexer:
         try:
             artist = await self.artists.get_artist_row(artist_id)
         except NotFoundError:
+            await self.hide(ENTITY_ARTIST, artist_id)
             return None
+        if artist.kind == "BAND":
+            # A band's artist row mirrors the band, which is indexed as the band (D-ARTIST-UNIFY-01).
+            await self.hide(ENTITY_ARTIST, artist_id)
+            return await self.index_band(artist_id)
         # legal_name is excluded (PII / not public copy).
         return await self.upsert(
             entity_type=ENTITY_ARTIST,
@@ -166,6 +179,7 @@ class SearchIndexer:
         try:
             band = await self.artists.get_band_row(band_id)
         except NotFoundError:
+            await self.hide(ENTITY_BAND, band_id)
             return None
         return await self.upsert(
             entity_type=ENTITY_BAND,
@@ -182,6 +196,7 @@ class SearchIndexer:
         try:
             track = await self.music.get_track_row(track_id)
         except NotFoundError:
+            await self.hide(ENTITY_TRACK, track_id)
             return None
         # ISRC is a catalog identifier, not money/KYC; still omit to keep index public-copy only.
         return await self.upsert(
@@ -199,6 +214,7 @@ class SearchIndexer:
         try:
             release = await self.music.get_release_row(release_id)
         except NotFoundError:
+            await self.hide(ENTITY_RELEASE, release_id)
             return None
         return await self.upsert(
             entity_type=ENTITY_RELEASE,
@@ -215,6 +231,7 @@ class SearchIndexer:
         try:
             event = await self.events.get_event_row(event_id)
         except NotFoundError:
+            await self.hide(ENTITY_EVENT, event_id)
             return None
         return await self.upsert(
             entity_type=ENTITY_EVENT,
@@ -232,6 +249,7 @@ class SearchIndexer:
         try:
             venue = await self.events.get_venue_row(venue_id)
         except NotFoundError:
+            await self.hide(ENTITY_VENUE, venue_id)
             return None
         return await self.upsert(
             entity_type=ENTITY_VENUE,
@@ -245,24 +263,26 @@ class SearchIndexer:
         )
 
     async def rebuild(self) -> int:
-        """Full rebuild for gaps (no ArtistUpdated / VenueActivated events)."""
+        """Full rebuild for gaps (no ArtistUpdated / VenueActivated events). Documents whose source
+        no longer projects (deleted, or a solo profile moved to a band) are hidden."""
         count = 0
-        for artist_id in await self.artists.list_ids_for_projection():
-            if await self.index_artist(artist_id):
-                count += 1
-        for band_id in await self.artists.list_ids_for_projection_bands():
-            if await self.index_band(band_id):
-                count += 1
-        for track_id in await self.music.list_ids_for_projection_tracks():
-            if await self.index_track(track_id):
-                count += 1
-        for release_id in await self.music.list_ids_for_projection_releases():
-            if await self.index_release(release_id):
-                count += 1
-        for event_id in await self.events.list_ids_for_projection_events():
-            if await self.index_event(event_id):
-                count += 1
-        for venue_id in await self.events.list_ids_for_projection_venues():
-            if await self.index_venue(venue_id):
-                count += 1
+        for entity_type, ids, index in (
+            (ENTITY_ARTIST, await self.artists.list_ids_for_projection(), self.index_artist),
+            (ENTITY_BAND, await self.artists.list_ids_for_projection_bands(), self.index_band),
+            (ENTITY_TRACK, await self.music.list_ids_for_projection_tracks(), self.index_track),
+            (ENTITY_RELEASE, await self.music.list_ids_for_projection_releases(), self.index_release),
+            (ENTITY_EVENT, await self.events.list_ids_for_projection_events(), self.index_event),
+            (ENTITY_VENUE, await self.events.list_ids_for_projection_venues(), self.index_venue),
+        ):
+            for entity_id in ids:
+                if await index(entity_id):
+                    count += 1
+            await self.session.execute(
+                update(SearchDocument)
+                .where(
+                    SearchDocument.entity_type == entity_type,
+                    SearchDocument.entity_id.not_in(ids) if ids else true(),
+                )
+                .values(visibility=VISIBILITY_UNAVAILABLE)
+            )
         return count

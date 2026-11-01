@@ -12,6 +12,8 @@ export type SearchHitRecord = {
   organization_id: string | null;
   visibility: string;
   route: string | null;
+  /** An artist's or band's approved picture (media asset id); absent from older API builds. */
+  picture?: string | null;
 };
 
 export async function fetchSearch(params: {
