@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { carouselWindow, edgeZone, isVisibleOffset, leaveTarget, nowPlayingAnnouncement, queuePositionLabel, roomEyebrow, swipeDirection } from "./listening-room-view";
+import { carouselWindow, edgeZone, isVisibleOffset, leaveTarget, nowPlayingAnnouncement, queuePositionLabel, roomEyebrow, swipeDirection, titleAtoms } from "./listening-room-view";
 
 describe("carousel", () => {
   const q = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -87,3 +87,28 @@ describe("roomEyebrow", () => {
     expect(roomEyebrow(null, "Chaya Pore", null)).toBe("Listening room");
   });
 });
+
+describe("title pieces (D-ROOM-03)", () => {
+  it("splits Latin titles into letters, keeping spaces as gaps", () => {
+    const atoms = titleAtoms("Chaya Pore");
+    expect(atoms.map((a) => a.text).join("")).toBe("Chaya Pore");
+    expect(atoms.filter((a) => a.space)).toHaveLength(1);
+    expect(atoms[0].delayMs).toBe(0);
+    expect(atoms[6].delayMs).toBe(5 * 28);
+  });
+
+  it("keeps Bangla words whole so joined letters stay joined", () => {
+    expect(titleAtoms("ছায়া পড়ে").map((a) => a.text)).toEqual(["ছায়া", " ", "পড়ে"]);
+  });
+
+  it("scatters the same way every time, a little", () => {
+    const a = titleAtoms("Night Bus");
+    expect(titleAtoms("Night Bus")).toEqual(a);
+    for (const atom of a) {
+      expect(Math.abs(atom.dx)).toBeLessThanOrEqual(0.12);
+      expect(Math.abs(atom.dy)).toBeLessThanOrEqual(0.22);
+      expect(Math.abs(atom.turn)).toBeLessThanOrEqual(14);
+    }
+  });
+});
+

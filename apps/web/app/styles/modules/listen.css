@@ -369,6 +369,69 @@
   }
 }
 
+/* The title is the link to the song page (D-ROOM-03). Pointed at or focused, it breaks into
+   charged pieces: each scatters a little and settles back in turn, then hums in place with a
+   cool glow while the pointer stays. Transform and opacity only on the pieces; one text glow on
+   the link. */
+[data-module="music"] .lr-title-link {
+  color: inherit;
+  text-decoration: none;
+  border-radius: 0.25rem;
+  transition: text-shadow 420ms var(--lr-ease), color 420ms var(--lr-ease);
+}
+[data-module="music"] .lr-atom {
+  display: inline-block;
+}
+[data-module="music"] .lr-title-link:hover,
+[data-module="music"] .lr-title-link:focus-visible {
+  color: var(--cr-highlight);
+  text-shadow:
+    0 0 0.35em rgb(187 237 254 / 0.55),
+    0 0 1.2em rgb(120 200 255 / 0.35);
+}
+[data-module="music"] .lr-title-link:hover .lr-atom,
+[data-module="music"] .lr-title-link:focus-visible .lr-atom {
+  animation:
+    lr-atomize 640ms var(--lr-ease) var(--delay, 0ms) both,
+    lr-charge 1.4s ease-in-out calc(var(--delay, 0ms) + 640ms) infinite alternate;
+}
+[data-module="music"] .lr-title-link:active .lr-atom {
+  animation: lr-gather 180ms ease-out both;
+}
+@keyframes lr-atomize {
+  0% {
+    transform: none;
+    opacity: 1;
+  }
+  38% {
+    transform: translate(var(--dx), var(--dy)) rotate(var(--turn)) scale(0.86);
+    opacity: 0.55;
+  }
+  70% {
+    transform: translate(calc(var(--dx) * -0.25), calc(var(--dy) * -0.25)) rotate(calc(var(--turn) * -0.3)) scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes lr-charge {
+  from {
+    transform: translate(calc(var(--dx) * 0.18), calc(var(--dy) * 0.12));
+    opacity: 1;
+  }
+  to {
+    transform: translate(calc(var(--dx) * -0.18), calc(var(--dy) * -0.12)) scale(1.03);
+    opacity: 0.82;
+  }
+}
+@keyframes lr-gather {
+  to {
+    transform: scale(0.94);
+  }
+}
+
 /* The bar: transport, what is playing with its scrubber, then volume and focus. */
 [data-module="music"] .lr-bar {
   display: grid;
@@ -789,6 +852,7 @@
   [data-module="music"] .lr-stage::before,
   [data-module="music"] .lr-card,
   [data-module="music"] .lr-title,
+  [data-module="music"] .lr-title-link .lr-atom,
   [data-module="music"] .lr-focus,
   [data-module="music"] .lr-focus-cover,
   [data-module="music"] .lr-focus-art,

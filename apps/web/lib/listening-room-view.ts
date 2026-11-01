@@ -82,3 +82,39 @@ export function roomEyebrow(
   const from = source && !sameAsSong ? `From ${source}` : "Listening room";
   return [from, position].filter(Boolean).join(" · ");
 }
+
+/*
+ * The title is the way to the song page (owner, 2026-11-01, D-ROOM-03): pointing at it breaks it
+ * into charged pieces that scatter a little and settle back, humming while the pointer stays.
+ */
+
+/** One piece of the title: its text and where it drifts to (em and degrees), with its delay. */
+export type TitleAtom = { text: string; space: boolean; dx: number; dy: number; turn: number; delayMs: number };
+
+/** Plain Latin letters split one by one; other scripts (Bangla) stay whole words, because
+ * splitting them would pull joined letters apart. */
+const LETTERS = /^[\x20-\x7e -ɏ]*$/;
+
+/** A fixed pseudo-random number in [-1, 1) for piece `i`, so the scatter is the same each time. */
+function wobble(i: number, salt: number): number {
+  const x = Math.sin((i + 1) * 12.9898 + salt * 78.233) * 43758.5453;
+  return (x - Math.floor(x)) * 2 - 1;
+}
+
+export function titleAtoms(title: string): TitleAtom[] {
+  const letters = LETTERS.test(title);
+  const parts = letters ? Array.from(title) : title.split(/(\s+)/).filter(Boolean);
+  let n = 0;
+  return parts.map((text) => {
+    if (/^\s+$/.test(text)) return { text: " ", space: true, dx: 0, dy: 0, turn: 0, delayMs: 0 };
+    const i = n++;
+    return {
+      text,
+      space: false,
+      dx: Math.round(wobble(i, 1) * 0.12 * 1000) / 1000,
+      dy: Math.round(wobble(i, 2) * 0.22 * 1000) / 1000,
+      turn: Math.round(wobble(i, 3) * 14),
+      delayMs: i * 28,
+    };
+  });
+}

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from cornerroom.api.deps import get_auth_context, get_optional_auth_context, music_service
 from cornerroom.kernel.auth_context import AuthContext
+from cornerroom.modules.music.application.lyrics import timings_for
 from cornerroom.modules.music.application.service import MusicService
 from cornerroom.modules.music.domain.models import Credit, Track, TrackVersion
 
@@ -32,6 +33,8 @@ class TrackOut(BaseModel):
     listens: int = 0
     # D-LYRICS-01: single-track reads of a released song only (never in lists).
     lyrics: str | None = None
+    # D-LYRICS-03: when each sung line starts (ms), with the lyrics; null when not timed.
+    lyrics_timings_ms: list[int] | None = None
     # D-LISTEN-02 (editors and staff only): plays before counting started, included in `listens`.
     listens_before_counting: int = 0
 
@@ -50,6 +53,8 @@ class PublicTrackOut(BaseModel):
     listens: int = 0
     # D-LYRICS-01: single-track reads of a released song only (never in lists).
     lyrics: str | None = None
+    # D-LYRICS-03: when each sung line starts (ms), with the lyrics; null when not timed.
+    lyrics_timings_ms: list[int] | None = None
 
 
 class TrackPage(BaseModel):
@@ -237,6 +242,7 @@ async def get_track(
     out.release_ids = await _released_release_ids(svc, row.id)
     out.listens = await _listen_count(svc, row.id)
     out.lyrics = row.lyrics if row.status == "RELEASED" else None
+    out.lyrics_timings_ms = timings_for(row.lyrics, row.lyrics_timings) if out.lyrics else None
     return out
 
 

@@ -21,6 +21,8 @@ export type TrackRecord = {
   listens?: number;
   /** D-LYRICS-01: single-track reads of a released song only. */
   lyrics?: string | null;
+  /** D-LYRICS-03: when each sung line starts (ms), with the lyrics; null when not timed. */
+  lyrics_timings_ms?: number[] | null;
   /** D-LISTEN-02 (editors and staff): plays before counting started, already included in `listens`. */
   listens_before_counting?: number;
 };

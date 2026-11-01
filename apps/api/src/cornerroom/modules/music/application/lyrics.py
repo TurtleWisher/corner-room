@@ -5,6 +5,10 @@ saved straight onto the track and staff read them in the release review like eve
 Once the song is approved or out, a change waits in `lyrics_pending` until someone other than the
 artist approves it (the same two-person rule as releases). Listeners only ever see `lyrics` of a
 released song.
+
+Lyric timings (owner, 2026-11-01, D-LYRICS-03): staff tap along to a released song once per sung
+line, and `lyrics_timings` keeps when each line starts (milliseconds). They belong to the text:
+when the number of sung lines changes, the timings are dropped and the room paces the lines again.
 """
 
 from __future__ import annotations
@@ -47,6 +51,46 @@ def clean_lyrics(value: str | None) -> str | None:
     return text
 
 
+# A song's start times are kept to the millisecond, at most a day in.
+_TIMING_MAX_MS = 24 * 60 * 60 * 1000
+
+
+def sung_lines(text: str | None) -> list[str]:
+    """The lines that are sung, in order: empty lines between verses are not lines."""
+    return [line.strip() for line in (text or "").splitlines() if line.strip()]
+
+
+def timings_for(lyrics: str | None, timings: Any) -> list[int] | None:
+    """The stored start times when they still fit the lyrics (one per sung line), else None."""
+    if not isinstance(timings, list) or not timings:
+        return None
+    if len(timings) != len(sung_lines(lyrics)):
+        return None
+    return [int(t) for t in timings]
+
+
+def clean_timings(times: list[int], lyrics: str | None) -> list[int]:
+    """One start per sung line, in milliseconds, never going backwards."""
+    count = len(sung_lines(lyrics))
+    if count == 0:
+        raise AppError("INVALID_TRANSITION", "This song has no lyrics to time", 409)
+    if len(times) != count:
+        raise AppError("VALIDATION_ERROR", f"Give one time for each of the {count} lines", 422)
+    previous = 0
+    for t in times:
+        if t < 0 or t > _TIMING_MAX_MS:
+            raise AppError("VALIDATION_ERROR", "A line's time is outside the song", 422)
+        if t < previous:
+            raise AppError("VALIDATION_ERROR", "Each line must start at or after the one before", 422)
+        previous = t
+    return list(times)
+
+
+def _drop_stale_timings(track: Track) -> None:
+    if track.lyrics_timings is not None and timings_for(track.lyrics, track.lyrics_timings) is None:
+        track.lyrics_timings = None
+
+
 def lyrics_view(track: Track) -> dict[str, Any]:
     """What Studio and the release review show about a song's lyrics."""
     waiting = track.lyrics_pending_at is not None
@@ -73,6 +117,7 @@ class LyricsService:
         text = clean_lyrics(lyrics)
         if release.status in EDITABLE_RELEASE_STATUSES and track.status in EDITABLE_TRACK_STATUSES:
             track.lyrics = text
+            _drop_stale_timings(track)
             track.lyrics_pending = None
             track.lyrics_pending_at = None
             track.lyrics_pending_by = None
@@ -187,6 +232,7 @@ class LyricsService:
             if track.lyrics_pending_by == ctx.user_id:
                 raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You suggested these lyrics")
             track.lyrics = track.lyrics_pending
+            _drop_stale_timings(track)
             track.lyrics_review_note = None
         else:
             if not text:
@@ -205,3 +251,23 @@ class LyricsService:
             entity_id=track.id, new_state={"note": text} if text else {}, organization_id=org,
         )
         return await self._item(track)
+
+    async def save_timings(self, ctx: AuthContext, track_id: UUID, times: list[int] | None) -> dict[str, Any]:
+        """Staff (music.approve): when each line of a released song's lyrics starts, or None to go
+        back to pacing the lines across the song (D-LYRICS-03). The words themselves don't change."""
+        track = await self.music.get_track_row(track_id)
+        org = track.primary_org_id
+        if org is None or not await self.music._is_allowed(
+            ctx.user_id, "music.approve", resource_type="track", resource_id=track.id, organization_id=org
+        ):
+            raise NotFoundError("Track not found")
+        if track.status != "RELEASED":
+            raise AppError("INVALID_TRANSITION", "Only songs that are out can have their lyrics timed", 409)
+        track.lyrics_timings = None if times is None else clean_timings(times, track.lyrics)
+        track.updated_by = ctx.user_id
+        await self.music._flush_versioned()
+        await self.audit.record_from_auth(
+            ctx, action="track.lyrics_timed", entity_type="Track", entity_id=track.id,
+            new_state={"lines_timed": len(track.lyrics_timings or [])}, organization_id=org,
+        )
+        return {"track_id": track.id, "lyrics": track.lyrics, "lyrics_timings_ms": track.lyrics_timings}
