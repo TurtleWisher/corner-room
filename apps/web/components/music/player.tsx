@@ -333,6 +333,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         } catch (err) {
           if (seq !== loadSeq.current || isSuperseded(err)) return;
           if (isAutoplayBlocked(err)) {
+            // The browser wants a click first. Read the song's length meanwhile, so the room and
+            // the bar show a real scrubber instead of an empty one (owner, 2026-11-02).
+            a.preload = "metadata";
+            a.load();
             setState((s) => ({ ...s, status: "paused", needsGesture: true }));
             return;
           }
@@ -740,7 +744,8 @@ export function usePlayerProgress(): PlayerProgress {
 export function playerStatusText(p: Pick<PlayerApi, "status" | "problem" | "needsGesture" | "buffering">): string {
   if (p.status === "problem" && p.problem) return problemMessage(p.problem);
   if (p.status === "loading") return "Loading";
-  if (p.needsGesture) return "Press play to start";
+  // Short, so the song's title keeps its room; the play button is lit as the way to start.
+  if (p.needsGesture) return "Ready";
   if (p.buffering) return "Buffering";
   if (p.status === "playing") return "Playing";
   if (p.status === "paused") return "Paused";

@@ -486,6 +486,19 @@
   width: 4rem;
   height: 4rem;
 }
+/* The browser wanted a click before playing: the play key breathes until it is pressed. */
+[data-module="music"] .lr-key[data-ready] {
+  animation: lr-ready 1.6s ease-in-out infinite;
+}
+@keyframes lr-ready {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(187 237 254 / 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgb(187 237 254 / 0);
+  }
+}
 
 [data-module="music"] .lr-status {
   display: flex;
@@ -554,6 +567,13 @@
 [data-module="music"] .lr-range:disabled {
   cursor: default;
   opacity: 0.5;
+}
+/* No thumb while the length is unknown: a square stuck at the start read as broken. */
+[data-module="music"] .lr-range:disabled::-webkit-slider-thumb {
+  opacity: 0;
+}
+[data-module="music"] .lr-range:disabled::-moz-range-thumb {
+  opacity: 0;
 }
 [data-module="music"] .lr-range::-webkit-slider-runnable-track {
   height: 3px;
@@ -853,6 +873,7 @@
   [data-module="music"] .lr-card,
   [data-module="music"] .lr-title,
   [data-module="music"] .lr-title-link .lr-atom,
+  [data-module="music"] .lr-key[data-ready],
   [data-module="music"] .lr-focus,
   [data-module="music"] .lr-focus-cover,
   [data-module="music"] .lr-focus-art,
