@@ -163,9 +163,7 @@ class SearchService:
         for entity_type, model, ids in ((ENTITY_ARTIST, Artist, artist_ids), (ENTITY_BAND, Band, band_ids)):
             if not ids:
                 continue
-            found = await self.session.execute(
-                select(model).where(model.id.in_(ids), model.deleted_at.is_(None))
-            )
+            found = await self.session.execute(select(model).where(model.id.in_(ids)))
             for act in found.scalars():
                 acts[(entity_type, act.id)] = act
         return acts
@@ -174,13 +172,15 @@ class SearchService:
         self, row: SearchDocument, acts: dict[tuple[str, UUID], Artist | Band]
     ) -> SearchHit | None:
         """One act appears once, with its picture (owner, 2026-11-01). A document whose artist or
-        band is gone (a solo profile moved to a band, D-BAND-01) is skipped; a band's own artist row
-        (D-ARTIST-UNIFY-01) is shown as the band."""
+        band was deleted (a solo profile moved to a band, D-BAND-01) is skipped; a band's own artist
+        row (D-ARTIST-UNIFY-01) is shown as the band. A document with no row keeps its indexed copy."""
         hit = self._hit(row)
         if row.entity_type not in (ENTITY_ARTIST, ENTITY_BAND):
             return hit
         act = acts.get((row.entity_type, row.entity_id))
         if act is None:
+            return hit
+        if act.deleted_at is not None:
             return None
         if isinstance(act, Artist) and act.kind == "BAND":
             return replace(
