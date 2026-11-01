@@ -476,11 +476,10 @@
     transform: scaleX(1);
   }
 }
-/* Reduced motion: nothing turns by itself. The active segment is simply full. */
+/* Reduced motion: slides still change by themselves (a cross-fade, no swing), so the line keeps
+   running. Stopping it left iPhones with Reduce Motion on stuck on the first slide with a full
+   line (owner, 2026-11-02). */
 @media (prefers-reduced-motion: reduce) {
-  [data-module="home"] .home-feature-fill {
-    animation: none;
-  }
   [data-module="home"] .home-feature-arrow {
     transition: opacity var(--cr-dur-component) linear;
   }
