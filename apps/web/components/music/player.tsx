@@ -137,6 +137,8 @@ type PlayerApi = PlayerState & {
   /** Whether levelling can work here: element volume is ignored on some devices (iOS). */
   levellingAvailable: boolean;
   isCurrent: (trackId: string) => boolean;
+  /** The audio's own clock, read now (progress reports come only a few times a second). */
+  exactPosition: () => number;
 };
 
 const PlayerContext = createContext<PlayerApi | null>(null);
@@ -642,6 +644,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       toggleNormalise,
       levellingAvailable: volumeSettable,
       isCurrent: (id) => state.track?.id === id,
+      exactPosition: () => audio.current?.currentTime ?? progress.get().position,
     }),
     [state, hasNext, volumeSettable, progress, play, toggle, seek, next, previous, setVolume, toggleMute, toggleShuffle, cycleRepeat, toggleNormalise],
   );

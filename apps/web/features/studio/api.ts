@@ -339,6 +339,18 @@ export function fetchLyricsQueue(): Promise<LyricsReviewItem[]> {
   return apiFetch<LyricsReviewItem[]>("/api/v1/catalog-intake/lyrics");
 }
 
+/** D-LYRICS-03 (staff, music.approve): when each sung line of a released song starts, or null to remove. */
+export type LyricTimings = { track_id: string; lyrics: string | null; lyrics_timings_ms: number[] | null };
+
+export function saveLyricTimings(trackId: string, timesMs: number[] | null): Promise<LyricTimings> {
+  return apiFetch<LyricTimings>(`/api/v1/catalog-intake/tracks/${trackId}/lyrics/timings`, {
+    method: "PUT",
+    headers: json,
+    body: JSON.stringify({ times_ms: timesMs }),
+    retry: false,
+  });
+}
+
 export function reviewLyrics(trackId: string, action: "approve" | "reject", note?: string): Promise<LyricsReviewItem> {
   return apiFetch<LyricsReviewItem>(`/api/v1/catalog-intake/tracks/${trackId}/lyrics/review`, {
     method: "POST",

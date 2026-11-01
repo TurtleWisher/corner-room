@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, memo, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -39,6 +39,7 @@ import {
   queuePositionLabel,
   roomEyebrow,
   swipeDirection,
+  titleAtoms,
 } from "@/lib/listening-room-view";
 import { fetchPlayableCatalog, fetchTrack, type PlayableTrackRecord } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
@@ -47,6 +48,7 @@ import {
   lyricAgeAt,
   lyricIndexAt,
   lyricLines,
+  lyricTimes,
   ringPose,
   type RingAxis,
   type RingPlane,
@@ -295,23 +297,57 @@ function ArtistLink({ track }: { track: PlayerTrack }) {
 }
 
 /**
- * Floating lyrics (owner, 2026-10-27, D-LYRICS-01): off until the listener turns them on with the
- * small button by the volume. Lines float in 3D around the playing cover (owner, 2026-11-01),
- * paced across the song (lyrics carry no timings, so this is an estimate). Decorative here: the
- * song page has the full lyrics for reading and screen readers.
+ * The playing title is the way to the song page (owner, 2026-11-01, D-ROOM-03; it replaces the
+ * "Track page" link under the bar). Pointing at it or focusing it breaks it into charged pieces
+ * that scatter a little and settle back, then hum while the pointer stays (app/styles/modules/
+ * listen.css). The pieces are decoration: the link's name is the whole title.
  */
-type RoomLyrics = { trackId: string | null; lines: string[]; on: boolean; toggle: () => void };
-const LyricsContext = createContext<RoomLyrics>({ trackId: null, lines: [], on: false, toggle: () => {} });
+function RoomTitle({ track, className }: { track: PlayerTrack; className: string }) {
+  const label = titleOf(track);
+  const atoms = useMemo(() => titleAtoms(label), [label]);
+  return (
+    <h1 id="room-title" className={`lr-title cr-display text-fg ${className}`}>
+      <Link href={`/tracks/${track.id}`} className="lr-title-link cr-focus" aria-label={label}>
+        <span aria-hidden="true">
+          {atoms.map((atom, i) =>
+            atom.space ? (
+              " "
+            ) : (
+              <span
+                key={i}
+                className="lr-atom"
+                style={{ "--dx": `${atom.dx}em`, "--dy": `${atom.dy}em`, "--turn": `${atom.turn}deg`, "--delay": `${atom.delayMs}ms` } as React.CSSProperties}
+              >
+                {atom.text}
+              </span>
+            ),
+          )}
+        </span>
+      </Link>
+    </h1>
+  );
+}
+
+/**
+ * Floating lyrics (owner, 2026-10-27, D-LYRICS-01): off until the listener turns them on with the
+ * small button by the volume. Lines float in 3D around the playing cover (owner, 2026-11-01).
+ * When staff have timed the song (D-LYRICS-03) each line arrives as it is sung; otherwise the
+ * lines are paced across the song, an estimate. Decorative here: the song page has the full
+ * lyrics for reading and screen readers.
+ */
+type RoomLyrics = { trackId: string | null; lines: string[]; times: number[] | null; on: boolean; toggle: () => void };
+const LyricsContext = createContext<RoomLyrics>({ trackId: null, lines: [], times: null, on: false, toggle: () => {} });
 const LYRICS_PREF = "cr.room.lyrics";
-const lyricsCache = new Map<string, Promise<string | null>>();
+type LoadedLyrics = { text: string | null; timingsMs: number[] | null };
+const lyricsCache = new Map<string, Promise<LoadedLyrics>>();
 
 /** A released song's lyrics, once per song per page view (public read, no sign-in needed). */
-function loadLyrics(trackId: string): Promise<string | null> {
+function loadLyrics(trackId: string): Promise<LoadedLyrics> {
   let hit = lyricsCache.get(trackId);
   if (!hit) {
     hit = fetchTrack(trackId, { skipAuth: true })
-      .then((t) => t.lyrics ?? null)
-      .catch(() => null);
+      .then((t) => ({ text: t.lyrics ?? null, timingsMs: t.lyrics_timings_ms ?? null }))
+      .catch(() => ({ text: null, timingsMs: null }));
     lyricsCache.set(trackId, hit);
   }
   return hit;
@@ -336,10 +372,14 @@ function useRoomLyrics(trackId: string | null): RoomLyrics {
       return !was;
     });
   }, []);
-  const loaded = useAsync(async () => (trackId ? { trackId, text: await loadLyrics(trackId) } : null), [trackId]);
+  const loaded = useAsync(async () => (trackId ? { trackId, ...(await loadLyrics(trackId)) } : null), [trackId]);
   // Never show the previous song's lines while the next song's are loading.
-  const text = loaded.status === "ok" && loaded.data?.trackId === trackId ? loaded.data.text : null;
-  return { trackId, lines: lyricLines(text), on, toggle };
+  const mine = loaded.status === "ok" && loaded.data?.trackId === trackId ? loaded.data : null;
+  const text = mine?.text ?? null;
+  const timingsMs = mine?.timingsMs ?? null;
+  const lines = useMemo(() => lyricLines(text), [text]);
+  const times = useMemo(() => lyricTimes(lines.length, timingsMs), [lines, timingsMs]);
+  return { trackId, lines, times, on, toggle };
 }
 
 function LyricsToggle() {
@@ -409,9 +449,10 @@ function LyricOrbit({ axis }: { axis: RingAxis | "auto" }) {
   const p = usePlayer();
   const compact = useCompactRoom();
   const count = lyrics.lines.length;
+  const times = lyrics.times;
   const index = useSyncExternalStore(
     p.progress.subscribe,
-    () => lyricIndexAt(count, p.progress.get().position, p.progress.get().duration),
+    () => lyricIndexAt(count, p.progress.get().position, p.progress.get().duration, times),
     () => -1,
   );
   const shape: RingAxis = axis === "auto" ? (compact ? "over" : "around") : axis;
@@ -449,7 +490,7 @@ function LyricOrbit({ axis }: { axis: RingAxis | "auto" }) {
         const id = el.dataset.line ?? "";
         const key = Number(el.dataset.index);
         seen.add(id);
-        const age = lyricAgeAt(key, count, t, base.duration);
+        const age = lyricAgeAt(key, count, t, base.duration, times);
         if (!Number.isFinite(age)) continue;
         let st = states.get(id);
         const fresh = !st;
@@ -509,14 +550,14 @@ function LyricOrbit({ axis }: { axis: RingAxis | "auto" }) {
       unsubscribe();
       resize?.disconnect();
     };
-  }, [show, index, playing, shape, count, lyrics.trackId, p.progress]);
+  }, [show, index, playing, shape, count, times, lyrics.trackId, p.progress]);
 
   if (!show) return null;
 
   const hold = (el: HTMLElement) => {
     const st = lines.current.get(el.dataset.line ?? "");
     const { position, duration } = p.progress.get();
-    if (st && st.held === null) st.held = lyricAgeAt(Number(el.dataset.index), count, position, duration);
+    if (st && st.held === null) st.held = lyricAgeAt(Number(el.dataset.index), count, position, duration, times);
     el.dataset.focus = "";
   };
   const release = (el: HTMLElement) => {
@@ -830,9 +871,7 @@ function FocusView({ track, edge, keyRef }: { track: PlayerTrack; edge: "left" |
         <p className="cr-eyebrow text-[0.6875rem] text-highlight">
           {roomEyebrow(p.source, titleOf(track), position, p.queue.length)}
         </p>
-        <h1 key={track.id} id="room-title" className="lr-title cr-display mt-4 text-[2.5rem] leading-[0.92] text-fg md:text-[4rem]">
-          {label}
-        </h1>
+        <RoomTitle key={track.id} track={track} className="mt-4 text-[2.5rem] leading-[0.92] md:text-[4rem]" />
         <p className="mt-3 text-lg text-fg-muted">
           <ArtistLink track={track} />
         </p>
@@ -960,17 +999,12 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
                 <p className="cr-eyebrow text-[0.6875rem] text-highlight">
                   {roomEyebrow(p.source, titleOf(track), position, p.queue.length)}
                 </p>
-                <h1 key={track.id} id="room-title" className="lr-title cr-display mt-3 text-[2.25rem] leading-[0.95] text-fg md:text-[3rem]">
-                  {titleOf(track)}
-                </h1>
+                <RoomTitle key={track.id} track={track} className="mt-3 text-[2.25rem] leading-[0.95] md:text-[3rem]" />
                 <p className="mt-1.5 text-base text-fg-muted">
                   <ArtistLink track={track} />
                 </p>
               </div>
               <ControlBar track={track} onFocus={enterFocus} />
-              <Link href={`/tracks/${track.id}`} className="cr-focus mt-4 inline-block text-sm font-semibold text-link hover:underline">
-                Track page
-              </Link>
             </div>
           )
         ) : (

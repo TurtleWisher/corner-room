@@ -1,7 +1,8 @@
 /*
  * Song lyrics (owner, 2026-10-27, D-LYRICS-01). Plain text from the API, one sung line per line
- * and an empty line between verses. Lyrics carry no timings, so the listening room paces the
- * floating lines across the song: an estimate, never presented as synced.
+ * and an empty line between verses. Without timings the listening room paces the floating lines
+ * across the song: an estimate, never presented as synced. With timings (D-LYRICS-03: staff tap
+ * along once per line) each line arrives when it is sung.
  */
 
 /** Sung lines, verse breaks dropped. */
@@ -25,10 +26,47 @@ const INTRO = 0.06;
 const OUTRO = 0.06;
 
 /**
- * The line to float now: lines spread evenly over the song between a short intro and outro.
- * -1 before the first line, or while the length is unknown.
+ * Start times in seconds from the API's milliseconds (D-LYRICS-03), or null when they don't fit
+ * the lines (a different count, or going backwards): the lines are then paced instead.
  */
-export function lyricIndexAt(count: number, positionS: number, durationS: number): number {
+export function lyricTimes(count: number, timingsMs?: readonly number[] | null): number[] | null {
+  if (!timingsMs || count <= 0 || timingsMs.length !== count) return null;
+  for (let i = 0; i < count; i++) {
+    const t = timingsMs[i];
+    if (!Number.isFinite(t) || t < 0 || (i > 0 && t < timingsMs[i - 1])) return null;
+  }
+  return timingsMs.map((t) => t / 1000);
+}
+
+/** The shortest time a timed line is given to be sung, so two taps together don't flash. */
+const MIN_LINE_S = 0.25;
+
+/**
+ * Timed lines as one smooth count: 2.5 is halfway between line 2's start and line 3's. Before the
+ * first line it is negative (the first line arriving), and the last line gets the song's average
+ * line length.
+ */
+export function lyricClock(times: readonly number[], positionS: number): number {
+  const n = times.length;
+  if (n === 0 || !Number.isFinite(positionS)) return Number.NaN;
+  const average = n > 1 ? (times[n - 1] - times[0]) / (n - 1) : 4;
+  const spanAfter = (i: number) => Math.max(MIN_LINE_S, (i + 1 < n ? times[i + 1] : times[i] + average) - times[i]);
+  if (positionS < times[0]) return (positionS - times[0]) / spanAfter(0);
+  let i = 0;
+  while (i + 1 < n && times[i + 1] <= positionS) i++;
+  return i + (positionS - times[i]) / spanAfter(i);
+}
+
+/**
+ * The line to float now: at its tapped time when the song is timed, otherwise lines spread evenly
+ * over the song between a short intro and outro. -1 before the first line, or while the length
+ * is unknown.
+ */
+export function lyricIndexAt(count: number, positionS: number, durationS: number, times?: readonly number[] | null): number {
+  if (times && times.length === count && count > 0) {
+    const clock = lyricClock(times, positionS);
+    return Number.isFinite(clock) ? Math.max(-1, Math.min(count - 1, Math.floor(clock))) : -1;
+  }
   if (count <= 0 || !(durationS > 0) || !Number.isFinite(positionS)) return -1;
   const start = durationS * INTRO;
   const span = durationS * (1 - INTRO - OUTRO);
@@ -46,7 +84,14 @@ export function lyricStepSeconds(count: number, durationS: number): number {
  * How many lines old line `index` is at `positionS`, as a smooth number: 0 as its singing starts,
  * 1 as the next line's starts, negative before. NaN while the length is unknown.
  */
-export function lyricAgeAt(index: number, count: number, positionS: number, durationS: number): number {
+export function lyricAgeAt(
+  index: number,
+  count: number,
+  positionS: number,
+  durationS: number,
+  times?: readonly number[] | null,
+): number {
+  if (times && times.length === count && count > 0) return lyricClock(times, positionS) - index;
   if (count <= 0 || !(durationS > 0) || !Number.isFinite(positionS)) return Number.NaN;
   const step = lyricStepSeconds(count, durationS);
   return (positionS - durationS * INTRO - index * step) / step;
@@ -186,4 +231,42 @@ export function lyricsMode(trackStatus: string, releaseEditable: boolean): Lyric
   if (releaseEditable && trackStatus === "DRAFT") return "draft";
   if (trackStatus === "APPROVED" || trackStatus === "SCHEDULED" || trackStatus === "RELEASED") return "review";
   return "locked";
+}
+
+/*
+ * Tap-to-time (owner, 2026-11-01, D-LYRICS-03): staff play a released song and tap once as each
+ * line starts. The taps are milliseconds from the start of the song.
+ */
+
+/** "1:05.40": minutes, seconds and hundredths, as lyric files write them. */
+export function lyricStamp(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 10));
+  const minutes = Math.floor(total / 6000);
+  const seconds = Math.floor((total % 6000) / 100);
+  const hundredths = total % 100;
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(hundredths).padStart(2, "0")}`;
+}
+
+/** The timed lines as an LRC lyric file, "[01:05.40]Line", for checking or keeping a copy. */
+export function lyricLrc(lines: readonly string[], timesMs: readonly number[]): string {
+  return lines
+    .map((line, i) => {
+      const t = timesMs[i];
+      if (t === undefined) return null;
+      const stamp = lyricStamp(t);
+      return `[${stamp.length < 8 ? "0" : ""}${stamp}]${line}`;
+    })
+    .filter((row): row is string => row !== null)
+    .join("\n");
+}
+
+/** A tap for the next untimed line; a tap earlier than the line before counts as the same time. */
+export function tapLine(timesMs: readonly number[], atMs: number): number[] {
+  const last = timesMs.length ? timesMs[timesMs.length - 1] : 0;
+  return [...timesMs, Math.max(last, Math.round(Math.max(0, atMs)))];
+}
+
+/** Every time moved by `deltaMs` (taps are usually a little late), never before the song starts. */
+export function shiftLines(timesMs: readonly number[], deltaMs: number): number[] {
+  return timesMs.map((t) => Math.max(0, Math.round(t + deltaMs)));
 }

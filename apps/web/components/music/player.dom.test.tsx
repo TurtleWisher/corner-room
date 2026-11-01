@@ -300,6 +300,9 @@ describe("ListeningRoom", () => {
     // The bar steps aside inside the room; the room has its own controls.
     expect(screen.queryByRole("region", { name: "Player" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Night Bus" })).toBeTruthy();
+    // The title is the way to the song page (D-ROOM-03); no separate "Track page" link.
+    expect(screen.getByRole("link", { name: "Night Bus" }).getAttribute("href")).toBe("/tracks/t2");
+    expect(screen.queryByRole("link", { name: "Track page" })).toBeNull();
     expect(screen.getByText("From Night Bus · Track 2 of 3")).toBeTruthy();
     const slots = [...document.querySelectorAll<HTMLElement>(".lr-slot")].map((s) => [s.dataset.offset, s.textContent?.includes("Last Stop") ? "t1" : s.textContent?.includes("Home Late") ? "t3" : "t2"]);
     expect(slots).toEqual([

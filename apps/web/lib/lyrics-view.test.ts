@@ -3,14 +3,20 @@ import { describe, expect, it } from "vitest";
 import {
   floatingLines,
   lyricAgeAt,
+  lyricClock,
   lyricIndexAt,
   lyricLines,
+  lyricLrc,
+  lyricStamp,
+  lyricTimes,
   lyricStepSeconds,
   lyricVerses,
   lyricsMode,
   RING_GAP,
   ringPath,
   ringPose,
+  shiftLines,
+  tapLine,
   type RingSize,
 } from "./lyrics-view";
 
@@ -147,5 +153,45 @@ describe("lyricsMode", () => {
     expect(lyricsMode("RELEASED", false)).toBe("review");
     expect(lyricsMode("APPROVED", false)).toBe("review");
     expect(lyricsMode("TAKEN_DOWN", false)).toBe("locked");
+  });
+});
+
+describe("timed lines (D-LYRICS-03)", () => {
+  const times = [10, 14, 20];
+
+  it("takes the API's milliseconds only when they fit the lines", () => {
+    expect(lyricTimes(3, [10000, 14000, 20000])).toEqual(times);
+    expect(lyricTimes(2, [10000, 14000, 20000])).toBeNull();
+    expect(lyricTimes(3, [10000, 9000, 20000])).toBeNull();
+    expect(lyricTimes(3, null)).toBeNull();
+  });
+
+  it("counts lines smoothly between their start times", () => {
+    expect(lyricClock(times, 10)).toBe(0);
+    expect(lyricClock(times, 12)).toBe(0.5);
+    expect(lyricClock(times, 17)).toBe(1.5);
+    // The last line gets the average line length (5 s).
+    expect(lyricClock(times, 22.5)).toBe(2.5);
+    // Before the first line: arriving, over the first line's own length.
+    expect(lyricClock(times, 8)).toBe(-0.5);
+  });
+
+  it("shows each line from its own start, not paced across the song", () => {
+    expect(lyricIndexAt(3, 9, 200, times)).toBe(-1);
+    expect(lyricIndexAt(3, 10, 200, times)).toBe(0);
+    expect(lyricIndexAt(3, 19.9, 200, times)).toBe(1);
+    expect(lyricIndexAt(3, 150, 200, times)).toBe(2);
+    expect(lyricAgeAt(1, 3, 17, 200, times)).toBe(0.5);
+    // Without timings the old pacing is unchanged.
+    expect(lyricIndexAt(3, 9, 200)).toBe(lyricIndexAt(3, 9, 200, null));
+  });
+
+  it("records taps and writes them as a lyric file", () => {
+    let taps = tapLine([], 1234.4);
+    taps = tapLine(taps, 900);
+    expect(taps).toEqual([1234, 1234]);
+    expect(shiftLines([100, 5000], -150)).toEqual([0, 4850]);
+    expect(lyricStamp(65400)).toBe("1:05.40");
+    expect(lyricLrc(["One", "Two", "Three"], [5000, 65400])).toBe("[00:05.00]One\n[01:05.40]Two");
   });
 });

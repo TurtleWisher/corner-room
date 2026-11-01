@@ -672,6 +672,26 @@ async def review_lyrics(track_id: UUID, body: LyricsReviewIn, ctx: Ctx, svc: Stu
     return LyricsReviewItemOut(**item)
 
 
+class LyricTimingsIn(BaseModel):
+    # D-LYRICS-03: one start time per sung line, in ms; null removes the timings.
+    times_ms: list[int] | None = Field(default=None, max_length=2000)
+
+
+class LyricTimingsOut(BaseModel):
+    track_id: UUID
+    lyrics: str | None
+    lyrics_timings_ms: list[int] | None
+
+
+@router.put("/catalog-intake/tracks/{track_id}/lyrics/timings", response_model=LyricTimingsOut)
+async def save_lyric_timings(track_id: UUID, body: LyricTimingsIn, ctx: Ctx, svc: StudioDep) -> LyricTimingsOut:
+    """Staff: when each line of a released song's lyrics starts (D-LYRICS-03, music.approve)."""
+    from cornerroom.modules.music.application.lyrics import LyricsService
+
+    out = await LyricsService(svc.session, svc.settings, svc.clock).save_timings(ctx, track_id, body.times_ms)
+    return LyricTimingsOut(**out)
+
+
 class CoverReviewItemOut(BaseModel):
     release_id: UUID
     title: str
