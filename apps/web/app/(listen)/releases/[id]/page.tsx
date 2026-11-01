@@ -17,6 +17,7 @@ import { CreditFace } from "@/components/music/credit-face";
 import { GiftNote } from "@/components/music/gift-note";
 import { PresaleView } from "@/components/music/presale-view";
 import { useCredits } from "@/components/music/credits";
+import { SongCredits } from "@/components/music/song-credits";
 import { usePlayer, type PlayOptions } from "@/components/music/player";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
@@ -28,14 +29,17 @@ import {
   fetchRelease,
   fetchReleaseTracks,
   fetchTrack,
+  fetchTrackCredits,
   transitionRelease,
+  type CreditRecord,
   type PlayableTrackRecord,
   type ReleaseRecord,
   type TrackRecord,
 } from "@/lib/api";
 import { fetchPresale, type PresalePageRecord } from "@/features/catalog/api";
 import { coverUrl } from "@/lib/cover-view";
-import { canModerateMusic, creditName, formatDuration, playQueue, playState, releaseEyebrow, trackCountLabel } from "@/lib/music-view";
+import { formatCount } from "@/lib/format/count";
+import { canModerateMusic, creditName, formatDuration, playQueue, playState, releaseEyebrow, releaseHeroActions, trackCountLabel } from "@/lib/music-view";
 import { releaseBuyLabel, releaseBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
 import { cn } from "@/lib/utils";
@@ -205,6 +209,7 @@ function TrackList({
                   playFrom={playFrom}
                   releaseIds={[releaseId]}
                   onReleasePage={releaseId}
+                  opensRoom
                 />
               ) : null}
             </div>
@@ -246,7 +251,10 @@ export default function ReleasePage() {
     const playable = new Map<string, PlayableTrackRecord>();
     const catalog = await fetchPlayableCatalog(opts).catch(() => null);
     for (const item of catalog?.items ?? []) playable.set(item.id, item);
-    return { release, rows, playable, presale: null as PresalePageRecord | null };
+    // A single shows its song's credits beside the cover (owner, 2026-11-01, D-SINGLE-01).
+    const credits: CreditRecord[] =
+      ordered.length === 1 ? await fetchTrackCredits(ordered[0].track_id, opts).then((p) => p.items).catch(() => []) : [];
+    return { release, rows, playable, credits, presale: null as PresalePageRecord | null };
   }, [id, status]);
 
   if (data.status === "loading" || (data.status === "ok" && !data.data)) {
@@ -274,7 +282,7 @@ export default function ReleasePage() {
   }
 
   if (data.data!.presale) return <PresaleView presale={data.data!.presale} />;
-  const { rows, playable } = data.data! as { rows: Row[]; playable: Map<string, PlayableTrackRecord> };
+  const { rows, playable, credits: songCredits } = data.data! as { rows: Row[]; playable: Map<string, PlayableTrackRecord>; credits: CreditRecord[] };
   const release = override ?? (data.data! as { release: ReleaseRecord }).release;
   const artist = creditName(release, credits.artists, credits.bands);
   const durations = rows.map((r) => playable.get(r.trackId)?.duration_ms);
@@ -284,6 +292,8 @@ export default function ReleasePage() {
   // A whole-release price (D-AUDIO-10, -11). Shown only once the customer's ownership is known.
   const releaseBuy = commerce.ready ? releaseBuyState(signedIn ? commerce.entitlements : [], commerce.offers, release.id, rows.map((r) => r.trackId)) : null;
   const buyRelease = releaseBuy?.kind === "buy" ? releaseBuy.offer : null;
+  const hero = releaseHeroActions({ trackCount: rows.length, signedIn, ownsOne: Boolean(firstOwned), onSale: Boolean(buyRelease) });
+  const onlySong = rows.length === 1 ? rows[0].track : null;
   // Up next: this release's tracks in order, the ones the customer can play.
   const playFrom: PlayOptions = {
     queue: playQueue(
@@ -325,38 +335,60 @@ export default function ReleasePage() {
                 <StatusChip value={release.status} map={RELEASE_STATUS} />
               </div>
             ) : null}
-            <div className="mt-8 flex flex-wrap gap-3">
-              {!signedIn ? (
-                // Visitors: "Sign in" on the play button, and the price when it is on sale (owner, 2026-10-24).
-                <>
+            {hero.play || hero.signIn || hero.price || hero.notOnSale ? (
+              <div className="mt-8 flex flex-wrap gap-3">
+                {hero.signIn ? (
+                  // Visitors: "Sign in" on the play button (owner, 2026-10-24); a single's row has its own.
                   <ButtonLink href={`/login?next=${encodeURIComponent(`/releases/${release.id}`)}`} size="lg" aria-label={`Sign in to play ${release.title}`}>
                     <LogIn aria-hidden="true" /> Sign in
                   </ButtonLink>
-                  {buyRelease ? (
-                    <p className="self-center text-sm text-fg">
-                      {releaseBuyLabel(release.release_type, buyRelease)}{" "}
-                      <Money value={{ amount_minor: buyRelease.amount_minor, currency_code: buyRelease.currency_code }} className="font-semibold" />
-                    </p>
-                  ) : null}
-                </>
-              ) : firstOwned || buyRelease ? (
-                <>
-                  {firstOwned ? (
-                    <Button size="lg" onClick={() => void player.play({ id: firstOwned.trackId, title: firstOwned.track?.title ?? "", artist }, playFrom)}>
-                      <Play aria-hidden="true" /> Play
-                    </Button>
-                  ) : null}
-                  {buyRelease ? (
+                ) : null}
+                {hero.play && firstOwned ? (
+                  // Play opens the listening room as the music starts (owner, 2026-11-01, D-ROOM-02).
+                  <ButtonLink
+                    href={`/listen/${firstOwned.trackId}`}
+                    size="lg"
+                    onClick={() => {
+                      if (!player.isCurrent(firstOwned.trackId)) void player.play({ id: firstOwned.trackId, title: firstOwned.track?.title ?? "", artist }, playFrom);
+                    }}
+                  >
+                    <Play aria-hidden="true" /> Play
+                  </ButtonLink>
+                ) : null}
+                {hero.price && buyRelease ? (
+                  signedIn ? (
                     <ButtonLink href={`/checkout?offer=${buyRelease.id}`} size="lg" variant={firstOwned ? "secondary" : undefined} title="Buy to play">
                       <Lock aria-hidden="true" /> {releaseBuyLabel(release.release_type, buyRelease)}{" "}
                       <Money value={{ amount_minor: buyRelease.amount_minor, currency_code: buyRelease.currency_code }} />
                     </ButtonLink>
-                  ) : null}
-                </>
-              ) : (
-                <p className="self-center text-sm text-fg-muted">Not on sale yet.</p>
-              )}
-            </div>
+                  ) : (
+                    <p className="self-center text-sm text-fg">
+                      {releaseBuyLabel(release.release_type, buyRelease)}{" "}
+                      <Money value={{ amount_minor: buyRelease.amount_minor, currency_code: buyRelease.currency_code }} className="font-semibold" />
+                    </p>
+                  )
+                ) : null}
+                {hero.notOnSale ? <p className="self-center text-sm text-fg-muted">Not on sale yet.</p> : null}
+              </div>
+            ) : null}
+            {hero.credits && onlySong ? (
+              // A single: who made the song, where a second Play button used to be (D-SINGLE-01).
+              <div className="mt-8 max-w-lg">
+                {typeof onlySong.listens === "number" ? (
+                  <p className="mb-2 text-sm text-fg-muted">
+                    <span className="cr-num font-semibold text-fg">{formatCount(onlySong.listens)}</span> {onlySong.listens === 1 ? "listen" : "listens"}
+                  </p>
+                ) : null}
+                <SongCredits
+                  credits={songCredits}
+                  artists={credits.artists}
+                  bands={credits.bands}
+                  ownActId={onlySong.primary_artist_id ?? onlySong.primary_band_id ?? null}
+                  defaultOpen
+                  className="border-t border-line"
+                />
+              </div>
+            ) : null}
           </div>
         </div>
       </LitSurface>

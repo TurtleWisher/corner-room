@@ -219,6 +219,45 @@ export function formatDuration(ms: number | null | undefined): string | null {
   return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
 }
 
+export type ReleaseHeroActions = {
+  /** Play from the top: albums and EPs only; a single's one song plays from its own row. */
+  play: boolean;
+  /** Visitors: "Sign in" here only when the songs' rows don't already offer it. */
+  signIn: boolean;
+  /** The whole release's price: a button for customers, a line for visitors. */
+  price: boolean;
+  /** Nothing to play and nothing to buy yet. */
+  notOnSale: boolean;
+  /** A single shows its song's credits beside the cover instead of a second Play (owner, 2026-11-01). */
+  credits: boolean;
+};
+
+/**
+ * What sits beside a release's cover (owner, 2026-11-01, D-SINGLE-01): a single (one song) has no
+ * Play or Sign in there, since its one row has both; it shows the song's credits instead. Buying the
+ * release stays, because the row shows only a lock for a song sold with its release.
+ */
+export function releaseHeroActions({
+  trackCount,
+  signedIn,
+  ownsOne,
+  onSale,
+}: {
+  trackCount: number;
+  signedIn: boolean;
+  ownsOne: boolean;
+  onSale: boolean;
+}): ReleaseHeroActions {
+  const single = trackCount === 1;
+  return {
+    play: signedIn && ownsOne && !single,
+    signIn: !signedIn && !single,
+    price: onSale,
+    notOnSale: signedIn && !ownsOne && !onSale,
+    credits: single,
+  };
+}
+
 /**
  * "5 tracks · 21 min" only when every duration is known, otherwise "5 tracks" (music.md copy rule).
  */

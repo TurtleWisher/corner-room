@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /* The play button for a song (owner, 2026-10-24): "Sign in" for visitors, a lock that opens the
@@ -7,7 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const auth = { status: "anonymous" as string };
 vi.mock("@/components/auth-provider", () => ({ useAuth: () => auth }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/releases/r1" }));
-vi.mock("@/components/music/player", () => ({ useOptionalPlayer: () => null }));
+const playerState: { current: unknown } = { current: null };
+vi.mock("@/components/music/player", () => ({ useOptionalPlayer: () => playerState.current }));
 
 import { TrackBuyControl, type CustomerCommerce } from "./commerce";
 
@@ -31,7 +32,10 @@ const commerce = (entitlements: CustomerCommerce["entitlements"] = []): Customer
 });
 const track = { id: "t1", title: "Night Bus", artist: "Kaal Bela" };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  playerState.current = null;
+});
 
 describe("TrackBuyControl", () => {
   it("shows visitors 'Sign in' and the price, and brings them back to this page", () => {
@@ -101,5 +105,28 @@ describe("TrackBuyControl", () => {
     render(<TrackBuyControl track={track} commerce={commerce(owned)} releaseIds={[]} />);
     expect(screen.getByRole("link", { name: /Owned/ })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Locked/ })).toBeNull();
+  });
+
+  it("on a song's or release's page, Play opens the listening room as the song starts (D-ROOM-02)", () => {
+    auth.status = "authenticated";
+    const play = vi.fn(() => Promise.resolve());
+    playerState.current = { isCurrent: () => false, status: "idle", play, toggle: vi.fn() };
+    render(<TrackBuyControl track={track} commerce={{ ...commerce(), streamable: new Set(["t1"]) }} releaseIds={[]} opensRoom />);
+    const link = screen.getByRole("link", { name: "Play Night Bus" });
+    expect(link.getAttribute("href")).toBe("/listen/t1");
+    link.addEventListener("click", (e) => e.preventDefault()); // jsdom cannot change pages
+    fireEvent.click(link);
+    expect(play).toHaveBeenCalledWith(track, undefined);
+  });
+
+  it("never restarts the song already playing; it only opens the room", () => {
+    auth.status = "authenticated";
+    const play = vi.fn(() => Promise.resolve());
+    playerState.current = { isCurrent: () => true, status: "playing", play, toggle: vi.fn() };
+    render(<TrackBuyControl track={track} commerce={{ ...commerce(), streamable: new Set(["t1"]) }} releaseIds={[]} opensRoom />);
+    const link = screen.getByRole("link", { name: "Open the listening room for Night Bus" });
+    link.addEventListener("click", (e) => e.preventDefault()); // jsdom cannot change pages
+    fireEvent.click(link);
+    expect(play).not.toHaveBeenCalled();
   });
 });

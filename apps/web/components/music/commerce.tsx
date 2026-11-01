@@ -61,6 +61,7 @@ export function TrackBuyControl({
   playFrom,
   releaseIds,
   onReleasePage,
+  opensRoom,
 }: {
   track: PlayerTrack;
   commerce: CustomerCommerce;
@@ -74,6 +75,9 @@ export function TrackBuyControl({
   /** The release whose own page this is: it already shows its buy button, so a song sold only as
    * part of it gets a quiet lock here, not a second price button (owner, 2026-10-25). */
   onReleasePage?: string;
+  /** Play opens the listening room as the music starts (owner, 2026-11-01, D-ROOM-02): the song
+   * page and a release's own page. Leaving the room leaves the player bar, as before. */
+  opensRoom?: boolean;
 }) {
   const { status } = useAuth();
   const player = useOptionalPlayer();
@@ -106,7 +110,21 @@ export function TrackBuyControl({
   const state = trackBuyState(commerce.entitlements, commerce.offers, track.id, releaseIds, commerce.streamable);
   if (state.kind === "owned") {
     const current = player?.isCurrent(track.id) && player.status === "playing";
-    const main = player ? (
+    const main = player && opensRoom ? (
+      // A link, so the room's own transition and the back button work as for any way in. The song
+      // starts in the same click; one already loaded is never restarted, only resumed if paused.
+      <ButtonLink
+        href={`/listen/${track.id}`}
+        size={size}
+        onClick={() => {
+          if (!player.isCurrent(track.id)) void player.play(track, playFrom);
+          else if (player.status === "paused") player.toggle();
+        }}
+        aria-label={`${current ? "Open the listening room for" : "Play"} ${track.title}`}
+      >
+        <Play aria-hidden="true" /> {current ? "Playing" : "Play"}
+      </ButtonLink>
+    ) : player ? (
       <Button size={size} onClick={() => (current ? player.toggle() : void player.play(track, playFrom))} aria-label={`${current ? "Pause" : "Play"} ${track.title}`}>
         <Play aria-hidden="true" /> {current ? "Playing" : "Play"}
       </Button>
