@@ -6,11 +6,11 @@ import { useEffect, useRef } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
-import { Display, Eyebrow } from "@/components/brand/display";
-import { ButtonLink, Skeleton } from "@/components/ds";
+import { Eyebrow } from "@/components/brand/display";
+import { Skeleton } from "@/components/ds";
 import { canPlay, TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
 import { useCredits } from "@/components/music/credits";
-import { ListeningRoom } from "@/components/music/listening-room";
+import { ListeningRoom, RoomTitle } from "@/components/music/listening-room";
 import { usePlayer } from "@/components/music/player";
 import { useAsync } from "@/components/use-async";
 import { fetchTrack } from "@/lib/api";
@@ -97,14 +97,10 @@ export default function ListeningRoomPage() {
                 />
                 <div>
                   <Eyebrow>{artist ?? "Artist not available"}</Eyebrow>
-                  <Display as="h1" id="room-title" size="md" className="mt-3">
-                    {title || "Track"}
-                  </Display>
+                  {/* The title is the way to the song page, as in the playing room (D-ROOM-03). */}
+                  <RoomTitle track={{ id: trackId, title: title || "Track", artist }} className="mt-3 text-[2.25rem] leading-[0.95] md:text-[3rem]" />
                   <div className="mt-6 flex flex-wrap gap-3">
                     <TrackBuyControl track={{ id: trackId, title, artist }} commerce={commerce} size="lg" releaseIds={track.status === "ok" && track.data.release_ids?.length ? track.data.release_ids : releaseIdsFor(catalog.map, trackId)} />
-                    <ButtonLink href={`/tracks/${trackId}`} variant="secondary" size="lg">
-                      Track page
-                    </ButtonLink>
                   </div>
                 </div>
               </div>

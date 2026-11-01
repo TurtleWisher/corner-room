@@ -119,8 +119,12 @@ describe("PlayerProvider", () => {
       </PlayerProvider>,
     );
     await act(async () => screen.getByText("start t1").click());
-    expect(screen.getByText("Press play to start")).toBeTruthy();
+    expect(screen.getByText("Ready")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Play Last Stop" })).toBeTruthy();
+    // The song's length is read meanwhile, so the scrubber is ready when play is pressed.
+    const audio = document.querySelector("audio")!;
+    expect(audio.preload).toBe("metadata");
+    expect(HTMLMediaElement.prototype.load).toHaveBeenCalled();
   });
 
   it("shows an unknown length as --:-- and does not offer seeking yet", async () => {

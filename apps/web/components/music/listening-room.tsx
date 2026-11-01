@@ -302,7 +302,7 @@ function ArtistLink({ track }: { track: PlayerTrack }) {
  * that scatter a little and settle back, then hum while the pointer stays (app/styles/modules/
  * listen.css). The pieces are decoration: the link's name is the whole title.
  */
-function RoomTitle({ track, className }: { track: PlayerTrack; className: string }) {
+export function RoomTitle({ track, className }: { track: PlayerTrack; className: string }) {
   const label = titleOf(track);
   const atoms = useMemo(() => titleAtoms(label), [label]);
   return (
@@ -635,6 +635,7 @@ function Transport({ label, large = false, keyRef }: { label: string; large?: bo
         disabled={p.status === "loading"}
         aria-label={problem ? `Try ${label} again` : playing ? `Pause ${label}` : `Play ${label}`}
         data-playing={playing ? "" : undefined}
+        data-ready={p.needsGesture && !problem ? "" : undefined}
         className={cn("lr-key cr-cut cr-cut-sm cr-pkey cr-focus", large && "lr-key-large")}
       >
         {problem ? (
