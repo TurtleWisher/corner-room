@@ -233,6 +233,14 @@ export function initials(name: string | null | undefined, email?: string | null)
   return local ? local.slice(0, 2).toUpperCase() : "ME";
 }
 
+/**
+ * The signed picture link for the avatar button: the person's own picture, else the approved
+ * picture of an act they own or manage (owner, 2026-11-02), else none and initials show.
+ */
+export function chipPicture(user: { avatar_url?: string | null; act_picture_url?: string | null } | null | undefined): string | null {
+  return user?.avatar_url || user?.act_picture_url || null;
+}
+
 /** Active state for a nav link: exact match, or a deeper path under it ("/events/1" under "/events"). */
 export function isActivePath(pathname: string | null | undefined, href: string): boolean {
   if (!pathname) return false;

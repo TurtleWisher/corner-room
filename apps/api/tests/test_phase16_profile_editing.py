@@ -127,6 +127,8 @@ async def test_artist_changes_wait_for_staff(client: AsyncClient) -> None:
     public = (await client.get(f"/api/v1/artists/{artist_id}")).json()
     assert public["stage_name"] == "Rumi Test" and public["portrait_asset_id"] is None
     assert (await client.get(f"/api/v1/covers/artists/{artist_id}/480")).status_code == 404
+    # The header chip doesn't show a picture that is still waiting for staff either.
+    assert (await client.get("/api/v1/me", headers=bearer(token))).json()["act_picture_url"] is None
 
     # Staff of the label see it; the artist can't approve their own change; fans can't decide.
     queue = (await client.get("/api/v1/profile-changes", headers=bearer(staff))).json()
@@ -148,6 +150,11 @@ async def test_artist_changes_wait_for_staff(client: AsyncClient) -> None:
     assert public["stage_name"] == "Rumi" and public["bio"] == "Songs from Dhaka" and public["portrait_asset_id"]
     picture = await client.get(f"/api/v1/covers/artists/{artist_id}/480")
     assert picture.status_code == 200 and picture.headers["content-type"] == "image/jpeg"
+    # With no picture of their own, the header chip shows the act's approved one (owner, 2026-11-02).
+    me = (await client.get("/api/v1/me", headers=bearer(token))).json()
+    assert me["avatar_url"] is None and me["act_picture_url"].startswith("/api/v1/covers/signed/")
+    assert (await client.get(me["act_picture_url"])).status_code == 200
+    assert (await client.get("/api/v1/me", headers=bearer(fan["access_token"]))).json()["act_picture_url"] is None
     again = await client.post(f"/api/v1/profile-changes/{request_id}/transition", headers=bearer(staff), json={"to": "REJECTED", "note": "x"})
     assert again.status_code == 409
 

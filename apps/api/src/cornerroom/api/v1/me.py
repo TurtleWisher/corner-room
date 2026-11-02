@@ -69,6 +69,9 @@ class MeOut(BaseModel):
     has_workspace: bool = False
     # The fan's own picture (owner, 2026-10-23): a short-lived signed link, shown only to them.
     avatar_url: str | None = None
+    # The approved picture of an act they own or manage, for the header chip when they have no
+    # picture of their own (owner, 2026-11-02): the first such act in Studio's "Publishing as" list.
+    act_picture_url: str | None = None
 
 
 class MePatch(BaseModel):
@@ -83,6 +86,32 @@ def _avatar_url(svc: IdentityService, profile: CustomerProfile | None) -> str | 
     from cornerroom.modules.documents.application.covers import CoverService
 
     return CoverService(svc.session, svc.settings).signed_path(profile.avatar_asset_id, 480)
+
+
+async def _act_picture_url(svc: IdentityService, user_id: UUID) -> str | None:
+    from sqlalchemy import select
+
+    from cornerroom.modules.artists.domain.models import Artist, ArtistTeamMember
+    from cornerroom.modules.documents.application.covers import CoverService
+
+    # Artist.portrait_asset_id is the staff-approved picture for both kinds (a band's artist row
+    # mirrors the band, D-ARTIST-UNIFY-01); a picture still waiting for staff never shows here.
+    # Same order as Studio's "Publishing as" list (artist_ids_run_by): the act joined earliest.
+    asset_id = await svc.session.scalar(
+        select(Artist.portrait_asset_id)
+        .join(ArtistTeamMember, ArtistTeamMember.artist_id == Artist.id)
+        .where(
+            ArtistTeamMember.user_id == user_id,
+            ArtistTeamMember.status == "ACTIVE",
+            Artist.deleted_at.is_(None),
+            Artist.portrait_asset_id.is_not(None),
+        )
+        .order_by(ArtistTeamMember.created_at.asc())
+        .limit(1)
+    )
+    if asset_id is None:
+        return None
+    return CoverService(svc.session, svc.settings).signed_path(asset_id, 480)
 
 
 class SessionOut(BaseModel):
@@ -114,6 +143,7 @@ async def get_me(
         security_locked=user.security_locked_at is not None,
         organization_id=ctx.organization_id,
         avatar_url=_avatar_url(svc, profile),
+        act_picture_url=await _act_picture_url(svc, user.id),
         **await _roles_for_menu(svc, user.id, ctx.permission_keys),
     )
 
@@ -141,6 +171,7 @@ async def patch_me(
         security_locked=user.security_locked_at is not None,
         organization_id=ctx.organization_id,
         avatar_url=_avatar_url(svc, profile),
+        act_picture_url=await _act_picture_url(svc, user.id),
         **await _roles_for_menu(svc, user.id, ctx.permission_keys),
     )
 
