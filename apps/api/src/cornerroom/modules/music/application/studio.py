@@ -55,6 +55,10 @@ from cornerroom.modules.music.domain.models import (
 )
 
 EDITABLE_RELEASE_STATUSES = frozenset({"IDEA", "DEMO", "IN_PRODUCTION", "QC"})
+# D-PRESALE-03: once an early pre-sale is sent or approved, its title and type are what fans see.
+PRESALE_LOCKING = frozenset({"REQUESTED", "APPROVED"})
+# How soon an early pre-sale's date may be: a little room for staff to review it.
+PRESALE_MIN_LEAD = timedelta(hours=24)
 EDITABLE_TRACK_STATUSES = frozenset({"DRAFT"})
 STUDIO_RELEASE_TYPES = frozenset({"SINGLE", "EP", "ALBUM", "COMPILATION", "LIVE"})
 DEFAULT_CURRENCY = "BDT"
@@ -333,6 +337,8 @@ class StudioService:
             "cover_review_note": release.cover_review_note,
             # D-COVER-02: whether fans see the cover before release, and when.
             "cover_reveal": self._cover_reveal_view(release),
+            # D-PRESALE-03: the early pre-sale and its release-day email.
+            "presale": await self._presale_view(release, proposals),
             # D-CHANGES-01: changes to approved or released music waiting for staff, and the last decision.
             **(await self._change_request_view(release)),
             "profile": {"kind": _kind, "id": _pid, "display_name": profile_name},
@@ -359,6 +365,12 @@ class StudioService:
     async def update_release(self, ctx: AuthContext, release_id: UUID, changes: dict[str, Any], expected_version: int | None) -> Release:
         release, role = await self._release(ctx, release_id)
         self._require_editable(release)
+        if release.presale_status in PRESALE_LOCKING and (
+            ("title" in changes and _clean(changes["title"], 300) != release.title)
+            or ("release_type" in changes and changes["release_type"] != release.release_type)
+        ):
+            # D-PRESALE-03: fans see the title and type on the pre-sale page; staff approved them.
+            raise AppError("PRESALE_LOCKED", "The title and type are on your pre-sale page", 409, "Ask Corner Room to change them")
         if expected_version is not None and release.version != expected_version:
             raise ConflictError("Someone else changed this release. Reload to see their changes.")
         previous = self._release_fields(release)
@@ -943,6 +955,188 @@ class StudioService:
         return await latest_artwork_report(
             self.session, target_type="release_cover", target_id=release.id, current_asset_id=release.cover_asset_id
         )
+
+    # --- early pre-sale (D-PRESALE-03) -----------------------------------------------------------
+
+    async def _presale_view(self, release: Release, proposals: Any) -> dict[str, Any]:
+        from cornerroom.modules.commerce.application.onsite_presale import (
+            BEFORE_RELEASE_STATUSES,
+            PresaleService,
+            presale_listed,
+            presale_open,
+        )
+
+        now = self.clock.now()
+        presale_prices = [p for p in proposals if p.audience == "PRESALE" and p.status in ("PROPOSED", "ACCEPTED", "COUNTERED")]
+        price = presale_prices[0] if presale_prices else None
+        offers = await PresaleService(self.session, self.settings, self.clock).presale_offers(release.id)
+        early_possible = release.status in BEFORE_RELEASE_STATUSES
+        return {
+            "status": release.presale_status,
+            "requested_release_at": release.presale_requested_release_at,
+            "release_at": release.release_at if (release.presale_status == "APPROVED" or release.status == "SCHEDULED") else None,
+            "note": release.presale_note,
+            "requested_at": release.presale_requested_at,
+            "decided_at": release.presale_decided_at,
+            "price": None if price is None else {
+                "status": price.status, "amount_minor": price.amount_minor, "currency_code": price.currency_code,
+            },
+            "price_live": bool(offers),
+            "listed": presale_listed(release) and bool(offers),
+            "open": presale_open(release, now) and bool(offers),
+            "can_request": early_possible and release.presale_status in (None, "RETURNED"),
+            "can_withdraw": release.presale_status == "REQUESTED",
+            "email": await self._presale_email_view(release),
+        }
+
+    async def request_presale(self, ctx: AuthContext, release_id: UUID, release_at: Any) -> Release:
+        """Send an early pre-sale for review: fans would see the title, artist, this date and the
+        pre-sale price before the release is finished. Staff approve it or send it back."""
+        from cornerroom.modules.commerce.application.onsite_presale import BEFORE_RELEASE_STATUSES
+        from cornerroom.modules.music.domain.models import ReleaseReview
+
+        release, role = await self._release(ctx, release_id)
+        if release.status not in BEFORE_RELEASE_STATUSES:
+            raise AppError("INVALID_TRANSITION", "A scheduled release takes pre-orders on its own", 409)
+        if release.presale_status not in (None, "RETURNED"):
+            raise AppError("INVALID_TRANSITION", "This pre-sale is already with Corner Room", 409)
+        if release.primary_org_id is None:
+            raise AppError("CATALOG_AFFILIATION_REQUIRED", "Join a label on Corner Room before selling", 409)
+        if release_at is None or release_at <= self.clock.now() + PRESALE_MIN_LEAD:
+            raise AppError("VALIDATION_ERROR", "Choose a release date at least a day from now", 422, extras={"field": "release_at"})
+        priced = await self.session.scalar(
+            select(func.count()).select_from(OfferProposal).where(
+                OfferProposal.release_id == release.id, OfferProposal.audience == "PRESALE",
+                OfferProposal.status.in_(("PROPOSED", "ACCEPTED")),
+            )
+        )
+        if not priced:
+            raise AppError("PRESALE_PRICE_REQUIRED", "Propose a pre-sale price first", 409)
+        release.presale_status = "REQUESTED"
+        release.presale_requested_release_at = release_at
+        release.presale_requested_at = self.clock.now()
+        release.presale_requested_by = ctx.user_id
+        release.presale_note = None
+        release.updated_by = ctx.user_id
+        await self.music._flush_versioned()
+        await self._note_staff(ctx, release, role)
+        self.session.add(
+            ReleaseReview(release_id=release.id, reviewer_id=ctx.user_id, action="request_presale", note=None, from_status=release.status, to_status=release.status)
+        )
+        await self.session.flush()
+        await self.audit.record_from_auth(
+            ctx, action="release.presale.requested", entity_type="Release", entity_id=release.id,
+            new_state={"release_at": release_at.isoformat()}, organization_id=release.primary_org_id,
+        )
+        return release
+
+    async def withdraw_presale(self, ctx: AuthContext, release_id: UUID) -> Release:
+        """Take an early pre-sale back while it waits for review."""
+        release, role = await self._release(ctx, release_id)
+        if release.presale_status != "REQUESTED":
+            raise AppError("INVALID_TRANSITION", "Only a pre-sale waiting for review can be taken back", 409)
+        release.presale_status = None
+        release.updated_by = ctx.user_id
+        await self.music._flush_versioned()
+        await self._note_staff(ctx, release, role)
+        await self.audit.record_from_auth(
+            ctx, action="release.presale.withdrawn", entity_type="Release", entity_id=release.id, new_state={},
+            organization_id=release.primary_org_id,
+        )
+        return release
+
+    async def presale_queue(self, ctx: AuthContext) -> list[dict[str, Any]]:
+        """Staff: early pre-sales waiting for review in the active workspace."""
+        org = await self._require_staff_workspace(ctx, "music.approve")
+        rows = (
+            await self.session.execute(
+                select(Release)
+                .where(Release.primary_org_id == org, Release.presale_status == "REQUESTED", Release.deleted_at.is_(None))
+                .order_by(Release.presale_requested_at)
+            )
+        ).scalars().all()
+        out = []
+        for r in rows:
+            kind, pid = MusicService.profile_of(r)
+            name = None
+            if kind is not None and pid is not None:
+                _row, _org, name = await self._profile(kind, pid)
+            price = (
+                await self.session.execute(
+                    select(OfferProposal)
+                    .where(OfferProposal.release_id == r.id, OfferProposal.audience == "PRESALE", OfferProposal.status.in_(("PROPOSED", "ACCEPTED")))
+                    .order_by(OfferProposal.created_at.desc())
+                )
+            ).scalars().first()
+            out.append({
+                "release_id": r.id, "title": r.title, "release_type": r.release_type, "status": r.status,
+                "profile_name": name, "requested_release_at": r.presale_requested_release_at, "requested_at": r.presale_requested_at,
+                "price": None if price is None else {"status": price.status, "amount_minor": price.amount_minor, "currency_code": price.currency_code},
+            })
+        return out
+
+    # --- release-day email to pre-order buyers (D-PRESALE-03, D-MAIL-01 review rules) -----------------
+
+    async def _presale_mail(self, release: Release) -> Any:
+        from cornerroom.modules.commerce.domain.artist_mail import ArtistMail
+
+        return (
+            await self.session.execute(
+                select(ArtistMail).where(ArtistMail.send_with_release_id == release.id).order_by(ArtistMail.created_at.desc())
+            )
+        ).scalars().first()
+
+    async def _presale_email_view(self, release: Release) -> dict[str, Any] | None:
+        mail = await self._presale_mail(release)
+        if mail is None:
+            return None
+        return {
+            "id": mail.id, "subject": mail.subject, "body": mail.body, "status": mail.status, "review_note": mail.review_note,
+            "submitted_at": mail.submitted_at, "approved_at": mail.approved_at, "sent_at": mail.sent_at,
+            "recipient_count": mail.recipient_count,
+        }
+
+    async def save_presale_email(self, ctx: AuthContext, release_id: UUID, *, subject: Any, body: Any) -> Release:
+        """Write or change the email pre-order buyers get when the release comes out. It is an
+        artist email like any other (staff approve it, it carries the stop link); once approved it
+        waits for the release. Changing it after it was sent for review takes it back to a draft."""
+        from cornerroom.modules.commerce.application.artist_mail import ArtistMailService
+        from cornerroom.modules.commerce.domain.artist_mail import ArtistMail
+
+        release, _role = await self._release(ctx, release_id)
+        if release.status in {"RELEASED", "TAKEN_DOWN", "ARCHIVED"}:
+            raise AppError("INVALID_TRANSITION", "The release is out; write to buyers from Gifts, Emails", 409)
+        kind, pid = MusicService.profile_of(release)
+        if kind is None or pid is None:
+            raise NotFoundError("Release not found")
+        mails = ArtistMailService(self.session, self.settings, self.clock)
+        mail = await self._presale_mail(release)
+        data = {"subject": subject, "body": body}
+        if mail is None:
+            out = await mails.create_mail(ctx, kind, pid, {
+                **data, "occasion": "NEW_RELEASE",
+                "audience": {"works": [{"type": "RELEASE", "id": str(release.id)}], "who": "PRESALE"},
+            })
+            created = await self.session.get(ArtistMail, out["id"])
+            created.send_with_release_id = release.id
+            await self.session.flush()
+        else:
+            if mail.status in {"SENDING", "SENT"}:
+                raise AppError("INVALID_TRANSITION", "This email has already gone", 409)
+            if mail.status in {"IN_REVIEW", "SCHEDULED"}:
+                await mails.withdraw_mail(ctx, mail.id)
+            await mails.update_mail(ctx, mail.id, data)
+        return release
+
+    async def submit_presale_email(self, ctx: AuthContext, release_id: UUID) -> Release:
+        from cornerroom.modules.commerce.application.artist_mail import ArtistMailService
+
+        release, _role = await self._release(ctx, release_id)
+        mail = await self._presale_mail(release)
+        if mail is None:
+            raise AppError("VALIDATION_ERROR", "Write the email first", 422)
+        await ArtistMailService(self.session, self.settings, self.clock).submit_mail(ctx, mail.id)
+        return release
 
     # --- early cover reveal (D-COVER-02) ------------------------------------------------------------
 

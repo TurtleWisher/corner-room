@@ -144,6 +144,9 @@ class ArtistMail(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     occasion: Mapped[str | None] = mapped_column(String(32), nullable=True)
     file_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    # D-PRESALE-03: the release-day email to pre-order buyers. Once approved it waits (SCHEDULED, no
+    # send_at) until this release comes out, then goes like any scheduled email.
+    send_with_release_id: Mapped[UUID | None] = mapped_column(ForeignKey("music.releases.id"), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     __mapper_args__ = {"version_id_col": version}
 

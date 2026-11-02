@@ -89,7 +89,7 @@ describe("price proposals", () => {
     expect(canProposePresale("SCHEDULED")).toBe(true);
     expect(canProposePresale("RELEASED")).toBe(false);
     expect(canProposePresale("TAKEN_DOWN")).toBe(false);
-    expect(presaleHint("APPROVED", null)).toContain("once Corner Room sets the release date");
+    expect(presaleHint("APPROVED", null)).toContain("once your pre-sale is approved");
     expect(presaleHint("SCHEDULED", "2026-11-05T14:00:00Z")).toContain("open at this price");
   });
 });

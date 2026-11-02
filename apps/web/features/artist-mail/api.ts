@@ -95,6 +95,8 @@ export type ArtistMail = {
   occasion: Occasion | null;
   file_ids: string[];
   send_at?: string | null;
+  /** D-PRESALE-03: a release-day email to pre-order buyers goes out when this release does. */
+  send_with_release_id?: string | null;
   sent_at?: string | null;
   created_at: string;
   submitted_at?: string | null;

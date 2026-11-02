@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { CloudDownload, Disc3, X } from "lucide-react";
+import { CloudDownload, Disc3, Lock, X } from "lucide-react";
 
-import { ButtonLink, EmptyState, ErrorState, IconButton, Skeleton } from "@/components/ds";
+import { ButtonLink, DateTime, EmptyState, ErrorState, IconButton, Skeleton } from "@/components/ds";
 import { usePlayableCatalog, useCustomerCommerce } from "@/components/music/commerce";
 import { useCredits } from "@/components/music/credits";
 import { ListenPage } from "@/components/music/listen-page";
 import { TrackRows } from "@/components/music/track-rows";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
+import { fetchPresale } from "@/features/catalog/api";
 import { fetchLibrary, fetchRelease, removeLibraryItem, type LibraryRecord } from "@/lib/api";
 
 /* Library kinds from the streaming module: PURCHASE_REF is added by the API when a track or a whole release is bought. */
@@ -18,7 +19,18 @@ const KIND: Record<string, string> = { PURCHASE_REF: "Bought", SAVE: "Saved", LI
 
 /** Whole releases the customer bought; every track on them plays from the release page. */
 function BoughtReleases({ ids }: { ids: string[] }) {
-  const releases = useAsync(() => Promise.all(ids.map((id) => fetchRelease(id).catch(() => null))), [ids.join(",")]);
+  // A pre-ordered release isn't out yet (D-PRESALE-02/03): its pre-sale page gives the title and date.
+  const releases = useAsync(
+    () =>
+      Promise.all(
+        ids.map((id) =>
+          fetchRelease(id)
+            .then((r) => ({ title: r.title, unlocksAt: null as string | null }))
+            .catch(() => fetchPresale(id).then((p) => ({ title: p.title, unlocksAt: p.release_at })).catch(() => null)),
+        ),
+      ),
+    [ids.join(",")],
+  );
   if (ids.length === 0) return null;
   return (
     <section aria-labelledby="bought-releases" className="mb-10">
@@ -31,9 +43,20 @@ function BoughtReleases({ ids }: { ids: string[] }) {
           return (
             <li key={id}>
               <Link href={`/releases/${id}`} className="cr-focus flex items-center gap-3 border border-line p-3 hover:border-highlight">
-                <Disc3 aria-hidden="true" className="size-5 shrink-0 text-highlight" />
-                <span className="min-w-0 truncate font-semibold text-fg">
-                  {release?.title ?? (releases.status === "loading" ? "Loading" : "Release")}
+                {release?.unlocksAt ? (
+                  <Lock aria-hidden="true" className="size-5 shrink-0 text-fg-muted" />
+                ) : (
+                  <Disc3 aria-hidden="true" className="size-5 shrink-0 text-highlight" />
+                )}
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold text-fg">
+                    {release?.title ?? (releases.status === "loading" ? "Loading" : "Release")}
+                  </span>
+                  {release?.unlocksAt ? (
+                    <span className="block text-xs text-fg-muted">
+                      Pre-ordered · unlocks on <DateTime value={release.unlocksAt} format="date" />
+                    </span>
+                  ) : null}
                 </span>
               </Link>
             </li>

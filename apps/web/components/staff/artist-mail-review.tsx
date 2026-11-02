@@ -47,7 +47,11 @@ function Item({ m, onDone }: { m: ArtistMail; onDone: () => void }) {
         {audienceLine(fullAudience(m.audience))} · {reachLine(m.reach)}
       </p>
       <p className="mt-1 text-sm text-muted-foreground">
-        {m.send_at ? `Goes out ${whenLine(m.send_at)} if approved (who gets it is worked out then).` : "Goes out as soon as it is approved."}
+        {m.send_with_release_id
+          ? "A release-day email: if approved, it goes to everyone who pre-ordered when the release comes out (who gets it is worked out then)."
+          : m.send_at
+            ? `Goes out ${whenLine(m.send_at)} if approved (who gets it is worked out then).`
+            : "Goes out as soon as it is approved."}
         {m.files?.length ? ` With files: ${m.files.map((f) => f.name).join(", ")}.` : ""}
       </p>
       <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded border bg-muted/30 p-3 font-sans text-sm">{m.body}</pre>

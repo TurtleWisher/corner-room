@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
-import { CircleCheck, LogIn } from "lucide-react";
+import { CalendarClock, CircleCheck, LogIn } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
@@ -14,10 +14,12 @@ import { PaymentPanel } from "@/components/checkout/payment-panel";
 import { PowerTransition } from "@/components/checkout/power-transition";
 import { GenericSummary, MusicReceipt, TicketConfirmation, TicketSummary, TrackSummary } from "@/components/checkout/summaries";
 import { useOrderStatus } from "@/components/checkout/use-order-status";
-import { Button, ButtonLink, Card, ErrorState, Field, Input, Money, Skeleton } from "@/components/ds";
+import { Button, ButtonLink, Card, DateTime, ErrorState, Field, Input, Money, Skeleton } from "@/components/ds";
 import { useCredits } from "@/components/music/credits";
 import { RetryButton } from "@/components/shell/staff-panel";
+import { fetchPresale } from "@/features/catalog/api";
 import { maybeCoverUrl, offerCoverSource } from "@/lib/cover-view";
+import { PRESALE_PROMISE } from "@/lib/presale-view";
 import { friendlyError } from "@/lib/error-copy";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import {
@@ -58,6 +60,8 @@ type Summary = {
   side?: string;
   /** For music offers: what is being bought, to check ownership and route after paying. */
   offer?: { product_type: string | null; subject_id?: string | null };
+  /** A pre-order (D-PRESALE-02/03): its release date, shown with the promise before paying. */
+  presale?: { releaseAt: string; open: boolean } | null;
 };
 
 function alreadyOwns(entitlements: EntitlementRecord[], offer: NonNullable<Summary["offer"]>): boolean {
@@ -75,14 +79,16 @@ async function loadSummary(item: CheckoutItem): Promise<Summary | null> {
   if (item.kind === "offer") {
     const offer = (await fetchOffers()).items.find((o) => o.id === item.id);
     if (!offer) return null;
+    const page = offer.audience === "PRESALE" && offer.subject_id ? await fetchPresale(offer.subject_id).catch(() => null) : null;
     return {
       title: offerTitle(offer),
       kind: productKind(offer.product_type),
       price: { amount_minor: offer.amount_minor, currency_code: offer.currency_code },
       // D-PRESALE-02: a pre-order is paid now and unlocks on release day.
-      note: offer.audience === "PRESALE" ? "Pre-order. The music unlocks for you on release day, and we'll email you when it's out." : null,
+      note: offer.audience === "PRESALE" && !page ? PRESALE_PROMISE.unlock : null,
       tone: "sky",
       offer: { product_type: offer.product_type, subject_id: offer.subject_id },
+      presale: page ? { releaseAt: page.release_at, open: page.open !== false } : null,
     };
   }
   // Ticket types are read through their event; without the event the order total still comes from the API.
@@ -365,6 +371,21 @@ function NewCheckout() {
               </p>
             ) : null}
             {summary.data.note ? <p className="mt-1 text-sm text-fg">{summary.data.note}</p> : null}
+            {summary.data.presale ? (
+              // Before paying: when it comes out and what the pre-order promises (pre-sale experience guide).
+              <div className="mt-3 border-l-2 border-line pl-3 text-sm">
+                <p className="inline-flex items-center gap-2 font-semibold text-fg">
+                  <CalendarClock aria-hidden="true" className="size-4" /> Pre-order · out <DateTime value={summary.data.presale.releaseAt} format="date" /> at{" "}
+                  <DateTime value={summary.data.presale.releaseAt} format="time" />
+                </p>
+                <ul className="mt-1 grid gap-1 text-fg">
+                  <li>{PRESALE_PROMISE.unlock}</li>
+                  <li>{PRESALE_PROMISE.dateChange}</li>
+                  <li>{PRESALE_PROMISE.cancelled}</li>
+                </ul>
+                {!summary.data.presale.open ? <p className="mt-1 font-semibold text-fg">Pre-orders for this release are closed.</p> : null}
+              </div>
+            ) : null}
             {item.kind === "tickets" ? (
               <div className="mt-4 max-w-[8rem]">
                 <Field label="Quantity">

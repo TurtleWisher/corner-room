@@ -39,6 +39,10 @@ const COPY: Record<string, string> = {
   REVEAL_TIME_PASSED: "That time has already passed. Choose a shorter time, or use Reveal now.",
   COVER_ALREADY_REVEALED: "Fans can already see this cover, so it can't be hidden again.",
   COVER_REQUIRED: "Add a cover first.",
+  // Early pre-sale (owner, 2026-11-03, D-PRESALE-03).
+  PRESALE_PRICE_REQUIRED: "Propose a pre-sale price first, in the Price section.",
+  PRESALE_LOCKED: "Fans see this title and type on your pre-sale page, so they can't change now. Ask Corner Room to change them.",
+  CATALOG_AFFILIATION_REQUIRED: "Your music needs a label on Corner Room before it can be sold. Ask Corner Room to set one up.",
   RATE_LIMITED: "Too many attempts. Please wait a moment and try again.",
   NETWORK_ERROR: "We could not reach Corner Room. Check your connection and try again.",
 };

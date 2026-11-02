@@ -451,3 +451,35 @@
     box-shadow: none;
   }
 }
+
+/* The pre-sale status, in words and a shape (never colour alone). */
+.ps-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.2em 0.6em;
+  border: 1px solid currentColor;
+}
+.ps-badge::before {
+  content: "";
+  width: 0.45em;
+  height: 0.45em;
+  background: currentColor;
+  transform: rotate(45deg);
+}
+
+/* Release day: the cover opens from the seam once, when the API first serves it as released to a
+   browser that saw the pre-sale. Hero timing (420 ms); none under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .ps-open {
+    animation: ps-open 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+}
+@keyframes ps-open {
+  from {
+    clip-path: inset(0 50% 0 50%);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}

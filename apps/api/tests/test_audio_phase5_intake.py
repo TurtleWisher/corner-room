@@ -74,6 +74,8 @@ async def test_staff_prepare_catalog_only_and_cannot_submit(client: AsyncClient)
         "cover_waiting", "pending_cover_url", "cover_review_note", "change_request", "last_change_decision",
         # When fans see the cover before release (D-COVER-02, 2026-11-02): times and flags only.
         "cover_reveal",
+        # Early pre-sale and its release-day email (D-PRESALE-03, 2026-11-03).
+        "presale",
     }
     assert set(detail["cover_reveal"]) == {"lead_minutes", "revealed_at", "reveal_at", "revealed", "can_change", "can_reveal_now"}
     assert set(detail["profile"]) == {"kind", "id", "display_name"}

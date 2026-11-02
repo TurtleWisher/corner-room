@@ -234,6 +234,43 @@ class CoverRevealOut(BaseModel):
     can_reveal_now: bool = False
 
 
+class PresalePriceOut(BaseModel):
+    status: str
+    amount_minor: int
+    currency_code: str
+
+
+class PresaleEmailOut(BaseModel):
+    id: UUID
+    subject: str
+    body: str
+    # DRAFT, IN_REVIEW, SCHEDULED (approved, waits for the release), SENDING or SENT.
+    status: str
+    review_note: str | None = None
+    submitted_at: datetime | None = None
+    approved_at: datetime | None = None
+    sent_at: datetime | None = None
+    recipient_count: int | None = None
+
+
+class StudioPresaleOut(BaseModel):
+    """D-PRESALE-03: the early pre-sale (REQUESTED, APPROVED or RETURNED) and its release-day email."""
+
+    status: str | None = None
+    requested_release_at: datetime | None = None
+    release_at: datetime | None = None
+    note: str | None = None
+    requested_at: datetime | None = None
+    decided_at: datetime | None = None
+    price: PresalePriceOut | None = None
+    price_live: bool = False
+    listed: bool = False
+    open: bool = False
+    can_request: bool = False
+    can_withdraw: bool = False
+    email: PresaleEmailOut | None = None
+
+
 class ReleaseDetailOut(BaseModel):
     release: ReleaseFieldsOut
     cover_url: str | None = None
@@ -242,6 +279,7 @@ class ReleaseDetailOut(BaseModel):
     pending_cover_url: str | None = None
     cover_review_note: str | None = None
     cover_reveal: CoverRevealOut = CoverRevealOut()
+    presale: StudioPresaleOut = StudioPresaleOut()
     # D-CHANGES-01: changes to approved or released music waiting for staff, and the last decision.
     change_request: ChangeRequestOut | None = None
     last_change_decision: dict[str, Any] | None = None
@@ -498,6 +536,41 @@ class CoverRevealIn(BaseModel):
     lead_minutes: int | None = Field(default=None, ge=1)
 
 
+class PresaleRequestIn(BaseModel):
+    release_at: datetime
+
+
+class PresaleEmailIn(BaseModel):
+    subject: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=20000)
+
+
+@router.post("/studio/releases/{release_id}/presale/request", response_model=ReleaseDetailOut)
+async def request_presale(release_id: UUID, body: PresaleRequestIn, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
+    """D-PRESALE-03: send an early pre-sale (title, artist, date, pre-sale price) for review."""
+    await svc.request_presale(ctx, release_id, body.release_at)
+    return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
+
+
+@router.post("/studio/releases/{release_id}/presale/withdraw", response_model=ReleaseDetailOut)
+async def withdraw_presale(release_id: UUID, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
+    await svc.withdraw_presale(ctx, release_id)
+    return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
+
+
+@router.put("/studio/releases/{release_id}/presale/email", response_model=ReleaseDetailOut)
+async def save_presale_email(release_id: UUID, body: PresaleEmailIn, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
+    """D-PRESALE-03: the email pre-order buyers get when the release comes out (staff approve it)."""
+    await svc.save_presale_email(ctx, release_id, subject=body.subject, body=body.body)
+    return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
+
+
+@router.post("/studio/releases/{release_id}/presale/email/submit", response_model=ReleaseDetailOut)
+async def submit_presale_email(release_id: UUID, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
+    await svc.submit_presale_email(ctx, release_id)
+    return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
+
+
 @router.put("/studio/releases/{release_id}/cover-reveal", response_model=ReleaseDetailOut)
 async def set_cover_reveal(release_id: UUID, body: CoverRevealIn, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
     """D-COVER-02: show the cover a chosen time before release, or only with the release."""
@@ -640,6 +713,46 @@ async def intake_queue(ctx: Ctx, svc: StudioDep, in_review: bool = False) -> lis
 async def set_managed(release_id: UUID, body: ManagedIn, ctx: Ctx, svc: StudioDep) -> IntakeOut:
     intake = await svc.set_managed(ctx, release_id, enabled=body.enabled, reason=body.reason)
     return IntakeOut(mode=intake.mode, status=intake.status, managed_reason=intake.managed_reason, artist_confirmed_at=intake.artist_confirmed_at)
+
+
+class PresaleQueueItemOut(BaseModel):
+    release_id: UUID
+    title: str
+    release_type: str
+    status: str
+    profile_name: str | None = None
+    requested_release_at: datetime | None = None
+    requested_at: datetime | None = None
+    price: PresalePriceOut | None = None
+
+
+@router.get("/catalog-intake/presales", response_model=list[PresaleQueueItemOut])
+async def presale_queue(ctx: Ctx, svc: StudioDep) -> list[PresaleQueueItemOut]:
+    """Staff: early pre-sales waiting for review in the active workspace (D-PRESALE-03)."""
+    return [PresaleQueueItemOut(**i) for i in await svc.presale_queue(ctx)]
+
+
+class PresaleDecisionIn(BaseModel):
+    decision: Literal["approve", "return", "move_date"]
+    release_at: datetime | None = None
+    note: str | None = Field(default=None, max_length=2000)
+
+
+@router.post("/catalog-intake/releases/{release_id}/presale/review", response_model=ReleaseFieldsOut)
+async def review_presale(
+    release_id: UUID,
+    body: PresaleDecisionIn,
+    ctx: Ctx,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    settings: Annotated[Settings, Depends(settings_dep)],
+) -> ReleaseFieldsOut:
+    """Staff: approve an early pre-sale, send it back with a note, or move its date (D-PRESALE-03)."""
+    from cornerroom.modules.music.application.review import ReviewService
+
+    release = await ReviewService(session, settings).presale_decision(
+        ctx, release_id, decision=body.decision, release_at=body.release_at, note=body.note
+    )
+    return ReleaseFieldsOut(**StudioService._release_fields(release))
 
 
 class ReviewIn(BaseModel):
@@ -877,6 +990,8 @@ class PresaleViewOut(BaseModel):
     # Only once the artist reveals it early (D-COVER-02); songs stay hidden until release.
     cover_url: str | None
     offer: PresaleOfferOut
+    # False once the date has passed while the release waits to be finished: no pre-orders then.
+    open: bool = True
 
 
 class PresaleCancelIn(BaseModel):

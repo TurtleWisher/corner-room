@@ -139,6 +139,8 @@ export type StudioReleaseDetail = {
   cover_review_note?: string | null;
   /** D-COVER-02: whether fans see the cover before release, and when (the API decides). */
   cover_reveal?: CoverRevealState;
+  /** D-PRESALE-03: the early pre-sale and its release-day email (the API decides every flag). */
+  presale?: StudioPresale;
   /** D-CHANGES-01: changes to approved or released music, waiting in a request; the last decision. */
   change_request?: ChangeRequest | null;
   last_change_decision?: { status: string; review_note?: string | null; decided_at?: string | null } | null;
@@ -285,6 +287,89 @@ export function reviewChanges(releaseId: string, action: "approve" | "reject", n
 }
 
 /** Withdraw a new cover that is waiting for staff (D-COVER-01). */
+export type StudioPresale = {
+  status: "REQUESTED" | "APPROVED" | "RETURNED" | null;
+  requested_release_at: string | null;
+  release_at: string | null;
+  note: string | null;
+  requested_at: string | null;
+  decided_at: string | null;
+  price: { status: string; amount_minor: number; currency_code: string } | null;
+  price_live: boolean;
+  listed: boolean;
+  open: boolean;
+  can_request: boolean;
+  can_withdraw: boolean;
+  email: {
+    id: string;
+    subject: string;
+    body: string;
+    status: string;
+    review_note: string | null;
+    submitted_at: string | null;
+    approved_at: string | null;
+    sent_at: string | null;
+    recipient_count: number | null;
+  } | null;
+};
+
+/** D-PRESALE-03: send an early pre-sale (title, artist, this date, the pre-sale price) for review. */
+export function requestPresale(releaseId: string, releaseAt: string): Promise<StudioReleaseDetail> {
+  return apiFetch<StudioReleaseDetail>(`/api/v1/studio/releases/${releaseId}/presale/request`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify({ release_at: releaseAt }),
+    retry: false,
+  });
+}
+
+export function withdrawPresale(releaseId: string): Promise<StudioReleaseDetail> {
+  return apiFetch<StudioReleaseDetail>(`/api/v1/studio/releases/${releaseId}/presale/withdraw`, { method: "POST", retry: false });
+}
+
+/** D-PRESALE-03: the email pre-order buyers get when the release comes out (staff approve it). */
+export function savePresaleEmail(releaseId: string, body: { subject: string; body: string }): Promise<StudioReleaseDetail> {
+  return apiFetch<StudioReleaseDetail>(`/api/v1/studio/releases/${releaseId}/presale/email`, {
+    method: "PUT",
+    headers: json,
+    body: JSON.stringify(body),
+    retry: false,
+  });
+}
+
+export function submitPresaleEmail(releaseId: string): Promise<StudioReleaseDetail> {
+  return apiFetch<StudioReleaseDetail>(`/api/v1/studio/releases/${releaseId}/presale/email/submit`, { method: "POST", retry: false });
+}
+
+export type PresaleQueueItem = {
+  release_id: string;
+  title: string;
+  release_type: string;
+  status: string;
+  profile_name: string | null;
+  requested_release_at: string | null;
+  requested_at: string | null;
+  price: { status: string; amount_minor: number; currency_code: string } | null;
+};
+
+/** Staff: early pre-sales waiting for review in the active workspace. */
+export function fetchPresaleQueue(): Promise<PresaleQueueItem[]> {
+  return apiFetch<PresaleQueueItem[]>("/api/v1/catalog-intake/presales", { retry: false });
+}
+
+/** Staff: approve an early pre-sale, send it back with a note, or move its date. */
+export function reviewPresale(
+  releaseId: string,
+  body: { decision: "approve" | "return" | "move_date"; release_at?: string | null; note?: string },
+): Promise<StudioRelease> {
+  return apiFetch<StudioRelease>(`/api/v1/catalog-intake/releases/${releaseId}/presale/review`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify(body),
+    retry: false,
+  });
+}
+
 /** D-COVER-02: show the cover this many minutes before release, or (null) only with the release. */
 export function setCoverReveal(releaseId: string, leadMinutes: number | null): Promise<StudioReleaseDetail> {
   return apiFetch<StudioReleaseDetail>(`/api/v1/studio/releases/${releaseId}/cover-reveal`, {
