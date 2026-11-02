@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useLayoutEffect, useState } from "react";
 import { Check, Lock, LogIn, Play, Plus } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -38,6 +38,7 @@ import {
 } from "@/lib/api";
 import { fetchPresale, type PresalePageRecord } from "@/features/catalog/api";
 import { coverUrl } from "@/lib/cover-view";
+import { takePresaleSeen } from "@/lib/presale-view";
 import { formatCount } from "@/lib/format/count";
 import { canModerateMusic, creditName, formatDuration, playQueue, playState, releaseEyebrow, releaseHeroActions, trackCountLabel } from "@/lib/music-view";
 import { releaseBuyLabel, releaseBuyState } from "@/lib/ownership";
@@ -220,6 +221,27 @@ function TrackList({
   );
 }
 
+/**
+ * Release day (pre-sale experience guide): someone who saw this release on pre-sale sees its cover
+ * open once from the seam, the first time the API serves it as released. Never delays playing.
+ */
+function OpeningCover({ releaseId, children }: { releaseId: string; children: React.ReactNode }) {
+  const [opening, setOpening] = useState(false);
+  useLayoutEffect(() => {
+    if (takePresaleSeen(releaseId)) setOpening(true);
+  }, [releaseId]);
+  return (
+    <div className={cn("w-full", opening && "ps-open")}>
+      {children}
+      {opening ? (
+        <p role="status" aria-live="polite" className="sr-only">
+          It&apos;s out now.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function ReleasePage() {
   const { id } = useParams<{ id: string }>();
   const { status, user } = useAuth();
@@ -308,11 +330,13 @@ export default function ReleasePage() {
     <main id="main" data-theme="sky" className="cr-scope">
       <LitSurface as="section" theme="sky" aria-labelledby="release-title">
         <div className="mx-auto grid max-w-[90rem] items-center gap-10 px-4 py-12 md:grid-cols-[minmax(0,26rem)_1fr] md:px-6 md:py-16">
-          <CoverArt
-            src={coverUrl({ release: release.id, hasCover: !!release.cover_asset_id }, 1200)}
-            fallback={<RoomCube front={release.title} side={artist ?? release.title} tone="sky" label="" animate className="w-full" />}
-            className="w-full"
-          />
+          <OpeningCover releaseId={release.id}>
+            <CoverArt
+              src={coverUrl({ release: release.id, hasCover: !!release.cover_asset_id }, 1200)}
+              fallback={<RoomCube front={release.title} side={artist ?? release.title} tone="sky" label="" animate className="w-full" />}
+              className="w-full"
+            />
+          </OpeningCover>
           <div>
             <Eyebrow>{releaseEyebrow(release, artist, rows.length)}</Eyebrow>
             <Display as="h1" id="release-title" size="lg" className="mt-4">

@@ -134,6 +134,11 @@ const REVIEW_TEXT: Record<string, string> = {
   release: "Released",
   takedown: "Taken down",
   cancel_presale: "Pre-sale cancelled",
+  // Early pre-sale (D-PRESALE-03).
+  request_presale: "Pre-sale sent for review",
+  approve_presale: "Pre-sale approved",
+  return_presale: "Pre-sale sent back",
+  move_presale_date: "Pre-sale date moved",
 };
 
 /** Words for one review event; the reviewer's identity is never part of it. */
@@ -174,7 +179,7 @@ export function presaleHint(status: string, releaseAt: string | null | undefined
   if (status === "SCHEDULED" && releaseAt) {
     return "Pre-orders are open at this price until release day. Fans who pre-order can play the music from release day.";
   }
-  return "Fans can pre-order at this price once Corner Room sets the release date. The music unlocks for them on release day.";
+  return "Fans pre-book at this price once your pre-sale is approved and Corner Room agrees the price. The music unlocks for them on release day.";
 }
 /** Asset states after a cover upload: still being checked, usable, or turned down. */
 const COVER_ACCEPTED = new Set(["ACCEPTED", "READY"]);

@@ -64,6 +64,11 @@ function MailRow({ mail, onEdit, onChanged }: { mail: ArtistMail; onEdit: () => 
       </p>
       {mail.send_at && !sent ? <p className="mt-1 text-sm text-fg">Goes out {whenLine(mail.send_at)} once approved.</p> : null}
       {mail.status === "SCHEDULED" && mail.send_at ? <p className="mt-1 text-sm text-fg">Approved. Goes out {whenLine(mail.send_at)}.</p> : null}
+      {mail.send_with_release_id && !sent ? (
+        <p className="mt-1 text-sm text-fg">
+          {mail.status === "SCHEDULED" ? "Approved. " : ""}Goes to pre-order buyers when the release comes out. Change it in the release&apos;s Pre-sale section.
+        </p>
+      ) : null}
       {progress ? <p className="mt-1 text-sm text-fg">{progress}</p> : null}
       {mail.review_note ? (
         <p className="mt-2 text-sm text-fg">

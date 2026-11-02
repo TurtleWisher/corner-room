@@ -261,6 +261,8 @@ class MailOut(BaseModel):
     counts: dict[str, int]
     reach: ReachOut | None = None
     files: list[AttachedFileOut] | None = None
+    # D-PRESALE-03: the release-day email to pre-order buyers goes out when this release does.
+    send_with_release_id: UUID | None = None
 
 
 class OverviewOut(BaseModel):

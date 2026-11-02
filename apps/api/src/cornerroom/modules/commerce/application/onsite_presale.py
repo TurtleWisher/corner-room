@@ -40,15 +40,24 @@ DHAKA = timezone(timedelta(hours=6), "Dhaka")
 SYSTEM_ACTOR = UUID(int=0)
 
 
+# Before release: the release is still being made or reviewed (an early pre-sale, D-PRESALE-03).
+BEFORE_RELEASE_STATUSES = frozenset({"IDEA", "DEMO", "IN_PRODUCTION", "QC", "METADATA_REVIEW", "APPROVED"})
+
+
+def presale_listed(release: Any) -> bool:
+    """Fans can see the pre-sale page: the release is scheduled (D-PRESALE-02), or staff approved an
+    early pre-sale for it and it isn't out yet (D-PRESALE-03). The date may have passed while the
+    release waits to be finished; then the page stays, without the button."""
+    if release is None or getattr(release, "deleted_at", None) is not None or release.release_at is None:
+        return False
+    if release.status == "SCHEDULED":
+        return True
+    return getattr(release, "presale_status", None) == "APPROVED" and release.status in BEFORE_RELEASE_STATUSES
+
+
 def presale_open(release: Any, now: datetime) -> bool:
-    """Pre-orders are taken while a release is scheduled for a date still to come."""
-    return (
-        release is not None
-        and getattr(release, "deleted_at", None) is None
-        and release.status == "SCHEDULED"
-        and release.release_at is not None
-        and release.release_at > now
-    )
+    """Pre-orders are taken while the pre-sale page is up and the date is still to come."""
+    return presale_listed(release) and release.release_at > now
 
 
 def release_date_text(moment: datetime | None) -> str:
@@ -82,7 +91,8 @@ class PresaleService:
 
     async def public_view(self, release_id: UUID) -> dict[str, Any]:
         """What fans see of a release on pre-sale: title, artist, date and the offer only (owner,
-        2026-11-02). The cover only once the artist reveals it early (D-COVER-02); never the songs."""
+        2026-11-02). The cover only once the artist reveals it early (D-COVER-02); never the songs.
+        `open` is false once the date has passed while the release waits to be finished."""
         from cornerroom.modules.documents.application.covers import CoverService
         from cornerroom.modules.music.application.studio import StudioService
         from cornerroom.modules.music.domain.cover_reveal import cover_revealed
@@ -90,7 +100,7 @@ class PresaleService:
 
         release = await self.session.get(Release, release_id)
         offers = await self.presale_offers(release_id) if release is not None else []
-        if not presale_open(release, self.clock.now()) or not offers:
+        if not presale_listed(release) or not offers:
             raise NotFoundError("Release not found")
         studio = StudioService(self.session, self.settings, self.clock)
         kind, pid = studio.music.profile_of(release)
@@ -109,6 +119,7 @@ class PresaleService:
             "artist_id": pid,
             "cover_url": CoverService(self.session, self.settings).signed_path(release.cover_asset_id, 1200) if show_cover else None,
             "offer": {"id": offer.id, "amount_minor": offer.amount_minor, "currency_code": offer.currency_code},
+            "open": presale_open(release, self.clock.now()),
         }
 
     async def presale_orders(self, release_id: UUID) -> list[Order]:
@@ -161,17 +172,36 @@ class PresaleService:
         for release in due:
             if not await review.system_release(release, actor=SYSTEM_ACTOR):
                 continue
-            # The pre-sale price ends with the pre-sale; the normal price takes over.
-            for offer in await self.presale_offers(release.id):
-                offer.status = "RETIRED"
-            await self.tell_buyers(release, PRESALE_RELEASED, actor=None)
+            await self.after_release(release, actor=None)
             released += 1
         await self.session.flush()
         return released
 
+    async def after_release(self, release: Any, *, actor: UUID | None) -> None:
+        """A release just came out (on its date, or staff pressed Release now): the pre-sale price
+        ends and the normal price takes over, pre-order buyers are told, and the artist's approved
+        release-day email (D-PRESALE-03) goes out with the next run of the email worker."""
+        from cornerroom.modules.commerce.domain.artist_mail import ArtistMail
+
+        for offer in await self.presale_offers(release.id):
+            offer.status = "RETIRED"
+        await self.tell_buyers(release, PRESALE_RELEASED, actor=actor)
+        waiting = (
+            await self.session.execute(
+                select(ArtistMail).where(
+                    ArtistMail.send_with_release_id == release.id, ArtistMail.status == "SCHEDULED", ArtistMail.send_at.is_(None)
+                )
+            )
+        ).scalars().all()
+        for mail in waiting:
+            mail.send_at = self.clock.now()
+        await self.session.flush()
+
     async def cancel(self, ctx: AuthContext, release_id: UUID, note: str | None) -> dict[str, Any]:
-        """Staff: cancel a pre-sale. The release goes back to approved without a date, the pre-sale
-        price stops, every pre-order is sent to finance for a full refund, and buyers are told."""
+        """Staff: cancel a pre-sale. A scheduled release goes back to approved without a date; an early
+        pre-sale (D-PRESALE-03) is closed and the release stays where it is in the making, without a
+        date. The pre-sale price stops, every pre-order is sent to finance for a full refund, and
+        buyers are told."""
         from cornerroom.modules.authorization.application.service import AuthorizationService
         from cornerroom.modules.audit.application.service import AuditService
         from cornerroom.modules.finance.application.service import PaymentService
@@ -185,8 +215,8 @@ class PresaleService:
             ctx.user_id, "music.approve", resource_type="release", resource_id=release.id, organization_id=release.primary_org_id
         ):
             raise NotFoundError("Release not found")
-        if release.status != "SCHEDULED":
-            raise AppError("INVALID_TRANSITION", "Only a scheduled release has a pre-sale to cancel", 409)
+        if release.status != "SCHEDULED" and not presale_listed(release):
+            raise AppError("INVALID_TRANSITION", "This release has no pre-sale to cancel", 409)
         if ctx.organization_id != release.primary_org_id:
             raise AppError("WORKSPACE_REQUIRED", "Switch to this release's workspace to cancel its pre-sale", 409)
         # Refunds need finance rights in this workspace (Q-P0-05): check before changing anything.
@@ -196,8 +226,10 @@ class PresaleService:
         )
         text = " ".join((note or "").split())[:2000] or None
         previous = release.status
-        release.status = "APPROVED"
+        if release.status == "SCHEDULED":
+            release.status = "APPROVED"
         release.release_at = None
+        release.presale_status = None
         tracks = (
             await self.session.execute(
                 select(Track).join(ReleaseTrack, ReleaseTrack.track_id == Track.id).where(ReleaseTrack.release_id == release.id)

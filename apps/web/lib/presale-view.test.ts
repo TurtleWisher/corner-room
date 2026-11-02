@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { parsePaidOn, parsePresaleList, preorderLabel, preorderNote, presaleCountdown, presaleTotal, splitLine } from "./presale-view";
+import {
+  PRESALE_PROMISE,
+  parsePaidOn,
+  parsePresaleList,
+  preorderLabel,
+  preorderNote,
+  presaleCountdown,
+  presaleTotal,
+  splitLine,
+  studioPresaleStage,
+} from "./presale-view";
 
 describe("pre-sale list", () => {
   it("reads a Notion CSV export in any column order and ignores extra columns", () => {
@@ -76,14 +86,54 @@ describe("pre-orders on Corner Room (D-PRESALE-02)", () => {
   });
 
   it("names the pre-order", () => {
-    expect(preorderLabel("SINGLE")).toBe("Pre-order the single");
-    expect(preorderLabel("ALBUM")).toBe("Pre-order the album");
-    expect(preorderLabel(null)).toBe("Pre-order the release");
+    expect(preorderLabel("SINGLE")).toBe("Pre-book the single");
+    expect(preorderLabel("EP")).toBe("Pre-book the EP");
+    expect(preorderLabel("ALBUM")).toBe("Pre-book the album");
+    expect(preorderLabel(null)).toBe("Pre-book the release");
   });
+
+  it("states the pre-order promise from the decided policy", () => {
+    expect(PRESALE_PROMISE.unlock).toMatch(/unlocks for you on release day/);
+    expect(PRESALE_PROMISE.dateChange).toMatch(/stays in place.*refund/);
+    expect(PRESALE_PROMISE.cancelled).toMatch(/full refund/);
+  });
+
+  it("reads where an early pre-sale stands in Studio", () => {
+    expect(studioPresaleStage(null, "IDEA")).toBe("none");
+    expect(studioPresaleStage({ can_request: true, price: null }, "IDEA")).toBe("price_needed");
+    expect(studioPresaleStage({ can_request: true, price: { status: "PROPOSED" } }, "IDEA")).toBe("ready_to_send");
+    expect(studioPresaleStage({ can_request: true, price: { status: "COUNTERED" } }, "IDEA")).toBe("price_needed");
+    expect(studioPresaleStage({ status: "REQUESTED" }, "IDEA")).toBe("waiting");
+    expect(studioPresaleStage({ status: "RETURNED", can_request: true }, "IDEA")).toBe("returned");
+    expect(studioPresaleStage({ status: "APPROVED" }, "IN_PRODUCTION")).toBe("approved_waiting_price");
+    expect(studioPresaleStage({ status: "APPROVED", listed: true, open: true }, "IN_PRODUCTION")).toBe("live");
+    expect(studioPresaleStage({ status: "APPROVED", listed: true, open: false }, "METADATA_REVIEW")).toBe("closed");
+    expect(studioPresaleStage({ listed: false }, "SCHEDULED")).toBe("scheduled");
+  });
+
 
   it("marks pre-orders on orders", () => {
     expect(preorderNote({ is_presale: true })).toBe("Pre-order · unlocks on release day");
     expect(preorderNote({ is_presale: false })).toBeNull();
     expect(preorderNote({})).toBeNull();
+  });
+});
+
+describe("release-day opening", () => {
+  it("opens once for a browser that saw the pre-sale", async () => {
+    const { rememberPresaleSeen, takePresaleSeen } = await import("./presale-view");
+    const data = new Map<string, string>();
+    const store = {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+    };
+    expect(takePresaleSeen("r1", store)).toBe(false);
+    rememberPresaleSeen("r1", store);
+    expect(takePresaleSeen("r1", store)).toBe(true);
+    expect(takePresaleSeen("r1", store)).toBe(false);
+    const broken = { getItem: () => { throw new Error("off"); }, setItem: () => { throw new Error("off"); }, removeItem: () => undefined };
+    expect(() => rememberPresaleSeen("r2", broken)).not.toThrow();
+    expect(takePresaleSeen("r2", broken)).toBe(false);
   });
 });

@@ -598,6 +598,8 @@ class ArtistMailService:
             "approved_at": mail.approved_at,
             "recipient_count": mail.recipient_count,
             "counts": await self._counts(mail.id),
+            # D-PRESALE-03: goes out when this release does.
+            "send_with_release_id": mail.send_with_release_id,
         }
 
     def _template_out(self, t: ArtistMailTemplate, audience: dict[str, Any]) -> dict[str, Any]:
@@ -914,7 +916,9 @@ class ArtistMailService:
         if mail.send_at is not None and mail.send_at <= self.clock.now():
             raise AppError("VALIDATION_ERROR", "Pick a sending time that hasn't passed, or send it when approved", 422, extras={"field": "send_at"})
         reach, _stopped = await self._recipients(mail.profile_type, mail.profile_id, mail.audience or {})
-        if not reach:
+        # A release-day email (D-PRESALE-03) is written before anyone has pre-ordered; who gets it is
+        # worked out when the release comes out.
+        if not reach and mail.send_with_release_id is None:
             raise AppError("VALIDATION_ERROR", "Nobody would get this email yet", 422, extras={"field": "audience"})
         limit = self.settings.artist_mail_weekly_limit
         if limit > 0:
@@ -995,7 +999,11 @@ class ArtistMailService:
             mail.approved_by = ctx.user_id
             mail.approved_at = self.clock.now()
             mail.review_note = None
-            if mail.send_at is not None and mail.send_at > self.clock.now():
+            if mail.send_with_release_id is not None and not await self._release_out(mail.send_with_release_id):
+                # D-PRESALE-03: waits for its release; the release sets its time when it comes out.
+                mail.status = "SCHEDULED"
+                mail.send_at = None
+            elif mail.send_at is not None and mail.send_at > self.clock.now():
                 # Who gets it is worked out at its time (D-MAIL-02).
                 mail.status = "SCHEDULED"
             else:
@@ -1016,6 +1024,12 @@ class ArtistMailService:
             entity_id=mail.id, new_state={"status": mail.status, "note": text, "recipients": mail.recipient_count}, organization_id=org,
         )
         return await self._mail_out(mail, name)
+
+    async def _release_out(self, release_id: UUID) -> bool:
+        from cornerroom.modules.music.domain.models import Release
+
+        release = await self.session.get(Release, release_id)
+        return release is not None and release.status == "RELEASED"
 
     async def _send_now(self, ctx: AuthContext | None, mail: ArtistMail, name: str) -> None:
         queued = await self._queue_mail(ctx, mail, name)

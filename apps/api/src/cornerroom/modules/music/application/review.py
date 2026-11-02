@@ -136,7 +136,8 @@ class ReviewService:
             # A scheduled release can move to a new date (D-PRESALE-02: pre-order buyers are told).
             if release.status not in {"APPROVED", "SCHEDULED"}:
                 raise AppError("INVALID_TRANSITION", "Approve the release before scheduling it", 409)
-            moved_from = release.release_at if release.status == "SCHEDULED" else None
+            # An early pre-sale (D-PRESALE-03) already told fans a date: moving it tells buyers too.
+            moved_from = release.release_at if release.status == "SCHEDULED" or release.presale_status == "APPROVED" else None
             if release_at is None or release_at <= self.clock.now():
                 raise AppError("VALIDATION_ERROR", "Choose a release date in the future", 422)
             release.status = "SCHEDULED"
@@ -175,12 +176,15 @@ class ReviewService:
             ReleaseReview(release_id=release.id, reviewer_id=ctx.user_id, action=action, note=text, from_status=previous, to_status=release.status)
         )
         await self.session.flush()
-        if action == "schedule" and previous == "SCHEDULED" and moved_from is not None and moved_from != release.release_at:
+        if action == "schedule" and moved_from is not None and moved_from != release.release_at:
             from cornerroom.kernel.events import PRESALE_DATE_CHANGED
             from cornerroom.modules.commerce.application.onsite_presale import PresaleService
 
             await PresaleService(self.session, self.settings, self.clock).tell_buyers(release, PRESALE_DATE_CHANGED, actor=ctx.user_id)
         if action == "release":
+            from cornerroom.modules.commerce.application.onsite_presale import PresaleService
+
+            await PresaleService(self.session, self.settings, self.clock).after_release(release, actor=ctx.user_id)
             event_type = RELEASE_RELEASED
         elif action == "request_changes":
             event_type = RELEASE_CHANGES_REQUESTED
@@ -196,6 +200,72 @@ class ReviewService:
             previous_state={"status": previous},
             new_state={"status": release.status, "note": text, **({"takedown_kind": kind} if action == "takedown" else {})},
             organization_id=org,
+        )
+        return release
+
+    # --- early pre-sale (D-PRESALE-03) ---------------------------------------------------------
+
+    async def presale_decision(
+        self, ctx: AuthContext, release_id: UUID, *, decision: str, release_at: datetime | None = None, note: str | None = None
+    ) -> Release:
+        """Staff decide an early pre-sale: approve its title, artist, date and price going public
+        (the release itself is still reviewed in full later), send it back with a note, or move an
+        approved pre-sale's date (buyers are emailed). Same reviewers and two-person rule as a release."""
+        from cornerroom.kernel.events import PRESALE_DATE_CHANGED
+        from cornerroom.modules.commerce.application.onsite_presale import BEFORE_RELEASE_STATUSES, PresaleService
+
+        if decision not in {"approve", "return", "move_date"}:
+            raise AppError("VALIDATION_ERROR", "Decision must be approve, return or move_date", 422)
+        release = await self.music.get_release_row(release_id)
+        await self._require(ctx, release, "music.approve")
+        if release.primary_org_id is not None:
+            await self.music._require_active_org(release.primary_org_id)
+        if release.status not in BEFORE_RELEASE_STATUSES:
+            raise AppError("INVALID_TRANSITION", "This release's date is set by scheduling it now", 409)
+        text = " ".join((note or "").split())[:2000] or None
+        now = self.clock.now()
+        previous = release.presale_status
+        moved_from = release.release_at
+        if decision == "approve":
+            if release.presale_status != "REQUESTED":
+                raise AppError("INVALID_TRANSITION", "This pre-sale isn't waiting for review", 409)
+            await self.music.assert_independent_reviewer(ctx, [release.id])
+            when = release_at or release.presale_requested_release_at
+            if when is None or when <= now:
+                raise AppError("VALIDATION_ERROR", "Choose a release date in the future", 422)
+            release.presale_status = "APPROVED"
+            release.release_at = when
+            release.presale_note = text
+        elif decision == "return":
+            if release.presale_status != "REQUESTED":
+                raise AppError("INVALID_TRANSITION", "This pre-sale isn't waiting for review", 409)
+            if not text:
+                raise AppError("VALIDATION_ERROR", "Tell the artist what to change", 422)
+            release.presale_status = "RETURNED"
+            release.presale_note = text
+        else:
+            if release.presale_status != "APPROVED":
+                raise AppError("INVALID_TRANSITION", "Only an approved pre-sale has a date to move", 409)
+            await self.music.assert_independent_reviewer(ctx, [release.id])
+            if release_at is None or release_at <= now:
+                raise AppError("VALIDATION_ERROR", "Choose a release date in the future", 422)
+            release.release_at = release_at
+        release.presale_decided_by = ctx.user_id
+        release.presale_decided_at = now
+        release.updated_by = ctx.user_id
+        await self.music._flush_versioned()
+        action = {"approve": "approve_presale", "return": "return_presale", "move_date": "move_presale_date"}[decision]
+        self.session.add(
+            ReleaseReview(release_id=release.id, reviewer_id=ctx.user_id, action=action, note=text, from_status=release.status, to_status=release.status)
+        )
+        await self.session.flush()
+        if decision == "move_date" and moved_from != release.release_at:
+            await PresaleService(self.session, self.settings, self.clock).tell_buyers(release, PRESALE_DATE_CHANGED, actor=ctx.user_id)
+        await self.audit.record_from_auth(
+            ctx, action=f"release.presale.{decision}", entity_type="Release", entity_id=release.id,
+            previous_state={"presale_status": previous, "release_at": moved_from.isoformat() if moved_from else None},
+            new_state={"presale_status": release.presale_status, "release_at": release.release_at.isoformat() if release.release_at else None, "note": text},
+            organization_id=release.primary_org_id,
         )
         return release
 

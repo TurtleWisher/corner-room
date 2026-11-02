@@ -107,6 +107,15 @@ class Release(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, 
     # either this many minutes before release_at or at once (cover_revealed_at). See cover_reveal.py.
     cover_reveal_lead_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cover_revealed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # D-PRESALE-03: a pre-sale opened before the release is finished. REQUESTED by the artist with
+    # a proposed date, APPROVED by staff (release_at becomes that date) or RETURNED with a note.
+    presale_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    presale_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    presale_requested_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    presale_requested_release_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    presale_decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    presale_decided_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    presale_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     __mapper_args__ = {"version_id_col": version}
 
@@ -419,7 +428,7 @@ class ReleaseReview(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         CheckConstraint(
             "action IN ('start_review','approve','request_changes','schedule','release','takedown',"
-            "'cancel_presale')",
+            "'cancel_presale','request_presale','approve_presale','return_presale','move_presale_date')",
             name="action",
         ),
         Index("ix_release_reviews_release", "release_id", "created_at"),

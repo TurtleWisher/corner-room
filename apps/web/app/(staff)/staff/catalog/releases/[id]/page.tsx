@@ -4,13 +4,14 @@
  * very special cases. The API enforces who may change what. */
 
 import { useParams } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { CircleAlert } from "lucide-react";
 
 import { Button, Card, Protected } from "@/components/staff/kit";
 import { ChangesReview } from "@/components/staff/changes-review";
+import { PresaleDecision } from "@/components/staff/presale-review";
 import { ReleaseEditor } from "@/components/studio/release-editor";
-import { cancelPresale, reviewRelease, setManagedMode } from "@/features/studio/api";
+import { cancelPresale, fetchStudioRelease, reviewRelease, setManagedMode, type StudioReleaseDetail } from "@/features/studio/api";
 import { friendlyError } from "@/lib/error-copy";
 
 function ManagedMode({ releaseId }: { releaseId: string }) {
@@ -144,8 +145,9 @@ function ReviewPanel({ releaseId }: { releaseId: string }) {
       <div className="mt-3 rounded border p-3">
         <p className="text-sm font-semibold">Cancel pre-sale</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          For a scheduled release that won&apos;t come out. It goes back to approved without a date, pre-orders stop, every pre-order is sent to
-          finance for a full refund, and buyers are emailed. Needs catalog and finance rights in this release&apos;s workspace.
+          For a pre-sale whose music won&apos;t come out. A scheduled release goes back to approved without a date; an early pre-sale closes and the
+          release stays in the making. Pre-orders stop, every pre-order is sent to finance for a full refund, and buyers are emailed. Needs
+          catalog and finance rights in this release&apos;s workspace.
         </p>
         <Button
           variant="outline"
@@ -177,6 +179,16 @@ function ReviewPanel({ releaseId }: { releaseId: string }) {
   );
 }
 
+/** D-PRESALE-03: an early pre-sale to decide, read from the same release answer the editor uses. */
+function EarlyPresale({ releaseId }: { releaseId: string }) {
+  const [detail, setDetail] = useState<StudioReleaseDetail | null>(null);
+  const [round, setRound] = useState(0);
+  useEffect(() => {
+    fetchStudioRelease(releaseId).then(setDetail).catch(() => setDetail(null));
+  }, [releaseId, round]);
+  return <PresaleDecision key={`${detail?.release.version ?? 0}`} detail={detail} onDone={() => setRound((n) => n + 1)} />;
+}
+
 export default function StaffCatalogReleasePage() {
   const { id } = useParams<{ id: string }>();
   return (
@@ -184,6 +196,7 @@ export default function StaffCatalogReleasePage() {
       <div className="grid gap-6">
         <h1 className="text-2xl font-bold">Release workspace</h1>
         <ChangesReview releaseId={id} />
+        <EarlyPresale releaseId={id} />
         {/* D-THEME-01: inside the console the editor uses the staff (black) palette, not Ember. */}
         <div className="rounded border border-line p-4">
           <ReleaseEditor releaseId={id} />

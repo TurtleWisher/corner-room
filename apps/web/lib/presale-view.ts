@@ -139,13 +139,83 @@ export function presaleCountdown(releaseAt: string, now: Date = new Date()): str
   return `Out in ${days} ${days === 1 ? "day" : "days"}`;
 }
 
-/** The pre-order button's words for a release type. */
+/** "single", "EP", "album" or "release", for a release type. */
+export function releaseNoun(releaseType: string | null | undefined): string {
+  return releaseType === "SINGLE" ? "single" : releaseType === "EP" ? "EP" : releaseType === "ALBUM" ? "album" : "release";
+}
+
+/** The pre-sale button's words for a release type (owner, 2026-11-03: "Pre-book"). */
 export function preorderLabel(releaseType: string | null | undefined): string {
-  const noun = releaseType === "SINGLE" ? "single" : releaseType === "EP" ? "EP" : releaseType === "ALBUM" ? "album" : "release";
-  return `Pre-order the ${noun}`;
+  return `Pre-book the ${releaseNoun(releaseType)}`;
+}
+
+/**
+ * What a pre-order promises, shown before paying (D-PRESALE-02 as decided, 2026-10-28): the music
+ * unlocks on release day; a new date keeps the pre-order (a refund on request goes through the
+ * normal refund approval); a cancelled pre-sale is refunded in full.
+ */
+export const PRESALE_PROMISE = {
+  unlock: "Pay now. It unlocks for you on release day. We'll email you when it's ready to play.",
+  dateChange: "If the date changes, your pre-order stays in place and we'll email you the new date. You can ask for a refund.",
+  cancelled: "If the pre-sale is cancelled, you get a full refund.",
+} as const;
+
+export type StudioPresaleStage = "none" | "price_needed" | "ready_to_send" | "waiting" | "returned" | "approved_waiting_price" | "live" | "closed" | "scheduled";
+
+/**
+ * Where an early pre-sale stands in Studio (D-PRESALE-03), from the API's answer only: the API
+ * decides who may send it, what staff decided and whether fans can see it.
+ */
+export function studioPresaleStage(
+  p: { status?: string | null; price?: { status: string } | null; price_live?: boolean; listed?: boolean; open?: boolean; can_request?: boolean } | null | undefined,
+  releaseStatus: string,
+): StudioPresaleStage {
+  if (!p) return "none";
+  if (p.listed) return p.open ? "live" : "closed";
+  if (releaseStatus === "SCHEDULED") return "scheduled";
+  if (p.status === "APPROVED") return "approved_waiting_price";
+  if (p.status === "REQUESTED") return "waiting";
+  if (p.status === "RETURNED") return "returned";
+  if (!p.can_request) return "none";
+  return p.price && ["PROPOSED", "ACCEPTED"].includes(p.price.status) ? "ready_to_send" : "price_needed";
 }
 
 /** What an order line says when it was a pre-order: locked until release day, then just music. */
 export function preorderNote(order: { is_presale?: boolean | null }): string | null {
   return order.is_presale ? "Pre-order · unlocks on release day" : null;
+}
+
+/*
+ * The release-day opening (pre-sale experience guide): a visitor who saw a release on pre-sale
+ * gets a one-time opening of the cover the first time the API serves it as released. Only a
+ * per-browser memory; the release page shows the same music either way.
+ */
+const SEEN_PREFIX = "cr-presale-seen:";
+
+/** Remember that this browser saw the release while it was on pre-sale. */
+export function rememberPresaleSeen(releaseId: string, store: Pick<Storage, "setItem"> | null = safeStorage()): void {
+  try {
+    store?.setItem(SEEN_PREFIX + releaseId, "1");
+  } catch {
+    /* private mode or storage off: no opening, nothing else changes */
+  }
+}
+
+/** True once, the first time the released page is shown after the pre-sale was seen. */
+export function takePresaleSeen(releaseId: string, store: Pick<Storage, "getItem" | "removeItem"> | null = safeStorage()): boolean {
+  try {
+    if (!store?.getItem(SEEN_PREFIX + releaseId)) return false;
+    store.removeItem(SEEN_PREFIX + releaseId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function safeStorage(): Storage | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
 }

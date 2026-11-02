@@ -181,6 +181,8 @@ export type PresalePageRecord = {
   /** Only once the artist reveals it early (D-COVER-02); the songs stay hidden until release. */
   cover_url: string | null;
   offer: { id: string; amount_minor: number; currency_code: string };
+  /** False once the date has passed while the release waits to be finished: no pre-orders then. */
+  open?: boolean;
 };
 
 export async function fetchPresale(id: string): Promise<PresalePageRecord> {

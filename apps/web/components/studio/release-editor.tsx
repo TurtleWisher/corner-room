@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ds/input";
 import { useCredits } from "@/components/music/credits";
 import { MediaReport } from "@/components/music/media-report";
 import { CoverReveal } from "@/components/studio/cover-reveal";
+import { PresalePanel } from "@/components/studio/presale-panel";
 import { CreditsNote, CreditsPreview, PartOfField, PersonField } from "@/components/studio/credit-parts";
 import { ArtworkReport } from "@/components/uploads/artwork-report";
 import { UploadCard } from "@/components/uploads/upload-card";
@@ -1128,23 +1129,12 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
             <PriceRow detail={detail} subjectType="RELEASE" subjectId={detail.release.id} label="For fans who already own some songs (optional)" audience="OWNS_PART_OF_RELEASE" reload={reload} />
           ) : null}
           {canProposePresale(detail.release.status) ? (
-            <PriceRow
-              detail={detail}
-              subjectType="RELEASE"
-              subjectId={detail.release.id}
-              label="Pre-sale price (optional)"
-              hint={presaleHint(detail.release.status, detail.release.release_at)}
-              audience="PRESALE"
-              reload={reload}
-            />
-          ) : null}
-          {detail.release.status === "SCHEDULED" && detail.proposals.some((p) => p.audience === "PRESALE" && p.status === "ACCEPTED") ? (
-            <p className="pt-3 text-sm text-fg">
-              Fans pre-order on your release&apos;s page:{" "}
-              <a href={`/releases/${detail.release.id}`} className="cr-focus font-semibold text-link underline">
-                open the pre-order page
-              </a>
-              . Share that link.
+            <p className="pt-3 text-sm text-fg-muted">
+              A pre-sale price is set in the{" "}
+              <a href="#presale" className="cr-focus font-semibold text-link underline">
+                Pre-sale
+              </a>{" "}
+              section below.
             </p>
           ) : null}
           {sellsTracks
@@ -1152,6 +1142,28 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
             : null}
         </Card>
       </Section>
+
+      {canProposePresale(detail.release.status) && detail.presale ? (
+        // D-PRESALE-03: open a pre-sale before the music is finished, preview it, write the release-day email.
+        <Section id="presale" title="Pre-sale" done={!!detail.presale.listed}>
+          <PresalePanel
+            key={`${detail.release.id}-${detail.release.version}`}
+            detail={detail}
+            reload={reload}
+            priceRow={
+              <PriceRow
+                detail={detail}
+                subjectType="RELEASE"
+                subjectId={detail.release.id}
+                label="What fans pay to pre-book"
+                hint={presaleHint(detail.release.status, detail.release.release_at)}
+                audience="PRESALE"
+                reload={reload}
+              />
+            }
+          />
+        </Section>
+      ) : null}
 
       <Section id="submit" title="Review and submit" done={submitPanelMode(detail.release.status) !== "submit"}>
         <SubmitPanel detail={detail} reload={reload} />

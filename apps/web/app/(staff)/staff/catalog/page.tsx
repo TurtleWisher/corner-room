@@ -11,6 +11,7 @@ import { CircleAlert, Search } from "lucide-react";
 import { ArtistMailReview } from "@/components/staff/artist-mail-review";
 import { ChangesQueue } from "@/components/staff/changes-review";
 import { GiftsReview } from "@/components/staff/gifts-review";
+import { PresaleQueue } from "@/components/staff/presale-review";
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
 import { useWorkspace } from "@/components/workspace-provider";
 import {
@@ -417,6 +418,7 @@ export default function StaffCatalogPage() {
     <Protected>
       <div className="grid gap-6">
         <h1 className="text-2xl font-bold">Catalog releases</h1>
+        <PresaleQueue />
         <ChangesQueue />
         <GiftsReview />
         <ArtistMailReview />
