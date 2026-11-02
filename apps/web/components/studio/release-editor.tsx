@@ -1155,7 +1155,7 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
                 detail={detail}
                 subjectType="RELEASE"
                 subjectId={detail.release.id}
-                label="Pre-sale price"
+                label="What fans pay to pre-book"
                 hint={presaleHint(detail.release.status, detail.release.release_at)}
                 audience="PRESALE"
                 reload={reload}
