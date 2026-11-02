@@ -41,7 +41,8 @@ class SmtpEmailSender:
             smtp.send_message(message)
 
     async def send(
-        self, *, to: str, subject: str, body: str, locale: str = "en", from_name: str | None = None
+        self, *, to: str, subject: str, body: str, locale: str = "en", from_name: str | None = None,
+        html: str | None = None,
     ) -> str | None:
         message = EmailMessage()
         # Another name on Corner Room's own address (D-MAIL-01: "{Artist} via Corner Room").
@@ -51,6 +52,9 @@ class SmtpEmailSender:
         message_id = make_msgid(domain=self.sender.rsplit("@", 1)[-1].strip("> ") or None)
         message["Message-ID"] = message_id
         message.set_content(body)
+        if html:
+            # Artists' emails (D-MAIL-02): HTML with this plain-text copy for mail apps without it.
+            message.add_alternative(html, subtype="html")
         await asyncio.to_thread(self._send_now, message)
         # Recipients are personal data: logs carry a masked address only.
         log.info("email_sent", to=mask_email(to), subject=subject, locale=locale)

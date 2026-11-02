@@ -228,6 +228,19 @@ async def release_scheduled(ctx: dict) -> int:
     return released
 
 
+async def send_scheduled_artist_mail(ctx: dict) -> int:
+    """Artists' emails approved for a later time go out when it comes (owner, 2026-11-02, D-MAIL-02)."""
+    from cornerroom.modules.commerce.application.artist_mail import ArtistMailService
+
+    factory = get_session_factory()
+    async with factory() as session:
+        sent = await ArtistMailService(session).send_due()
+        await session.commit()
+    if sent:
+        log.info("scheduled_artist_mail_sent", emails=sent, operation="commerce.artist_mail")
+    return sent
+
+
 class WorkerSettings:
     functions = [
         drain_outbox,
@@ -239,6 +252,7 @@ class WorkerSettings:
         expire_upload_intents,
         run_media_jobs,
         release_scheduled,
+        send_scheduled_artist_mail,
     ]
     on_startup = startup
     on_shutdown = shutdown
@@ -248,6 +262,7 @@ class WorkerSettings:
         cron(process_notification_delivery, second={5, 20, 35, 50}),
         cron(expire_ticket_holds, second={10, 40}),
         cron(release_scheduled, second={30}),
+        cron(send_scheduled_artist_mail, second={45}),
         cron(expire_upload_intents, minute=set(range(0, 60, 10)), second=25),
         # Media jobs can run for minutes (long masters); their own timeout, not the 120 s default.
         cron(run_media_jobs, second={0, 15, 30, 45}, timeout=get_settings().media_job_timeout_seconds * 3, unique=True),

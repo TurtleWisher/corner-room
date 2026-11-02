@@ -1,53 +1,110 @@
-/* How an artist email reads in a buyer's inbox (D-MAIL-01). The server writes the real one; this
- * mirrors its fill-ins and footer so the writer sees what goes out. */
+"use client";
 
-import { CircleAlert } from "lucide-react";
+/* The email as one buyer will see it (owner, 2026-11-02, D-MAIL-01 and D-MAIL-02): drawn the way
+ * `artist_mail_render.py` writes it, with the cover, the message, a Listen button, any files and
+ * the footer. Fill-ins show that buyer's own words, lightly marked. The server writes the real one. */
 
-import { previewFill, unknownFillIns } from "@/lib/artist-mail-view";
+import type { ReactNode } from "react";
 
-const SAMPLE = { buyer_name: "[buyer's name]", music: "[the music they bought]" };
+import type { MailFile, MailWork } from "@/features/artist-mail/api";
+import { coverUrl } from "@/lib/cover-view";
+import { parseRich, plainText, type MailValues } from "@/lib/artist-mail-view";
+
+function Words({ text, values }: { text: string; values: MailValues }) {
+  const paragraphs = text.trim().split(/\n{2,}/).filter((p) => p.trim());
+  if (paragraphs.length === 0) return <p className="text-[#5d5a7e]">Nothing written yet</p>;
+  return (
+    <>
+      {paragraphs.map((p, i) => (
+        <p key={i}>
+          {parseRich(p).map((t, j): ReactNode => {
+            if (t.kind === "text") return t.text;
+            if (t.kind === "fill")
+              return (
+                <span key={j} className="am-fill">
+                  {values[t.key]}
+                </span>
+              );
+            return (
+              <a key={j} href={t.url} target="_blank" rel="noreferrer noopener">
+                {plainText(t.label, values)}
+              </a>
+            );
+          })}
+        </p>
+      ))}
+    </>
+  );
+}
 
 export function MailPreview({
   artist,
   subject,
   body,
+  values,
   kind,
-  music,
+  work,
+  files = [],
 }: {
   artist: string;
   subject: string;
   body: string;
+  values: MailValues;
   kind: "THANK_YOU" | "MANUAL";
-  music?: string;
+  /** The music the email is about for this buyer: its cover and Listen button. */
+  work?: (MailWork & { title?: string }) | null;
+  files?: Pick<MailFile, "id" | "name" | "kind">[];
 }) {
-  const values = { ...SAMPLE, artist, ...(music ? { music } : {}) };
-  const unknown = unknownFillIns(`${subject} ${body}`);
+  const cover = work ? coverUrl(work.type === "RELEASE" ? { release: work.id } : { track: work.id }, 480) : null;
   return (
-    <figure className="grid content-start gap-2">
-      <figcaption className="text-[0.8125rem] font-semibold text-fg">Preview</figcaption>
-      <div className="rounded border border-line bg-surface-overlay p-4 text-sm">
-        <p className="text-fg-muted">
-          From: <span className="text-fg">{artist} via Corner Room</span>
-        </p>
-        <p className="mt-1 font-semibold text-fg">{previewFill(subject, values) || "No subject yet"}</p>
-        <div className="mt-3 whitespace-pre-wrap break-words text-fg">{previewFill(body, values) || "Nothing written yet"}</div>
-        <div className="mt-4 border-t border-line pt-2 text-xs text-fg-muted">
+    <section aria-label="Preview of the email" className="am-preview">
+      <p className="mb-2 text-xs text-[#5d5a7e]">
+        <span className="font-semibold text-[#1b1838]">From:</span> {artist} via Corner Room
+        <br />
+        <span className="font-semibold text-[#1b1838]">Subject:</span> {subject.trim() ? plainText(subject, values) : "No subject yet"}
+      </p>
+      <div className="am-preview-card">
+        <div className="am-preview-head">
+          <strong>{artist}</strong>
+          <span>via Corner Room</span>
+        </div>
+        {cover ? (
+          // The cover, as the email shows it (no next/image: this is the email's own picture).
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={cover} alt="" className="block aspect-square w-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+        ) : null}
+        <div className="am-preview-body">
+          <Words text={body} values={values} />
+          {work?.title ? <span className="am-preview-button">Listen to {work.title} on Corner Room</span> : null}
+          {files.length ? (
+            <div className="am-preview-files">
+              <p className="mb-1 text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-[#5d5a7e]">From {artist}, for you</p>
+              <ul className="list-disc pl-5">
+                {files.map((f) => (
+                  <li key={f.id} className="font-semibold text-[#2e2860] underline">
+                    {f.kind === "FILE" ? "Download" : "Open"} {f.name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+        <div className="am-preview-foot">
           {kind === "THANK_YOU" ? (
-            <p>Sent by Corner Room for {artist}. Replies to this email aren&apos;t read. Your music on Corner Room: a link to their purchases.</p>
+            <>
+              Sent by Corner Room for {artist}. Replies to this email aren&apos;t read.
+              <br />
+              <span className="underline">Your music on Corner Room</span>
+            </>
           ) : (
-            <p>
-              You&apos;re getting this because you bought music from {artist} on Corner Room. Replies to this email aren&apos;t read. Stop emails
-              from {artist}: a one-click link.
-            </p>
+            <>
+              You&apos;re getting this because you bought music from {artist} on Corner Room. Replies to this email aren&apos;t read.
+              <br />
+              <span className="underline">Stop emails from {artist}</span>
+            </>
           )}
         </div>
       </div>
-      {unknown.length ? (
-        <p className="flex items-start gap-2 text-sm text-danger">
-          <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          {unknown.join(", ")} {unknown.length === 1 ? "isn't a fill-in, so it" : "aren't fill-ins, so they"} will show as written.
-        </p>
-      ) : null}
-    </figure>
+    </section>
   );
 }
