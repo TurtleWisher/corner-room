@@ -215,3 +215,61 @@ async def test_early_presale_cancel_refunds_and_closes(client: AsyncClient) -> N
     assert (await client.get(f"/api/v1/presales/releases/{release_id}")).status_code == 404
     view = (await client.get(f"/api/v1/studio/releases/{release_id}", headers=bearer(token))).json()
     assert view["presale"]["status"] is None and view["release"]["status"] in ("IDEA", "DEMO", "IN_PRODUCTION", "QC")
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_released_too_early_goes_back_to_presale(client: AsyncClient) -> None:
+    """Owner, 2026-11-03: a pre-sale released with Release now before its date can go back to
+    pre-sale, unless someone has bought it at the normal price since."""
+    admin, orgs = await _orgs(client)
+    label = orgs["LABEL"]
+    owner = await register_and_login(client, "eb-owner@example.com")
+    token = owner["access_token"]
+    artist_id = await _artist_for(owner["user"]["id"], label, name="Early Back")
+    reviewer = await _staff_with(client, admin, "eb-reviewer@example.com", "content_manager", label)
+    ops = await _staff_with(client, admin, "eb-ops@example.com", "finance_manager", label)
+    release_id = (
+        await client.post("/api/v1/studio/releases", headers=bearer(token), json={"profile": {"kind": "artist", "id": artist_id}, "release_type": "SINGLE", "title": "Too Soon"})
+    ).json()["release"]["id"]
+    await client.post(
+        f"/api/v1/studio/releases/{release_id}/price-proposals", headers=bearer(token),
+        json={"subject_type": "RELEASE", "subject_id": release_id, "audience": "PRESALE", "amount_minor": 1200},
+    )
+    when = datetime.now(timezone.utc) + timedelta(days=6)
+    assert (await client.post(f"/api/v1/studio/releases/{release_id}/presale/request", headers=bearer(token), json={"release_at": when.isoformat()})).status_code == 200
+    assert (await client.post(f"/api/v1/catalog-intake/releases/{release_id}/presale/review", headers=bearer(reviewer), json={"decision": "approve"})).status_code == 200
+    for p in (await client.get("/api/v1/offer-proposals", headers=bearer(ops))).json():
+        if p["release_id"] == release_id and p["status"] == "PROPOSED":
+            assert (await client.post(f"/api/v1/offer-proposals/{p['id']}/decision", headers=bearer(ops), json={"decision": "accept"})).status_code == 200
+    fan = await register_and_login(client, "eb-fan@example.com")
+    await _buy(client, fan["access_token"], (await client.get(f"/api/v1/presales/releases/{release_id}")).json()["offer"]["id"])
+
+    # Finished, approved, and then released at once by mistake.
+    track_id = await _finish(client, token, release_id)
+    for p in (await client.get("/api/v1/offer-proposals", headers=bearer(ops))).json():
+        if p["release_id"] == release_id and p["status"] == "PROPOSED":
+            assert (await client.post(f"/api/v1/offer-proposals/{p['id']}/decision", headers=bearer(ops), json={"decision": "accept"})).status_code == 200
+    for action in ("start_review", "approve", "release"):
+        assert (await _review(client, reviewer, release_id, action)).status_code == 200
+    assert (await client.get(f"/api/v1/presales/releases/{release_id}")).status_code == 404
+
+    # The artist can't undo it; staff put it back on pre-sale for its date.
+    back = f"/api/v1/catalog-intake/releases/{release_id}/back-to-presale"
+    assert (await client.post(back, headers=bearer(token), json={})).status_code == 404
+    undone = await client.post(back, headers=bearer(reviewer), json={})
+    assert undone.status_code == 200, undone.text
+    assert undone.json()["status"] == "SCHEDULED"
+    page = (await client.get(f"/api/v1/presales/releases/{release_id}")).json()
+    assert page["open"] is True and page["offer"]["amount_minor"] == 1200
+    early = await client.post("/api/v1/playback/sessions", headers=bearer(fan["access_token"]), json={"track_id": track_id})
+    assert early.status_code in (403, 404, 409)
+    assert (await client.post(back, headers=bearer(reviewer), json={})).status_code == 409
+
+    # Released early again, and someone buys it at the normal price: no going back now.
+    assert (await _review(client, reviewer, release_id, "release")).status_code == 200
+    normal = next(o for o in (await client.get("/api/v1/offers")).json()["items"] if o.get("subject_id") == release_id and o["audience"] == "EVERYONE")
+    buyer = await register_and_login(client, "eb-buyer@example.com")
+    await _buy(client, buyer["access_token"], normal["id"])
+    refused = await client.post(back, headers=bearer(reviewer), json={})
+    assert refused.status_code == 409 and refused.json()["code"] == "ALREADY_BOUGHT"

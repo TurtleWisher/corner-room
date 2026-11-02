@@ -269,6 +269,93 @@ class ReviewService:
         )
         return release
 
+    async def back_to_presale(self, ctx: AuthContext, release_id: UUID, *, release_at: datetime | None = None, note: str | None = None) -> Release:
+        """Undo a release that went out before its pre-sale date (owner, 2026-11-03): the release and
+        its songs go back to scheduled for that date, and the pre-sale price is on sale again at the
+        same amount. Only while nobody has bought it at the normal price since, so no buyer loses
+        music they paid to hear now. Pre-order buyers already told "it's out" are not told again."""
+        from cornerroom.modules.commerce.application.onsite_presale import PRESALE_ORDER_STATUSES
+        from cornerroom.modules.commerce.domain.models import Offer, Order, OrderItem, Product
+
+        release = await self.music.get_release_row(release_id)
+        await self._require(ctx, release, "music.approve")
+        if release.primary_org_id is not None:
+            await self.music._require_active_org(release.primary_org_id)
+        await self.music.assert_independent_reviewer(ctx, [release.id])
+        if release.status != "RELEASED":
+            raise AppError("INVALID_TRANSITION", "Only released music can go back to pre-sale", 409)
+        when = release_at or release.release_at
+        if when is None or when <= self.clock.now():
+            raise AppError("VALIDATION_ERROR", "Choose a release date in the future", 422)
+        tracks = await self._tracks(release.id)
+        subjects = [release.id, *[t.id for t in tracks]]
+        sold = await self.session.scalar(
+            select(Order.id)
+            .join(OrderItem, OrderItem.order_id == Order.id)
+            .where(
+                OrderItem.ref_id.in_(subjects),
+                Order.is_presale.is_(False),
+                Order.status.in_(PRESALE_ORDER_STATUSES),
+                Order.deleted_at.is_(None),
+            )
+            .limit(1)
+        )
+        if sold is not None:
+            raise AppError(
+                "ALREADY_BOUGHT", "Someone has bought it since it came out", 409,
+                "Taking it back would stop them listening; ask the owner what to do",
+            )
+        org = release.primary_org_id
+        text = " ".join((note or "").split())[:2000] or None
+        release.status = "SCHEDULED"
+        release.release_at = when
+        for t in tracks:
+            if t.status == "RELEASED":
+                t.status = "SCHEDULED"
+                t.updated_by = ctx.user_id
+        # The pre-sale price ended when it came out; the same agreed amount goes on sale again.
+        retired = (
+            await self.session.execute(
+                select(Offer)
+                .join(Product, Product.id == Offer.product_id)
+                .where(
+                    Product.subject_id == release.id, Product.product_type == "RELEASE", Product.deleted_at.is_(None),
+                    Offer.audience == "PRESALE", Offer.deleted_at.is_(None),
+                )
+                .order_by(Offer.created_at.desc())
+            )
+        ).scalars().all()
+        reopened = None
+        if retired and not any(o.status == "ACTIVE" for o in retired):
+            last = retired[0]
+            reopened = Offer(
+                organization_id=last.organization_id, product_id=last.product_id, amount_minor=last.amount_minor,
+                currency_code=last.currency_code, status="ACTIVE", audience="PRESALE",
+                created_by=ctx.user_id, updated_by=ctx.user_id,
+            )
+            self.session.add(reopened)
+        release.updated_by = ctx.user_id
+        await self.music._flush_versioned()
+        self.session.add(
+            ReleaseReview(
+                release_id=release.id, reviewer_id=ctx.user_id, action="schedule",
+                note=text or "Back to pre-sale: it went out before its date", from_status="RELEASED", to_status="SCHEDULED",
+            )
+        )
+        await self.session.flush()
+        await self._event(
+            ctx, RELEASE_STAGE_CHANGED, "Release", release.id,
+            {"status": release.status, "previous_status": "RELEASED", "release_type": release.release_type, "review_action": "back_to_presale"},
+            org,
+        )
+        await self.audit.record_from_auth(
+            ctx, action="release.back_to_presale", entity_type="Release", entity_id=release.id,
+            previous_state={"status": "RELEASED"},
+            new_state={"status": "SCHEDULED", "release_at": when.isoformat(), "presale_offer": str(reopened.id) if reopened else None, "note": text},
+            organization_id=org,
+        )
+        return release
+
     async def system_release(self, release: Release, *, actor: UUID) -> bool:
         """The scheduler releases music whose date has come (owner, 2026-10-28, D-PRESALE-02), the
         same way as "Release now": every song needs verified audio, else it waits for staff."""

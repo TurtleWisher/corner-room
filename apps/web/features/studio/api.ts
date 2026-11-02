@@ -370,6 +370,16 @@ export function reviewPresale(
   });
 }
 
+/** Staff: music that went out before its pre-sale date goes back to pre-sale (owner, 2026-11-03). */
+export function backToPresale(releaseId: string, body: { release_at?: string | null; note?: string }): Promise<StudioRelease> {
+  return apiFetch<StudioRelease>(`/api/v1/catalog-intake/releases/${releaseId}/back-to-presale`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify(body),
+    retry: false,
+  });
+}
+
 /** D-COVER-02: show the cover this many minutes before release, or (null) only with the release. */
 export function setCoverReveal(releaseId: string, leadMinutes: number | null): Promise<StudioReleaseDetail> {
   return apiFetch<StudioReleaseDetail>(`/api/v1/studio/releases/${releaseId}/cover-reveal`, {

@@ -755,6 +755,26 @@ async def review_presale(
     return ReleaseFieldsOut(**StudioService._release_fields(release))
 
 
+class BackToPresaleIn(BaseModel):
+    release_at: datetime | None = None
+    note: str | None = Field(default=None, max_length=2000)
+
+
+@router.post("/catalog-intake/releases/{release_id}/back-to-presale", response_model=ReleaseFieldsOut)
+async def back_to_presale(
+    release_id: UUID,
+    body: BackToPresaleIn,
+    ctx: Ctx,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    settings: Annotated[Settings, Depends(settings_dep)],
+) -> ReleaseFieldsOut:
+    """Staff: music that went out before its pre-sale date goes back to pre-sale (owner, 2026-11-03)."""
+    from cornerroom.modules.music.application.review import ReviewService
+
+    release = await ReviewService(session, settings).back_to_presale(ctx, release_id, release_at=body.release_at, note=body.note)
+    return ReleaseFieldsOut(**StudioService._release_fields(release))
+
+
 class ReviewIn(BaseModel):
     action: Literal["start_review", "approve", "request_changes", "schedule", "release", "takedown"]
     note: str | None = Field(default=None, max_length=2000)
