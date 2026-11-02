@@ -82,6 +82,13 @@ from cornerroom.modules.commerce.domain.models import (
     RefundEntitlementPolicy,
     TaxLine,
 )
+from cornerroom.modules.commerce.domain.artist_mail import (
+    ArtistMail,
+    ArtistMailMessage,
+    ArtistMailOptOut,
+    ArtistMailSettings,
+    ArtistMailTemplate,
+)
 from cornerroom.modules.commerce.domain.gifts import GiftCampaign, GiftCampaignPeriod, GiftRecipient
 from cornerroom.modules.entitlements.domain.models import Entitlement
 from cornerroom.modules.finance.domain.models import (
@@ -222,6 +229,11 @@ __all__ = [
     "GiftCampaign",
     "GiftCampaignPeriod",
     "GiftRecipient",
+    "ArtistMail",
+    "ArtistMailMessage",
+    "ArtistMailOptOut",
+    "ArtistMailSettings",
+    "ArtistMailTemplate",
     "OutboxEvent",
     "Payment",
     "PaymentAttempt",

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cornerroom.infra.outbox import OutboxEvent
 from cornerroom.kernel.events import DomainEvent
 from cornerroom.modules.analytics.application.consumers import consume_analytics_event
+from cornerroom.modules.commerce.application.artist_mail import consume_artist_mail_event
 from cornerroom.modules.commerce.application.payment_alerts import consume_payment_alert_event
 from cornerroom.modules.commerce.application.gifts import consume_gift_email_event
 from cornerroom.modules.commerce.application.presales import consume_presale_event
@@ -38,6 +39,8 @@ SIDE_CONSUMERS: list[OutboxHandler] = [
     consume_payment_alert_event,
     # Pre-sale buyers without an account hear that their gift is on its way (D-CAMPAIGN-02).
     consume_gift_email_event,
+    # Artists' thank-you emails on purchase, and every queued artist email sent (D-MAIL-01).
+    consume_artist_mail_event,
 ]
 
 

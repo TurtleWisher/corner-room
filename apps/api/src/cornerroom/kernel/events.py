@@ -122,6 +122,12 @@ GIFT_CAMPAIGN_RESUMED = "GiftCampaignResumed"
 # One per recipient: the buyer is told the gift is on its way (in-app and email).
 GIFT_DISPATCHED = "GiftDispatched"
 GIFT_SENT = "GiftSent"
+# D-MAIL-01: artists' emails to buyers (commerce/application/artist_mail.py). Staff approve each
+# email; one ArtistMailQueued per message is what sends it (thank-you, email to buyers or test).
+ARTIST_MAIL_SUBMITTED = "ArtistMailSubmitted"
+ARTIST_MAIL_APPROVED = "ArtistMailApproved"
+ARTIST_MAIL_REJECTED = "ArtistMailRejected"
+ARTIST_MAIL_QUEUED = "ArtistMailQueued"
 # D-CHANGES-01: changes to released music wait for staff (music/application/changes.py).
 RELEASE_CHANGES_SUBMITTED = "ReleaseChangesSubmitted"
 RELEASE_CHANGES_REJECTED = "ReleaseChangesRejected"
