@@ -12,14 +12,14 @@ import { NavIcon } from "@/components/shell/nav-icons";
 import { useFanView } from "@/components/use-fan-view";
 import { useWorkspace } from "@/components/workspace-provider";
 import { coverUrl } from "@/lib/cover-view";
-import { activeHref, initials, menuSections, navFlagsFor, showStaffEntry, showStaffSignInLink, staffHomeHref } from "@/lib/nav-view";
+import { activeHref, chipPicture, initials, menuSections, navFlagsFor, showStaffEntry, showStaffSignInLink, staffHomeHref } from "@/lib/nav-view";
 import { cn } from "@/lib/utils";
 
-/** The red initials square that opens the account menu, or the fan's picture when they have one. */
+/** The red initials square that opens the account menu, or their picture (or their act's) when there is one. */
 export function AvatarButton({ onClick, className }: { onClick: () => void; className?: string }) {
   const { user } = useAuth();
   const name = user?.display_name || user?.email || "your account";
-  const picture = coverUrl({ signed: user?.avatar_url });
+  const picture = coverUrl({ signed: chipPicture(user) });
   // The signed link lasts an hour; if it has run out, the initials come back.
   const [broken, setBroken] = useState<string | null>(null);
   return (

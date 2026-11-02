@@ -30,6 +30,8 @@ export type AuthUser = {
   has_workspace?: boolean;
   /** The fan's own picture: a signed link that lasts an hour (owner, 2026-10-23). */
   avatar_url?: string | null;
+  /** The approved picture of an act they own or manage, signed like avatar_url (owner, 2026-11-02). */
+  act_picture_url?: string | null;
 };
 
 export type Organization = {
