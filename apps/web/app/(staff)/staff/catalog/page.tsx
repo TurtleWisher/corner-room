@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { CircleAlert, Search } from "lucide-react";
 
+import { ArtistMailReview } from "@/components/staff/artist-mail-review";
 import { ChangesQueue } from "@/components/staff/changes-review";
 import { GiftsReview } from "@/components/staff/gifts-review";
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
@@ -418,6 +419,7 @@ export default function StaffCatalogPage() {
         <h1 className="text-2xl font-bold">Catalog releases</h1>
         <ChangesQueue />
         <GiftsReview />
+        <ArtistMailReview />
         <LyricsQueue />
         <TimeLyrics />
         <CoverQueue />

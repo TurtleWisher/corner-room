@@ -39,6 +39,7 @@ from cornerroom.api.v1.uploads import router as uploads_router
 from cornerroom.api.v1.downloads import router as downloads_router
 from cornerroom.api.v1.media import router as media_router
 from cornerroom.api.v1.gifts import router as gifts_router
+from cornerroom.api.v1.artist_mail import router as artist_mail_router
 from cornerroom.api.v1.profiles import router as profiles_router
 from cornerroom.api.v1.team import router as team_router
 from cornerroom.api.v1.studio import router as studio_router
@@ -168,6 +169,7 @@ def create_app(settings: Settings | None = None, *, enable_lifespan: bool = True
     app.include_router(profiles_router, prefix="/api/v1")
     app.include_router(team_router, prefix="/api/v1")
     app.include_router(gifts_router, prefix="/api/v1")
+    app.include_router(artist_mail_router, prefix="/api/v1")
     app.include_router(covers_router, prefix="/api/v1")
     return app
 

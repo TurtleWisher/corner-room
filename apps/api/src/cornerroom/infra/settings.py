@@ -155,6 +155,9 @@ class Settings(BaseSettings):
     # Finance staff inbox told when a buyer sends a Bangla QR transaction ID (D-PAYALERT-01).
     # Empty = no alert.
     payment_alert_email: str = ""
+    # Artists' emails to buyers (D-MAIL-01): how many one artist or band may send in 7 days. The
+    # owner chose no cap for now (2026-11-02): 0 means no limit, like the other limits.
+    artist_mail_weekly_limit: int = 0
     # Error tracking (D-ERR-01, Sentry cloud): the project DSN. Empty = off.
     sentry_dsn: str = ""
     password_recovery_ttl_seconds: int = 0

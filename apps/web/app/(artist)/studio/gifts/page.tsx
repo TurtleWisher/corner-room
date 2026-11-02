@@ -10,6 +10,7 @@ import { ArrowLeft, Gift, Plus } from "lucide-react";
 
 import { Button, ButtonLink, Card, EmptyState, ErrorState, Skeleton } from "@/components/ds";
 import { CampaignForm } from "@/components/gifts/campaign-form";
+import { GiftTabs } from "@/components/gifts/gift-tabs";
 import { AccountPage } from "@/components/shell/account-page";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
@@ -114,6 +115,7 @@ export default function StudioGiftsPage() {
         </ButtonLink>
       }
     >
+      <GiftTabs current="campaigns" />
       <Gifts />
     </AccountPage>
   );

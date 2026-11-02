@@ -58,6 +58,8 @@ def test_phase13_uses_existing_outbox_only() -> None:
         "consume_payment_alert_event",
         # Pre-sale buyers without an account told their gift is on its way (D-CAMPAIGN-02, 2026-10-28).
         "consume_gift_email_event",
+        # Artists' thank-you emails and approved emails to buyers (D-MAIL-01, 2026-11-02).
+        "consume_artist_mail_event",
     }
 
 

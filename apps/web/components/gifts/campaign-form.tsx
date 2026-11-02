@@ -20,7 +20,7 @@ import { RELEASE_TYPE_LABEL } from "@/lib/studio-view";
 const key = (w: GiftWork) => `${w.type}:${w.id}`;
 
 /** One album or EP: tick the whole release, or open it to pick its songs. */
-function ReleaseChoice({ release, chosen, toggle }: { release: ReleaseCard; chosen: Set<string>; toggle: (w: GiftWork) => void }) {
+export function ReleaseChoice({ release, chosen, toggle }: { release: ReleaseCard; chosen: Set<string>; toggle: (w: GiftWork) => void }) {
   const [open, setOpen] = useState(false);
   const tracks = useAsync(async () => (open ? (await fetchStudioRelease(release.id)).tracks : []), [open, release.id]);
   const whole: GiftWork = { type: "RELEASE", id: release.id };

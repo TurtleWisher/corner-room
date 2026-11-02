@@ -15,7 +15,9 @@ log = structlog.get_logger("notifications")
 
 
 class StubEmailSender:
-    async def send(self, *, to: str, subject: str, body: str, locale: str = "en") -> str | None:
+    async def send(
+        self, *, to: str, subject: str, body: str, locale: str = "en", from_name: str | None = None
+    ) -> str | None:
         # Recipients are personal data: logs carry a masked address only.
         log.info("email_stub", to=mask_email(to), subject=subject, locale=locale)
         return "stub-email"
@@ -42,9 +44,13 @@ class DevMailboxEmailSender:
     def __init__(self, path: str) -> None:
         self.file = Path(path) / "mailbox.jsonl"
 
-    async def send(self, *, to: str, subject: str, body: str, locale: str = "en") -> str | None:
+    async def send(
+        self, *, to: str, subject: str, body: str, locale: str = "en", from_name: str | None = None
+    ) -> str | None:
         self.file.parent.mkdir(parents=True, exist_ok=True)
         record = {"at": datetime.now(timezone.utc).isoformat(), "to": to, "subject": subject, "body": body, "locale": locale}
+        if from_name:
+            record["from_name"] = from_name
         with self.file.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record) + "\n")
         log.info("email_dev_mailbox", to=mask_email(to), subject=subject, file=str(self.file))

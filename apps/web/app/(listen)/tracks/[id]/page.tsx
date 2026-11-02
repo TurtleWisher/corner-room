@@ -15,6 +15,7 @@ import { canPlay, TrackBuyControl, useCustomerCommerce, usePlayableCatalog } fro
 import { CoverTilt } from "@/components/music/cover-tilt";
 import { CreditFace } from "@/components/music/credit-face";
 import { GiftNote } from "@/components/music/gift-note";
+import { ListensInMillions } from "@/components/music/listens-in-millions";
 import { SongCredits } from "@/components/music/song-credits";
 import { SongLyrics } from "@/components/music/song-lyrics";
 import { useCredits } from "@/components/music/credits";
@@ -214,7 +215,9 @@ export default function TrackPage() {
       {/* Owner, 2026-10-28: under the cover, the lyrics fold-out, then the credits ending in the
           "Track credit details" fold-out; the title, artist and buying stay beside the cover. */}
       <LitSurface as="section" theme="sky" aria-labelledby="track-title">
-        <div className="mx-auto grid max-w-[90rem] items-start gap-x-12 gap-y-8 px-4 py-12 md:grid-cols-[minmax(0,24rem)_1fr] md:px-6 md:py-16">
+        {/* Owner, 2026-11-02: the listens in millions, very large behind the song. */}
+        {typeof track.listens === "number" ? <ListensInMillions listens={track.listens} /> : null}
+        <div className="relative mx-auto grid max-w-[90rem] items-start gap-x-12 gap-y-8 px-4 py-12 md:grid-cols-[minmax(0,24rem)_1fr] md:px-6 md:py-16">
           <div className="md:row-span-2">
             {/* Owner, 2026-10-31 (D-MOTION-02): the cover leans toward the mouse with light behind it. */}
             <CoverTilt className="music-cover-in">

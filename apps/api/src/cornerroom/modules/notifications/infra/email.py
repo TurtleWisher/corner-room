@@ -12,7 +12,7 @@ import asyncio
 import smtplib
 import ssl
 from email.message import EmailMessage
-from email.utils import make_msgid
+from email.utils import formataddr, make_msgid, parseaddr
 
 import structlog
 
@@ -40,9 +40,12 @@ class SmtpEmailSender:
                 smtp.login(self.username, self.password or "")
             smtp.send_message(message)
 
-    async def send(self, *, to: str, subject: str, body: str, locale: str = "en") -> str | None:
+    async def send(
+        self, *, to: str, subject: str, body: str, locale: str = "en", from_name: str | None = None
+    ) -> str | None:
         message = EmailMessage()
-        message["From"] = self.sender
+        # Another name on Corner Room's own address (D-MAIL-01: "{Artist} via Corner Room").
+        message["From"] = formataddr((from_name, parseaddr(self.sender)[1])) if from_name else self.sender
         message["To"] = to
         message["Subject"] = subject
         message_id = make_msgid(domain=self.sender.rsplit("@", 1)[-1].strip("> ") or None)
