@@ -84,10 +84,13 @@ from cornerroom.modules.commerce.domain.models import (
 )
 from cornerroom.modules.commerce.domain.artist_mail import (
     ArtistMail,
+    ArtistMailClick,
+    ArtistMailFile,
     ArtistMailMessage,
     ArtistMailOptOut,
     ArtistMailSettings,
     ArtistMailTemplate,
+    ArtistMailThankYou,
 )
 from cornerroom.modules.commerce.domain.gifts import GiftCampaign, GiftCampaignPeriod, GiftRecipient
 from cornerroom.modules.entitlements.domain.models import Entitlement
@@ -230,10 +233,13 @@ __all__ = [
     "GiftCampaignPeriod",
     "GiftRecipient",
     "ArtistMail",
+    "ArtistMailClick",
+    "ArtistMailFile",
     "ArtistMailMessage",
     "ArtistMailOptOut",
     "ArtistMailSettings",
     "ArtistMailTemplate",
+    "ArtistMailThankYou",
     "OutboxEvent",
     "Payment",
     "PaymentAttempt",

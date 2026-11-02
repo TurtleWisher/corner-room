@@ -121,6 +121,9 @@ class Settings(BaseSettings):
     verification_challenge_ttl_seconds: int = 0
     # Public web origin used to build links in messages (verification). No trailing slash.
     web_base_url: str = "http://localhost:3000"
+    # Public origin of /api/v1 for links and images inside emails (covers, click links, files).
+    # Empty means web_base_url, as in production where nginx serves the API on the web origin.
+    public_api_base_url: str = ""
     # Google sign-in (OpenID Connect, server-side code flow). Empty client id = feature off.
     # The secret is server-only; never put it in NEXT_PUBLIC_* or the web app.
     google_client_id: str = ""

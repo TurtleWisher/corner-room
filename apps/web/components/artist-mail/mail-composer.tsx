@@ -1,132 +1,130 @@
 "use client";
 
 /*
- * Write an email to buyers (owner, 2026-11-02, D-MAIL-01): subject, message and who gets it: the
- * buyers of chosen songs and releases, all of them, pre-sale buyers only, or people picked by name
- * (names only, D-BUYERS-01). Corner Room checks every email before it goes; who gets it is worked
- * out when it is approved. Save it as a draft or a template to use again.
+ * Write an email to buyers (owner, 2026-11-02, D-MAIL-01 and D-MAIL-02). Pick an occasion and the
+ * words are written for it, for who gets it and for what they bought; change the audience and the
+ * words follow until you edit them yourself. Fill-ins show as the real words for the buyer you're
+ * previewing as. Add links inside the text, files for a gift, and a time to send. Corner Room checks
+ * every email before it goes; who gets it is worked out then (or at its time).
  */
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { BookmarkPlus, Save, Search, Send, SendHorizontal } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { BookmarkPlus, CalendarClock, Save, Send, SendHorizontal, Sparkles } from "lucide-react";
 
 import { Button, Field, Input } from "@/components/ds";
-import { Textarea } from "@/components/ds/input";
+import { AudienceBuilder } from "@/components/artist-mail/audience-builder";
+import { FilesPicker } from "@/components/artist-mail/files-picker";
 import { MailPreview } from "@/components/artist-mail/mail-preview";
-import { ReleaseChoice } from "@/components/gifts/campaign-form";
-import { useAsync } from "@/components/use-async";
+import { RichEditor } from "@/components/artist-mail/rich-editor";
+import { releaseTypes } from "@/components/artist-mail/work-picker";
 import {
   createMail,
   createMailTemplate,
-  fetchMailBuyers,
-  fetchReach,
+  fullAudience,
   sendTestMail,
   submitMail,
   updateMail,
   updateMailTemplate,
   type ArtistMail,
   type MailAudience,
+  type MailFile,
+  type MailPerson,
   type MailProfile,
   type MailTemplate,
-  type MailWho,
-  type MailWork,
-  type Reach,
+  type Occasion,
 } from "@/features/artist-mail/api";
-import { fetchProfileReleases } from "@/features/studio/api";
+import type { ReleaseCard } from "@/features/studio/api";
 import { ApiError } from "@/lib/api/client";
-import { FILL_INS, reachLine, readyToSend, togglePicked, WHO_LABEL } from "@/lib/artist-mail-view";
-
-const key = (w: MailWork) => `${w.type}:${w.id}`;
+import { OCCASION_LABEL, OCCASIONS, occasionStarter, shapeOf, type Voice } from "@/lib/artist-mail-starters";
+import { fromLocalInput, previewValues, reachOf, readyToSend, toLocalInput, unfilledMarks, unknownFillIns } from "@/lib/artist-mail-view";
 
 export type ComposerStart = { draft?: ArtistMail; template?: MailTemplate } | null;
-
-function BuyerPicker({ profile, works, picked, onChange }: { profile: MailProfile; works: MailWork[]; picked: string[]; onChange: (p: string[]) => void }) {
-  const worksKey = works.map(key).sort().join(",");
-  const buyers = useAsync(() => (works.length ? fetchMailBuyers(profile, works) : Promise.resolve([])), [profile.kind, profile.id, worksKey]);
-  const [query, setQuery] = useState("");
-  if (!works.length) return <p className="text-sm text-fg-muted">Choose the music first to see who bought it.</p>;
-  if (buyers.status === "loading") return <p className="text-sm text-fg-muted">Loading buyers</p>;
-  if (buyers.status === "error") return <p className="text-sm text-danger">Buyers couldn&apos;t be loaded.</p>;
-  if (buyers.data.length === 0) return <p className="text-sm text-fg">Nobody has bought this music yet.</p>;
-  const shown = buyers.data.filter((b) => b.name.toLowerCase().includes(query.trim().toLowerCase()));
-  return (
-    <div className="grid gap-2">
-      <label className="relative block">
-        <span className="sr-only">Find a buyer</span>
-        <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" />
-        <Input className="pl-9" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a buyer" />
-      </label>
-      <p className="text-xs text-fg-muted">
-        {picked.length} of {buyers.data.length} picked. You see names only; Corner Room sends the email.
-      </p>
-      <ul className="max-h-64 overflow-y-auto border-y border-line">
-        {shown.map((b) => (
-          <li key={b.ref}>
-            <label className="flex items-center gap-2 py-1.5 text-sm text-fg">
-              <input type="checkbox" checked={picked.includes(b.ref)} onChange={() => onChange(togglePicked(picked, b.ref))} />
-              {b.name}
-              {b.presale ? <span className="text-xs font-semibold text-highlight">Pre-sale</span> : null}
-            </label>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 export function MailComposer({
   profile,
   artist,
+  voice,
+  releases,
+  files,
+  onFiles,
+  fileMaxBytes,
   start,
   onDone,
 }: {
   profile: MailProfile;
   artist: string;
+  voice: Voice;
+  releases: ReleaseCard[];
+  files: MailFile[];
+  onFiles: (files: MailFile[]) => void;
+  fileMaxBytes: number;
   start: ComposerStart;
   onDone: (note: string) => void;
 }) {
   const source = start?.draft ?? start?.template ?? null;
-  const releases = useAsync(() => fetchProfileReleases(profile.kind, profile.id), [profile.kind, profile.id]);
-  const [subject, setSubject] = useState(source?.subject ?? "");
-  const [body, setBody] = useState(source?.body ?? "");
-  const [works, setWorks] = useState<MailWork[]>(source?.audience.works.map((w) => ({ type: w.type, id: w.id, title: w.title })) ?? []);
-  const [who, setWho] = useState<MailWho>(source?.audience.who ?? "ALL");
-  const [picked, setPicked] = useState<string[]>(source?.audience.picked ?? []);
+  const first = source ? null : occasionStarter("NOTE", "ALL", { kind: "any" }, voice);
+  const [occasion, setOccasion] = useState<Occasion>(source?.occasion ?? "NOTE");
+  const [audience, setAudience] = useState<MailAudience>(fullAudience(source?.audience));
+  const [subject, setSubject] = useState(source?.subject ?? first?.subject ?? "");
+  const [body, setBody] = useState(source?.body ?? first?.body ?? "");
+  const [edited, setEdited] = useState(Boolean(source));
+  const [people, setPeople] = useState<MailPerson[]>([]);
+  const [previewRef, setPreviewRef] = useState<string | null>(null);
+  const [fileIds, setFileIds] = useState<string[]>(source?.file_ids ?? []);
+  const [later, setLater] = useState(Boolean(start?.draft?.send_at));
+  const [sendAt, setSendAt] = useState(toLocalInput(start?.draft?.send_at));
   const [templateName, setTemplateName] = useState(start?.template?.name ?? "");
-  const [reach, setReach] = useState<Reach | null>(null);
   const [busy, setBusy] = useState<"draft" | "send" | "template" | "test" | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const chosen = new Set(works.map(key));
-  const audience: MailAudience = useMemo(() => ({ works, who, picked }), [works, who, picked]);
-  const ready = readyToSend({ subject, body, audience });
+  const [offer, setOffer] = useState<{ subject: string; body: string } | null>(null);
 
-  const { kind: profileKind, id: profileId } = profile;
+  const types = useMemo(() => releaseTypes(releases), [releases]);
+  const shape = shapeOf(audience.works, types);
+  const starter = occasionStarter(occasion, audience.who, shape, voice);
+
+  // While the words are still the starting ones, they follow the occasion, audience and music.
+  const lastStarter = useRef(`${subject}\u0000${body}`);
+  const mounted = useRef(false);
   useEffect(() => {
-    setReach(null);
-    if (!audience.works.length || (audience.who === "PICKED" && !audience.picked.length)) return;
-    let live = true;
-    const timer = window.setTimeout(() => {
-      fetchReach({ kind: profileKind, id: profileId }, audience)
-        .then((r) => live && setReach(r))
-        .catch(() => live && setReach(null));
-    }, 300);
-    return () => {
-      live = false;
-      window.clearTimeout(timer);
-    };
-  }, [profileKind, profileId, audience]);
+    const next = `${starter.subject}\u0000${starter.body}`;
+    if (!mounted.current) {
+      // A saved draft or template opens with its own words, not an offer to replace them.
+      mounted.current = true;
+      if (source) return;
+    }
+    if (next === lastStarter.current) return;
+    if (!edited) {
+      setSubject(starter.subject);
+      setBody(starter.body);
+      lastStarter.current = next;
+      setOffer(null);
+    } else {
+      setOffer(starter);
+    }
+    // starter is derived from these.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [occasion, audience.who, shape.kind, voice, JSON.stringify(shape)]);
 
-  const toggle = (w: MailWork) => {
-    setWorks((list) => (list.some((x) => key(x) === key(w)) ? list.filter((x) => key(x) !== key(w)) : [...list, w]));
-    setPicked([]);
-  };
+  const reachable = people.filter((p) => !p.stopped && reachOf([p], audience.pick).count === 1);
+  const previewPerson = reachable.find((p) => p.ref === previewRef) ?? reachable[0] ?? null;
+  const chosenTitles = audience.works.map((w) => w.title ?? "");
+  const values = previewValues(previewPerson, chosenTitles, artist);
+  const previewWork = audience.works.find((w) => previewPerson?.bought.includes(w.title ?? "")) ?? audience.works[0] ?? null;
+  const reach = reachOf(people, audience.pick);
+  const marks = unfilledMarks(subject + "\n" + body);
+  const typos = unknownFillIns(subject + "\n" + body);
+  const sendAtIso = later ? fromLocalInput(sendAt) : null;
+  const ready = readyToSend({ subject, body, audience }) && !marks.length && (!later || Boolean(sendAtIso));
+
+  const payload = () => ({ subject, body, audience, send_at: sendAtIso, occasion, file_ids: fileIds });
+  const save = () => (start?.draft ? updateMail(start.draft.id, payload()) : createMail(profile, payload()));
 
   async function run(kind: "draft" | "send" | "template" | "test", job: () => Promise<string>) {
     setBusy(kind);
     setMessage(null);
     try {
       const note = await job();
-      if (kind === "test") setMessage({ ok: true, text: note });
+      if (kind === "test" || kind === "template") setMessage({ ok: true, text: note });
       else onDone(note);
     } catch (err) {
       setMessage({ ok: false, text: err instanceof ApiError ? err.message : "That didn't go through. Try again." });
@@ -135,68 +133,142 @@ export function MailComposer({
     }
   }
 
-  const save = () => (start?.draft ? updateMail(start.draft.id, { subject, body, audience }) : createMail(profile, { subject, body, audience }));
-
   function submit(e: FormEvent) {
     e.preventDefault();
     void run("send", async () => {
       const draft = await save();
       await submitMail(draft.id);
-      return "Sent to Corner Room. It goes out once it is approved.";
+      return sendAtIso ? "Sent to Corner Room. Once approved it goes at the time you chose." : "Sent to Corner Room. It goes out once it is approved.";
     });
   }
 
-  const music = releases.status === "ok" ? releases.data.filter((r) => ["APPROVED", "SCHEDULED", "RELEASED"].includes(r.status)) : [];
+  const typed = (setter: (v: string) => void) => (v: string) => {
+    setter(v);
+    setEdited(true);
+  };
+
   return (
-    <form onSubmit={submit} className="grid gap-5">
+    <form onSubmit={submit} className="grid gap-6">
       <fieldset>
-        <legend className="text-[0.8125rem] font-semibold text-fg">Which music</legend>
-        <p className="mt-1 text-sm text-fg-muted">The email goes to people who bought what you tick. Buying an album counts for each of its songs.</p>
-        {releases.status === "loading" ? (
-          <p className="mt-2 text-sm text-fg-muted">Loading your music</p>
-        ) : music.length === 0 ? (
-          <p className="mt-2 text-sm text-fg">No approved or released music yet.</p>
-        ) : (
-          <ul className="mt-2 border-t border-line">
-            {music.map((r) => (
-              <ReleaseChoice key={r.id} release={r} chosen={chosen} toggle={(w) => toggle({ ...w, title: w.type === "RELEASE" ? r.title : undefined })} />
-            ))}
-          </ul>
-        )}
-      </fieldset>
-      <fieldset>
-        <legend className="text-[0.8125rem] font-semibold text-fg">Who gets it</legend>
-        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
-          {(Object.keys(WHO_LABEL) as MailWho[]).map((w) => (
-            <label key={w} className="flex items-center gap-2 text-sm text-fg">
-              <input type="radio" name={`who-${profile.id}`} checked={who === w} onChange={() => setWho(w)} />
-              {WHO_LABEL[w]}
-            </label>
+        <legend className="flex items-center gap-2 text-[0.8125rem] font-semibold text-fg">
+          <Sparkles aria-hidden="true" className="size-4 text-highlight" /> What it&apos;s about
+        </legend>
+        <p className="mt-1 text-sm text-fg-muted">Pick one and the words are written for it. They follow who gets it and what they bought until you change them.</p>
+        <div className="am-chips mt-2">
+          {OCCASIONS.map((o) => (
+            <button
+              key={o}
+              type="button"
+              aria-pressed={occasion === o}
+              className="am-occasion cr-focus"
+              onClick={() => {
+                setOccasion(o);
+              }}
+            >
+              {OCCASION_LABEL[o]}
+            </button>
           ))}
         </div>
-        {who === "PICKED" ? (
-          <div className="mt-3">
-            <BuyerPicker profile={profile} works={works} picked={picked} onChange={setPicked} />
-          </div>
-        ) : null}
-        <p className="mt-3 text-sm font-semibold text-fg" aria-live="polite">
-          {works.length ? reachLine(reach) : "Choose the music to see how many people it reaches"}
-        </p>
       </fieldset>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="grid content-start gap-4">
-          <Field label="Subject" required>
-            {(c) => <Input {...c} value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={200} />}
-          </Field>
-          <Field label="Message" required hint="Plain text. Links work. Write in any language.">
-            {(c) => <Textarea {...c} value={body} onChange={(e) => setBody(e.target.value)} maxLength={10000} rows={10} />}
-          </Field>
-          <p className="text-xs text-fg-muted">Fill-ins: {FILL_INS.map((f) => `{${f.key}} ${f.label.toLowerCase()}`).join(" · ")}</p>
+
+      <AudienceBuilder profile={profile} releases={releases} value={audience} onChange={setAudience} onPeople={setPeople} />
+
+      {offer ? (
+        <div role="status" className="flex flex-wrap items-center gap-3 border border-line p-3 text-sm text-fg">
+          <span>There are starting words for {OCCASION_LABEL[occasion].toLowerCase()} written for this audience.</span>
+          <Button
+            size="sm"
+            variant="secondary"
+            type="button"
+            onClick={() => {
+              setSubject(offer.subject);
+              setBody(offer.body);
+              lastStarter.current = `${offer.subject}\u0000${offer.body}`;
+              setEdited(false);
+              setOffer(null);
+            }}
+          >
+            Use them instead of mine
+          </Button>
+          <Button size="sm" variant="ghost" type="button" onClick={() => setOffer(null)}>
+            Keep mine
+          </Button>
         </div>
-        <MailPreview artist={artist} subject={subject} body={body} kind="MANUAL" />
+      ) : null}
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="grid content-start gap-4">
+          {reachable.length ? (
+            <label className="grid gap-1 text-[0.8125rem] font-semibold text-fg">
+              Preview as
+              <select
+                className="cr-focus min-h-10 border border-line-strong bg-surface-sunken px-3 text-sm text-fg"
+                value={previewPerson?.ref ?? ""}
+                onChange={(e) => setPreviewRef(e.target.value)}
+              >
+                {reachable.slice(0, 500).map((p) => (
+                  <option key={p.ref} value={p.ref}>
+                    {p.name}
+                    {p.bought.length ? ` (bought ${p.bought.join(", ")})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <RichEditor label="Subject" singleLine value={subject} onChange={typed(setSubject)} values={values} placeholder="What the email is about" />
+          <RichEditor label="Message" value={body} onChange={typed(setBody)} values={values} placeholder="Write to your buyers" />
+          <p className="text-xs text-fg-muted">
+            Highlighted words change for each person. Select words and tap Link to add a link. Write in any language.
+          </p>
+          {marks.length ? (
+            <p role="alert" className="text-sm text-danger">
+              Fill in {marks.join(", ")} before sending.
+            </p>
+          ) : null}
+          {typos.length ? <p className="text-sm text-danger">{typos.join(", ")} won&apos;t be filled in. Use the buttons above the message.</p> : null}
+        </div>
+        <MailPreview
+          artist={artist}
+          subject={subject}
+          body={body}
+          values={values}
+          kind="MANUAL"
+          work={previewWork}
+          files={files.filter((f) => fileIds.includes(f.id))}
+        />
       </div>
+
+      <FilesPicker profile={profile} files={files} onFiles={onFiles} value={fileIds} onChange={setFileIds} maxBytes={fileMaxBytes} />
+
+      <fieldset>
+        <legend className="flex items-center gap-2 text-[0.8125rem] font-semibold text-fg">
+          <CalendarClock aria-hidden="true" className="size-4 text-highlight" /> When it goes
+        </legend>
+        <div className="mt-2 grid gap-2 text-sm text-fg">
+          <label className="flex items-center gap-2">
+            <input type="radio" name={`when-${profile.id}`} checked={!later} onChange={() => setLater(false)} />
+            As soon as Corner Room approves it
+          </label>
+          <label className="flex flex-wrap items-center gap-2">
+            <input type="radio" name={`when-${profile.id}`} checked={later} onChange={() => setLater(true)} />
+            At a time I choose (Bangladesh time)
+            {later ? (
+              <Input
+                type="datetime-local"
+                className="w-auto"
+                value={sendAt}
+                min={toLocalInput(new Date().toISOString())}
+                onChange={(e) => setSendAt(e.target.value)}
+                aria-label="Send at"
+              />
+            ) : null}
+          </label>
+          {later ? <p className="text-xs text-fg-muted">Who gets it is worked out at that time, so new buyers who fit are included.</p> : null}
+        </div>
+      </fieldset>
+
       <div className="grid gap-2 sm:max-w-md">
-        <Field label="Template name" hint="To save this email and its audience to use again">
+        <Field label="Template name" hint="To keep this email, its audience and files for next time">
           {(c) => <Input {...c} value={templateName} onChange={(e) => setTemplateName(e.target.value)} maxLength={120} />}
         </Field>
       </div>
@@ -206,24 +278,26 @@ export function MailComposer({
         </p>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" busy={busy === "send"} disabled={!ready || reach?.count === 0}>
+        <Button type="submit" busy={busy === "send"} disabled={!ready || reach.count === 0}>
           <SendHorizontal aria-hidden="true" /> Send for review
         </Button>
         <Button
           variant="secondary"
+          type="button"
           busy={busy === "draft"}
-          disabled={!ready}
+          disabled={!subject.trim() || !body.trim() || audience.works.length === 0}
           onClick={() => void run("draft", async () => (await save(), "Draft saved."))}
         >
           <Save aria-hidden="true" /> Save draft
         </Button>
         <Button
           variant="secondary"
+          type="button"
           busy={busy === "template"}
-          disabled={!ready || !templateName.trim()}
+          disabled={!subject.trim() || !body.trim() || audience.works.length === 0 || !templateName.trim()}
           onClick={() =>
             void run("template", async () => {
-              const t = { name: templateName, subject, body, audience };
+              const t = { name: templateName, subject, body, audience, occasion, file_ids: fileIds };
               await (start?.template ? updateMailTemplate(start.template.id, t) : createMailTemplate(profile, t));
               return `Template "${templateName.trim()}" saved.`;
             })
@@ -233,12 +307,20 @@ export function MailComposer({
         </Button>
         <Button
           variant="ghost"
+          type="button"
           busy={busy === "test"}
           disabled={!subject.trim() || !body.trim()}
           onClick={() =>
             void run("test", async () => {
-              await sendTestMail(profile, { kind: "MANUAL", subject, body });
-              return "A test is on its way to your account email.";
+              await sendTestMail(profile, {
+                kind: "MANUAL",
+                subject,
+                body,
+                works: previewWork ? [previewWork] : [],
+                preview: previewPerson ? { name: previewPerson.has_name ? previewPerson.name : null, music: previewPerson.bought } : null,
+                file_ids: fileIds,
+              });
+              return `A test${previewPerson ? `, written as ${previewPerson.name} will see it,` : ""} is on its way to your account email.`;
             })
           }
         >

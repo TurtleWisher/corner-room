@@ -11,9 +11,9 @@ import { CircleAlert } from "lucide-react";
 
 import { Button, Card, ErrorState, LoadingState } from "@/components/staff/kit";
 import { useWorkspace } from "@/components/workspace-provider";
-import { fetchMailReviewQueue, reviewMail, type ArtistMail } from "@/features/artist-mail/api";
+import { fetchMailReviewQueue, fullAudience, reviewMail, type ArtistMail } from "@/features/artist-mail/api";
 import { ApiError } from "@/lib/api/client";
-import { audienceLine, reachLine } from "@/lib/artist-mail-view";
+import { audienceLine, reachLine, whenLine } from "@/lib/artist-mail-view";
 import { friendlyError } from "@/lib/error-copy";
 
 function Item({ m, onDone }: { m: ArtistMail; onDone: () => void }) {
@@ -44,7 +44,11 @@ function Item({ m, onDone }: { m: ArtistMail; onDone: () => void }) {
         <span className="font-normal text-muted-foreground"> · {m.profile.display_name}</span>
       </p>
       <p className="mt-1 text-sm">
-        {audienceLine(m.audience)} · {reachLine(m.reach)}
+        {audienceLine(fullAudience(m.audience))} · {reachLine(m.reach)}
+      </p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {m.send_at ? `Goes out ${whenLine(m.send_at)} if approved (who gets it is worked out then).` : "Goes out as soon as it is approved."}
+        {m.files?.length ? ` With files: ${m.files.map((f) => f.name).join(", ")}.` : ""}
       </p>
       <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded border bg-muted/30 p-3 font-sans text-sm">{m.body}</pre>
       <textarea

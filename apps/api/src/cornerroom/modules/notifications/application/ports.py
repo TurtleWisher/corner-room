@@ -10,7 +10,8 @@ class EmailSender(Protocol):
     # `from_name` replaces the name on the From line (the address stays Corner Room's), e.g.
     # "MIZULS via Corner Room" on artists' emails (D-MAIL-01).
     async def send(
-        self, *, to: str, subject: str, body: str, locale: str = "en", from_name: str | None = None
+        self, *, to: str, subject: str, body: str, locale: str = "en", from_name: str | None = None,
+        html: str | None = None,
     ) -> str | None: ...
 
 

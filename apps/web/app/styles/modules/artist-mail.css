@@ -1,0 +1,300 @@
+/*
+ * Artist emails in Studio (owner, 2026-11-02, D-MAIL-02): the writing area with real-word fill-ins
+ * and links, the email preview, picking people, and the report. Colours come from the page's own
+ * world tokens (Studio mint), so nothing here hard-codes a brand colour except the preview, which
+ * shows the email as buyers will see it (Music world on light paper, as the server writes it).
+ */
+
+/* ---------- Writing ---------- */
+.am-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+.am-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--cr-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cr-accent) 6%, transparent);
+  color: var(--cr-fg);
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: background-color var(--cr-dur-interaction) var(--ease-corner), border-color var(--cr-dur-interaction) var(--ease-corner);
+}
+.am-tool:hover {
+  border-color: var(--cr-accent);
+  background: color-mix(in srgb, var(--cr-accent) 16%, transparent);
+}
+.am-tool:focus-visible {
+  outline: 2px solid var(--cr-focus);
+  outline-offset: 2px;
+}
+.am-linkbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.am-linkinput {
+  flex: 1 1 14rem;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--cr-line-strong);
+  background: var(--cr-surface-sunken);
+  color: var(--cr-fg);
+  font-size: 0.875rem;
+}
+.am-input {
+  min-height: 12rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--cr-line-strong);
+  background: var(--cr-surface-sunken);
+  color: var(--cr-fg);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.am-input[data-single] {
+  min-height: 0;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.am-input[aria-invalid="true"] {
+  border-color: var(--cr-danger, #ff6b81);
+}
+.am-input:empty::before {
+  content: attr(data-placeholder);
+  color: var(--cr-fg-muted);
+  pointer-events: none;
+}
+/* A fill-in: the real word for the buyer being previewed, marked so it's clear it changes. */
+.am-chip {
+  display: inline;
+  padding: 0.05em 0.35em;
+  margin: 0 0.05em;
+  border-radius: 0.35em;
+  background: color-mix(in srgb, var(--cr-accent) 22%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--cr-accent) 60%, transparent);
+  color: var(--cr-fg);
+  font-weight: 600;
+  cursor: default;
+  user-select: all;
+}
+.am-link {
+  color: var(--cr-link);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+/* ---------- Choosing ---------- */
+.am-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--cr-line);
+}
+.am-seg button {
+  min-height: 2.25rem;
+  padding: 0.25rem 0.875rem;
+  color: var(--cr-fg-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: background-color var(--cr-dur-interaction) var(--ease-corner), color var(--cr-dur-interaction) var(--ease-corner);
+}
+.am-seg button[aria-pressed="true"] {
+  background: var(--cr-accent);
+  color: var(--cr-on-accent);
+}
+.am-seg button:focus-visible {
+  outline: 2px solid var(--cr-focus);
+  outline-offset: 2px;
+}
+.am-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+.am-occasion {
+  min-height: 2.25rem;
+  padding: 0.375rem 0.875rem;
+  border: 1px solid var(--cr-line);
+  color: var(--cr-fg);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: border-color var(--cr-dur-interaction) var(--ease-corner), background-color var(--cr-dur-interaction) var(--ease-corner);
+}
+.am-occasion:hover {
+  border-color: var(--cr-accent);
+}
+.am-occasion[aria-pressed="true"] {
+  border-color: var(--cr-accent);
+  background: color-mix(in srgb, var(--cr-accent) 18%, transparent);
+}
+.am-people {
+  max-height: 18rem;
+  overflow-y: auto;
+  border-top: 1px solid var(--cr-line);
+  border-bottom: 1px solid var(--cr-line);
+}
+.am-person {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.25rem 0.625rem;
+  padding: 0.5rem 0.25rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--cr-line) 60%, transparent);
+  font-size: 0.875rem;
+}
+.am-person:last-child {
+  border-bottom: 0;
+}
+.am-tag {
+  padding: 0.05rem 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--cr-accent) 50%, transparent);
+  color: var(--cr-highlight);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ---------- The email as buyers will see it (matches artist_mail_render.py) ---------- */
+.am-preview {
+  background: #f2f0f9;
+  padding: 1rem;
+  color: #1b1838;
+}
+.am-preview-card {
+  max-width: 35rem;
+  margin: 0 auto;
+  background: #ffffff;
+  box-shadow: 0 18px 40px -24px rgb(18 15 38 / 0.55);
+}
+.am-preview-head {
+  background: #120f26;
+  padding: 0.875rem 1.25rem;
+  font-family: var(--font-archivo), sans-serif;
+}
+.am-preview-head strong {
+  color: #f6ece6;
+  font-weight: 800;
+}
+.am-preview-head span {
+  margin-left: 0.5rem;
+  color: #bbedfe;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.am-preview-body {
+  padding: 1.25rem 1.25rem 0.5rem;
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+.am-preview-body p {
+  margin: 0 0 1rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.am-preview-body a {
+  color: #2e2860;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.am-preview-button {
+  display: inline-block;
+  margin: 0.25rem 0 1.25rem;
+  padding: 0.75rem 1.125rem;
+  background: #53c8ea;
+  color: #2e2860;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.am-preview-files {
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  background: #f2f0f9;
+  border-left: 3px solid #53c8ea;
+  font-size: 0.875rem;
+}
+.am-preview-foot {
+  padding: 0.875rem 1.25rem 1.125rem;
+  border-top: 1px solid #e4e1f0;
+  color: #5d5a7e;
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+.am-preview .am-fill {
+  background: rgb(83 200 234 / 0.22);
+  border-radius: 0.3em;
+  padding: 0 0.2em;
+}
+
+/* ---------- Report ---------- */
+.am-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.75rem;
+}
+.am-kpi {
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--cr-line);
+  background: color-mix(in srgb, var(--cr-surface-raised) 70%, transparent);
+}
+.am-kpi-value {
+  margin-top: 0.25rem;
+  color: var(--cr-fg);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums lining-nums;
+  line-height: 1.1;
+}
+.am-kpi-value[data-na] {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--cr-fg-muted);
+}
+.am-bar-track {
+  height: 0.5rem;
+  background: color-mix(in srgb, var(--cr-fg) 8%, transparent);
+}
+.am-bar-fill {
+  height: 100%;
+  background: var(--cr-accent);
+  transform-origin: left center;
+  animation: am-grow 600ms var(--ease-corner) both;
+}
+@keyframes am-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+.am-chart text {
+  fill: var(--cr-fg-muted);
+  font-family: var(--font-archivo), sans-serif;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .am-bar-fill {
+    animation: none;
+  }
+  .am-tool,
+  .am-seg button,
+  .am-occasion {
+    transition: none;
+  }
+}

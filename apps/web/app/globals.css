@@ -8,6 +8,7 @@
 @import "./styles/modules/listen.css";
 @import "./styles/modules/music.css";
 @import "./styles/modules/artists.css";
+@import "./styles/modules/artist-mail.css";
 @import "./styles/browse.css";
 @import "./styles/player-controls.css";
 @import "./styles/purchase.css";

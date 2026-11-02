@@ -46,6 +46,7 @@ REGISTERED_JOBS = (
     "expire_upload_intents",
     "run_media_jobs",
     "release_scheduled",
+    "send_scheduled_artist_mail",
 )
 
 
