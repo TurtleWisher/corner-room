@@ -26,7 +26,9 @@ from cornerroom.infra.settings import Settings, get_settings
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import (
+    METADATA_CORRECTED,
     OFFER_PROPOSED,
+    RELEASE_STAGE_CHANGED,
     RELEASE_SUBMITTED,
     RELEASE_WITHDRAWN,
     TRACK_CREATED,
@@ -954,6 +956,109 @@ class StudioService:
         release, _role = await self._release(ctx, release_id)
         return await latest_artwork_report(
             self.session, target_type="release_cover", target_id=release.id, current_asset_id=release.cover_asset_id
+        )
+
+    # --- delete an unreleased release (owner, 2026-11-03) ------------------------------------------
+
+    async def delete_release(self, ctx: AuthContext, release_id: UUID) -> None:
+        """Delete music that isn't out yet so the artist can start again. Only while nobody has paid
+        for it (a pre-sale is cancelled first, and its refunds finished). The release and songs only
+        on it are hidden everywhere (kept in the database for the audit trail); prices stop, price
+        proposals, waiting reviews and its release-day email go. Uploaded files stay in storage,
+        no longer used."""
+        from cornerroom.modules.commerce.application.onsite_presale import PRESALE_ORDER_STATUSES
+        from cornerroom.modules.commerce.domain.artist_mail import ArtistMail
+        from cornerroom.modules.commerce.domain.models import Offer, Order, OrderItem, PresaleClaim, Product
+        from cornerroom.modules.music.domain.models import ReleaseChangeRequest
+
+        release, role = await self._release(ctx, release_id)
+        if release.status in {"RELEASED", "TAKEN_DOWN", "ARCHIVED"}:
+            raise AppError("INVALID_TRANSITION", "Released music can't be deleted", 409, "Ask Corner Room to take it down instead")
+        tracks = [t for _pos, t in await self._tracks_of(release.id)]
+        # Songs that are also on another release stay; only this release's own songs go with it.
+        own_tracks = []
+        for t in tracks:
+            elsewhere = await self.session.scalar(
+                select(func.count())
+                .select_from(ReleaseTrack)
+                .join(Release, Release.id == ReleaseTrack.release_id)
+                .where(ReleaseTrack.track_id == t.id, ReleaseTrack.release_id != release.id, Release.deleted_at.is_(None))
+            )
+            if not elsewhere:
+                own_tracks.append(t)
+        subjects = [release.id, *[t.id for t in own_tracks]]
+        paid = await self.session.scalar(
+            select(func.count())
+            .select_from(Order)
+            .join(OrderItem, OrderItem.order_id == Order.id)
+            .where(OrderItem.ref_id.in_(subjects), Order.status.in_(PRESALE_ORDER_STATUSES), Order.deleted_at.is_(None))
+        )
+        products = (
+            await self.session.execute(select(Product).where(Product.subject_id.in_(subjects), Product.deleted_at.is_(None)))
+        ).scalars().all()
+        listed = await self.session.scalar(
+            select(func.count()).select_from(PresaleClaim).where(
+                PresaleClaim.product_id.in_([p.id for p in products] or [UUID(int=0)]), PresaleClaim.status != "CANCELLED"
+            )
+        )
+        if paid or listed:
+            raise AppError(
+                "HAS_BUYERS", "Someone has paid for this release", 409,
+                "Cancel its pre-sale first and let the refunds finish, then delete it",
+            )
+        now = self.clock.now()
+        for offer in (
+            await self.session.execute(
+                select(Offer).where(Offer.product_id.in_([p.id for p in products] or [UUID(int=0)]), Offer.status == "ACTIVE")
+            )
+        ).scalars().all():
+            offer.status = "RETIRED"
+        for proposal in (
+            await self.session.execute(select(OfferProposal).where(OfferProposal.release_id == release.id, OfferProposal.status == "PROPOSED"))
+        ).scalars().all():
+            proposal.status = "WITHDRAWN"
+        for change in (
+            await self.session.execute(
+                select(ReleaseChangeRequest).where(ReleaseChangeRequest.release_id == release.id, ReleaseChangeRequest.status.in_(("OPEN", "SUBMITTED")))
+            )
+        ).scalars().all():
+            change.status = "WITHDRAWN"
+        intake = (await self.session.execute(select(IntakeRecord).where(IntakeRecord.release_id == release.id))).scalar_one_or_none()
+        if intake is not None and intake.status != "CLOSED":
+            intake.status = "CLOSED"
+        for mail in (
+            await self.session.execute(
+                select(ArtistMail).where(ArtistMail.send_with_release_id == release.id, ArtistMail.status.in_(("DRAFT", "IN_REVIEW", "SCHEDULED")))
+            )
+        ).scalars().all():
+            await self.session.delete(mail)
+        for t in own_tracks:
+            t.lyrics_pending = None
+            t.lyrics_pending_at = None
+            t.lyrics_pending_by = None
+            t.deleted_at = now
+            t.updated_by = ctx.user_id
+        release.cover_pending_asset_id = None
+        release.cover_pending_at = None
+        release.cover_pending_by = None
+        release.presale_status = None
+        release.deleted_at = now
+        release.updated_by = ctx.user_id
+        await self.music._flush_versioned()
+        await self._note_staff(ctx, release, role)
+        # Search hides what was deleted (the indexer finds no row for it).
+        await self._event(
+            RELEASE_STAGE_CHANGED, "Release", release.id,
+            {"status": release.status, "previous_status": release.status, "release_type": release.release_type, "review_action": "deleted"},
+            ctx, release.primary_org_id,
+        )
+        for t in own_tracks:
+            await self._event(METADATA_CORRECTED, "Track", t.id, {"deleted": True}, ctx, release.primary_org_id)
+        await self.audit.record_from_auth(
+            ctx, action="release.deleted", entity_type="Release", entity_id=release.id,
+            previous_state={"status": release.status, "title": release.title},
+            new_state={"deleted": True, "tracks": [str(t.id) for t in own_tracks], "offers_stopped": True},
+            organization_id=release.primary_org_id,
         )
 
     # --- early pre-sale (D-PRESALE-03) -----------------------------------------------------------

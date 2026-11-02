@@ -127,8 +127,9 @@ async def test_track_sales_and_audience_rules(client: AsyncClient) -> None:
     offer = await client.post("/api/v1/offers", headers=bearer(ops), json={"product_id": product_id, "amount_minor": 500, "currency_code": "BDT"})
     assert offer.status_code == 201, offer.text
     assert (await client.post(f"/api/v1/offers/{offer.json()['id']}/lifecycle", headers=bearer(ops), json={"action": "activate"})).status_code == 200
+    # Owner, 2026-11-03: a price of music that isn't out yet isn't listed (or sold) at all.
     listed = {o["id"] for o in (await client.get("/api/v1/offers")).json()["items"]}
-    assert offer.json()["id"] in listed
+    assert offer.json()["id"] not in listed
     switched = await client.patch(f"/api/v1/studio/releases/{album_id}", headers=bearer(owner["access_token"]), json={"track_sales": "RELEASE_ONLY"})
     assert switched.status_code == 200, switched.text
     listed = {o["id"] for o in (await client.get("/api/v1/offers")).json()["items"]}

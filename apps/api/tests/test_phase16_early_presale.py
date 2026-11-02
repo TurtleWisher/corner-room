@@ -250,6 +250,9 @@ async def test_released_too_early_goes_back_to_presale(client: AsyncClient) -> N
     for p in (await client.get("/api/v1/offer-proposals", headers=bearer(ops))).json():
         if p["release_id"] == release_id and p["status"] == "PROPOSED":
             assert (await client.post(f"/api/v1/offer-proposals/{p['id']}/decision", headers=bearer(ops), json={"decision": "accept"})).status_code == 200
+    # Owner, 2026-11-03: the agreed normal price isn't in the Store until the music is out.
+    listed = (await client.get("/api/v1/offers")).json()["items"]
+    assert not [o for o in listed if o.get("subject_id") == release_id and o["audience"] == "EVERYONE"]
     for action in ("start_review", "approve", "release"):
         assert (await _review(client, reviewer, release_id, action)).status_code == 200
     assert (await client.get(f"/api/v1/presales/releases/{release_id}")).status_code == 404
@@ -260,6 +263,8 @@ async def test_released_too_early_goes_back_to_presale(client: AsyncClient) -> N
     undone = await client.post(back, headers=bearer(reviewer), json={})
     assert undone.status_code == 200, undone.text
     assert undone.json()["status"] == "SCHEDULED"
+    listed = (await client.get("/api/v1/offers")).json()["items"]
+    assert [o["audience"] for o in listed if o.get("subject_id") == release_id] == ["PRESALE"]
     page = (await client.get(f"/api/v1/presales/releases/{release_id}")).json()
     assert page["open"] is True and page["offer"]["amount_minor"] == 1200
     early = await client.post("/api/v1/playback/sessions", headers=bearer(fan["access_token"]), json={"track_id": track_id})
