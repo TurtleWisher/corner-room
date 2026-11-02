@@ -12,6 +12,7 @@ release unless it is in managed mode (D-AUDIO-09), and Phase 6 keeps them from a
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
@@ -40,6 +41,7 @@ from cornerroom.modules.documents.domain.models import MediaAsset
 from cornerroom.modules.music.application.languages import LANGUAGES, is_language
 from cornerroom.modules.music.application.review import ReviewService
 from cornerroom.modules.music.application.service import MusicService
+from cornerroom.modules.music.domain import cover_reveal
 from cornerroom.modules.music.domain.models import (
     Credit,
     CreditRole,
@@ -329,6 +331,8 @@ class StudioService:
                 else None
             ),
             "cover_review_note": release.cover_review_note,
+            # D-COVER-02: whether fans see the cover before release, and when.
+            "cover_reveal": self._cover_reveal_view(release),
             # D-CHANGES-01: changes to approved or released music waiting for staff, and the last decision.
             **(await self._change_request_view(release)),
             "profile": {"kind": _kind, "id": _pid, "display_name": profile_name},
@@ -939,6 +943,70 @@ class StudioService:
         return await latest_artwork_report(
             self.session, target_type="release_cover", target_id=release.id, current_asset_id=release.cover_asset_id
         )
+
+    # --- early cover reveal (D-COVER-02) ------------------------------------------------------------
+
+    def _cover_reveal_view(self, release: Release) -> dict[str, Any]:
+        settable = release.status in cover_reveal.REVEAL_SETTABLE_STATUSES
+        revealed = cover_reveal.cover_revealed(release, self.clock.now())
+        return {
+            "lead_minutes": release.cover_reveal_lead_minutes,
+            "revealed_at": release.cover_revealed_at,
+            "reveal_at": cover_reveal.reveal_at(release),
+            "revealed": revealed,
+            # Choosing a time is open until the cover shows; Reveal now needs a scheduled date and a cover.
+            "can_change": settable and not revealed,
+            "can_reveal_now": settable and not revealed and release.status == "SCHEDULED" and release.cover_asset_id is not None,
+        }
+
+    def _require_reveal_open(self, release: Release) -> None:
+        if release.status not in cover_reveal.REVEAL_SETTABLE_STATUSES:
+            raise AppError("INVALID_TRANSITION", "The cover shows with the release now", 409)
+        if cover_reveal.cover_revealed(release, self.clock.now()):
+            raise AppError("COVER_ALREADY_REVEALED", "Fans can already see this cover", 409, "A cover that is out can't be hidden again")
+
+    async def set_cover_reveal(self, ctx: AuthContext, release_id: UUID, lead_minutes: int | None) -> Release:
+        """Show the cover this many minutes before release, or (None) only when the release is out."""
+        release, role = await self._release(ctx, release_id)
+        self._require_reveal_open(release)
+        if lead_minutes is not None and not cover_reveal.lead_is_valid(lead_minutes):
+            raise AppError("VALIDATION_ERROR", "Choose between 1 hour and 30 days before release", 422)
+        if lead_minutes is not None and release.release_at is not None:
+            # A moment already gone would show the cover at once; that is what Reveal now is for.
+            if release.release_at - timedelta(minutes=lead_minutes) <= self.clock.now():
+                raise AppError("REVEAL_TIME_PASSED", "That time has already passed", 422, "Choose a shorter time, or use Reveal now")
+        previous = release.cover_reveal_lead_minutes
+        release.cover_reveal_lead_minutes = lead_minutes
+        release.updated_by = ctx.user_id
+        await self.music._flush_versioned()
+        await self._note_staff(ctx, release, role)
+        await self.audit.record_from_auth(
+            ctx, action="release.cover_reveal_set", entity_type="Release", entity_id=release.id,
+            previous_state={"cover_reveal_lead_minutes": previous},
+            new_state={"cover_reveal_lead_minutes": lead_minutes},
+            organization_id=release.primary_org_id,
+        )
+        return release
+
+    async def reveal_cover_now(self, ctx: AuthContext, release_id: UUID) -> Release:
+        """Show the cover to fans at once, ahead of a scheduled release. It can't be hidden again."""
+        release, role = await self._release(ctx, release_id)
+        self._require_reveal_open(release)
+        if release.status != "SCHEDULED":
+            raise AppError("INVALID_TRANSITION", "The cover can be revealed once a release date is set", 409)
+        if release.cover_asset_id is None:
+            raise AppError("COVER_REQUIRED", "Add a cover first", 409)
+        release.cover_revealed_at = self.clock.now()
+        release.updated_by = ctx.user_id
+        await self.music._flush_versioned()
+        await self._note_staff(ctx, release, role)
+        await self.audit.record_from_auth(
+            ctx, action="release.cover_revealed", entity_type="Release", entity_id=release.id,
+            previous_state={"cover_revealed_at": None},
+            new_state={"cover_revealed_at": release.cover_revealed_at.isoformat()},
+            organization_id=release.primary_org_id,
+        )
+        return release
 
     # --- sales (HANDOFF 0.2 step 2) -------------------------------------------------------------------
 

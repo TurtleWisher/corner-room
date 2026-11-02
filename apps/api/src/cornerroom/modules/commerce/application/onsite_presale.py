@@ -81,9 +81,11 @@ class PresaleService:
         return list(rows.scalars())
 
     async def public_view(self, release_id: UUID) -> dict[str, Any]:
-        """What fans see of a release on pre-sale: never anything that isn't on pre-sale now."""
+        """What fans see of a release on pre-sale: title, artist, date and the offer only (owner,
+        2026-11-02). The cover only once the artist reveals it early (D-COVER-02); never the songs."""
         from cornerroom.modules.documents.application.covers import CoverService
         from cornerroom.modules.music.application.studio import StudioService
+        from cornerroom.modules.music.domain.cover_reveal import cover_revealed
         from cornerroom.modules.music.domain.models import Release
 
         release = await self.session.get(Release, release_id)
@@ -95,8 +97,8 @@ class PresaleService:
         artist = None
         if kind is not None and pid is not None:
             _row, _org, artist = await studio._profile(kind, pid)
-        tracks = await studio._tracks_of(release.id)
         offer = offers[0]
+        show_cover = release.cover_asset_id is not None and cover_revealed(release, self.clock.now())
         return {
             "id": release.id,
             "title": release.title,
@@ -105,8 +107,7 @@ class PresaleService:
             "artist": artist,
             "artist_kind": kind,
             "artist_id": pid,
-            "cover_url": CoverService(self.session, self.settings).signed_path(release.cover_asset_id, 1200) if release.cover_asset_id else None,
-            "tracks": [{"position": pos, "title": t.title} for pos, t in tracks],
+            "cover_url": CoverService(self.session, self.settings).signed_path(release.cover_asset_id, 1200) if show_cover else None,
             "offer": {"id": offer.id, "amount_minor": offer.amount_minor, "currency_code": offer.currency_code},
         }
 

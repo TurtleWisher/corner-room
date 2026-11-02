@@ -10,6 +10,7 @@ import { Button, Card, DateTime, ErrorState, Field, Input, Money, Select, Skelet
 import { Textarea } from "@/components/ds/input";
 import { useCredits } from "@/components/music/credits";
 import { MediaReport } from "@/components/music/media-report";
+import { CoverReveal } from "@/components/studio/cover-reveal";
 import { CreditsNote, CreditsPreview, PartOfField, PersonField } from "@/components/studio/credit-parts";
 import { ArtworkReport } from "@/components/uploads/artwork-report";
 import { UploadCard } from "@/components/uploads/upload-card";
@@ -1065,6 +1066,8 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
         ) : null}
         {/* The checks' verdict on the latest cover; the readiness list updates once they finish. */}
         <ArtworkReport load={() => fetchCoverReport(detail.release.id)} refresh={coverUploads} onSettled={() => reload()} />
+        {/* D-COVER-02: hidden from fans until release unless the artist shows it early. */}
+        <CoverReveal key={`${detail.release.id}-${detail.release.version}`} detail={detail} reload={reload} />
       </Section>
 
       <Section id="tracks" title="Tracks">

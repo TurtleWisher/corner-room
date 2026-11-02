@@ -420,3 +420,34 @@
     transition: none;
   }
 }
+
+/* A pre-sale cover not shown yet (owner, 2026-11-02, D-COVER-02): a closed surface with a thin seam
+   of light, like a door before the room opens. Static; carries nothing from the hidden cover. */
+.ps-sealed {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 50% 110%, color-mix(in oklab, var(--cr-highlight) 14%, transparent), transparent 60%),
+    var(--color-surface-sunken);
+  border: 1px solid var(--color-line);
+}
+.ps-sealed::before {
+  content: "";
+  position: absolute;
+  inset: 12% auto 12% 50%;
+  width: 1px;
+  background: linear-gradient(to bottom, transparent, color-mix(in oklab, var(--cr-highlight) 85%, transparent) 45%, transparent);
+  box-shadow: 0 0 18px 2px color-mix(in oklab, var(--cr-highlight) 35%, transparent);
+}
+.ps-sealed::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgb(0 0 0 / 0.28), transparent 46%, transparent 54%, rgb(0 0 0 / 0.28));
+}
+@media (prefers-reduced-transparency: reduce) {
+  .ps-sealed::before {
+    box-shadow: none;
+  }
+}

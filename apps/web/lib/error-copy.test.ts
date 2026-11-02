@@ -12,6 +12,10 @@ describe("friendlyError", () => {
     expect(message).toBe("You already have an active subscription.");
     expect(message).not.toMatch(/Q-P|P1/);
   });
+  it("explains cover reveal refusals in plain words", () => {
+    expect(friendlyError(err("REVEAL_TIME_PASSED", 422))).toMatch(/already passed.*Reveal now/);
+    expect(friendlyError(err("COVER_ALREADY_REVEALED", 409))).toMatch(/can't be hidden again/);
+  });
   it("explains purchase refusals in plain words", () => {
     expect(friendlyError(err("TRACK_NOT_SOLD_SEPARATELY", 409))).toBe("This song is sold only as part of its album or EP.");
     expect(friendlyError(err("DELIVERY_ADDRESS_REQUIRED", 409))).toMatch(/address where we can send your gifts/);

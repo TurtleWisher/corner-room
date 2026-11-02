@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, Check, LogIn, ShoppingBag } from "lucide-react";
+import { CalendarClock, Check, EyeOff, LogIn, ShoppingBag } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { CoverArt } from "@/components/brand/cover-art";
 import { Display, Eyebrow } from "@/components/brand/display";
-import { RoomCube } from "@/components/brand/room-cube";
 import { ButtonLink, DateTime, Money } from "@/components/ds";
 import { useCustomerCommerce } from "@/components/music/commerce";
 import type { PresalePageRecord } from "@/features/catalog/api";
@@ -18,7 +17,8 @@ import { preorderLabel, presaleCountdown } from "@/lib/presale-view";
 
 /**
  * A release on pre-sale (D-PRESALE-02): what fans see before it is out. The music unlocks on
- * release day; until then there is nothing to play, only the pre-order.
+ * release day; until then there is nothing to play, only the pre-order. Title, artist, date and
+ * the offer only (owner, 2026-11-02); the cover once the artist reveals it early (D-COVER-02).
  */
 export function PresaleView({ presale }: { presale: PresalePageRecord }) {
   const { status } = useAuth();
@@ -33,11 +33,12 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
     <main id="main" data-theme="sky" className="cr-scope">
       <LitSurface as="section" theme="sky" aria-labelledby="presale-title">
         <div className="mx-auto grid max-w-[90rem] items-center gap-10 px-4 py-12 md:grid-cols-[minmax(0,26rem)_1fr] md:px-6 md:py-16">
-          <CoverArt
-            src={coverUrl({ signed: presale.cover_url }, 1200)}
-            fallback={<RoomCube front={presale.title} side={presale.artist ?? presale.title} tone="sky" label="" animate className="w-full" />}
-            className="w-full"
-          />
+          {presale.cover_url ? (
+            // The closed surface keeps the square while the revealed cover loads.
+            <CoverArt src={coverUrl({ signed: presale.cover_url }, 1200)} fallback={<div className="ps-sealed w-full" aria-hidden="true" />} className="w-full" />
+          ) : (
+            <SealedCover />
+          )}
           <div>
             <Eyebrow>
               {releaseTypeLabel(presale.release_type)} · Pre-order
@@ -90,23 +91,18 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
           </div>
         </div>
       </LitSurface>
-
-      <div className="mx-auto max-w-[90rem] px-4 pb-16 pt-10 md:px-6">
-        <section aria-labelledby="presale-tracks">
-          <h2 id="presale-tracks" className="mb-4 text-xl font-bold text-fg">
-            Tracks
-          </h2>
-          <ol aria-label="Track list" className="border-t border-line">
-            {presale.tracks.map((t) => (
-              <li key={t.position} className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-4 border-b border-line py-3">
-                <span className="cr-num text-right text-lg text-fg-muted">{String(t.position).padStart(2, "0")}</span>
-                <p className="truncate font-semibold text-fg">{t.title}</p>
-                <span className="text-xs text-fg-muted">On release day</span>
-              </li>
-            ))}
-          </ol>
-        </section>
-      </div>
     </main>
+  );
+}
+
+/** The cover before it is revealed: a closed surface with a seam of light, nothing from the cover. */
+function SealedCover() {
+  return (
+    <figure className="w-full">
+      <div className="ps-sealed w-full" aria-hidden="true" />
+      <figcaption className="mt-3 inline-flex items-center gap-2 text-sm text-fg-muted">
+        <EyeOff aria-hidden="true" className="size-4" /> The cover is still under wraps.
+      </figcaption>
+    </figure>
   );
 }

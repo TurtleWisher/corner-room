@@ -35,6 +35,10 @@ const COPY: Record<string, string> = {
   NOTHING_TO_CHANGE: "Nothing has changed yet. Edit the name, bio or picture first.",
   PROFILE_REVIEW_REQUIRED: "Profile changes go to staff for approval. Send them from Studio, Profile.",
   SAME_PERSON_REVIEW: "Someone else must approve this: you can't approve your own changes.",
+  // Early cover reveal (owner, 2026-11-02, D-COVER-02).
+  REVEAL_TIME_PASSED: "That time has already passed. Choose a shorter time, or use Reveal now.",
+  COVER_ALREADY_REVEALED: "Fans can already see this cover, so it can't be hidden again.",
+  COVER_REQUIRED: "Add a cover first.",
   RATE_LIMITED: "Too many attempts. Please wait a moment and try again.",
   NETWORK_ERROR: "We could not reach Corner Room. Check your connection and try again.",
 };
