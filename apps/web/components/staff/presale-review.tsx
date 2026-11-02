@@ -11,7 +11,7 @@ import { CircleAlert } from "lucide-react";
 import { DateTime, Money } from "@/components/ds";
 import { Button, Card, ErrorState, LoadingState } from "@/components/staff/kit";
 import { useWorkspace } from "@/components/workspace-provider";
-import { fetchPresaleQueue, reviewPresale, type PresaleQueueItem, type StudioReleaseDetail } from "@/features/studio/api";
+import { backToPresale, fetchPresaleQueue, reviewPresale, type PresaleQueueItem, type StudioReleaseDetail } from "@/features/studio/api";
 import { ApiError } from "@/lib/api/client";
 import { friendlyError } from "@/lib/error-copy";
 import { fromLocalInput, toLocalInput } from "@/lib/artist-mail-view";
@@ -78,6 +78,59 @@ export function PresaleQueue() {
           ))}
         </ul>
       )}
+    </Card>
+  );
+}
+
+/**
+ * Released by mistake before its pre-sale date (owner, 2026-11-03): put it back on pre-sale for the
+ * date. The API refuses when someone has bought it at the normal price since it came out.
+ */
+export function BackToPresale({ detail, onDone }: { detail: StudioReleaseDetail | null; onDone: () => void }) {
+  const [when, setWhen] = useState(toLocalInput(detail?.release.release_at ?? null));
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  if (!detail || detail.release.status !== "RELEASED") return null;
+
+  async function go() {
+    if (!window.confirm("Take this release off the shelves and put it back on pre-sale until its date?")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await backToPresale(detail!.release.id, { release_at: fromLocalInput(when) });
+      setResult("Back on pre-sale. Fans can pre-book it again until its date.");
+      onDone();
+    } catch (err) {
+      setError(friendlyError(err, "That didn't go through."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="p-5">
+      <h2 className="font-semibold">Released too early? Back to pre-sale</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        For music that went out before its pre-sale date. It goes back to scheduled for the date below, its songs stop playing until then,
+        and pre-orders open again at the agreed pre-sale price. Not possible once someone has bought it at the normal price. Anyone who
+        pre-ordered was already emailed that it&apos;s out and isn&apos;t emailed again.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <label className="text-sm" htmlFor="back-to-presale-at">
+          Release date (Bangladesh time)
+        </label>
+        <input id="back-to-presale-at" type="datetime-local" className="rounded border px-2 py-1 text-sm" value={when} onChange={(e) => setWhen(e.target.value)} />
+        <Button variant="outline" disabled={busy || !when} onClick={() => void go()}>
+          Back to pre-sale
+        </Button>
+      </div>
+      {result ? <p className="mt-2 text-sm">{result}</p> : null}
+      {error ? (
+        <p role="alert" className="mt-2 flex items-center gap-2 text-sm text-red-600">
+          <CircleAlert aria-hidden="true" className="size-4" /> {error}
+        </p>
+      ) : null}
     </Card>
   );
 }

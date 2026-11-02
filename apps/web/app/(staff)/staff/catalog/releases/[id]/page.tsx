@@ -9,7 +9,7 @@ import { CircleAlert } from "lucide-react";
 
 import { Button, Card, Protected } from "@/components/staff/kit";
 import { ChangesReview } from "@/components/staff/changes-review";
-import { PresaleDecision } from "@/components/staff/presale-review";
+import { BackToPresale, PresaleDecision } from "@/components/staff/presale-review";
 import { ReleaseEditor } from "@/components/studio/release-editor";
 import { cancelPresale, fetchStudioRelease, reviewRelease, setManagedMode, type StudioReleaseDetail } from "@/features/studio/api";
 import { friendlyError } from "@/lib/error-copy";
@@ -79,6 +79,14 @@ function ReviewPanel({ releaseId }: { releaseId: string }) {
   async function act(action: string, needsNote: boolean, releaseAt?: string, takedownKind?: "STANDARD" | "LEGAL") {
     if (needsNote && note.trim().length === 0) {
       setError("Write a note the artist will see.");
+      return;
+    }
+    if (
+      action === "release" &&
+      !window.confirm(
+        "Release now puts the music live for everyone right away. If it is on pre-sale, pre-orders close and buyers are emailed that it's out. To keep the pre-sale, use Schedule with its release date instead. Release now?",
+      )
+    ) {
       return;
     }
     if (
@@ -186,7 +194,12 @@ function EarlyPresale({ releaseId }: { releaseId: string }) {
   useEffect(() => {
     fetchStudioRelease(releaseId).then(setDetail).catch(() => setDetail(null));
   }, [releaseId, round]);
-  return <PresaleDecision key={`${detail?.release.version ?? 0}`} detail={detail} onDone={() => setRound((n) => n + 1)} />;
+  return (
+    <>
+      <PresaleDecision key={`d-${detail?.release.version ?? 0}`} detail={detail} onDone={() => setRound((n) => n + 1)} />
+      <BackToPresale key={`b-${detail?.release.version ?? 0}`} detail={detail} onDone={() => setRound((n) => n + 1)} />
+    </>
+  );
 }
 
 export default function StaffCatalogReleasePage() {

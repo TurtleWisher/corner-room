@@ -265,6 +265,12 @@ export default function ReleasePage() {
       }
       throw err;
     }
+    // Staff and the artist can read a release before it is out; while it is on pre-sale they see the
+    // pre-sale page fans see, not release tools (owner, 2026-11-03: "Release" there skipped the pre-sale).
+    if (release.status !== "RELEASED") {
+      const presale = await fetchPresale(id).catch(() => null);
+      if (presale) return { presale };
+    }
     const composed = await fetchReleaseTracks(id, opts);
     const ordered = [...composed.items].sort((a, b) => a.position - b.position);
     const tracks = await Promise.all(ordered.map((r) => fetchTrack(r.track_id, opts).catch(() => null)));
