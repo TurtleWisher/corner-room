@@ -6,6 +6,7 @@ import {
   LISTEN_NAV,
   PUBLIC_NAV,
   activeHref,
+  chipPicture,
   initials,
   isActivePath,
   isStudioAuthPath,
@@ -75,6 +76,13 @@ describe("helpers", () => {
     expect(initials("Rumi")).toBe("RU");
     expect(initials(null, "fan@example.test")).toBe("FA");
     expect(initials(null, null)).toBe("ME");
+  });
+
+  it("picks the avatar picture: own first, then the act's, else none", () => {
+    expect(chipPicture({ avatar_url: "/own", act_picture_url: "/act" })).toBe("/own");
+    expect(chipPicture({ avatar_url: null, act_picture_url: "/act" })).toBe("/act");
+    expect(chipPicture({ avatar_url: "", act_picture_url: undefined })).toBeNull();
+    expect(chipPicture(null)).toBeNull();
   });
 
   it("matches active paths", () => {
