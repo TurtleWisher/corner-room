@@ -103,6 +103,10 @@ class Release(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, 
     cover_pending_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cover_pending_by: Mapped[UUID | None] = mapped_column(nullable=True)
     cover_review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # D-COVER-02: fans see the cover before release only if the artist chose to show it early,
+    # either this many minutes before release_at or at once (cover_revealed_at). See cover_reveal.py.
+    cover_reveal_lead_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cover_revealed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     __mapper_args__ = {"version_id_col": version}
 

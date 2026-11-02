@@ -80,7 +80,9 @@ async def test_preorder_unlocks_on_release_day_and_buyers_are_told(client: Async
     # Scheduled: pre-orders open at the pre-sale price.
     assert (await _schedule(client, reviewer, release_id, datetime.now(timezone.utc) + timedelta(days=1))).status_code == 200
     page = (await client.get(f"/api/v1/presales/releases/{release_id}")).json()
-    assert page["offer"]["amount_minor"] == 2000 and page["tracks"][0]["title"] == "Song" and page["artist"] == "Presale a"
+    assert page["offer"]["amount_minor"] == 2000 and page["artist"] == "Presale a"
+    # Fans see title, artist, date and the offer only: no songs, and no cover until it is revealed.
+    assert "tracks" not in page and page["cover_url"] is None
     offer_id = page["offer"]["id"]
     fan = await register_and_login(client, "ps-fan-a@example.com")
     receipt = await _buy(client, fan["access_token"], offer_id)

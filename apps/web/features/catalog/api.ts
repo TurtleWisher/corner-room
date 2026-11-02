@@ -168,7 +168,8 @@ export async function fetchTrackCredits(id: string, opts?: { skipAuth?: boolean 
   });
 }
 
-/** A release on pre-sale, as fans see it before it is out (D-PRESALE-02). Public; 404 when not on pre-sale. */
+/** A release on pre-sale, as fans see it before it is out (D-PRESALE-02): title, artist, date and the
+ * offer only (owner, 2026-11-02). Public; 404 when not on pre-sale. */
 export type PresalePageRecord = {
   id: string;
   title: string;
@@ -177,8 +178,8 @@ export type PresalePageRecord = {
   artist: string | null;
   artist_kind: string | null;
   artist_id: string | null;
+  /** Only once the artist reveals it early (D-COVER-02); the songs stay hidden until release. */
   cover_url: string | null;
-  tracks: { position: number; title: string }[];
   offer: { id: string; amount_minor: number; currency_code: string };
 };
 

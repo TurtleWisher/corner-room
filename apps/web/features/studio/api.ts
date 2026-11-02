@@ -2,6 +2,7 @@
 
 import type { ArtworkReport } from "@/features/uploads/api";
 import { apiFetch } from "@/lib/api/client";
+import type { CoverRevealState } from "@/lib/cover-reveal-view";
 
 export type ProfileKind = "artist" | "band";
 
@@ -136,6 +137,8 @@ export type StudioReleaseDetail = {
   cover_waiting?: boolean;
   pending_cover_url?: string | null;
   cover_review_note?: string | null;
+  /** D-COVER-02: whether fans see the cover before release, and when (the API decides). */
+  cover_reveal?: CoverRevealState;
   /** D-CHANGES-01: changes to approved or released music, waiting in a request; the last decision. */
   change_request?: ChangeRequest | null;
   last_change_decision?: { status: string; review_note?: string | null; decided_at?: string | null } | null;
@@ -282,6 +285,21 @@ export function reviewChanges(releaseId: string, action: "approve" | "reject", n
 }
 
 /** Withdraw a new cover that is waiting for staff (D-COVER-01). */
+/** D-COVER-02: show the cover this many minutes before release, or (null) only with the release. */
+export function setCoverReveal(releaseId: string, leadMinutes: number | null): Promise<StudioReleaseDetail> {
+  return apiFetch<StudioReleaseDetail>(`/api/v1/studio/releases/${releaseId}/cover-reveal`, {
+    method: "PUT",
+    headers: json,
+    body: JSON.stringify({ lead_minutes: leadMinutes }),
+    retry: false,
+  });
+}
+
+/** D-COVER-02: show the cover to fans now, ahead of a scheduled release. It can't be hidden again. */
+export function revealCoverNow(releaseId: string): Promise<StudioReleaseDetail> {
+  return apiFetch<StudioReleaseDetail>(`/api/v1/studio/releases/${releaseId}/cover-reveal/now`, { method: "POST", retry: false });
+}
+
 export function withdrawStudioCover(releaseId: string): Promise<void> {
   return apiFetch<void>(`/api/v1/studio/releases/${releaseId}/cover/pending`, { method: "DELETE", retry: false });
 }

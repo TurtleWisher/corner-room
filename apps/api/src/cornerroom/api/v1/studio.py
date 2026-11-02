@@ -223,6 +223,17 @@ class ChangeRequestOut(BaseModel):
     audio: list[ChangeAudioOut]
 
 
+class CoverRevealOut(BaseModel):
+    """D-COVER-02: whether fans see the cover before release, and when."""
+
+    lead_minutes: int | None = None
+    revealed_at: datetime | None = None
+    reveal_at: datetime | None = None
+    revealed: bool = False
+    can_change: bool = False
+    can_reveal_now: bool = False
+
+
 class ReleaseDetailOut(BaseModel):
     release: ReleaseFieldsOut
     cover_url: str | None = None
@@ -230,6 +241,7 @@ class ReleaseDetailOut(BaseModel):
     cover_waiting: bool = False
     pending_cover_url: str | None = None
     cover_review_note: str | None = None
+    cover_reveal: CoverRevealOut = CoverRevealOut()
     # D-CHANGES-01: changes to approved or released music waiting for staff, and the last decision.
     change_request: ChangeRequestOut | None = None
     last_change_decision: dict[str, Any] | None = None
@@ -479,6 +491,25 @@ class CoverReportOut(BaseModel):
 async def cover_report(release_id: UUID, ctx: Ctx, svc: StudioDep) -> CoverReportOut | None:
     report = await svc.cover_report(ctx, release_id)
     return CoverReportOut(**report) if report is not None else None
+
+
+class CoverRevealIn(BaseModel):
+    # Minutes before release that fans see the cover; null keeps it hidden until release.
+    lead_minutes: int | None = Field(default=None, ge=1)
+
+
+@router.put("/studio/releases/{release_id}/cover-reveal", response_model=ReleaseDetailOut)
+async def set_cover_reveal(release_id: UUID, body: CoverRevealIn, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
+    """D-COVER-02: show the cover a chosen time before release, or only with the release."""
+    await svc.set_cover_reveal(ctx, release_id, body.lead_minutes)
+    return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
+
+
+@router.post("/studio/releases/{release_id}/cover-reveal/now", response_model=ReleaseDetailOut)
+async def reveal_cover_now(release_id: UUID, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
+    """D-COVER-02: show the cover to fans at once, ahead of a scheduled release."""
+    await svc.reveal_cover_now(ctx, release_id)
+    return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
 
 
 # --- Sales (owners and finance staff; no buyer identity) ---------------------------------------
@@ -827,11 +858,6 @@ async def review_changes(release_id: UUID, body: ChangeReviewIn, ctx: Ctx, svc: 
 # --- Pre-sales on Corner Room (D-PRESALE-02) ------------------------------------------------------
 
 
-class PresaleTrackOut(BaseModel):
-    position: int
-    title: str
-
-
 class PresaleOfferOut(BaseModel):
     id: UUID
     amount_minor: int
@@ -848,8 +874,8 @@ class PresaleViewOut(BaseModel):
     artist: str | None
     artist_kind: str | None
     artist_id: UUID | None
+    # Only once the artist reveals it early (D-COVER-02); songs stay hidden until release.
     cover_url: str | None
-    tracks: list[PresaleTrackOut]
     offer: PresaleOfferOut
 
 
