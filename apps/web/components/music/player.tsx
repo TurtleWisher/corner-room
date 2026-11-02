@@ -54,6 +54,7 @@ import {
   type RepeatMode,
 } from "@/lib/player-model";
 import { coverUrl } from "@/lib/cover-view";
+import { mediaSessionInfo } from "@/lib/media-session-view";
 import { DOCK_IDLE_MS, atPageEdge, dockLook, dockTravel, pointerWantsDock, settleDock, stepDock } from "@/lib/player-dock-view";
 import { cn } from "@/lib/utils";
 
@@ -606,13 +607,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       /* not supported */
     }
   }, [hasNext]);
-  useEffect(() => {
+  // The lock screen and notification player: title, artist and cover (owner, 2026-11-02). Set
+  // again when playback starts, since some phones only read it once audio is flowing.
+  const showMediaInfo = useCallback(() => {
     const ms = typeof navigator !== "undefined" ? navigator.mediaSession : undefined;
     if (!ms || typeof MediaMetadata === "undefined") return;
-    ms.metadata = state.track
-      ? new MediaMetadata({ title: state.track.title || "Track", artist: state.track.artist ?? "", album: state.source ?? "" })
-      : null;
-  }, [state.track, state.source]);
+    const { track, source } = stateRef.current;
+    ms.metadata = track ? new MediaMetadata(mediaSessionInfo(track, source, window.location.origin)) : null;
+  }, []);
+  useEffect(() => {
+    showMediaInfo();
+  }, [state.track, state.source, showMediaInfo]);
   useEffect(() => {
     const ms = typeof navigator !== "undefined" ? navigator.mediaSession : undefined;
     if (ms) ms.playbackState = state.status === "playing" ? "playing" : state.track ? "paused" : "none";
@@ -661,6 +666,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         preload="none"
         onPlay={() => {
           setState((s) => ({ ...s, status: "playing", problem: null, needsGesture: false }));
+          showMediaInfo();
           if (audioCtx.current?.state === "suspended") void audioCtx.current.resume().catch(() => undefined);
         }}
         onPlaying={() => {

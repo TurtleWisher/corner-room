@@ -67,6 +67,26 @@ describe("FeaturedCarousel (owner, 2026-10-31)", () => {
     expect(current()?.getAttribute("aria-label")).toBe("2 of 3: Chaya Pore");
   });
 
+  it("still turns by itself with Reduce Motion on (owner, 2026-11-02: iPhones looked stuck)", () => {
+    window.matchMedia = vi.fn().mockImplementation((q: string) => ({ matches: q.includes("reduce"), media: q, addEventListener() {}, removeEventListener() {} })) as never;
+    const { container } = render(<FeaturedCarousel slides={slides} />);
+    act(() => {
+      fireEvent.animationEnd(container.querySelector(".home-feature-fill") as Element);
+    });
+    expect(current()?.getAttribute("aria-label")).toBe("2 of 3: Chaya Pore");
+  });
+
+  it("ends the touch pause when the finger lifts outside the cover", () => {
+    render(<FeaturedCarousel slides={slides} />);
+    const region = screen.getByRole("region", { name: "Featured" });
+    fireEvent.touchStart(document.querySelector(".home-feature-stage") as Element, { touches: [{ clientX: 200, clientY: 100 }] });
+    expect(region.hasAttribute("data-paused")).toBe(true);
+    act(() => {
+      window.dispatchEvent(new Event("touchend"));
+    });
+    expect(region.hasAttribute("data-paused")).toBe(false);
+  });
+
   it("has no arrows or progress line for a single feature", () => {
     render(<FeaturedCarousel slides={slides.slice(0, 1)} />);
     expect(screen.queryByRole("button", { name: "Next" })).toBeNull();

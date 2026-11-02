@@ -99,8 +99,9 @@ function turn(from: HTMLElement | null, to: HTMLElement | null, dir: 1 | -1, red
  * cover keeps the poster light and tilt (PosterTilt). Pointing at it (or touching it, or keyboard
  * focus inside it) pauses the turning until the pointer leaves; two glass arrows appear on hover
  * for going back and forward, and on touch screens a sideways swipe does the same. The line under
- * the cover shows the time to the next turn and lets anyone jump to a slide. Reduced motion: no
- * turning by itself, and a cross-fade when someone moves.
+ * the cover shows the time to the next turn and lets anyone jump to a slide. Reduced motion: the
+ * slides still change on the same clock, by cross-fade instead of the swing (owner, 2026-11-02:
+ * with no turning, iPhones with Reduce Motion on looked stuck on the first slide).
  */
 export function FeaturedCarousel({ slides }: { slides: HomeFeature[] }) {
   const count = slides.length;
@@ -120,6 +121,22 @@ export function FeaturedCarousel({ slides }: { slides: HomeFeature[] }) {
   React.useEffect(() => {
     reduced.current = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   }, []);
+
+  // A finger lifted anywhere ends the touch pause, even when the cover never hears it (Safari can
+  // hand a touch that turned into a page scroll elsewhere), so the turning can't stay stopped.
+  React.useEffect(() => {
+    if (!touching) return;
+    const release = () => {
+      touch.current = null;
+      setTouching(false);
+    };
+    window.addEventListener("touchend", release);
+    window.addEventListener("touchcancel", release);
+    return () => {
+      window.removeEventListener("touchend", release);
+      window.removeEventListener("touchcancel", release);
+    };
+  }, [touching]);
 
   const go = React.useCallback(
     (delta: number) => {
