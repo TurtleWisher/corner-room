@@ -1,59 +1,105 @@
 "use client";
 
 import Link from "next/link";
+import { LockKeyhole } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
-import { ButtonLink, Card, EmptyState, ErrorState, Money, Skeleton } from "@/components/ds";
+import { Badge, ButtonLink, Card, DateTime, EmptyState, ErrorState, Money, Skeleton } from "@/components/ds";
 import { PageIntro, RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
+import { fetchPresale, type PresalePageRecord } from "@/features/catalog/api";
 import { fetchOffers, type OfferRecord } from "@/lib/api";
-import { maybeCoverUrl, offerCoverSource } from "@/lib/cover-view";
+import { coverUrl, maybeCoverUrl, offerCoverSource } from "@/lib/cover-view";
 import { groupOffers, offerTitle, productKind } from "@/lib/store-view";
 
-function BuyLink({ href, children, label }: { href: string; children: React.ReactNode; label: string }) {
+function BuyLink({ href, children, label, className, presale = false }: { href: string; children: React.ReactNode; label: string; className?: string; presale?: boolean }) {
   const { status } = useAuth();
   if (status !== "authenticated") {
     return (
-      <ButtonLink href={`/login?next=${encodeURIComponent(href)}`} variant="secondary" block aria-label={`Sign in to ${label}`}>
-        Sign in to buy
+      <ButtonLink href={`/login?next=${encodeURIComponent(href)}`} variant={presale ? "brand" : "secondary"} block className={className} aria-label={`Sign in to ${label}`}>
+        {presale ? "Sign in to pre-book" : "Sign in to buy"}
       </ButtonLink>
     );
   }
   return (
-    <ButtonLink href={href} block aria-label={label}>
+    <ButtonLink href={href} variant={presale ? "brand" : undefined} block className={className} aria-label={label}>
       {children}
     </ButtonLink>
   );
 }
 
-function OfferCard({ offer }: { offer: OfferRecord }) {
-  const title = offerTitle(offer);
+function OfferCard({ offer, presale }: { offer: OfferRecord; presale?: PresalePageRecord | null }) {
+  const isPresale = offer.audience === "PRESALE" && offer.product_type === "RELEASE";
+  const title = presale?.title ?? offerTitle(offer);
+  const releaseHref = isPresale && offer.subject_id ? `/releases/${offer.subject_id}` : null;
+  const checkoutHref = `/checkout?offer=${offer.id}`;
+  const artistHref = presale?.artist_id ? (presale.artist_kind === "band" ? `/bands/${presale.artist_id}` : `/artists/${presale.artist_id}`) : null;
+  const cover = isPresale
+    ? coverUrl({ signed: presale?.cover_url }, 480)
+    : maybeCoverUrl(offerCoverSource(offer.product_type, offer.subject_id), 480);
   return (
     <Card as="article" className="flex h-full flex-col p-4">
-      <CoverArt
-        src={maybeCoverUrl(offerCoverSource(offer.product_type, offer.subject_id), 480)}
-        fallback={<RoomCube front={title} side={title} tone="sky" label="" className="w-full" />}
-        className="w-full"
-      />
-      <h3 className="mt-4 truncate text-base font-bold text-fg">{title}</h3>
-      {productKind(offer.product_type) !== title ? <p className="text-xs text-fg-muted">{productKind(offer.product_type)}</p> : null}
+      <div className={isPresale ? "store-presale-cover" : undefined}>
+        <CoverArt
+          src={cover}
+          fallback={<RoomCube front={title} side={presale?.artist ?? title} tone="sky" label="" className="w-full" />}
+          className={isPresale ? "w-full store-presale-image" : "w-full"}
+        />
+        {isPresale ? (
+          <div className="store-presale-overlay">
+            <BuyLink href={checkoutHref} label={`Pre-book ${title}`} presale className="store-presale-action">
+              <LockKeyhole aria-hidden="true" /> Pre-book
+            </BuyLink>
+          </div>
+        ) : null}
+      </div>
+      <h3 className="mt-4 truncate text-base font-bold text-fg">
+        {releaseHref ? <Link href={releaseHref} className="cr-focus hover:text-highlight">{title}</Link> : title}
+      </h3>
+      {isPresale ? (
+        <div className="mt-2 space-y-1.5">
+          <Badge tone="accent">Pre-sale</Badge>
+          {presale?.artist ? (
+            <p className="text-sm text-fg-muted">
+              {artistHref ? <Link href={artistHref} className="cr-focus hover:text-fg">{presale.artist}</Link> : presale.artist}
+            </p>
+          ) : null}
+          {presale?.release_at ? <p className="text-xs text-fg-muted">Out <DateTime value={presale.release_at} format="date" /></p> : null}
+        </div>
+      ) : productKind(offer.product_type) !== title ? <p className="text-xs text-fg-muted">{productKind(offer.product_type)}</p> : null}
       <p className="mt-3 flex-1">
         <Money value={{ amount_minor: offer.amount_minor, currency_code: offer.currency_code }} variant="display" className="text-2xl text-highlight" />
       </p>
       <div className="mt-4">
-        <BuyLink href={`/checkout?offer=${offer.id}`} label={`Buy ${title}`}>
-          Buy
-        </BuyLink>
+        {isPresale && releaseHref ? (
+          <div className="space-y-2">
+            <ButtonLink href={releaseHref} variant="secondary" block aria-label={`View pre-sale for ${title}`}>View pre-sale</ButtonLink>
+            <BuyLink href={checkoutHref} label={`Pre-book ${title}`} presale><LockKeyhole aria-hidden="true" /> Pre-book</BuyLink>
+          </div>
+        ) : (
+          <BuyLink href={checkoutHref} label={`Buy ${title}`}>Buy</BuyLink>
+        )}
       </div>
     </Card>
   );
 }
 
 export default function StorePage() {
-  const data = useAsync(() => fetchOffers().then((o) => ({ offers: o.items })), []);
+  const data = useAsync(async () => {
+    const offers = (await fetchOffers()).items;
+    const presaleOffers = offers.filter((offer) => offer.audience === "PRESALE" && offer.product_type === "RELEASE" && offer.subject_id);
+    const presaleResults = await Promise.all(presaleOffers.map(async (offer) => {
+      try {
+        return [offer.subject_id!, await fetchPresale(offer.subject_id!)] as const;
+      } catch {
+        return [offer.subject_id!, null] as const;
+      }
+    }));
+    return { offers, presales: new Map(presaleResults) };
+  }, []);
 
   return (
     <main id="main" data-theme="ember" data-module="store" className="cr-scope">
@@ -86,7 +132,7 @@ export default function StorePage() {
                 <ul className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {group.offers.map((offer) => (
                     <li key={offer.id}>
-                      <OfferCard offer={offer} />
+                      <OfferCard offer={offer} presale={offer.subject_id ? data.data.presales.get(offer.subject_id) : null} />
                     </li>
                   ))}
                 </ul>

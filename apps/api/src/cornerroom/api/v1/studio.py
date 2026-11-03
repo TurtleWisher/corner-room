@@ -1014,7 +1014,7 @@ class PresaleViewOut(BaseModel):
     artist: str | None
     artist_kind: str | None
     artist_id: UUID | None
-    # Only once the artist reveals it early (D-COVER-02); songs stay hidden until release.
+    # Present only after the artist explicitly reveals the cover early; songs stay hidden.
     cover_url: str | None
     offer: PresaleOfferOut
     # False once the date has passed while the release waits to be finished: no pre-orders then.

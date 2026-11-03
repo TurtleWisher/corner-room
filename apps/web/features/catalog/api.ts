@@ -178,7 +178,7 @@ export type PresalePageRecord = {
   artist: string | null;
   artist_kind: string | null;
   artist_id: string | null;
-  /** Only once the artist reveals it early (D-COVER-02); the songs stay hidden until release. */
+  /** Present only when the artist has allowed the cover to be previewed; the UI keeps it blurred. */
   cover_url: string | null;
   offer: { id: string; amount_minor: number; currency_code: string };
   /** False once the date has passed while the release waits to be finished: no pre-orders then. */

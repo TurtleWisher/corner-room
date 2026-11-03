@@ -33,13 +33,15 @@ export function productTypeLabel(type: string | null | undefined): string {
 
 /**
  * Offers grouped by product type, in a stable order (tracks first). Empty groups are dropped.
- * Owners' prices (OWNS_PART_OF_RELEASE) are only offered on their release's page, never here.
+ * Open presales are public Store inventory; owners' prices (OWNS_PART_OF_RELEASE) stay on their
+ * release page and are never listed here.
  */
 export function groupOffers(offers: OfferRecord[]): { type: string; label: string; offers: OfferRecord[] }[] {
   const order = ["TRACK", "RELEASE", "CATALOG_ACCESS", "SUBSCRIPTION_PLAN"];
   const groups = new Map<string, OfferRecord[]>();
   for (const offer of offers) {
-    if ((offer.audience ?? "EVERYONE") !== "EVERYONE") continue;
+    // A currently open pre-sale is public inventory too; owner-only prices remain private.
+    if ((offer.audience ?? "EVERYONE") !== "EVERYONE" && offer.audience !== "PRESALE") continue;
     const key = offer.product_type ?? "OTHER";
     groups.set(key, [...(groups.get(key) ?? []), offer]);
   }

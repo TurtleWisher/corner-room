@@ -90,9 +90,10 @@ class PresaleService:
         return list(rows.scalars())
 
     async def public_view(self, release_id: UUID) -> dict[str, Any]:
-        """What fans see of a release on pre-sale: title, artist, date and the offer only (owner,
-        2026-11-02). The cover only once the artist reveals it early (D-COVER-02); never the songs.
-        `open` is false once the date has passed while the release waits to be finished."""
+        """What fans see of a release on pre-sale: title, artist, date and the offer only. Never
+        disclose songs. A cover can be shown only when the artist has explicitly revealed it, and
+        Corner Room's fan UI keeps that preview blurred until the release is public. `open` is
+        false once the date has passed while the release waits to be finished."""
         from cornerroom.modules.documents.application.covers import CoverService
         from cornerroom.modules.music.application.studio import StudioService
         from cornerroom.modules.music.domain.cover_reveal import cover_revealed

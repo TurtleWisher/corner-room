@@ -94,9 +94,15 @@ describe("store view", () => {
   it("lists release prices after tracks and keeps owners' prices off the store", () => {
     const offer = (id: string, product_type: string, audience?: string) =>
       ({ id, product_type, audience, name: id, amount_minor: 100, currency_code: "BDT" }) as OfferRecord;
-    const groups = groupOffers([offer("c", "CATALOG_ACCESS"), offer("r", "RELEASE"), offer("own", "RELEASE", "OWNS_PART_OF_RELEASE"), offer("t", "TRACK")]);
+    const groups = groupOffers([
+      offer("c", "CATALOG_ACCESS"),
+      offer("r", "RELEASE"),
+      offer("p", "RELEASE", "PRESALE"),
+      offer("own", "RELEASE", "OWNS_PART_OF_RELEASE"),
+      offer("t", "TRACK"),
+    ]);
     expect(groups.map((g) => g.label)).toEqual(["Tracks", "Albums and EPs", "Full catalog"]);
-    expect(groups[1].offers.map((o) => o.id)).toEqual(["r"]);
+    expect(groups[1].offers.map((o) => o.id)).toEqual(["r", "p"]);
     expect(afterPurchaseHref({ kind: "offer", id: "o" }, { product_type: "RELEASE", subject_id: "r1" }).href).toBe("/releases/r1");
   });
 

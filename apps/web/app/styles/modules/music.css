@@ -269,6 +269,49 @@
   }
 }
 
+/* Store pre-sales use the same closed-room treatment as the release page. The cover remains
+   intentionally unreadable until release; the action is still clear on touch and keyboard. */
+[data-module="store"] .store-presale-cover {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  aspect-ratio: 1;
+  background: var(--color-surface-sunken);
+}
+[data-module="store"] .store-presale-image {
+  position: absolute;
+  inset: -6%;
+  width: 112%;
+  height: 112%;
+  filter: blur(16px) brightness(0.6) saturate(0.7);
+  transform: scale(1.08);
+}
+[data-module="store"] .store-presale-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, rgb(7 5 20 / 0.2), rgb(7 5 20 / 0.55));
+}
+[data-module="store"] .store-presale-action {
+  opacity: 1;
+  transition: opacity var(--cr-dur-interaction) var(--ease-corner), transform var(--cr-dur-interaction) var(--ease-corner);
+}
+[data-module="store"] .store-presale-action {
+  border: 1px solid rgb(255 255 255 / 0.34);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 0.32), inset 0 1px rgb(255 255 255 / 0.24);
+  backdrop-filter: blur(18px);
+}
+@media (hover: hover) and (pointer: fine) {
+  [data-module="store"] .store-presale-action { opacity: 0; transform: translateY(0.35rem); pointer-events: none; }
+  [data-module="store"] .store-presale-cover:hover .store-presale-action,
+  [data-module="store"] .store-presale-cover:focus-within .store-presale-action { opacity: 1; transform: translateY(0); pointer-events: auto; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  [data-module="store"] .store-presale-image { filter: blur(12px) brightness(0.58); }
+  [data-module="store"] .store-presale-action { backdrop-filter: none; }
+}
+
 /* ---------- Studio credits editor (components/studio/credit-parts.tsx, D-CREDITS-07) ----------
    Works in any world: colours come from the page's own tokens. */
 .credit-note {
@@ -446,10 +489,50 @@
   inset: 0;
   background: linear-gradient(90deg, rgb(0 0 0 / 0.28), transparent 46%, transparent 54%, rgb(0 0 0 / 0.28));
 }
+.ps-cover-frame {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-sunken);
+  isolation: isolate;
+}
+.ps-cover-blur {
+  position: absolute;
+  inset: -6%;
+  filter: blur(18px) brightness(0.62) saturate(0.72);
+  transform: scale(1.08);
+}
+.ps-cover-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(145deg, rgb(7 5 20 / 0.2), rgb(7 5 20 / 0.58));
+  pointer-events: none;
+}
+.ps-cover-cta {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  opacity: 1;
+  transition: opacity var(--cr-dur-interaction) var(--ease-corner);
+}
+.ps-cover-cta a {
+  border: 1px solid rgb(255 255 255 / 0.34);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 0.32), inset 0 1px rgb(255 255 255 / 0.24);
+  backdrop-filter: blur(18px);
+}
+@media (hover: hover) and (pointer: fine) {
+  .ps-cover-cta { opacity: 0; pointer-events: none; }
+  .ps-cover-frame:hover .ps-cover-cta,
+  .ps-cover-frame:focus-within .ps-cover-cta { opacity: 1; pointer-events: auto; }
+}
 @media (prefers-reduced-transparency: reduce) {
   .ps-sealed::before {
     box-shadow: none;
   }
+  .ps-cover-blur { filter: blur(12px) brightness(0.58); }
+  .ps-cover-cta a { backdrop-filter: none; }
 }
 
 /* The pre-sale status, in words and a shape (never colour alone). */

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { CalendarClock, Check, Clock, EyeOff, LogIn, ShoppingBag } from "lucide-react";
+import { CalendarClock, Check, Clock, LockKeyhole, LogIn, ShoppingBag } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
@@ -18,9 +18,8 @@ import { PRESALE_PROMISE, preorderLabel, presaleCountdown, rememberPresaleSeen }
 
 /**
  * A release on pre-sale (D-PRESALE-02, early pre-sales D-PRESALE-03): what fans see before it is
- * out. Title, artist, date and the offer only (owner, 2026-11-02, following the pre-sale experience
- * guide); the cover once the artist reveals it early (D-COVER-02). Outside a room before the doors
- * open: a closed surface, the date, and the one action, Pre-book.
+ * out. Title, artist, date and the offer only. Any explicitly revealed cover stays blurred. Outside
+ * a room before the doors open: a closed surface, the date, and the one action, Pre-book.
  */
 export function PresaleView({ presale }: { presale: PresalePageRecord }) {
   const { status } = useAuth();
@@ -31,6 +30,7 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
   const artistHref = presale.artist_id ? (presale.artist_kind === "band" ? `/bands/${presale.artist_id}` : `/artists/${presale.artist_id}`) : null;
   const price = { amount_minor: presale.offer.amount_minor, currency_code: presale.offer.currency_code };
   const checkout = `/checkout?offer=${presale.offer.id}`;
+  const cover = coverUrl({ signed: presale.cover_url }, 1200);
 
   // So the release page can open once, the first time this visitor sees it out.
   useEffect(() => rememberPresaleSeen(presale.id), [presale.id]);
@@ -39,12 +39,23 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
     <main id="main" data-theme="sky" className="cr-scope">
       <LitSurface as="section" theme="sky" aria-labelledby="presale-title">
         <div className="mx-auto grid max-w-[90rem] items-center gap-10 px-4 py-12 md:grid-cols-[minmax(0,26rem)_1fr] md:px-6 md:py-16">
-          {presale.cover_url ? (
-            // The closed surface keeps the square while the revealed cover loads.
-            <CoverArt src={coverUrl({ signed: presale.cover_url }, 1200)} fallback={<div className="ps-sealed w-full" aria-hidden="true" />} className="w-full" />
-          ) : (
-            <SealedCover />
-          )}
+          <div className="ps-cover-frame">
+            <div className="ps-cover-blur" aria-hidden="true">
+              {cover ? (
+                <CoverArt src={cover} fallback={<SealedCover />} className="w-full" />
+              ) : (
+                <SealedCover />
+              )}
+            </div>
+            <div className="ps-cover-shade" aria-hidden="true" />
+            {open && !preordered ? (
+              <div className="ps-cover-cta">
+                <ButtonLink href={signedIn ? checkout : `/login?next=${encodeURIComponent(checkout)}`} size="lg" aria-label={`Pre-book ${presale.title}`}>
+                  <LockKeyhole aria-hidden="true" /> Pre-book
+                </ButtonLink>
+              </div>
+            ) : null}
+          </div>
           <div>
             <Eyebrow>
               <span className="ps-badge">{open ? "Pre-sale" : "Coming soon"}</span>{" "}
@@ -114,14 +125,11 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
   );
 }
 
-/** The cover before it is revealed: a closed surface with a seam of light, nothing from the cover. */
+/** The art-free fallback: a closed surface with a seam of light. */
 function SealedCover() {
   return (
-    <figure className="w-full">
-      <div className="ps-sealed w-full" aria-hidden="true" />
-      <figcaption className="mt-3 inline-flex items-center gap-2 text-sm text-fg-muted">
-        <EyeOff aria-hidden="true" className="size-4" /> The cover is still under wraps.
-      </figcaption>
-    </figure>
+    <div className="w-full" aria-hidden="true">
+      <div className="ps-sealed w-full" />
+    </div>
   );
 }
