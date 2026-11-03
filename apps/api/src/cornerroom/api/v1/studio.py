@@ -545,6 +545,13 @@ class PresaleEmailIn(BaseModel):
     body: str = Field(min_length=1, max_length=20000)
 
 
+@router.delete("/studio/releases/{release_id}", status_code=204)
+async def delete_release(release_id: UUID, ctx: Ctx, svc: StudioDep) -> Response:
+    """Delete music that isn't out yet, while nobody has paid for it (owner, 2026-11-03)."""
+    await svc.delete_release(ctx, release_id)
+    return Response(status_code=204)
+
+
 @router.post("/studio/releases/{release_id}/presale/request", response_model=ReleaseDetailOut)
 async def request_presale(release_id: UUID, body: PresaleRequestIn, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
     """D-PRESALE-03: send an early pre-sale (title, artist, date, pre-sale price) for review."""

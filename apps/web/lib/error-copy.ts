@@ -40,6 +40,7 @@ const COPY: Record<string, string> = {
   COVER_ALREADY_REVEALED: "Fans can already see this cover, so it can't be hidden again.",
   COVER_REQUIRED: "Add a cover first.",
   // Early pre-sale (owner, 2026-11-03, D-PRESALE-03).
+  HAS_BUYERS: "Someone has paid for this release. Cancel its pre-sale first and let the refunds finish, then delete it.",
   ALREADY_BOUGHT: "Someone has bought it since it came out, so it can't go back to pre-sale without stopping them listening.",
   PRESALE_PRICE_REQUIRED: "Propose a pre-sale price first, in the Price section.",
   PRESALE_LOCKED: "Fans see this title and type on your pre-sale page, so they can't change now. Ask Corner Room to change them.",

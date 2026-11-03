@@ -529,14 +529,25 @@ class CatalogCommerceService:
         blocked = await self.tracks_not_sold_separately(
             [product.subject_id for _offer, product in rows if product.product_type == "TRACK"]
         )
-        # D-PRESALE-02: a pre-sale price shows only while that release takes pre-orders.
+        # D-PRESALE-02: a pre-sale price shows only while that release takes pre-orders. Any other
+        # price shows only once its music is out (owner, 2026-11-03: agreed prices of unreleased
+        # music were listed in the Store, though buying them was refused).
         from cornerroom.modules.commerce.application.onsite_presale import presale_open
-        from cornerroom.modules.music.domain.models import Release
+        from cornerroom.modules.music.domain.models import Release, Track
 
         closed: set[UUID] = set()
         for offer, product in rows:
-            if offer.audience == "PRESALE" and not presale_open(await self.session.get(Release, product.subject_id), self.clock.now()):
-                closed.add(offer.id)
+            if product.product_type == "RELEASE":
+                release = await self.session.get(Release, product.subject_id)
+                if offer.audience == "PRESALE":
+                    if not presale_open(release, self.clock.now()):
+                        closed.add(offer.id)
+                elif release is None or release.deleted_at is not None or release.status != "RELEASED":
+                    closed.add(offer.id)
+            elif product.product_type == "TRACK":
+                track = await self.session.get(Track, product.subject_id)
+                if track is None or track.deleted_at is not None or track.status != "RELEASED":
+                    closed.add(offer.id)
         return [
             (offer, product)
             for offer, product in rows

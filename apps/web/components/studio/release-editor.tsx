@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ds/input";
 import { useCredits } from "@/components/music/credits";
 import { MediaReport } from "@/components/music/media-report";
 import { CoverReveal } from "@/components/studio/cover-reveal";
+import { DeleteRelease } from "@/components/studio/delete-release";
 import { PresalePanel } from "@/components/studio/presale-panel";
 import { CreditsNote, CreditsPreview, PartOfField, PersonField } from "@/components/studio/credit-parts";
 import { ArtworkReport } from "@/components/uploads/artwork-report";
@@ -1181,6 +1182,13 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
               </li>
             ))}
           </ol>
+        </Section>
+      ) : null}
+
+      {/* Owner, 2026-11-03: unreleased music can be deleted to start again (the API refuses once paid for). */}
+      {!["RELEASED", "TAKEN_DOWN", "ARCHIVED"].includes(detail.release.status) ? (
+        <Section id="delete" title="Delete">
+          <DeleteRelease detail={detail} afterHref={detail.viewer_role === "staff" ? "/staff/catalog" : "/studio"} />
         </Section>
       ) : null}
     </div>

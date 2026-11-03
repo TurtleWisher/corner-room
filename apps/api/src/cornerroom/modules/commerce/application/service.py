@@ -312,6 +312,12 @@ class CheckoutService:
 
         if product.product_type == "TRACK":
             await CatalogCommerceService(self.session).assert_track_sold_separately(product.subject_id)
+            # Like a release, a song is on sale only once it is out (owner, 2026-11-03).
+            from cornerroom.modules.music.domain.models import Track
+
+            track = await self.session.get(Track, product.subject_id)
+            if track is None or track.deleted_at is not None or track.status != "RELEASED":
+                raise AppError("RELEASE_NOT_AVAILABLE", "This song isn't on sale", 409)
         if product.product_type != "RELEASE":
             return
         release = await self.session.get(Release, product.subject_id)
