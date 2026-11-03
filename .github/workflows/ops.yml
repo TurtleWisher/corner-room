@@ -54,6 +54,7 @@ jobs:
           JOB: ${{ inputs.job }}
           REF: ${{ inputs.ref }}
         run: |
+          set -euo pipefail
           # Only plain git names reach the server's shell.
           case "$REF" in *[!A-Za-z0-9._/-]*) echo "ref may only contain letters, digits and . _ / -" >&2; exit 1 ;; esac
           case "$JOB" in

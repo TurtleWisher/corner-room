@@ -36,7 +36,6 @@ describe("Pre-sale page (DOM)", () => {
     const { container } = render(<PresaleView presale={PRESALE} />);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Chaya Pore");
     expect(screen.getByText("Pre-sale")).toBeTruthy();
-    expect(screen.getByText("The cover is still under wraps.")).toBeTruthy();
     expect(container.querySelector("img")).toBeNull();
     expect(screen.queryByText("Tracks")).toBeNull();
     expect(screen.getByRole("link", { name: /Sign in to pre-book Chaya Pore/ }).getAttribute("href")).toContain(encodeURIComponent("/checkout?offer=o1"));
@@ -66,9 +65,9 @@ describe("Pre-sale page (DOM)", () => {
     expect(screen.queryByRole("link", { name: /pre-book/i })).toBeNull();
   });
 
-  it("after the artist reveals it, the cover shows", () => {
+  it("keeps an allowed cover preview blurred under the lock action", () => {
     const { container } = render(<PresaleView presale={{ ...PRESALE, cover_url: "/api/v1/covers/signed/t/1200" }} />);
-    expect(screen.queryByText("The cover is still under wraps.")).toBeNull();
-    expect(container.querySelector("img")?.getAttribute("src")).toContain("/api/v1/covers/signed/t/1200");
+    expect(container.querySelector(".ps-cover-blur img")?.getAttribute("src")).toContain("/api/v1/covers/signed/t/1200");
+    expect(container.querySelector(".ps-cover-cta")).toBeTruthy();
   });
 });
