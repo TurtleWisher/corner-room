@@ -65,6 +65,15 @@
     border-color 320ms var(--ease-corner),
     box-shadow 520ms var(--ease-corner);
 }
+/* Closed, the bar is only the lens wide, but the hidden field and "/" key would still stick out
+   past its right edge over the gap and the bell. The pointer there would open the bar, the bar
+   would pull them away from under it, it would close, and they would slide back: the bar jumped
+   open and shut (owner, 2026-11-06). Clipping them while closed makes the lens the whole hover
+   area. Suggestions never show while it is closed (they need text, which keeps it open). */
+.cr-hsearch:not(:hover, :focus-within, [data-filled]) {
+  overflow: hidden;
+  overflow: clip;
+}
 .cr-hsearch input {
   min-width: 0;
   flex: 1;
