@@ -1,0 +1,58 @@
+/* ---------- Pre-sale campaign numbers in Studio (D-PRESALE-04; components/studio/campaign-numbers.tsx) ----------
+   One measure per chart, one colour (the world's highlight), 4 px rounded tops on a shared
+   baseline, a 2 px gap between bars, a tooltip on hover. The table view carries every number. */
+.cn-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 7rem;
+  border-bottom: 1px solid var(--color-line);
+}
+.cn-bar {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  flex: 1 1 0;
+  min-width: 3px;
+  max-width: 2.5rem;
+  height: 100%;
+}
+.cn-bar-fill {
+  display: block;
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--cr-highlight);
+}
+.cn-bar:hover .cn-bar-fill {
+  filter: brightness(1.15);
+}
+.cn-tip {
+  position: absolute;
+  bottom: calc(100% + 0.35rem);
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg);
+  background: var(--color-surface-raised, var(--color-surface));
+  border: 1px solid var(--color-line);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--cr-dur-interaction, 120ms) ease;
+}
+.cn-bar:hover .cn-tip {
+  opacity: 1;
+}
+/* The live dot breathes while numbers refresh; still under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .cn-live-dot {
+    animation: cn-live 2.4s ease-in-out infinite;
+  }
+}
+@keyframes cn-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}

@@ -101,8 +101,10 @@ describe("store view", () => {
       offer("own", "RELEASE", "OWNS_PART_OF_RELEASE"),
       offer("t", "TRACK"),
     ]);
-    expect(groups.map((g) => g.label)).toEqual(["Tracks", "Albums and EPs", "Full catalog"]);
-    expect(groups[1].offers.map((o) => o.id)).toEqual(["r", "p"]);
+    // Open pre-sales lead the Store in their own group (D-PRESALE-04).
+    expect(groups.map((g) => g.label)).toEqual(["On pre-sale", "Tracks", "Albums and EPs", "Full catalog"]);
+    expect(groups[0].offers.map((o) => o.id)).toEqual(["p"]);
+    expect(groups[2].offers.map((o) => o.id)).toEqual(["r"]);
     expect(afterPurchaseHref({ kind: "offer", id: "o" }, { product_type: "RELEASE", subject_id: "r1" }).href).toBe("/releases/r1");
   });
 

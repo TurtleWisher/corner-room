@@ -4,15 +4,16 @@
  * re-renders from the server's answer; nothing here decides permission, readiness or state. */
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, CircleAlert, CircleCheck, GripVertical, Plus, Save, Send, Trash2, Undo2, UserRound } from "lucide-react";
+import { ArrowDown, ArrowUp, ChartLine, CircleAlert, CircleCheck, GripVertical, Plus, Save, Send, Trash2, Undo2, UserRound } from "lucide-react";
 
-import { Button, Card, DateTime, ErrorState, Field, Input, Money, Select, Skeleton } from "@/components/ds";
+import { Button, ButtonLink, Card, DateTime, ErrorState, Field, Input, Money, Select, Skeleton } from "@/components/ds";
 import { Textarea } from "@/components/ds/input";
 import { useCredits } from "@/components/music/credits";
 import { MediaReport } from "@/components/music/media-report";
 import { CoverReveal } from "@/components/studio/cover-reveal";
 import { DeleteRelease } from "@/components/studio/delete-release";
 import { PresalePanel } from "@/components/studio/presale-panel";
+import { campaignHref } from "@/lib/presale-campaign-view";
 import { CreditsNote, CreditsPreview, PartOfField, PersonField } from "@/components/studio/credit-parts";
 import { ArtworkReport } from "@/components/uploads/artwork-report";
 import { UploadCard } from "@/components/uploads/upload-card";
@@ -760,7 +761,7 @@ function TrackCard({
   );
 }
 
-function PriceRow({ detail, subjectType, subjectId, label, hint, audience, reload }: { detail: StudioReleaseDetail; subjectType: "TRACK" | "RELEASE"; subjectId: string; label: string; hint?: string; audience: "EVERYONE" | "OWNS_PART_OF_RELEASE" | "PRESALE"; reload: Reload }) {
+export function PriceRow({ detail, subjectType, subjectId, label, hint, audience, reload }: { detail: StudioReleaseDetail; subjectType: "TRACK" | "RELEASE"; subjectId: string; label: string; hint?: string; audience: "EVERYONE" | "OWNS_PART_OF_RELEASE" | "PRESALE"; reload: Reload }) {
   const mine = detail.proposals
     .filter((p) => p.subject_type === subjectType && p.subject_id === subjectId && p.audience === audience && p.status !== "WITHDRAWN")
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -1147,6 +1148,12 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
       {canProposePresale(detail.release.status) && detail.presale ? (
         // D-PRESALE-03: open a pre-sale before the music is finished, preview it, write the release-day email.
         <Section id="presale" title="Pre-sale" done={!!detail.presale.listed}>
+          {/* D-PRESALE-04: the pre-sale's own pages, with live numbers and share links. */}
+          <p className="mb-4">
+            <ButtonLink href={campaignHref(detail.release.id)} variant="secondary" size="sm">
+              <ChartLine aria-hidden="true" /> Pre-sale campaign: live numbers and sharing
+            </ButtonLink>
+          </p>
           <PresalePanel
             key={`${detail.release.id}-${detail.release.version}`}
             detail={detail}

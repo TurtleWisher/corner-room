@@ -107,8 +107,11 @@ export function pickHomeFeature(events: EventRecord[], releases: ReleaseRecord[]
 /**
  * What the home store band may show, all from the live store: up to two songs or releases on sale,
  * newest first as the API lists them. Corner Room has no plans or whole-catalog pass
- * (D-COMMERCE-01). Selection only; prices are shown exactly as the API gives them.
+ * (D-COMMERCE-01). Pre-sales are not here: the band shows them on their own, marked as releasing
+ * soon (D-PRESALE-04). Selection only; prices are shown exactly as the API gives them.
  */
-export function storeHighlights<O extends { product_type: string | null; status: string }>(offers: O[], count = 2): O[] {
-  return offers.filter((o) => (o.product_type === "TRACK" || o.product_type === "RELEASE") && o.status === "ACTIVE").slice(0, count);
+export function storeHighlights<O extends { product_type: string | null; status: string; audience?: string | null }>(offers: O[], count = 2): O[] {
+  return offers
+    .filter((o) => (o.product_type === "TRACK" || o.product_type === "RELEASE") && o.status === "ACTIVE" && (o.audience ?? "EVERYONE") === "EVERYONE")
+    .slice(0, count);
 }

@@ -16,6 +16,7 @@ import { BandLineup } from "@/components/artists/band-lineup";
 import { CreditFace } from "@/components/music/credit-face";
 import { GiftNote } from "@/components/music/gift-note";
 import { PresaleView } from "@/components/music/presale-view";
+import { useReleaseOpenCount } from "@/components/music/use-release-count";
 import { useCredits } from "@/components/music/credits";
 import { SongCredits } from "@/components/music/song-credits";
 import { usePlayer, type PlayOptions } from "@/components/music/player";
@@ -37,6 +38,7 @@ import {
   type TrackRecord,
 } from "@/lib/api";
 import { fetchPresale, type PresalePageRecord } from "@/features/catalog/api";
+import { countPresale } from "@/features/presales/api";
 import { coverUrl } from "@/lib/cover-view";
 import { takePresaleSeen } from "@/lib/presale-view";
 import { formatCount } from "@/lib/format/count";
@@ -284,6 +286,9 @@ export default function ReleasePage() {
       ordered.length === 1 ? await fetchTrackCredits(ordered[0].track_id, opts).then((p) => p.items).catch(() => []) : [];
     return { release, rows, playable, credits, presale: null as PresalePageRecord | null };
   }, [id, status]);
+  // Once it is out, the release page keeps counting for the release's numbers (D-PRESALE-04).
+  const outRelease = data.status === "ok" && data.data && !data.data.presale ? (data.data as { release: ReleaseRecord }).release : null;
+  useReleaseOpenCount(outRelease?.status === "RELEASED" ? outRelease.id : null);
 
   if (data.status === "loading" || (data.status === "ok" && !data.data)) {
     return (
@@ -387,7 +392,13 @@ export default function ReleasePage() {
                 ) : null}
                 {hero.price && buyRelease ? (
                   signedIn ? (
-                    <ButtonLink href={`/checkout?offer=${buyRelease.id}`} size="lg" variant={firstOwned ? "secondary" : undefined} title="Buy to play">
+                    <ButtonLink
+                      href={`/checkout?offer=${buyRelease.id}`}
+                      size="lg"
+                      variant={firstOwned ? "secondary" : undefined}
+                      title="Buy to play"
+                      onClick={() => countPresale(release.id, { kind: "prebook", place: "PAGE" })}
+                    >
                       <Lock aria-hidden="true" /> {releaseBuyLabel(release.release_type, buyRelease)}{" "}
                       <Money value={{ amount_minor: buyRelease.amount_minor, currency_code: buyRelease.currency_code }} />
                     </ButtonLink>

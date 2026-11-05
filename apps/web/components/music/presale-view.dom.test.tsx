@@ -38,7 +38,11 @@ describe("Pre-sale page (DOM)", () => {
     expect(screen.getByText("Pre-sale")).toBeTruthy();
     expect(container.querySelector("img")).toBeNull();
     expect(screen.queryByText("Tracks")).toBeNull();
-    expect(screen.getByRole("link", { name: /Sign in to pre-book Chaya Pore/ }).getAttribute("href")).toContain(encodeURIComponent("/checkout?offer=o1"));
+    // No cover yet: the title screen, sharp, with no picture (D-PRESALE-04).
+    expect(container.querySelector(".psc-screen")).toBeTruthy();
+    for (const link of screen.getAllByRole("link", { name: /Sign in to pre-book Chaya Pore/ })) {
+      expect(link.getAttribute("href")).toContain(encodeURIComponent("/checkout?offer=o1"));
+    }
     expect(screen.getByText(/unlocks for you on release day/)).toBeTruthy();
   });
 
@@ -65,9 +69,9 @@ describe("Pre-sale page (DOM)", () => {
     expect(screen.queryByRole("link", { name: /pre-book/i })).toBeNull();
   });
 
-  it("keeps an allowed cover preview blurred under the lock action", () => {
+  it("keeps an allowed cover preview under the light blur, with Pre-book over it", () => {
     const { container } = render(<PresaleView presale={{ ...PRESALE, cover_url: "/api/v1/covers/signed/t/1200" }} />);
-    expect(container.querySelector(".ps-cover-blur img")?.getAttribute("src")).toContain("/api/v1/covers/signed/t/1200");
-    expect(container.querySelector(".ps-cover-cta")).toBeTruthy();
+    expect(container.querySelector(".psc-art img")?.getAttribute("src")).toContain("/api/v1/covers/signed/t/1200");
+    expect(container.querySelector(".psc-cta")).toBeTruthy();
   });
 });

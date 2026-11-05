@@ -66,6 +66,14 @@ export function studioNavSections(profiles: { kind: string; id: string; display_
       ],
     },
     {
+      // Owner, 2026-11-06 (D-PRESALE-04): a Releases area with its own Pre-sale campaigns.
+      label: "Releases",
+      items: [
+        { href: "/studio/releases", label: "All releases" },
+        { href: "/studio/releases/presales", label: "Pre-sales" },
+      ],
+    },
+    {
       label: "Fans and money",
       items: [
         { href: "/studio/sales", label: "Sales and buyers" },

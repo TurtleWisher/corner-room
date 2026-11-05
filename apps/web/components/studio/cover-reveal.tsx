@@ -51,19 +51,19 @@ export function CoverReveal({ detail, reload }: { detail: StudioReleaseDetail; r
           <span className="inline-flex items-start gap-2">
             <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" />
             <span>
-              Fans can see your cover now
+              Fans see your cover now, under a light blur until release
               {state.revealed_at ? (
                 <>
                   {" "}
                   (revealed <DateTime value={state.revealed_at} format="datetime" />)
                 </>
               ) : null}
-              . It stays on show.
+              . It stays on show, and opens fully on release day.
             </span>
           </span>
         ) : status === "timed" ? (
           <>
-            Fans see your cover on <DateTime value={state.reveal_at!} format="datetime" className="font-semibold" />, {leadLabel(saved)} the release.
+            Fans see your cover, lightly blurred, on <DateTime value={state.reveal_at!} format="datetime" className="font-semibold" />, {leadLabel(saved)} the release.
           </>
         ) : status === "waiting_for_date" ? (
           <>Fans see your cover {leadLabel(saved)} the release, once Corner Room sets the date.</>
@@ -72,7 +72,7 @@ export function CoverReveal({ detail, reload }: { detail: StudioReleaseDetail; r
         )}
       </p>
       {status !== "revealed" ? (
-        <p className="mt-1 text-sm text-fg-muted">Until then, your pre-order page shows the title, your name and the date. Never the songs.</p>
+        <p className="mt-1 text-sm text-fg-muted">Until then, your pre-order page shows your title as a cube on a glowing screen, with your name and the date. Never the songs.</p>
       ) : null}
 
       {state.can_change ? (
@@ -105,7 +105,7 @@ export function CoverReveal({ detail, reload }: { detail: StudioReleaseDetail; r
           {state.can_reveal_now ? (
             confirming ? (
               <div className="grid gap-3">
-                <p className="text-sm text-fg">Fans will see this cover on your pre-order page right away. You can&apos;t hide it again.</p>
+                <p className="text-sm text-fg">Fans will see this cover, lightly blurred, on your pre-order page right away. You can&apos;t hide it again.</p>
                 <div className="flex flex-wrap gap-2">
                   <Button busy={busy === "now"} onClick={() => void run("now", () => revealCoverNow(detail.release.id))}>
                     <Eye aria-hidden="true" /> Yes, reveal it now

@@ -55,7 +55,7 @@ describe("Cover reveal (DOM)", () => {
     expect(screen.getByText("Add a cover to reveal it early.")).toBeTruthy();
     cleanup();
     render(<CoverReveal detail={detail("SCHEDULED", { revealed: true, can_change: false })} reload={vi.fn()} />);
-    expect(screen.getByRole("status").textContent).toContain("Fans can see your cover now");
+    expect(screen.getByRole("status").textContent).toContain("Fans see your cover now, under a light blur until release");
     expect(screen.queryByRole("button", { name: "Reveal now" })).toBeNull();
     expect(screen.queryByLabelText(/Show the cover early/)).toBeNull();
   });
