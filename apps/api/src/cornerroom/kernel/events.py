@@ -128,6 +128,12 @@ ARTIST_MAIL_SUBMITTED = "ArtistMailSubmitted"
 ARTIST_MAIL_APPROVED = "ArtistMailApproved"
 ARTIST_MAIL_REJECTED = "ArtistMailRejected"
 ARTIST_MAIL_QUEUED = "ArtistMailQueued"
+# D-GIFT-MUSIC-01: artists give music free to chosen people (commerce/application/music_gifts.py).
+# Staff approve each gift; one MusicGiftGiven per person who now owns the music.
+MUSIC_GIFT_SUBMITTED = "MusicGiftSubmitted"
+MUSIC_GIFT_APPROVED = "MusicGiftApproved"
+MUSIC_GIFT_REJECTED = "MusicGiftRejected"
+MUSIC_GIFT_GIVEN = "MusicGiftGiven"
 # D-CHANGES-01: changes to released music wait for staff (music/application/changes.py).
 RELEASE_CHANGES_SUBMITTED = "ReleaseChangesSubmitted"
 RELEASE_CHANGES_REJECTED = "ReleaseChangesRejected"

@@ -59,6 +59,8 @@ export function WorkPicker({
   legend,
   hint,
   anyLabel,
+  statuses = USABLE_RELEASE,
+  emptyText = "No approved or released music yet.",
 }: {
   releases: ReleaseCard[];
   value: MailWork[];
@@ -67,9 +69,12 @@ export function WorkPicker({
   hint?: string;
   /** When set, an "any of my music" choice that clears the list (thank-yous). */
   anyLabel?: string;
+  /** Release statuses offered (music gifts: released only). */
+  statuses?: string[];
+  emptyText?: string;
 }) {
   const chosen = new Set(value.map(key));
-  const usable = releases.filter((r) => USABLE_RELEASE.includes(r.status));
+  const usable = releases.filter((r) => statuses.includes(r.status));
   const toggle = (w: MailWork) => onChange(chosen.has(key(w)) ? value.filter((x) => key(x) !== key(w)) : [...value, w]);
   return (
     <fieldset>
@@ -82,7 +87,7 @@ export function WorkPicker({
         </label>
       ) : null}
       {usable.length === 0 ? (
-        <p className="mt-2 text-sm text-fg">No approved or released music yet.</p>
+        <p className="mt-2 text-sm text-fg">{emptyText}</p>
       ) : (
         <ul className="mt-2 max-h-72 overflow-y-auto border-t border-line">
           {usable.map((r) => (

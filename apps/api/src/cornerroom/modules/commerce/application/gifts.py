@@ -431,6 +431,8 @@ class GiftCampaignService:
                 .where(
                     Order.status.in_(GIFT_ORDER_STATUSES),
                     Order.deleted_at.is_(None),
+                    # Music an artist gave away (D-GIFT-MUSIC-01) wasn't bought: it earns no campaign gift.
+                    Order.music_gift_id.is_(None),
                     (OrderItem.product_id.in_(products or {UUID(int=0)})) | (OrderItem.ref_id.in_(subjects)),
                 )
                 .distinct()

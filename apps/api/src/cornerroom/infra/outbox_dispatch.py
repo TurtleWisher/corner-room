@@ -19,6 +19,7 @@ from cornerroom.modules.analytics.application.consumers import consume_analytics
 from cornerroom.modules.commerce.application.artist_mail import consume_artist_mail_event
 from cornerroom.modules.commerce.application.payment_alerts import consume_payment_alert_event
 from cornerroom.modules.commerce.application.gifts import consume_gift_email_event
+from cornerroom.modules.commerce.application.music_gifts import consume_music_gift_event
 from cornerroom.modules.commerce.application.presales import consume_presale_event
 from cornerroom.modules.notifications.application.consumers import consume_notification_event
 from cornerroom.modules.search.application.consumers import consume_search_event
@@ -41,6 +42,8 @@ SIDE_CONSUMERS: list[OutboxHandler] = [
     consume_gift_email_event,
     # Artists' thank-you emails on purchase, and every queued artist email sent (D-MAIL-01).
     consume_artist_mail_event,
+    # A newly verified account picks up music gifts waiting under its email (D-GIFT-MUSIC-01).
+    consume_music_gift_event,
 ]
 
 

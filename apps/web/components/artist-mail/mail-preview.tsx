@@ -45,12 +45,17 @@ export function MailPreview({
   kind,
   work,
   files = [],
+  note = null,
+  claimFor = null,
 }: {
   artist: string;
   subject: string;
   body: string;
   values: MailValues;
-  kind: "THANK_YOU" | "MANUAL";
+  kind: "THANK_YOU" | "MANUAL" | "GIFT";
+  /** A music gift (D-GIFT-MUSIC-01): the person's own note, and whether they have an account yet. */
+  note?: string | null;
+  claimFor?: string | null;
   /** The music the email is about for this buyer: its cover and Listen button. */
   work?: (MailWork & { title?: string }) | null;
   files?: Pick<MailFile, "id" | "name" | "kind">[];
@@ -74,8 +79,17 @@ export function MailPreview({
           <img src={cover} alt="" className="block aspect-square w-full object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
         ) : null}
         <div className="am-preview-body">
-          <Words text={body} values={values} />
-          {work?.title ? <span className="am-preview-button">Listen to {work.title} on Corner Room</span> : null}
+          <Words text={note?.trim() ? body.trimEnd() + "\n\n" + note.trim() : body} values={values} />
+          {claimFor ? (
+            <>
+              <p>
+                Your music is waiting for {claimFor}. Create your free Corner Room account with this email address and it is yours.
+              </p>
+              <span className="am-preview-button">Create your free account</span>
+            </>
+          ) : work?.title ? (
+            <span className="am-preview-button">Listen to {work.title} on Corner Room</span>
+          ) : null}
           {files.length ? (
             <div className="am-preview-files">
               <p className="mb-1 text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-[#5d5a7e]">From {artist}, for you</p>
@@ -95,6 +109,12 @@ export function MailPreview({
               Sent by Corner Room for {artist}. Replies to this email aren&apos;t read.
               <br />
               <span className="underline">Your music on Corner Room</span>
+            </>
+          ) : kind === "GIFT" ? (
+            <>
+              You&apos;re getting this because {artist} gave you music on Corner Room. Replies to this email aren&apos;t read.
+              <br />
+              <span className="underline">Stop emails from {artist}</span>
             </>
           ) : (
             <>

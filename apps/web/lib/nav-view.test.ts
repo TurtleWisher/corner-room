@@ -25,13 +25,13 @@ const hrefs = (sections: { items: { href: string }[] }[]) => sections.flatMap((s
 
 describe("staffNavSections", () => {
   it("keeps the always-visible staff destinations without permissions", () => {
-    expect(hrefs(staffNavSections([]))).toEqual(["/staff/events", "/staff/venues", "/staff/catalog", "/staff/catalog/artists", "/staff/catalog/processing", "/staff/commerce", "/staff/royalties", "/staff/campaigns"]);
-    expect(staffNavSections(undefined).map((s) => s.label)).toEqual(["Live", "Catalog", "Money", "Marketing"]);
+    expect(hrefs(staffNavSections([]))).toEqual(["/staff/events", "/staff/venues", "/staff/catalog", "/staff/catalog/artists", "/staff/catalog/processing", "/staff/commerce", "/staff/royalties", "/staff/campaigns", "/staff/updates"]);
+    expect(staffNavSections(undefined).map((s) => s.label)).toEqual(["Live", "Catalog", "Money", "Marketing", "Updates"]);
   });
 
   it("adds gated destinations with the same flags as before", () => {
     const sections = staffNavSections(ALL);
-    expect(sections.map((s) => s.label)).toEqual(["Live", "Catalog", "Money", "Marketing", "Insight", "Admin"]);
+    expect(sections.map((s) => s.label)).toEqual(["Live", "Catalog", "Money", "Marketing", "Insight", "Updates", "Admin"]);
     expect(hrefs(sections)).toEqual(
       expect.arrayContaining(["/staff/finance", "/staff/analytics", "/staff/ops", "/staff/audit", "/staff/users", "/staff/organizations"]),
     );
