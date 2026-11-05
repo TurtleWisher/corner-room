@@ -60,6 +60,8 @@ def test_phase13_uses_existing_outbox_only() -> None:
         "consume_gift_email_event",
         # Artists' thank-you emails and approved emails to buyers (D-MAIL-01, 2026-11-02).
         "consume_artist_mail_event",
+        # Music gifts waiting for an address claimed when it is verified (D-GIFT-MUSIC-01, 2026-11-06).
+        "consume_music_gift_event",
     }
 
 

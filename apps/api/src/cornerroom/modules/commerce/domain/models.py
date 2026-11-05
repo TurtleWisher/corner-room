@@ -37,6 +37,8 @@ class Order(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ba
     purpose: Mapped[str] = mapped_column(String(32), nullable=False, default="TICKET")
     # D-PRESALE-02: bought at the pre-sale price before the release was out (unlocks on release day).
     is_presale: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # D-GIFT-MUSIC-01: a ৳0 order made by an artist's music gift (no payment, never money).
+    music_gift_id: Mapped[UUID | None] = mapped_column(ForeignKey("commerce.music_gifts.id"), nullable=True)
 
 
 class OrderItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):

@@ -104,6 +104,7 @@ export function RichEditor({
   singleLine = false,
   placeholder,
   invalid,
+  fillIns = FILL_INS,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -112,6 +113,8 @@ export function RichEditor({
   singleLine?: boolean;
   placeholder?: string;
   invalid?: boolean;
+  /** The fill-in buttons and their words (music gifts name {music} as what is given). */
+  fillIns?: typeof FILL_INS;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const emitted = useRef<string | null>(null);
@@ -210,7 +213,7 @@ export function RichEditor({
         {label}
       </span>
       <div className="am-tools mt-2" role="toolbar" aria-label={`Add to ${label.toLowerCase()}`}>
-        {FILL_INS.filter((f) => !singleLine || f.key !== "buyer_name").map((f) => (
+        {fillIns.filter((f) => !singleLine || f.key !== "buyer_name").map((f) => (
           <button key={f.key} type="button" className="am-tool" onMouseDown={(e) => e.preventDefault()} onClick={() => addFill(f.key)} title={f.hint}>
             + {f.label}
           </button>

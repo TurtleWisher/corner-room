@@ -39,6 +39,8 @@ from cornerroom.api.v1.uploads import router as uploads_router
 from cornerroom.api.v1.downloads import router as downloads_router
 from cornerroom.api.v1.media import router as media_router
 from cornerroom.api.v1.gifts import router as gifts_router
+from cornerroom.api.v1.music_gifts import router as music_gifts_router
+from cornerroom.api.v1.feature_updates import router as feature_updates_router
 from cornerroom.api.v1.artist_mail import router as artist_mail_router
 from cornerroom.api.v1.profiles import router as profiles_router
 from cornerroom.api.v1.team import router as team_router
@@ -170,6 +172,8 @@ def create_app(settings: Settings | None = None, *, enable_lifespan: bool = True
     app.include_router(profiles_router, prefix="/api/v1")
     app.include_router(team_router, prefix="/api/v1")
     app.include_router(gifts_router, prefix="/api/v1")
+    app.include_router(music_gifts_router, prefix="/api/v1")
+    app.include_router(feature_updates_router, prefix="/api/v1")
     app.include_router(artist_mail_router, prefix="/api/v1")
     app.include_router(covers_router, prefix="/api/v1")
     app.include_router(presale_campaigns_router, prefix="/api/v1")

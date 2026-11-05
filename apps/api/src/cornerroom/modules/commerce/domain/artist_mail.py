@@ -13,7 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from cornerroom.infra.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 MAIL_STATUSES = ("DRAFT", "IN_REVIEW", "SCHEDULED", "SENDING", "SENT")
-MESSAGE_KINDS = ("THANK_YOU", "MANUAL", "TEST")
+MESSAGE_KINDS = ("THANK_YOU", "MANUAL", "TEST", "GIFT")
 MESSAGE_STATUSES = ("PENDING", "SENT", "SUPPRESSED", "FAILED")
 CLICK_KINDS = ("LINK", "LISTEN", "FILE")
 
@@ -158,7 +158,7 @@ class ArtistMailMessage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "artist_mail_messages"
     __table_args__ = (
         CheckConstraint("profile_type IN ('artist','band')", name="profile_type"),
-        CheckConstraint("kind IN ('THANK_YOU','MANUAL','TEST')", name="kind"),
+        CheckConstraint("kind IN ('THANK_YOU','MANUAL','TEST','GIFT')", name="kind"),
         CheckConstraint("status IN ('PENDING','SENT','SUPPRESSED','FAILED')", name="status"),
         Index("ix_artist_mail_messages_mail", "mail_id", "status"),
         Index("ix_artist_mail_messages_profile", "profile_type", "profile_id", "kind"),
@@ -192,6 +192,8 @@ class ArtistMailMessage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     link_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     thank_you_id: Mapped[UUID | None] = mapped_column(nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # D-GIFT-MUSIC-01: the email that tells someone about a music gift (kind GIFT).
+    music_gift_id: Mapped[UUID | None] = mapped_column(nullable=True)
     last_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
 

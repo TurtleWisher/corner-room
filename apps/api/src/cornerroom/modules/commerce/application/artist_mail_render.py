@@ -166,20 +166,41 @@ def write_email(
     listen: tuple[str, str] | None = None,
     files: list[dict[str, Any]] | None = None,
     stop_url: str | None = None,
+    note: str | None = None,
+    claim: tuple[str, str] | None = None,
 ) -> Written:
     """One person's email. ``listen`` is (page address, title); ``files`` are {"id", "name", "kind"}.
-    A thank-you (kind THANK_YOU) has no stop link: it always sends, as part of the purchase."""
+    A thank-you (kind THANK_YOU) has no stop link: it always sends, as part of the purchase.
+
+    A music gift (kind GIFT, D-GIFT-MUSIC-01) may carry the act's own ``note`` for this person and,
+    for an address with no account yet, ``claim`` = (sign-up address, the email to sign up with)
+    in place of the Listen button."""
     artist = values["artist"]
     web = web_base_url.rstrip("/")
     subject_out = subject_line(subject, values)
     # Both copies number the written links the same way, from 0, so one list serves both.
     links = Links(click_url)
+    if note and note.strip():
+        # Written by the act for this one person; fill-ins and links work as in the body.
+        body = body.rstrip() + "\n\n" + note.strip()
     html_body = body_html(body, values, links)
     text_body = body_text(body, values, Links(click_url))
 
     text_lines = [text_body, ""]
     html_extra: list[str] = []
-    if listen is not None:
+    if claim is not None:
+        href = links.add(claim[0], "Create your free account", "LISTEN")
+        line = f"Your music is waiting for {claim[1]}. Create your free Corner Room account with this email address and it is yours."
+        text_lines.append(f"{line} {href}")
+        html_extra.append(
+            f'<p style="margin:0 0 12px;font-family:{FONT};font-size:15px;line-height:1.6;color:{INK}">{html.escape(line)}</p>'
+            '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px"><tr>'
+            f'<td style="background:{SKY}">'
+            f'<a href="{html.escape(href)}" style="display:inline-block;padding:14px 22px;font-family:{FONT};font-size:15px;'
+            f'font-weight:700;color:{INDIGO_INK};text-decoration:none">Create your free account</a>'
+            "</td></tr></table>"
+        )
+    elif listen is not None:
         href = links.add(listen[0], f"Listen to {listen[1]}", "LISTEN")
         text_lines.append(f"Listen to {listen[1]} on Corner Room: {href}")
         html_extra.append(
@@ -214,6 +235,11 @@ def write_email(
         footer = [
             f"Sent by Corner Room for {artist}. Replies to this email aren't read.",
             ("Your music on Corner Room", f"{web}/purchases"),
+        ]
+    elif kind == "GIFT":
+        footer = [
+            f"You're getting this because {artist} gave you music on Corner Room. Replies to this email aren't read.",
+            (f"Stop emails from {artist}", stop_url or f"{web}/account"),
         ]
     else:
         footer = [

@@ -1169,7 +1169,9 @@ class ArtistMailService:
         message = await self.session.get(ArtistMailMessage, message_id)
         if message is None or message.status != "PENDING":
             return None
-        if message.kind == "MANUAL":
+        # A music gift's email respects "stop emails from this act" too (D-GIFT-MUSIC-01); the music
+        # itself is still given to an account.
+        if message.kind in ("MANUAL", "GIFT"):
             emails, user_ids = await self._stopped(message.profile_type, message.profile_id)
             if message.email.lower() in emails or (message.user_id and message.user_id in user_ids):
                 message.status = "SUPPRESSED"

@@ -17,6 +17,7 @@ import {
   House,
   Landmark,
   LayoutDashboard,
+  Newspaper,
   Library,
   ListMusic,
   MapPin,
@@ -82,6 +83,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/staff/audit": ScrollText,
   "/staff/users": Users,
   "/staff/organizations": Building2,
+  "/staff/updates": Newspaper,
 };
 
 /** Whether a destination has its icon (every menu entry should; tested in nav-icons.test.ts). */

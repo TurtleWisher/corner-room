@@ -1,9 +1,11 @@
-/* Studio > Gifts has two parts (owner, 2026-11-02, D-MAIL-01): gift campaigns and emails to buyers. */
+/* Studio > Gifts (owner, 2026-11-02, D-MAIL-01; 2026-11-06, D-GIFT-MUSIC-01): gift campaigns for
+ * buyers, music given free to chosen people, and emails to buyers. */
 
 import Link from "next/link";
 
 const TABS = [
   { key: "campaigns", href: "/studio/gifts", label: "Gift campaigns" },
+  { key: "music", href: "/studio/gifts/music", label: "Music gifts" },
   { key: "emails", href: "/studio/gifts/emails", label: "Emails" },
 ] as const;
 

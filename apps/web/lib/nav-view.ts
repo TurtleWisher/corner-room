@@ -183,6 +183,8 @@ export function staffNavSections(permissions: string[] | undefined): NavSection[
     { label: "Marketing", items: [{ href: "/staff/campaigns", label: "Campaigns" }] },
   ];
   if (flags.showAnalytics) sections.push({ label: "Insight", items: [{ href: "/staff/analytics", label: "Analytics" }] });
+  // Every Corner Room feature with its updates and fixes, for every staff member (owner, 2026-11-06, D-UPDATES-01).
+  sections.push({ label: "Updates", items: [{ href: "/staff/updates", label: "Feature updates" }] });
 
   const admin: NavItem[] = [];
   if (flags.showOps) admin.push({ href: "/staff/ops", label: "Ops" }, { href: "/staff/audit", label: "Audit log" });
