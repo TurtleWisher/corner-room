@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { CalendarClock, Check, Clock, LockKeyhole, LogIn, ShoppingBag } from "lucide-react";
+import { CalendarClock, Check, Clock, LogIn, ShoppingBag } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
-import { CoverArt } from "@/components/brand/cover-art";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { ButtonLink, DateTime, Money } from "@/components/ds";
 import { useCustomerCommerce } from "@/components/music/commerce";
+import { PrebookLink } from "@/components/music/presale-card";
+import { PresaleCover } from "@/components/music/presale-cover";
+import { useReleaseOpenCount } from "@/components/music/use-release-count";
+import { countPresale } from "@/features/presales/api";
 import type { PresalePageRecord } from "@/features/catalog/api";
 import { coverUrl } from "@/lib/cover-view";
 import { releaseTypeLabel } from "@/lib/music-view";
@@ -18,8 +21,8 @@ import { PRESALE_PROMISE, preorderLabel, presaleCountdown, rememberPresaleSeen }
 
 /**
  * A release on pre-sale (D-PRESALE-02, early pre-sales D-PRESALE-03): what fans see before it is
- * out. Title, artist, date and the offer only. Any explicitly revealed cover stays blurred. Outside
- * a room before the doors open: a closed surface, the date, and the one action, Pre-book.
+ * out. Title, artist, date and the offer only. A cover the artist chose to show sits under a very
+ * light blur; without one, the title cube on a curved screen (D-PRESALE-04). The one action: Pre-book.
  */
 export function PresaleView({ presale }: { presale: PresalePageRecord }) {
   const { status } = useAuth();
@@ -34,28 +37,19 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
 
   // So the release page can open once, the first time this visitor sees it out.
   useEffect(() => rememberPresaleSeen(presale.id), [presale.id]);
+  useReleaseOpenCount(presale.id);
 
   return (
     <main id="main" data-theme="sky" className="cr-scope">
       <LitSurface as="section" theme="sky" aria-labelledby="presale-title">
         <div className="mx-auto grid max-w-[90rem] items-center gap-10 px-4 py-12 md:grid-cols-[minmax(0,26rem)_1fr] md:px-6 md:py-16">
-          <div className="ps-cover-frame">
-            <div className="ps-cover-blur" aria-hidden="true">
-              {cover ? (
-                <CoverArt src={cover} fallback={<SealedCover />} className="w-full" />
-              ) : (
-                <SealedCover />
-              )}
-            </div>
-            <div className="ps-cover-shade" aria-hidden="true" />
+          <PresaleCover coverUrl={cover} title={presale.title} artist={presale.artist}>
             {open && !preordered ? (
-              <div className="ps-cover-cta">
-                <ButtonLink href={signedIn ? checkout : `/login?next=${encodeURIComponent(checkout)}`} size="lg" aria-label={`Pre-book ${presale.title}`}>
-                  <LockKeyhole aria-hidden="true" /> Pre-book
-                </ButtonLink>
+              <div className="psc-cta">
+                <PrebookLink presale={presale} place="PAGE" size="lg" />
               </div>
             ) : null}
-          </div>
+          </PresaleCover>
           <div>
             <Eyebrow>
               <span className="ps-badge">{open ? "Pre-sale" : "Coming soon"}</span>{" "}
@@ -105,11 +99,16 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     {signedIn ? (
-                      <ButtonLink href={checkout} size="lg">
+                      <ButtonLink href={checkout} size="lg" onClick={() => countPresale(presale.id, { kind: "prebook", place: "PAGE" })}>
                         <ShoppingBag aria-hidden="true" /> {preorderLabel(presale.release_type)}
                       </ButtonLink>
                     ) : (
-                      <ButtonLink href={`/login?next=${encodeURIComponent(checkout)}`} size="lg" aria-label={`Sign in to pre-book ${presale.title}`}>
+                      <ButtonLink
+                        href={`/login?next=${encodeURIComponent(checkout)}`}
+                        size="lg"
+                        aria-label={`Sign in to pre-book ${presale.title}`}
+                        onClick={() => countPresale(presale.id, { kind: "prebook", place: "PAGE" })}
+                      >
                         <LogIn aria-hidden="true" /> Sign in to pre-book
                       </ButtonLink>
                     )}
@@ -122,14 +121,5 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
         </div>
       </LitSurface>
     </main>
-  );
-}
-
-/** The art-free fallback: a closed surface with a seam of light. */
-function SealedCover() {
-  return (
-    <div className="w-full" aria-hidden="true">
-      <div className="ps-sealed w-full" />
-    </div>
   );
 }

@@ -40,6 +40,7 @@ import { friendlyError } from "@/lib/error-copy";
 import { formatCount } from "@/lib/format/count";
 import { humanizeStatus } from "@/lib/format/status";
 import { sortReleases } from "@/lib/music-view";
+import { PresaleShelf } from "@/components/music/presale-shelf";
 
 type Kind = "artist" | "band";
 type Entity = { id: string; name: string; bio: string | null; status: string; version?: number; picture?: string | null };
@@ -358,6 +359,13 @@ export function ProfilePage({ kind, id }: { kind: Kind; id: string }) {
 
       <div className="mx-auto max-w-[90rem] space-y-12 px-4 py-14 md:px-6">
         {kind === "band" ? <BandLineup bandId={entity.id} /> : null}
+        {/* Coming soon from this act (D-PRESALE-04): the same pre-sale card as the Store. */}
+        <PresaleShelf
+          place="PROFILE"
+          artistId={kind === "artist" ? entity.id : undefined}
+          bandId={kind === "band" ? entity.id : undefined}
+          headingId="profile-presale"
+        />
         <section aria-labelledby="releases-title">
           <h2 id="releases-title" className="text-xl font-bold text-fg">
             Releases

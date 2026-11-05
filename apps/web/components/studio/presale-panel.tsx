@@ -9,6 +9,7 @@ import { CalendarClock, CircleAlert, CircleCheck, Clock, ExternalLink, Mail, Sen
 
 import { Button, Card, DateTime, Field, Input, Money } from "@/components/ds";
 import { Textarea } from "@/components/ds/input";
+import { PresaleCover } from "@/components/music/presale-cover";
 import {
   requestPresale,
   savePresaleEmail,
@@ -16,6 +17,8 @@ import {
   withdrawPresale,
   type StudioReleaseDetail,
 } from "@/features/studio/api";
+import { coverUrl } from "@/lib/cover-view";
+import { revealStatus } from "@/lib/cover-reveal-view";
 import { friendlyError } from "@/lib/error-copy";
 import { fromLocalInput, toLocalInput } from "@/lib/artist-mail-view";
 import { preorderLabel, studioPresaleStage } from "@/lib/presale-view";
@@ -128,7 +131,15 @@ function FanPreview({ detail, date }: { detail: StudioReleaseDetail; date: strin
       <p id="fan-preview-title" className="cr-eyebrow text-[0.6875rem] text-fg-muted">
         Fan preview
       </p>
-      <div className="mt-3 border border-line bg-surface-sunken p-5">
+      <div className="mt-3 grid gap-5 border border-line bg-surface-sunken p-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center">
+        {/* The cover as fans see it now (D-PRESALE-04): lightly blurred once shown, else the title screen. */}
+        <PresaleCover
+          coverUrl={detail.cover_reveal && revealStatus(detail.cover_reveal) === "revealed" ? coverUrl({ signed: detail.cover_url }, 480) : null}
+          title={detail.release.title}
+          artist={detail.profile.display_name}
+          className="w-36"
+        />
+        <div className="min-w-0">
         <p className="cr-eyebrow text-[0.6875rem] text-highlight">Pre-sale</p>
         <p className="mt-2 text-2xl font-bold text-fg">{detail.release.title}</p>
         <p className="mt-1 text-fg">{detail.profile.display_name}</p>
@@ -149,9 +160,11 @@ function FanPreview({ detail, date }: { detail: StudioReleaseDetail; date: strin
           </span>
           {p.price && p.price.status !== "ACCEPTED" ? <span className="text-xs text-fg-muted">Price shown once Corner Room agrees it</span> : null}
         </div>
+        </div>
       </div>
       <p className="mt-3 text-sm text-fg-muted">
-        Fans never see your cover (unless you reveal it early), songs, credits or anything else before release, even when you&apos;ve uploaded them.
+        Fans never see your songs, credits or anything else before release, even when you&apos;ve uploaded them. Your cover shows only if you
+        choose to show it early, and then lightly blurred; until then they see your title on a glowing screen.
       </p>
     </Card>
   );

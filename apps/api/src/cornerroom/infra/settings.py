@@ -116,6 +116,11 @@ class Settings(BaseSettings):
     download_rate_limit_window_seconds: int = 0
     # Listen counts (owner, 2026-10-27, D-LISTEN-01): a play counts once it has been heard for
     # 30 seconds (as the big streaming services count), at most 30 a day per person per song.
+    # Pre-sale campaign counts (D-PRESALE-04; the owner left the number to us, 2026-11-06): one
+    # internet address counts at most this many page opens and Pre-book presses per release per
+    # hour; more are dropped silently, so a script can't pump an artist's numbers. Many phones in
+    # Bangladesh share one carrier address, hence a roomy number. 0 turns the limit off.
+    presale_count_max_per_hour: int = 60
     listen_min_ms: int = 30000
     listen_daily_cap: int = 30
     verification_challenge_ttl_seconds: int = 0

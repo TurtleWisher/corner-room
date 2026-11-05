@@ -32,17 +32,18 @@ export function productTypeLabel(type: string | null | undefined): string {
 }
 
 /**
- * Offers grouped by product type, in a stable order (tracks first). Empty groups are dropped.
+ * Offers grouped by product type, in a stable order (pre-sales, then tracks). Empty groups are dropped.
  * Open presales are public Store inventory; owners' prices (OWNS_PART_OF_RELEASE) stay on their
  * release page and are never listed here.
  */
 export function groupOffers(offers: OfferRecord[]): { type: string; label: string; offers: OfferRecord[] }[] {
-  const order = ["TRACK", "RELEASE", "CATALOG_ACCESS", "SUBSCRIPTION_PLAN"];
+  const order = ["PRESALE", "TRACK", "RELEASE", "CATALOG_ACCESS", "SUBSCRIPTION_PLAN"];
   const groups = new Map<string, OfferRecord[]>();
   for (const offer of offers) {
     // A currently open pre-sale is public inventory too; owner-only prices remain private.
     if ((offer.audience ?? "EVERYONE") !== "EVERYONE" && offer.audience !== "PRESALE") continue;
-    const key = offer.product_type ?? "OTHER";
+    // Pre-sales lead the Store in a group of their own (D-PRESALE-04), clearly not out yet.
+    const key = offer.audience === "PRESALE" && offer.product_type === "RELEASE" ? "PRESALE" : (offer.product_type ?? "OTHER");
     groups.set(key, [...(groups.get(key) ?? []), offer]);
   }
   return [...groups.entries()]
@@ -51,7 +52,11 @@ export function groupOffers(offers: OfferRecord[]): { type: string; label: strin
       const ib = order.indexOf(b);
       return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
     })
-    .map(([type, list]) => ({ type, label: type === "OTHER" ? "Other" : productTypeLabel(type), offers: list }));
+    .map(([type, list]) => ({
+      type,
+      label: type === "OTHER" ? "Other" : type === "PRESALE" ? "On pre-sale" : productTypeLabel(type),
+      offers: list,
+    }));
 }
 
 /** The words a Room Cube is built from for an offer: its product name, else its type. */

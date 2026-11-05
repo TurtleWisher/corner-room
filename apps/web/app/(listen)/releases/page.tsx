@@ -8,6 +8,7 @@ import { LitSurface } from "@/components/brand/corner-light";
 import { Button, EmptyState, ErrorState, Field, Input, Select, Skeleton, StatusChip, Table, TBody, TD, TH, THead, TR } from "@/components/ds";
 import { useCredits } from "@/components/music/credits";
 import { ReleaseCard } from "@/components/music/release-card";
+import { PresaleShelf } from "@/components/music/presale-shelf";
 import { PageIntro, RetryButton, StaffPanel } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import { useWorkspace } from "@/components/workspace-provider";
@@ -124,6 +125,7 @@ export default function ReleasesPage() {
         </div>
       </LitSurface>
       <div className="mx-auto max-w-[90rem] space-y-12 px-4 pb-16 md:px-6">
+        <PresaleShelf place="RELEASES" headingId="releases-presale" />
         {catalog.status === "loading" ? (
           <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {Array.from({ length: 5 }, (_, i) => (

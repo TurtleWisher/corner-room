@@ -65,6 +65,8 @@ const ICONS: Record<string, LucideIcon> = {
   "/studio": LayoutDashboard,
   "/studio/profile": UserRoundPen,
   "/studio/team": UsersRound,
+  "/studio/releases": Disc3,
+  "/studio/releases/presales": Megaphone,
   "/studio/sales": ChartNoAxesColumn,
   "/studio/gifts": Gift,
   "/staff/catalog": Disc3,

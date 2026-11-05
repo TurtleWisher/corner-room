@@ -74,6 +74,11 @@ describe("storeHighlights", () => {
     expect(storeHighlights([offer("plan", "SUBSCRIPTION_PLAN")])).toEqual([]);
     expect(storeHighlights([])).toEqual([]);
   });
+
+  it("leaves pre-sale and owner-only prices to their own places (D-PRESALE-04)", () => {
+    const priced = (id: string, audience: string) => ({ ...offer(id, "RELEASE"), audience });
+    expect(storeHighlights([priced("pre", "PRESALE"), priced("own", "OWNS_PART_OF_RELEASE"), offer("t1", "TRACK")]).map((o) => o.id)).toEqual(["t1"]);
+  });
 });
 
 describe("pickHomeFeature (owner, 2026-10-25: feature the newest real thing)", () => {
