@@ -344,6 +344,12 @@
     font-family: var(--font-archivo), var(--font-anek), system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
+  /* Nothing pushes past the edge (owner, 2026-11-07): a long unbroken word (a site name, a link, an
+     email) wraps where it must instead of widening its table, card or column beyond the page and
+     being cut off. Zero specificity, so truncate and nowrap utilities still win where they're used. */
+  .cr-scope :where(td, th, dd, dt, li, p, h1, h2, h3, h4, figcaption, blockquote, label) {
+    overflow-wrap: anywhere;
+  }
 
   /* Corner Light: gradient pools from the top-left corner, grain inside the gradient only (5.7).
      Never give this layer a z-index; place content in a positioned sibling above it.

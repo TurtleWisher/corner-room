@@ -1,6 +1,6 @@
 /*
- * The listening room's lyrics switch and full screen (owner, 2026-11-06, D-ROOM-05). Pure helpers,
- * so the defaults and the "when do we ask the browser" rules are tested.
+ * The listening room's lyrics switch and full screen (owner, 2026-11-06 and 2026-11-07, D-ROOM-05).
+ * Pure helpers, so the defaults and the "when do we ask the browser" rules are tested.
  */
 
 /** The per-browser key for the listener's lyrics choice ("1" on, "0" off). */
@@ -37,26 +37,29 @@ export function lyricsSwitch(input: { loaded: boolean; lineCount: number; on: bo
     : { kind: "ready", checked: false, stateText: "Off", title: "Show the lyrics round the cover" };
 }
 
-/** Keys that never count as the gesture that takes the room into real full screen. */
-const NOT_A_GESTURE = new Set(["Escape", "Tab", "Shift", "Control", "Alt", "Meta", "CapsLock", "F11", "ContextMenu"]);
-
-/** Whether a key press is a deliberate action in the room (and so may ask for full screen). */
-export function isRoomGestureKey(key: string): boolean {
-  return key !== "" && !NOT_A_GESTURE.has(key);
-}
+/**
+ * Everything in the room that is a control (or part of one). A double-click there is two clicks
+ * on that control, never a request for full screen (owner, 2026-11-07).
+ */
+export const ROOM_CONTROLS =
+  'a[href], button, input, select, textarea, label, [role="button"], [role="switch"], [role="slider"], .lr-bar, .lr-focus-console, .lr-lyrics-control';
 
 /**
- * Whether this gesture should ask the browser for real full screen. Asked at most once per visit
- * to the room, only where the browser offers it, never when the window is already full screen
- * (the browser's own full screen or F11), and never for a gesture that leaves the room (the close
- * button, a link) or one the listener used to type.
+ * What a double-click (or double-tap) on the room does with real browser full screen (owner,
+ * 2026-11-07, D-ROOM-05, like a video site): on empty space it goes in, and the same again comes
+ * out. On a control it does nothing. A window the browser made full screen itself (F11) is left to
+ * the browser. Leaving full screen also works with the browser's own ✕ at the top or Escape.
  */
-export function shouldAskFullscreen(state: {
-  asked: boolean;
+export function doubleClickFullscreen(state: {
   supported: boolean;
-  alreadyFullscreen: boolean;
-  leavesRoom: boolean;
-  typing: boolean;
-}): boolean {
-  return !state.asked && state.supported && !state.alreadyFullscreen && !state.leavesRoom && !state.typing;
+  onControl: boolean;
+  /** document.fullscreenElement is set: full screen this page asked for. */
+  pageFullscreen: boolean;
+  /** The browser's own full screen (F11), which a page cannot end. */
+  browserFullscreen: boolean;
+}): "enter" | "exit" | null {
+  if (state.onControl || !state.supported) return null;
+  if (state.pageFullscreen) return "exit";
+  if (state.browserFullscreen) return null;
+  return "enter";
 }
