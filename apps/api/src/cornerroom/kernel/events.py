@@ -121,7 +121,13 @@ GIFT_CAMPAIGN_PAUSED = "GiftCampaignPaused"
 GIFT_CAMPAIGN_RESUMED = "GiftCampaignResumed"
 # One per recipient: the buyer is told the gift is on its way (in-app and email).
 GIFT_DISPATCHED = "GiftDispatched"
-GIFT_SENT = "GiftSent"
+# D-CAMPAIGN-03: collectible tracking. Returned and missing tell the buyer too (owner, 2026-11-06).
+GIFT_PREPARED = "GiftPrepared"
+GIFT_UNPREPARED = "GiftUnprepared"
+GIFT_DISPATCH_SCHEDULED = "GiftDispatchScheduled"
+GIFT_RECEIVED = "GiftReceived"
+GIFT_RETURNED = "GiftReturned"
+GIFT_MARKED_MISSING = "GiftMarkedMissing"
 # D-MAIL-01: artists' emails to buyers (commerce/application/artist_mail.py). Staff approve each
 # email; one ArtistMailQueued per message is what sends it (thank-you, email to buyers or test).
 ARTIST_MAIL_SUBMITTED = "ArtistMailSubmitted"

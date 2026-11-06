@@ -7,8 +7,10 @@ own people can't approve them. Once live it can be paused and restarted at any t
 while it is paused don't count. Fans see it on the music's pages only while it is live.
 
 Recipients: every buyer of a covered work whose order was paid while the campaign was live (and,
-when chosen, the pre-sale buyers of that music). Each gift is yet to send, in process (dispatched:
-the buyer gets an email and a notice saying it is on its way) or sent. Free extras only: nothing
+when chosen, the pre-sale buyers of that music). Each collectible is tracked (owner, 2026-11-06,
+D-CAMPAIGN-03): not prepared yet, prepared, dispatched (now, or at a chosen time by the worker; the
+buyer gets an email and a notice saying it is on its way), then received, returned or missing
+(returned and missing tell the buyer too). The moves allowed are in `domain/gifts.py`. Free extras only: nothing
 here touches prices, orders or money. Recipients' name, phone and address are shown to staff, and
 to the artist only for campaigns they send themselves (owner, 2026-10-28).
 """
@@ -33,18 +35,40 @@ from cornerroom.kernel.events import (
     GIFT_CAMPAIGN_REJECTED,
     GIFT_CAMPAIGN_RESUMED,
     GIFT_CAMPAIGN_SUBMITTED,
+    GIFT_DISPATCH_SCHEDULED,
     GIFT_DISPATCHED,
-    GIFT_SENT,
+    GIFT_MARKED_MISSING,
+    GIFT_PREPARED,
+    GIFT_RECEIVED,
+    GIFT_RETURNED,
+    GIFT_UNPREPARED,
     DomainEvent,
 )
 from cornerroom.modules.audit.application.service import AuditService
-from cornerroom.modules.commerce.domain.gifts import GiftCampaign, GiftCampaignPeriod, GiftRecipient
+from cornerroom.modules.commerce.domain.gifts import (
+    RECIPIENT_STATUSES,
+    RECIPIENT_TRANSITIONS,
+    GiftCampaign,
+    GiftCampaignPeriod,
+    GiftRecipient,
+    can_move,
+)
 from cornerroom.modules.commerce.domain.models import Order, OrderDeliveryAddress, OrderItem, PresaleClaim, Product
 
 # Paid orders that still count (a fully refunded order no longer earns the gift).
 GIFT_ORDER_STATUSES = ("PAID", "FULFILLED", "PARTIALLY_REFUNDED")
 EDITABLE_FIELDS = ("title", "gift_items", "description", "sender", "include_presale", "counts_from", "works")
 MAX_WORKS = 200
+# Campaign states whose gifts can be tracked (it has been live).
+TRACKABLE = ("ACTIVE", "PAUSED", "ENDED")
+# The event each move writes (dispatching writes GIFT_DISPATCHED with what the buyer email needs).
+MOVE_EVENTS = {
+    "PREPARED": GIFT_PREPARED,
+    "YET_TO_SEND": GIFT_UNPREPARED,
+    "RECEIVED": GIFT_RECEIVED,
+    "RETURNED": GIFT_RETURNED,
+    "MISSING": GIFT_MARKED_MISSING,
+}
 
 
 def _clean(value: Any, limit: int) -> str | None:
@@ -488,10 +512,21 @@ class GiftCampaignService:
         rows = await self.session.execute(
             select(GiftRecipient.status, func.count()).where(GiftRecipient.campaign_id == campaign_id).group_by(GiftRecipient.status)
         )
-        counts = {"YET_TO_SEND": 0, "IN_PROCESS": 0, "SENT": 0}
+        counts = {status: 0 for status in RECIPIENT_STATUSES}
         for status, n in rows:
             counts[status] = int(n)
         counts["TOTAL"] = sum(counts.values())
+        # Prepared gifts with a dispatch time set (part of PREPARED, not added to the total).
+        counts["SCHEDULED"] = int(
+            await self.session.scalar(
+                select(func.count()).where(
+                    GiftRecipient.campaign_id == campaign_id,
+                    GiftRecipient.status == "PREPARED",
+                    GiftRecipient.dispatch_at.is_not(None),
+                )
+            )
+            or 0
+        )
         return counts
 
     async def _contact(self, recipients: list[GiftRecipient]) -> dict[UUID, dict[str, Any]]:
@@ -556,7 +591,7 @@ class GiftCampaignService:
         out = await self._summary(campaign, name)
         # Staff always; the artist only when they send the gifts themselves (owner, 2026-10-28).
         show_contact = role == "staff" or campaign.sender == "ARTIST"
-        can_dispatch = campaign.status in ("ACTIVE", "PAUSED", "ENDED") and (role == "staff" or campaign.sender == "ARTIST")
+        can_dispatch = campaign.status in TRACKABLE and (role == "staff" or campaign.sender == "ARTIST")
         recipients = (
             await self.session.execute(
                 select(GiftRecipient).where(GiftRecipient.campaign_id == campaign.id).order_by(GiftRecipient.created_at)
@@ -566,13 +601,17 @@ class GiftCampaignService:
         out["viewer_role"] = role
         out["can_dispatch"] = can_dispatch
         out["shows_contact"] = show_contact
+        # Where each status may go next; the page offers only these (it never hard-codes them).
+        out["transitions"] = {k: list(v) for k, v in RECIPIENT_TRANSITIONS.items()}
         out["recipients"] = [
             {
                 "id": r.id,
                 "status": r.status,
                 "has_account": r.user_id is not None,
+                "prepared_at": r.prepared_at,
+                "dispatch_at": r.dispatch_at if r.status == "PREPARED" else None,
                 "dispatched_at": r.dispatched_at,
-                "sent_at": r.sent_at,
+                "outcome_at": r.outcome_at,
                 **({"email": r.email} if role == "staff" else {}),
                 **(contact.get(r.id, {}) if show_contact else {}),
             }
@@ -580,69 +619,185 @@ class GiftCampaignService:
         ]
         return out
 
-    async def _recipients_for_action(self, ctx: AuthContext, campaign_id: UUID, ids: list[UUID]) -> tuple[GiftCampaign, list[GiftRecipient], str]:
+    async def _recipients_for_action(
+        self, ctx: AuthContext, campaign_id: UUID, ids: list[UUID] | None, every: str | None = None
+    ) -> tuple[GiftCampaign, list[GiftRecipient], str]:
+        """The chosen gifts, or every gift in one status (`every`, e.g. all not prepared yet)."""
         campaign, role, name = await self._campaign(ctx, campaign_id)
-        if campaign.status not in ("ACTIVE", "PAUSED", "ENDED"):
+        if campaign.status not in TRACKABLE:
             raise AppError("INVALID_TRANSITION", "The campaign isn't live yet", 409)
         if role != "staff" and campaign.sender != "ARTIST":
             raise AppError("FORBIDDEN", "Corner Room sends these gifts", 403)
-        if not ids:
+        query = select(GiftRecipient).where(GiftRecipient.campaign_id == campaign.id)
+        if every is not None:
+            if every not in RECIPIENT_STATUSES:
+                raise AppError("VALIDATION_ERROR", "Unknown status", 422)
+            await self.sync_recipients(campaign)
+            query = query.where(GiftRecipient.status == every)
+        elif ids:
+            query = query.where(GiftRecipient.id.in_(ids[:500]))
+        else:
             raise AppError("VALIDATION_ERROR", "Choose who to update", 422)
-        rows = (
-            await self.session.execute(
-                select(GiftRecipient).where(GiftRecipient.campaign_id == campaign.id, GiftRecipient.id.in_(ids[:500]))
-            )
-        ).scalars().all()
+        rows = (await self.session.execute(query.order_by(GiftRecipient.created_at))).scalars().all()
         return campaign, list(rows), name
 
-    async def dispatch(self, ctx: AuthContext, campaign_id: UUID, ids: list[UUID]) -> dict[str, Any]:
-        """Gifts leaving now: each buyer is told it is on its way (once per recipient)."""
-        campaign, rows, name = await self._recipients_for_action(ctx, campaign_id, ids)
+    async def _music_line(self, campaign: GiftCampaign) -> str:
         titles = [w["title"] for w in await self._work_names(campaign.works or [])]
-        music = ", ".join(titles[:3]) + (f" and {len(titles) - 3} more" if len(titles) > 3 else "")
+        return ", ".join(titles[:3]) + (f" and {len(titles) - 3} more" if len(titles) > 3 else "")
+
+    def _buyer_payload(self, r: GiftRecipient, campaign: GiftCampaign, name: str, music: str) -> dict[str, Any]:
+        """What a buyer email needs: account holders through notifications, others by address."""
+        return {
+            "user_id": str(r.user_id) if r.user_id else None, "email": None if r.user_id else r.email,
+            "artist": name, "gift": campaign.gift_items, "music": music, "campaign_id": str(campaign.id),
+        }
+
+    async def _dispatch_one(self, ctx: AuthContext | None, campaign: GiftCampaign, r: GiftRecipient, name: str, music: str) -> None:
+        """A prepared gift leaves now: the buyer is told it is on its way (once per dispatch)."""
+        r.status = "DISPATCHED"
+        r.dispatched_at = self.clock.now()
+        r.dispatched_by = ctx.user_id if ctx else r.dispatch_set_by
+        r.dispatch_at = None
+        await self._event(ctx, GIFT_DISPATCHED, "GiftRecipient", r.id, self._buyer_payload(r, campaign, name, music), campaign.organization_id)
+
+    async def transition(
+        self,
+        ctx: AuthContext,
+        campaign_id: UUID,
+        *,
+        to: str,
+        ids: list[UUID] | None = None,
+        every: str | None = None,
+        dispatch_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Move chosen gifts (or every gift in one status) to `to`. Dispatching with a future
+        `dispatch_at` keeps them prepared with that time set; the worker sends them when it comes.
+        Moving a scheduled gift to PREPARED again clears its time. Gifts that can't make the move
+        are left as they are and counted as skipped."""
+        if to not in RECIPIENT_STATUSES:
+            raise AppError("VALIDATION_ERROR", "Unknown status", 422)
         now = self.clock.now()
-        moved = 0
+        if dispatch_at is not None:
+            if to != "DISPATCHED":
+                raise AppError("VALIDATION_ERROR", "A time can only be set for dispatching", 422)
+            if dispatch_at.tzinfo is None:
+                raise AppError("VALIDATION_ERROR", "Give the dispatch time with its time zone", 422)
+            if dispatch_at <= now:
+                raise AppError("DISPATCH_TIME_PASSED", "That time has already gone. Dispatch now or choose a later time.", 422)
+        campaign, rows, name = await self._recipients_for_action(ctx, campaign_id, ids, every)
+        music = await self._music_line(campaign) if to in ("DISPATCHED", "RETURNED", "MISSING") else ""
+        moved = skipped = 0
         for r in rows:
-            if r.status != "YET_TO_SEND":
+            unschedule = to == "PREPARED" and r.status == "PREPARED" and r.dispatch_at is not None
+            if not unschedule and not can_move(r.status, to):
+                skipped += 1
                 continue
-            r.status = "IN_PROCESS"
-            r.dispatched_at = now
-            r.dispatched_by = ctx.user_id
             moved += 1
-            await self._event(
-                ctx, GIFT_DISPATCHED, "GiftRecipient", r.id,
-                {"user_id": str(r.user_id) if r.user_id else None, "email": None if r.user_id else r.email,
-                 "artist": name, "gift": campaign.gift_items, "music": music, "campaign_id": str(campaign.id)},
-                campaign.organization_id,
+            if to == "DISPATCHED":
+                if dispatch_at is None:
+                    await self._dispatch_one(ctx, campaign, r, name, music)
+                else:
+                    r.dispatch_at = dispatch_at
+                    r.dispatch_set_by = ctx.user_id
+                    await self._event(
+                        ctx, GIFT_DISPATCH_SCHEDULED, "GiftRecipient", r.id,
+                        {"campaign_id": str(campaign.id), "dispatch_at": dispatch_at.isoformat()}, campaign.organization_id,
+                    )
+                continue
+            payload: dict[str, Any] = {"campaign_id": str(campaign.id)}
+            if unschedule:
+                r.dispatch_at = None
+                r.dispatch_set_by = None
+            elif to == "PREPARED":
+                r.status = "PREPARED"
+                r.prepared_at = now
+                r.prepared_by = ctx.user_id
+                r.dispatch_at = None
+                r.outcome_at = None
+                r.outcome_by = None
+            elif to == "YET_TO_SEND":
+                r.status = "YET_TO_SEND"
+                r.prepared_at = None
+                r.prepared_by = None
+                r.dispatch_at = None
+                r.dispatch_set_by = None
+            else:  # an outcome: received, returned or missing
+                r.status = to
+                r.outcome_at = now
+                r.outcome_by = ctx.user_id
+                if to == "RECEIVED":
+                    r.sent_at = r.sent_at or now
+                    r.sent_by = r.sent_by or ctx.user_id
+                else:
+                    # Returned and missing tell the buyer (owner, 2026-11-06).
+                    payload = self._buyer_payload(r, campaign, name, music)
+            await self._event(ctx, MOVE_EVENTS[to], "GiftRecipient", r.id, payload, campaign.organization_id)
+        await self.session.flush()
+        await self.audit.record_from_auth(
+            ctx, action="gift_campaign.tracked", entity_type="GiftCampaign", entity_id=campaign.id,
+            new_state={"to": to, "count": moved, "skipped": skipped, "every": every,
+                       "dispatch_at": dispatch_at.isoformat() if dispatch_at else None},
+            organization_id=campaign.organization_id,
+        )
+        out = await self.detail(ctx, campaign.id)
+        out["moved"] = moved
+        out["skipped"] = skipped
+        return out
+
+    async def dispatch_due(self) -> int:
+        """Worker, every minute: prepared gifts whose dispatch time has come leave now."""
+        due = (
+            await self.session.execute(
+                select(GiftRecipient)
+                .where(
+                    GiftRecipient.status == "PREPARED",
+                    GiftRecipient.dispatch_at.is_not(None),
+                    GiftRecipient.dispatch_at <= self.clock.now(),
+                )
+                .order_by(GiftRecipient.dispatch_at)
+                .limit(1000)
+            )
+        ).scalars().all()
+        by_campaign: dict[UUID, list[GiftRecipient]] = {}
+        for r in due:
+            by_campaign.setdefault(r.campaign_id, []).append(r)
+        sent = 0
+        for campaign_id, rows in by_campaign.items():
+            campaign = await self.session.get(GiftCampaign, campaign_id)
+            if campaign is None or campaign.status not in TRACKABLE:
+                continue
+            try:
+                _row, _org, name = await self.studio._profile(campaign.profile_type, campaign.profile_id)
+            except (NotFoundError, AppError):
+                continue
+            music = await self._music_line(campaign)
+            for r in rows:
+                await self._dispatch_one(None, campaign, r, name, music)
+                sent += 1
+            await self.audit.record(
+                action="gift_campaign.dispatched_on_time", entity_type="GiftCampaign", entity_id=campaign.id,
+                actor_id="system:gift-dispatch", actor_type="system", new_state={"count": len(rows)},
             )
         await self.session.flush()
-        await self.audit.record_from_auth(
-            ctx, action="gift_campaign.dispatched", entity_type="GiftCampaign", entity_id=campaign.id,
-            new_state={"count": moved}, organization_id=campaign.organization_id,
-        )
-        return await self.detail(ctx, campaign.id)
+        return sent
 
-    async def mark_sent(self, ctx: AuthContext, campaign_id: UUID, ids: list[UUID]) -> dict[str, Any]:
-        campaign, rows, _name = await self._recipients_for_action(ctx, campaign_id, ids)
-        now = self.clock.now()
-        moved = 0
-        for r in rows:
-            if r.status == "SENT":
+    async def for_release(self, ctx: AuthContext, release_id: UUID) -> list[dict[str, Any]]:
+        """Collectible campaigns covering this release (or its songs), with how far their gifts
+        have got: for the release's team and catalog staff of its workspace (404 for anyone else)."""
+        release, _role = await self.studio._release(ctx, release_id)
+        rows = (
+            await self.session.execute(
+                select(GiftCampaign).where(GiftCampaign.status.in_(TRACKABLE)).order_by(GiftCampaign.created_at)
+            )
+        ).scalars().all()
+        out = []
+        for c in rows:
+            if release.id not in await self._subjects(c.works or []):
                 continue
-            r.status = "SENT"
-            r.sent_at = now
-            r.sent_by = ctx.user_id
-            if r.dispatched_at is None:
-                r.dispatched_at = now
-                r.dispatched_by = ctx.user_id
-            moved += 1
-            await self._event(ctx, GIFT_SENT, "GiftRecipient", r.id, {"campaign_id": str(campaign.id)}, campaign.organization_id)
-        await self.session.flush()
-        await self.audit.record_from_auth(
-            ctx, action="gift_campaign.sent", entity_type="GiftCampaign", entity_id=campaign.id,
-            new_state={"count": moved}, organization_id=campaign.organization_id,
-        )
-        return await self.detail(ctx, campaign.id)
+            await self.sync_recipients(c)
+            _row, _org, name = await self.studio._profile(c.profile_type, c.profile_id)
+            out.append(await self._summary(c, name))
+        return out
 
     # --- public -----------------------------------------------------------------------------------
 
@@ -660,29 +815,48 @@ class GiftCampaignService:
         return out
 
 
-GIFT_EMAIL_SUBJECT = "A gift is on its way"
-GIFT_EMAIL_BODY = (
-    "Good news from {artist}: a gift for buying {music} is on its way to you ({gift}). It should reach you in the next few days."
-)
+# Emails for buyers without an account (account holders get the same words as notifications,
+# seeded in infra/seed.py). Returned and missing: owner, 2026-11-06 (D-CAMPAIGN-03).
+GIFT_EMAILS: dict[str, tuple[str, str]] = {
+    GIFT_DISPATCHED: (
+        "A gift is on its way",
+        "Good news from {artist}: a gift for buying {music} is on its way to you ({gift}). It should reach you in the next few days.",
+    ),
+    GIFT_RETURNED: (
+        "Your gift couldn't be delivered",
+        "Your gift from {artist} ({gift}), for buying {music}, couldn't be delivered and came back. Please check that "
+        "the delivery address you gave us is correct. Once your address is right, it will be sent again. We'll email "
+        "you again when there's news.",
+    ),
+    GIFT_MARKED_MISSING: (
+        "Your gift is taking longer than expected",
+        "Your gift from {artist} ({gift}), for buying {music}, hasn't arrived yet. We're finding out where it is and "
+        "will email you as soon as we know more. If it doesn't turn up, we'll send another. You don't need to do "
+        "anything for now.",
+    ),
+}
+GIFT_EMAIL_SUBJECT, GIFT_EMAIL_BODY = GIFT_EMAILS[GIFT_DISPATCHED]
 
 
-def build_gift_email(*, artist: str, gift: str, music: str, web_base_url: str) -> tuple[str, str]:
+def build_gift_email(*, artist: str, gift: str, music: str, web_base_url: str, event_type: str = GIFT_DISPATCHED) -> tuple[str, str]:
     """Subject and plain-text body for a buyer without a Corner Room account."""
-    body = GIFT_EMAIL_BODY.format(artist=artist, gift=gift, music=music)
-    return GIFT_EMAIL_SUBJECT, "\n".join(
+    subject, template = GIFT_EMAILS[event_type]
+    body = template.format(artist=artist, gift=gift, music=music)
+    return subject, "\n".join(
         [body, "", "You can listen to your music and keep track of your orders on Corner Room:", web_base_url.rstrip("/"), "", "Corner Room"]
     )
 
 
 async def consume_gift_email_event(event: DomainEvent, session: AsyncSession, settings: Settings | None = None) -> None:
     """Outbox side consumer: email a pre-sale buyer without an account that their gift is on its
-    way (account holders get it through notifications, in-app and by email)."""
+    way, came back or went missing (account holders get it through notifications, in-app and by
+    email)."""
     import structlog
 
     from cornerroom.infra.logging import mask_email
     from cornerroom.modules.notifications.infra.email import email_sender_for
 
-    if event.event_type != GIFT_DISPATCHED:
+    if event.event_type not in GIFT_EMAILS:
         return
     payload = event.payload or {}
     to = str(payload.get("email") or "").strip()
@@ -696,8 +870,8 @@ async def consume_gift_email_event(event: DomainEvent, session: AsyncSession, se
         return
     subject, body = build_gift_email(
         artist=str(payload.get("artist") or "The artist"), gift=str(payload.get("gift") or "a gift"),
-        music=str(payload.get("music") or "their music"), web_base_url=settings.web_base_url,
+        music=str(payload.get("music") or "their music"), web_base_url=settings.web_base_url, event_type=event.event_type,
     )
     # A failed send raises, so the outbox retries the event.
     await sender.send(to=to, subject=subject, body=body)
-    log.info("gift_email_sent", to=mask_email(to), recipient_id=str(event.aggregate_id))
+    log.info("gift_email_sent", to=mask_email(to), recipient_id=str(event.aggregate_id), kind=event.event_type)

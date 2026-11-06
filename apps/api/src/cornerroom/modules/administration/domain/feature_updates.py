@@ -114,11 +114,16 @@ FEATURES: Final[list[dict]] = [
         "summary": "Free extras (posters, stickers) for the people who buy an artist's music.",
         "description": (
             "An artist or band sets up a gift for buyers of chosen music; staff review it and every "
-            "change. It can be paused and restarted any time. Studio tracks each gift as yet to send, in "
-            "process or sent, and dispatching tells each buyer by email that it is on its way. Music given "
-            "free through a music gift doesn't earn a campaign gift."
+            "change. It can be paused and restarted any time. Each collectible is tracked as not prepared, "
+            "prepared, dispatched (now or at a chosen time), received, returned or missing, by the artist "
+            "when they send it and always by staff, with one click to mark everyone prepared. Dispatching "
+            "tells each buyer by email that it is on its way; returned and missing tell them too. A "
+            "release's numbers page shows its collectibles. Music given free through a music gift doesn't "
+            "earn a campaign gift."
         ),
         "updates": [
+            {"date": "2026-11-06", "kind": "IMPROVED", "title": "Collectible tracking", "details": "Prepared, dispatched now or later, received, returned and missing; mark all prepared in one click."},
+            {"date": "2026-11-06", "kind": "NEW", "title": "Collectibles on release numbers", "details": "A release's numbers page shows how far each of its collectibles has got."},
             {"date": "2026-11-06", "kind": "IMPROVED", "title": "Given music doesn't count", "details": "Music an artist gave away through a music gift doesn't earn a campaign gift."},
             {"date": "2026-10-28", "kind": "NEW", "title": "Gift campaigns", "details": "Artists set up gifts for buyers, staff review, tracking and dispatch emails."},
         ],
@@ -174,11 +179,15 @@ FEATURES: Final[list[dict]] = [
         "summary": "The full-screen place to listen, with the cover, lyrics and controls.",
         "description": (
             "Play opens the listening room: a full-screen view with the blurred cover, a carousel, and the "
-            "lyrics on a ring round the cover that follow the song when staff have timed them. The big "
+            "lyrics on a ring round the cover that follow the song when staff have timed them. Lyrics are on "
+            "from the start, with a Lyrics switch under the close button; turning them off is remembered on "
+            "that device. The room fills the window, and the first click goes properly full screen. The big "
             "title links to the song page. When the browser blocks the automatic start, the room shows the "
             "song's real length and a lit play key."
         ),
         "updates": [
+            {"date": "2026-11-06", "kind": "IMPROVED", "title": "Lyrics on from the start", "details": "A Lyrics switch under the close button; turning lyrics off is remembered on the device."},
+            {"date": "2026-11-06", "kind": "IMPROVED", "title": "Full screen room", "details": "The room fills the window, and the first click in it goes properly full screen."},
             {"date": "2026-11-02", "kind": "IMPROVED", "title": "Room bar polish", "details": "Save and playlist buttons get the glossy hover; the playlist panel is solid."},
             {"date": "2026-11-02", "kind": "FIXED", "title": "Before the first click", "details": "Real length, short status and a lit play key; title link on the not-owned screen."},
             {"date": "2026-11-02", "kind": "NEW", "title": "Timed lyrics and title link", "details": "Staff tap along once per line and the room follows; the room title links to the song page."},

@@ -12,16 +12,27 @@
   display: none;
 }
 
+/* Full screen by default (owner, 2026-11-06, D-ROOM-05): the room covers the whole window, edge
+   to edge, and the page behind it does not scroll. The first click or key press in the room also
+   asks the browser for real full screen (components/music/room-fullscreen.ts). A window too short
+   for the room scrolls inside the room, never the page. */
+html:has([data-module="music"] .lr) {
+  overflow: hidden;
+}
 [data-module="music"] .lr {
   --card: min(64vw, 17rem, 40vh);
   --lr-move: 640ms;
   --lr-ease: cubic-bezier(0.22, 0.8, 0.16, 1);
-  position: relative;
+  position: fixed;
+  inset: 0;
+  z-index: 30;
   isolation: isolate;
   display: flex;
-  min-height: 100dvh;
   flex-direction: column;
-  overflow: hidden;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(187 237 254 / 0.3) transparent;
   background: var(--cr-surface-sunken);
   /* The backdrop is already a blur, and it moves: glass here is a translucent fill, not a live
      frosting, or every card would re-blur the moving backdrop each frame. */
@@ -107,10 +118,13 @@
   position: relative;
   z-index: 3;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem 1rem 0.5rem;
+}
+[data-module="music"] .lr-top > :first-child {
+  min-height: 2.5rem;
 }
 @media (min-width: 768px) {
   [data-module="music"] .lr-top {
@@ -137,6 +151,98 @@
   width: 2.5rem;
   justify-content: center;
   padding: 0;
+}
+
+/* The top bar's right end: the ways out, and under the close button the lyrics switch (owner,
+   2026-11-06, D-ROOM-05). A real switch with its state in words; on, the track fills with Sky and
+   the square thumb (Indigo Ink, 6.8:1 on Sky) moves right. The first time it can be used in a
+   visit, its track sends out two soft Ice rings to be noticed; never under reduced motion. */
+[data-module="music"] .lr-top-end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+[data-module="music"] .lr-lyrics-control {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+}
+[data-module="music"] .lr-lyrics-switch {
+  gap: 0.55rem;
+  padding: 0 0.75rem;
+  cursor: pointer;
+}
+[data-module="music"] .lr-lyrics-switch[aria-checked="true"] {
+  --cut-fill: rgb(83 200 234 / 0.16);
+  --cut-border: rgb(187 237 254 / 0.5);
+}
+[data-module="music"] .lr-lyrics-switch:disabled {
+  cursor: default;
+  color: var(--cr-fg-muted);
+}
+[data-module="music"] .lr-switch-track {
+  position: relative;
+  width: 2.25rem;
+  height: 1.25rem;
+  flex: none;
+  border: 1px solid rgb(187 237 254 / 0.45);
+  background: rgb(11 9 25 / 0.55);
+  transition:
+    background-color 200ms var(--lr-ease),
+    border-color 200ms var(--lr-ease);
+}
+[data-module="music"] .lr-switch-thumb {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--cr-fg-muted);
+  transition:
+    transform 200ms var(--lr-ease),
+    background-color 200ms var(--lr-ease);
+}
+[data-module="music"] .lr-lyrics-switch[aria-checked="true"] .lr-switch-track {
+  border-color: #bbedfe;
+  background: #53c8ea;
+}
+[data-module="music"] .lr-lyrics-switch[aria-checked="true"] .lr-switch-thumb {
+  transform: translateX(16px);
+  background: #2e2860;
+}
+[data-module="music"] .lr-lyrics-switch:disabled .lr-switch-track {
+  border-style: dashed;
+  border-color: rgb(187 237 254 / 0.3);
+}
+[data-module="music"] .lr-switch-state {
+  min-width: 1.5rem;
+  font-size: 0.75rem;
+  color: var(--cr-fg-muted);
+}
+[data-module="music"] .lr-lyrics-switch[aria-checked="true"] .lr-switch-state {
+  color: var(--cr-highlight);
+}
+[data-module="music"] .lr-lyrics-reason {
+  max-width: 12rem;
+  font-size: 0.75rem;
+  text-align: right;
+  color: var(--cr-fg-muted);
+}
+[data-module="music"] .lr-lyrics-switch[data-invite] .lr-switch-track {
+  animation: lr-invite 1.5s ease-out 0.9s 2;
+}
+@keyframes lr-invite {
+  0% {
+    box-shadow: 0 0 0 0 rgb(187 237 254 / 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgb(187 237 254 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(187 237 254 / 0);
+  }
 }
 
 /* Carousel view. */
@@ -880,8 +986,13 @@
   [data-module="music"] .lr-halo,
   [data-module="music"] .lr-bob,
   [data-module="music"] .lr-lyric-text::before,
+  [data-module="music"] .lr-lyrics-switch .lr-switch-track,
   [data-module="music"] .lr-eq i {
     animation: none !important;
+  }
+  [data-module="music"] .lr-switch-track,
+  [data-module="music"] .lr-switch-thumb {
+    transition: none;
   }
   /* The line now stays still where it is sung; nothing glides or leans. */
   [data-module="music"] .lr-lyric,

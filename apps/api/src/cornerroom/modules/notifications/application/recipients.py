@@ -14,6 +14,8 @@ from cornerroom.kernel.events import (
     DomainEvent,
     ENTITLEMENT_GRANTED,
     GIFT_DISPATCHED,
+    GIFT_MARKED_MISSING,
+    GIFT_RETURNED,
     PRESALE_CANCELLED,
     PRESALE_DATE_CHANGED,
     PRESALE_RELEASED,
@@ -68,7 +70,7 @@ async def resolve_recipient(session: AsyncSession, event: DomainEvent) -> UUID |
         return _uuid(payload.get("user_id"))
     if event_type in {PRESALE_RELEASED, PRESALE_DATE_CHANGED, PRESALE_CANCELLED}:
         return _uuid(payload.get("user_id"))
-    if event_type == GIFT_DISPATCHED:
+    if event_type in {GIFT_DISPATCHED, GIFT_RETURNED, GIFT_MARKED_MISSING}:
         # A pre-sale buyer without an account has no user id; they get the email directly (gifts).
         return _uuid(payload.get("user_id"))
 

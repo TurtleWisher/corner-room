@@ -1,12 +1,14 @@
 "use client";
 
 /* A release's numbers (owner, 2026-11-06, D-PRESALE-04): once it is out, a pre-sale's campaign moves
- * here and carries on. Pre-sale only, since release, or all together. */
+ * here and carries on. Pre-sale only, since release, or all together. Below, its collectibles and how
+ * far each buyer's has got (D-CAMPAIGN-03). */
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
+import { ReleaseCollectibles } from "@/components/gifts/release-collectibles";
 import { AccountPage } from "@/components/shell/account-page";
 import { CampaignNumbersPanel } from "@/components/studio/campaign-numbers";
 import { useAsync } from "@/components/use-async";
@@ -27,6 +29,7 @@ export default function ReleaseNumbersPage() {
         </Link>
       </p>
       <CampaignNumbersPanel releaseId={id} />
+      <ReleaseCollectibles releaseId={id} />
     </AccountPage>
   );
 }

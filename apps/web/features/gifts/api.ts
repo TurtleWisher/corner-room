@@ -7,8 +7,10 @@ const json = { "Content-Type": "application/json" };
 
 export type GiftWork = { type: "RELEASE" | "TRACK"; id: string; title?: string };
 export type GiftCampaignStatus = "DRAFT" | "IN_REVIEW" | "ACTIVE" | "PAUSED" | "ENDED";
-export type GiftRecipientStatus = "YET_TO_SEND" | "IN_PROCESS" | "SENT";
-export type GiftCounts = { YET_TO_SEND: number; IN_PROCESS: number; SENT: number; TOTAL: number };
+/** Collectible tracking (owner, 2026-11-06, D-CAMPAIGN-03). YET_TO_SEND is "not prepared yet". */
+export type GiftRecipientStatus = "YET_TO_SEND" | "PREPARED" | "DISPATCHED" | "RECEIVED" | "RETURNED" | "MISSING";
+/** One count per status, TOTAL, and SCHEDULED (prepared with a dispatch time; inside PREPARED). */
+export type GiftCounts = Record<GiftRecipientStatus, number> & { TOTAL: number; SCHEDULED: number };
 
 export type GiftCampaign = {
   id: string;
@@ -34,8 +36,12 @@ export type GiftRecipient = {
   id: string;
   status: GiftRecipientStatus;
   has_account: boolean;
+  prepared_at?: string | null;
+  /** A prepared gift set to leave at this time. */
+  dispatch_at?: string | null;
   dispatched_at?: string | null;
-  sent_at?: string | null;
+  /** When it was received, returned or marked missing. */
+  outcome_at?: string | null;
   email?: string | null;
   name?: string | null;
   phone?: string | null;
@@ -44,9 +50,15 @@ export type GiftRecipient = {
 
 export type GiftCampaignDetail = GiftCampaign & {
   viewer_role: "owner" | "staff";
+  /** Whether this viewer may update the gifts (staff always; the artist when they send them). */
   can_dispatch: boolean;
   shows_contact: boolean;
+  /** Where each status may go next (from the API; the page never hard-codes it). */
+  transitions: Partial<Record<GiftRecipientStatus, GiftRecipientStatus[]>>;
   recipients: GiftRecipient[];
+  /** After an update: how many moved, and how many couldn't make that move. */
+  moved?: number | null;
+  skipped?: number | null;
 };
 
 export type GiftCampaignInput = {
@@ -91,23 +103,28 @@ export const withdrawGiftCampaign = (id: string) => act(id, "withdraw");
 export const pauseGiftCampaign = (id: string) => act(id, "pause");
 export const resumeGiftCampaign = (id: string) => act(id, "resume");
 
-/** Gifts leaving now: each chosen buyer is told by email that it is on its way. */
-export function dispatchGifts(id: string, recipientIds: string[]): Promise<GiftCampaignDetail> {
-  return apiFetch<GiftCampaignDetail>(`/api/v1/studio/gift-campaigns/${id}/dispatch`, {
+export type GiftMove = {
+  to: GiftRecipientStatus;
+  /** Chosen gifts, or `every` gift in one status (for example all not prepared yet). */
+  recipient_ids?: string[];
+  every?: GiftRecipientStatus;
+  /** Dispatch at this time (ISO, with its zone) instead of now. */
+  dispatch_at?: string;
+};
+
+/** Collectible tracking: dispatching tells each buyer it is on its way; returned and missing tell them too. */
+export function trackGifts(id: string, move: GiftMove): Promise<GiftCampaignDetail> {
+  return apiFetch<GiftCampaignDetail>(`/api/v1/studio/gift-campaigns/${id}/recipients/transition`, {
     method: "POST",
     headers: json,
-    body: JSON.stringify({ recipient_ids: recipientIds }),
+    body: JSON.stringify(move),
     retry: false,
   });
 }
 
-export function markGiftsSent(id: string, recipientIds: string[]): Promise<GiftCampaignDetail> {
-  return apiFetch<GiftCampaignDetail>(`/api/v1/studio/gift-campaigns/${id}/sent`, {
-    method: "POST",
-    headers: json,
-    body: JSON.stringify({ recipient_ids: recipientIds }),
-    retry: false,
-  });
+/** Collectible campaigns covering a release, with how far their gifts have got. */
+export function fetchReleaseCollectibles(releaseId: string): Promise<GiftCampaign[]> {
+  return apiFetch<GiftCampaign[]>(`/api/v1/studio/releases/${releaseId}/collectibles`);
 }
 
 /** Staff: campaigns, or changes to live ones, waiting in the active workspace. */
