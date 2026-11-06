@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from cornerroom.infra.db import get_engine
 from cornerroom.kernel.events import GIFT_MARKED_MISSING, GIFT_RETURNED
 from cornerroom.modules.commerce.application.gifts import build_gift_email, in_periods
-from cornerroom.modules.commerce.domain.gifts import RECIPIENT_STATUSES, RECIPIENT_TRANSITIONS, can_move
+from cornerroom.modules.commerce.domain.gifts import RECIPIENT_STATUSES, RECIPIENT_TRANSITIONS, can_move, clean_person, phone_key
 from cornerroom.modules.notifications.domain.models import Notification
 from cornerroom.worker import drain_outbox
 from tests.auth_helpers import bearer, register_and_login
@@ -114,7 +114,7 @@ async def test_gift_campaign_review_pause_tracking_and_dispatch(client: AsyncCli
     fan = await register_and_login(client, "gift-fan@example.com")
     await _buy(client, fan["access_token"], offer["id"])
     detail = (await client.get(f"/api/v1/studio/gift-campaigns/{cid}", headers=bearer(token))).json()
-    assert detail["counts"] == {"YET_TO_SEND": 1, "PREPARED": 0, "DISPATCHED": 0, "RECEIVED": 0, "RETURNED": 0, "MISSING": 0, "TOTAL": 1, "SCHEDULED": 0}
+    assert detail["counts"] == {"YET_TO_SEND": 1, "PREPARED": 0, "DISPATCHED": 0, "RECEIVED": 0, "RETURNED": 0, "MISSING": 0, "TOTAL": 1, "SCHEDULED": 0, "WAITING": 0}
     row = detail["recipients"][0]
     # The artist sends these gifts, so sees where to post them, but not the email.
     assert detail["shows_contact"] is True and row["address"] and row["phone"] and "email" not in {k for k, v in row.items() if v}
@@ -144,7 +144,7 @@ async def test_gift_campaign_review_pause_tracking_and_dispatch(client: AsyncCli
     assert early_out.status_code == 200 and early_out.json()["moved"] == 0 and early_out.json()["skipped"] == 1
     prepared = await client.post(move, headers=bearer(token), json={"to": "PREPARED", "every": "YET_TO_SEND"})
     assert prepared.status_code == 200, prepared.text
-    assert prepared.json()["moved"] == 2 and prepared.json()["counts"] == {"YET_TO_SEND": 0, "PREPARED": 2, "DISPATCHED": 0, "RECEIVED": 0, "RETURNED": 0, "MISSING": 0, "TOTAL": 2, "SCHEDULED": 0}
+    assert prepared.json()["moved"] == 2 and prepared.json()["counts"] == {"YET_TO_SEND": 0, "PREPARED": 2, "DISPATCHED": 0, "RECEIVED": 0, "RETURNED": 0, "MISSING": 0, "TOTAL": 2, "SCHEDULED": 0, "WAITING": 0}
     assert prepared.json()["transitions"]["PREPARED"] == ["YET_TO_SEND", "DISPATCHED"]
     # A dispatch time already gone is refused; a later one schedules it (still prepared).
     gone = await client.post(move, headers=bearer(token), json={"to": "DISPATCHED", "recipient_ids": [fan_row["id"]], "dispatch_at": "2020-01-01T00:00:00+00:00"})
@@ -156,7 +156,7 @@ async def test_gift_campaign_review_pause_tracking_and_dispatch(client: AsyncCli
     # Dispatch now instead: the buyer is told.
     sent = await client.post(move, headers=bearer(token), json={"to": "DISPATCHED", "recipient_ids": [fan_row["id"]]})
     assert sent.status_code == 200, sent.text
-    assert sent.json()["counts"] == {"YET_TO_SEND": 0, "PREPARED": 1, "DISPATCHED": 1, "RECEIVED": 0, "RETURNED": 0, "MISSING": 0, "TOTAL": 2, "SCHEDULED": 0}
+    assert sent.json()["counts"] == {"YET_TO_SEND": 0, "PREPARED": 1, "DISPATCHED": 1, "RECEIVED": 0, "RETURNED": 0, "MISSING": 0, "TOTAL": 2, "SCHEDULED": 0, "WAITING": 0}
     while await drain_outbox({}):
         pass
     factory = async_sessionmaker(get_engine(), expire_on_commit=False)
@@ -173,7 +173,7 @@ async def test_gift_campaign_review_pause_tracking_and_dispatch(client: AsyncCli
         note = (await session.execute(select(Notification).where(Notification.type == "gift.missing"))).scalars().one()
     assert str(note.user_id) == fan["user"]["id"] and "we'll send another" in note.body
     done = await client.post(move, headers=bearer(token), json={"to": "RECEIVED", "recipient_ids": [fan_row["id"]]})
-    assert done.json()["counts"] == {"YET_TO_SEND": 0, "PREPARED": 1, "DISPATCHED": 0, "RECEIVED": 1, "RETURNED": 0, "MISSING": 0, "TOTAL": 2, "SCHEDULED": 0}
+    assert done.json()["counts"] == {"YET_TO_SEND": 0, "PREPARED": 1, "DISPATCHED": 0, "RECEIVED": 1, "RETURNED": 0, "MISSING": 0, "TOTAL": 2, "SCHEDULED": 0, "WAITING": 0}
     assert next(r for r in done.json()["recipients"] if r["id"] == fan_row["id"])["outcome_at"]
 
     # The release's collectibles, for its numbers page: the team sees this campaign's counts.
@@ -203,3 +203,104 @@ async def test_gift_campaign_review_pause_tracking_and_dispatch(client: AsyncCli
     outsider = await register_and_login(client, "gift-outsider@example.com")
     assert (await client.get(f"/api/v1/studio/gift-campaigns/{cid}", headers=bearer(outsider["access_token"]))).status_code == 404
     assert (await client.get(f"/api/v1/studio/releases/{release_id}/collectibles", headers=bearer(outsider["access_token"]))).status_code == 404
+
+
+def test_people_added_by_hand_need_an_email_or_a_phone() -> None:
+    """D-CAMPAIGN-04: a name, an email and/or a phone (one is required), and an address."""
+    person, problem = clean_person({"name": "  Nila  Akter ", "email": " Nila@Example.com ", "address": "House 1\r\nDhaka"})
+    assert problem is None and person == {"name": "Nila Akter", "email": "nila@example.com", "phone": None, "address": "House 1\nDhaka"}
+    person, problem = clean_person({"name": "Rafi", "phone": "+880 1712-345678"})
+    assert problem is None and person and person["phone"] == "+880 1712-345678"
+    assert clean_person({"name": "Mitu"})[1] == "Mitu needs an email or a phone"
+    assert clean_person({"email": "not-an-email"})[1] == "not-an-email isn't an email address"
+    assert clean_person({"phone": "12"})[1] == "12 isn't a phone number"
+    assert phone_key("+880 1712-345678") == phone_key("8801712345678") == "8801712345678"
+    assert phone_key("") is None
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_people_added_by_hand_wait_for_staff_then_count(client: AsyncClient) -> None:
+    """D-CAMPAIGN-04: the act adds people who bought outside Corner Room; they wait for staff, who
+    approve or turn them away. Staff additions count at once. Duplicates are skipped, an email that
+    belongs to an account is linked, and someone added by mistake can be taken back."""
+    admin, orgs = await _orgs(client)
+    label = orgs["LABEL"]
+    release_id, _track_id, owner, artist_id = await _released(client, admin, label, "people-owner@example.com", "People Band")
+    token = owner["access_token"]
+    reviewer = await _staff_with(client, admin, "people-reviewer@example.com", "content_manager", label)
+    created = await client.post(
+        f"/api/v1/studio/profiles/artist/{artist_id}/gift-campaigns", headers=bearer(token),
+        json={"title": "Card", "gift_items": "A signed card", "sender": "ARTIST", "works": [{"type": "RELEASE", "id": release_id}]},
+    )
+    cid = created.json()["id"]
+    # Not before the campaign has been live.
+    early = await client.post(f"/api/v1/studio/gift-campaigns/{cid}/recipients", headers=bearer(token), json={"people": [{"phone": "01712345678"}]})
+    assert early.status_code == 409
+    await client.post(f"/api/v1/studio/gift-campaigns/{cid}/submit", headers=bearer(token))
+    await client.post(f"/api/v1/catalog-intake/gift-campaigns/{cid}/review", headers=bearer(reviewer), json={"action": "approve"})
+    linked = await register_and_login(client, "people-linked@example.com")
+
+    # Every problem is reported and nothing is added.
+    bad = await client.post(
+        f"/api/v1/studio/gift-campaigns/{cid}/recipients", headers=bearer(token),
+        json={"people": [{"name": "Ok", "phone": "01712345678"}, {"name": "Nobody"}]},
+    )
+    assert bad.status_code == 422 and "Row 2" in bad.text
+    added = await client.post(
+        f"/api/v1/studio/gift-campaigns/{cid}/recipients", headers=bearer(token),
+        json={"people": [
+            {"name": "Linked Fan", "email": "People-Linked@example.com", "address": "Road 2, Dhaka"},
+            {"name": "Phone Only", "phone": "+880 1712-345678", "address": "Road 3, Chattogram"},
+            {"name": "Same Phone", "phone": "8801712345678"},
+        ]},
+    )
+    assert added.status_code == 200, added.text
+    body = added.json()
+    assert body["added"] == 2 and body["skipped"] == 1
+    assert body["counts"]["WAITING"] == 2 and body["counts"]["TOTAL"] == 0 and body["recipients"] == []
+    assert {w["name"] for w in body["waiting"]} == {"Linked Fan", "Phone Only"} and body["can_review"] is False
+    linked_row = next(w for w in body["waiting"] if w["name"] == "Linked Fan")
+    assert linked_row["has_account"] is True and linked_row["email"] == "people-linked@example.com"
+    phone_row = next(w for w in body["waiting"] if w["name"] == "Phone Only")
+
+    # Waiting people can't be tracked, and the act can't approve its own additions.
+    blocked = await client.post(
+        f"/api/v1/studio/gift-campaigns/{cid}/recipients/transition", headers=bearer(token), json={"to": "PREPARED", "recipient_ids": [phone_row["id"]]},
+    )
+    assert blocked.json()["moved"] == 0
+    own = await client.post(
+        f"/api/v1/studio/gift-campaigns/{cid}/recipients/review", headers=bearer(token), json={"recipient_ids": [phone_row["id"]], "action": "approve"},
+    )
+    assert own.status_code == 403
+    # Staff see the campaign in their queue, approve one and turn the other away.
+    assert cid in [c["id"] for c in (await client.get("/api/v1/catalog-intake/gift-campaigns", headers=bearer(reviewer))).json()]
+    approved = await client.post(
+        f"/api/v1/studio/gift-campaigns/{cid}/recipients/review", headers=bearer(reviewer), json={"recipient_ids": [linked_row["id"]], "action": "approve"},
+    )
+    assert approved.json()["counts"]["TOTAL"] == 1 and approved.json()["counts"]["WAITING"] == 1
+    row = approved.json()["recipients"][0]
+    assert row["source"] == "ADDED" and row["name"] == "Linked Fan" and row["address"] == "Road 2, Dhaka"
+    turned = await client.post(
+        f"/api/v1/studio/gift-campaigns/{cid}/recipients/review", headers=bearer(reviewer), json={"recipient_ids": [phone_row["id"]], "action": "reject"},
+    )
+    assert turned.json()["counts"]["WAITING"] == 0 and turned.json()["waiting"] == []
+    assert cid not in [c["id"] for c in (await client.get("/api/v1/catalog-intake/gift-campaigns", headers=bearer(reviewer))).json()]
+
+    # Staff additions count at once and can be prepared like any buyer's.
+    by_staff = await client.post(
+        f"/api/v1/studio/gift-campaigns/{cid}/recipients", headers=bearer(reviewer),
+        json={"people": [{"name": "Paid By Hand", "phone": "01812345678", "address": "Road 4, Sylhet"}]},
+    )
+    assert by_staff.json()["added"] == 1 and by_staff.json()["counts"]["TOTAL"] == 2 and by_staff.json()["counts"]["WAITING"] == 0
+    hand_row = next(r for r in by_staff.json()["recipients"] if r["name"] == "Paid By Hand")
+    # The act can't take back someone staff approved; staff can, until the gift moves.
+    assert (await client.delete(f"/api/v1/studio/gift-campaigns/{cid}/recipients/{hand_row['id']}", headers=bearer(token))).status_code == 403
+    prepared = await client.post(
+        f"/api/v1/studio/gift-campaigns/{cid}/recipients/transition", headers=bearer(reviewer), json={"to": "PREPARED", "every": "YET_TO_SEND"},
+    )
+    assert prepared.json()["moved"] == 2
+    stuck = await client.delete(f"/api/v1/studio/gift-campaigns/{cid}/recipients/{hand_row['id']}", headers=bearer(reviewer))
+    assert stuck.status_code == 409
+    # The person who later shows up as a real buyer isn't added twice.
+    assert linked["access_token"]
