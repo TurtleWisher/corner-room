@@ -40,7 +40,7 @@ export function RoomLyricsSwitch({ state, onToggle }: { state: LyricsSwitch; onT
           <span className="lr-switch-thumb" />
         </span>
         <span aria-hidden="true" className="lr-switch-state">
-          {ready ? state.stateText : "Off"}
+          {ready ? state.stateText : "None"}
         </span>
       </button>
       {ready ? null : (

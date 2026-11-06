@@ -111,7 +111,7 @@ export function CampaignNumbersPanel({ releaseId, initialView }: { releaseId: st
         <Timeline view={shown} ordersLabel={words.orders} />
       </section>
 
-      <div className="grid gap-8 lg:grid-cols-3">
+      <div className="grid gap-5 lg:grid-cols-3">
         <Breakdown
           id="numbers-places"
           title="Where on Corner Room"
@@ -345,18 +345,21 @@ function Breakdown({
   rows: string[][];
 }) {
   return (
-    <section aria-labelledby={id}>
+    <section aria-labelledby={id} className="min-w-0">
+      <Card className="h-full p-5">
       <h2 id={id} className="flex items-center gap-2 text-base font-bold text-fg">
-        <Icon aria-hidden="true" className="size-4 text-highlight" /> {title}
+        <Icon aria-hidden="true" className="size-4 shrink-0 text-highlight" /> {title}
       </h2>
       {rows.length === 0 ? (
-        <p className="mt-2 text-sm text-fg-muted">{empty}</p>
+        <p className="mt-3 text-sm text-fg-muted">{empty}</p>
       ) : (
-        <table className="mt-2 w-full text-left text-sm">
-          <thead className="text-fg-muted">
+        // Fixed layout: the name column takes what's left and wraps a long name (an app id, a
+        // long link label); the number columns keep their width, so figures never touch the edge.
+        <table className="mt-3 w-full table-fixed text-left text-sm">
+          <thead className="text-xs text-fg-muted">
             <tr>
               {head.map((h, i) => (
-                <th key={h} className={cn("py-1 font-semibold", i > 0 && "text-right")}>
+                <th key={h} scope="col" className={cn("pb-2 font-semibold", i > 0 && "w-[4.75rem] text-right")}>
                   {h}
                 </th>
               ))}
@@ -366,7 +369,10 @@ function Breakdown({
             {rows.map((r, i) => (
               <tr key={i} className="border-t border-line">
                 {r.map((cell, j) => (
-                  <td key={j} className={cn("py-1.5", j > 0 ? "cr-num text-right" : "pr-3 text-fg")}>
+                  <td
+                    key={j}
+                    className={cn("py-2.5 align-top", j > 0 ? "cr-num whitespace-nowrap pl-2 text-right font-semibold text-fg" : "pr-3 text-fg [overflow-wrap:anywhere]")}
+                  >
                     {cell}
                   </td>
                 ))}
@@ -375,6 +381,7 @@ function Breakdown({
           </tbody>
         </table>
       )}
+      </Card>
     </section>
   );
 }
