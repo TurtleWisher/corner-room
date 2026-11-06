@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const nav = vi.hoisted(() => ({ pathname: "/listen" }));
@@ -386,11 +386,15 @@ describe("ListeningRoom", () => {
     window.localStorage.removeItem("cr.room.lyrics");
   });
 
+  /** The lyric ring is up round the front cover (lyrics arrive from a public read). */
+  async function lyricsShown() {
+    await waitFor(() => expect(document.querySelector(".lr-orbit .lr-lyric")).toBeTruthy());
+  }
+
   it("floats the lyrics round the front cover, in its own 3D space, in the carousel and in focus", async () => {
     await renderSung("t-sung");
-    // Off until the listener turns them on.
-    expect(document.querySelector(".lr-lyric")).toBeNull();
-    await act(async () => (await screen.findByRole("button", { name: "Lyrics" })).click());
+    // On by default (D-ROOM-05): no click needed.
+    await lyricsShown();
     // The ring floats with the front card: both sit in the card's float wrapper.
     const orbit = document.querySelector('.lr-slot[data-offset="0"] .lr-bob > .lr-orbit') as HTMLElement;
     expect(orbit.getAttribute("aria-hidden")).toBe("true");
@@ -414,7 +418,7 @@ describe("ListeningRoom", () => {
 
   it("holds and lights a pointed line, and turning lyrics off takes every line away", async () => {
     await renderSung("t-held");
-    await act(async () => (await screen.findByRole("button", { name: "Lyrics" })).click());
+    await lyricsShown();
     await frames();
     const now = document.querySelector<HTMLElement>('.lr-lyric[data-index="2"]')!;
     const enter = new MouseEvent("pointerover", { bubbles: true });
@@ -439,12 +443,68 @@ describe("ListeningRoom", () => {
     })) as unknown as typeof window.matchMedia;
     try {
       await renderSung("t-still");
-      await act(async () => (await screen.findByRole("button", { name: "Lyrics" })).click());
+      await lyricsShown();
       await frames();
       const shown = [...document.querySelectorAll<HTMLElement>(".lr-lyric")].filter((l) => Number(l.style.opacity) > 0);
       expect(shown.map((l) => l.dataset.index)).toEqual(["2"]);
     } finally {
       window.matchMedia = before;
+    }
+  });
+
+  it("opens with lyrics on, and the switch under the close button and the bar button share one state", async () => {
+    await renderSung("t-switch");
+    await lyricsShown();
+    const sw = await screen.findByRole("switch", { name: /Lyrics/ });
+    const bar = screen.getByRole("button", { name: "Lyrics" });
+    expect(sw.getAttribute("aria-checked")).toBe("true");
+    expect(bar.getAttribute("aria-pressed")).toBe("true");
+    // The switch sits in the top bar, right under the close button.
+    expect(sw.closest(".lr-top-end")?.contains(screen.getByRole("button", { name: "Leave the listening room" }))).toBe(true);
+    await act(async () => sw.click());
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    expect(bar.getAttribute("aria-pressed")).toBe("false");
+    expect(document.querySelector(".lr-orbit")).toBeNull();
+    expect(window.localStorage.getItem("cr.room.lyrics")).toBe("0");
+    await act(async () => bar.click());
+    expect(sw.getAttribute("aria-checked")).toBe("true");
+    expect(window.localStorage.getItem("cr.room.lyrics")).toBe("1");
+  });
+
+  it("remembers a listener who turned lyrics off", async () => {
+    window.localStorage.setItem("cr.room.lyrics", "0");
+    await renderSung("t-off");
+    const sw = await screen.findByRole("switch", { name: /Lyrics/ });
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    expect(document.querySelector(".lr-orbit")).toBeNull();
+  });
+
+  it("says so when a song has no lyrics, with the switch disabled", async () => {
+    renderRoom();
+    await act(async () => screen.getByText("start t2").click());
+    const sw = await screen.findByRole("switch", { name: /Lyrics/ });
+    expect((sw as HTMLButtonElement).disabled).toBe(true);
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByText("No lyrics for this song yet").id).toBe(sw.getAttribute("aria-describedby"));
+  });
+
+  it("asks the browser for full screen once, on the first click in the room, never on the way out", async () => {
+    const request = vi.fn(async () => {});
+    Object.defineProperty(document, "fullscreenEnabled", { value: true, configurable: true });
+    Object.defineProperty(document.documentElement, "requestFullscreen", { value: request, configurable: true });
+    try {
+      renderRoom();
+      await act(async () => screen.getByText("start t2").click());
+      // Leaving is not an invitation to go full screen.
+      await act(async () => screen.getByRole("button", { name: "Leave the listening room" }).click());
+      expect(request).not.toHaveBeenCalled();
+      await act(async () => screen.getByRole("button", { name: "Next track" }).click());
+      expect(request).toHaveBeenCalledTimes(1);
+      await act(async () => screen.getByRole("button", { name: "Previous track" }).click());
+      expect(request).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (document as unknown as Record<string, unknown>).fullscreenEnabled;
+      delete (document.documentElement as unknown as Record<string, unknown>).requestFullscreen;
     }
   });
 

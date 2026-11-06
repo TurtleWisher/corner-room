@@ -255,6 +255,9 @@ async def seed_foundation(session: AsyncSession, settings: Settings) -> None:
         ("presale.cancelled", "The release of {title} was cancelled, so your pre-order is cancelled too. A full refund of your payment is on its way."),
         # D-CAMPAIGN-02 (owner, 2026-10-28): when an artist dispatches a gift campaign's gifts.
         ("gift.dispatched", "Good news from {artist}: a gift for buying {music} is on its way to you ({gift}). It should reach you in the next few days."),
+        # D-CAMPAIGN-03 (owner, 2026-11-06): a collectible that came back, or went missing.
+        ("gift.returned", "Your gift from {artist} ({gift}), for buying {music}, couldn't be delivered and came back. Please check that the delivery address in your Corner Room account is correct. Once your address is right, it will be sent again. We'll email you again when there's news."),
+        ("gift.missing", "Your gift from {artist} ({gift}), for buying {music}, hasn't arrived yet. We're finding out where it is and will email you as soon as we know more. If it doesn't turn up, we'll send another. You don't need to do anything for now."),
         ("refund.completed", "Your refund is complete."),
         ("track.approved", "A track was approved."),
         ("track.released", "A track was released."),

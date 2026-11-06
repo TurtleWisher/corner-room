@@ -229,7 +229,7 @@ async def release_scheduled(ctx: dict) -> int:
 
 
 async def send_scheduled_artist_mail(ctx: dict) -> int:
-    """Artists' emails (D-MAIL-02) and music gifts (D-GIFT-MUSIC-01) approved for a later time go out when it comes."""
+    """Artists' emails (D-MAIL-02), music gifts (D-GIFT-MUSIC-01) and collectibles (D-CAMPAIGN-03) set for a later time go out when it comes."""
     from cornerroom.modules.commerce.application.artist_mail import ArtistMailService
 
     factory = get_session_factory()
@@ -246,7 +246,15 @@ async def send_scheduled_artist_mail(ctx: dict) -> int:
         await session.commit()
     if given:
         log.info("scheduled_music_gifts_given", gifts=given, operation="commerce.music_gifts")
-    return sent + given
+    # Collectibles prepared with a dispatch time leave when it comes (D-CAMPAIGN-03).
+    from cornerroom.modules.commerce.application.gifts import GiftCampaignService
+
+    async with factory() as session:
+        dispatched = await GiftCampaignService(session).dispatch_due()
+        await session.commit()
+    if dispatched:
+        log.info("scheduled_gifts_dispatched", gifts=dispatched, operation="commerce.gift_campaigns")
+    return sent + given + dispatched
 
 
 class WorkerSettings:

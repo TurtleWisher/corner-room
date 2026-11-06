@@ -13,7 +13,27 @@ from sqlalchemy.orm import Mapped, mapped_column
 from cornerroom.infra.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 CAMPAIGN_STATUSES = ("DRAFT", "IN_REVIEW", "ACTIVE", "PAUSED", "ENDED")
-RECIPIENT_STATUSES = ("YET_TO_SEND", "IN_PROCESS", "SENT")
+# Collectible tracking (owner, 2026-11-06, D-CAMPAIGN-03). YET_TO_SEND is "not prepared yet".
+RECIPIENT_STATUSES = ("YET_TO_SEND", "PREPARED", "DISPATCHED", "RECEIVED", "RETURNED", "MISSING")
+
+# Where each gift may go next. Prepared can go back to not prepared; a dispatched gift ends as
+# received, returned or missing; a returned gift is prepared again to send it again; a missing one
+# may still turn up (received) or be prepared again. Received is the end.
+RECIPIENT_TRANSITIONS: dict[str, tuple[str, ...]] = {
+    "YET_TO_SEND": ("PREPARED",),
+    "PREPARED": ("YET_TO_SEND", "DISPATCHED"),
+    "DISPATCHED": ("RECEIVED", "RETURNED", "MISSING"),
+    "RETURNED": ("PREPARED",),
+    "MISSING": ("RECEIVED", "PREPARED"),
+    "RECEIVED": (),
+}
+# Moves that end a delivery, stamped as the gift's outcome.
+OUTCOMES = ("RECEIVED", "RETURNED", "MISSING")
+
+
+def can_move(current: str, target: str) -> bool:
+    """Whether a gift in `current` may be moved to `target`."""
+    return target in RECIPIENT_TRANSITIONS.get(current, ())
 
 
 class GiftCampaign(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -75,8 +95,14 @@ class GiftRecipient(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "gift_recipients"
     __table_args__ = (
-        CheckConstraint("status IN ('YET_TO_SEND','IN_PROCESS','SENT')", name="status"),
+        CheckConstraint(
+            "status IN ('YET_TO_SEND','PREPARED','DISPATCHED','RECEIVED','RETURNED','MISSING')", name="status"
+        ),
         Index("ix_gift_recipients_campaign", "campaign_id", "status"),
+        Index(
+            "ix_gift_recipients_dispatch_due", "dispatch_at",
+            postgresql_where=text("status = 'PREPARED' AND dispatch_at IS NOT NULL"),
+        ),
         Index("uq_gift_recipients_email", "campaign_id", text("lower(email)"), unique=True),
         {"schema": "commerce"},
     )
@@ -91,3 +117,11 @@ class GiftRecipient(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     dispatched_by: Mapped[UUID | None] = mapped_column(nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     sent_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    # D-CAMPAIGN-03: when it was prepared, when it is set to leave (a prepared gift with a time is
+    # dispatched by the worker when it comes), and how its delivery ended.
+    prepared_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    prepared_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    dispatch_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dispatch_set_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    outcome_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    outcome_by: Mapped[UUID | None] = mapped_column(nullable=True)

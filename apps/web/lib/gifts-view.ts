@@ -1,6 +1,7 @@
 /*
- * Gift campaigns in Studio and for staff (owner, 2026-10-28, D-CAMPAIGN-01, D-CAMPAIGN-02): words
- * for each state, and which gifts an action applies to. Pure helpers; the API decides the rules.
+ * Gift campaigns in Studio and for staff (owner, 2026-10-28, D-CAMPAIGN-01, D-CAMPAIGN-02), and the
+ * tracking of each collectible (owner, 2026-11-06, D-CAMPAIGN-03): words for each state, and which
+ * gifts an action applies to. Pure helpers; the API decides the rules and the moves allowed.
  */
 
 import type { GiftCampaign, GiftCampaignStatus, GiftRecipient, GiftRecipientStatus } from "@/features/gifts/api";
@@ -13,18 +14,43 @@ export const CAMPAIGN_STATUS_LABEL: Record<GiftCampaignStatus, string> = {
   ENDED: "Ended",
 };
 
+/** Tracking order, as the tiles and summaries show it. */
+export const RECIPIENT_STATUSES: GiftRecipientStatus[] = ["YET_TO_SEND", "PREPARED", "DISPATCHED", "RECEIVED", "RETURNED", "MISSING"];
+
 export const RECIPIENT_STATUS_LABEL: Record<GiftRecipientStatus, string> = {
-  YET_TO_SEND: "Yet to send",
-  IN_PROCESS: "In process",
-  SENT: "Sent",
+  YET_TO_SEND: "Not prepared",
+  PREPARED: "Prepared",
+  DISPATCHED: "Dispatched",
+  RECEIVED: "Received",
+  RETURNED: "Returned",
+  MISSING: "Missing",
+};
+
+/** The button that moves chosen gifts to a status. */
+export const MOVE_LABEL: Record<GiftRecipientStatus, string> = {
+  YET_TO_SEND: "Mark not prepared",
+  PREPARED: "Mark prepared",
+  DISPATCHED: "Dispatch",
+  RECEIVED: "Mark received",
+  RETURNED: "Mark returned",
+  MISSING: "Mark missing",
+};
+
+/** Moves that email the buyer (owner, 2026-11-06), said beside the buttons before they are pressed. */
+export const MOVE_TELLS_BUYER: Partial<Record<GiftRecipientStatus, string>> = {
+  DISPATCHED: "Dispatching emails each buyer that their gift is on its way and should reach them in the next few days.",
+  RETURNED:
+    "Marking returned emails each buyer that the gift came back, asks them to check their delivery address and says it will be sent again.",
+  MISSING: "Marking missing emails each buyer that the gift hasn't arrived yet and that another will be sent if it doesn't turn up.",
 };
 
 export const SENDER_LABEL = { ARTIST: "You send the gifts", CORNER_ROOM: "Corner Room sends the gifts" } as const;
 
-/** "12 gifts: 5 sent, 3 in process, 4 yet to send". */
+/** "12 gifts: 3 not prepared, 4 prepared, 5 received" (statuses with none are left out). */
 export function countsLine(c: GiftCampaign["counts"]): string {
   if (!c.TOTAL) return "No one has earned this gift yet";
-  return `${c.TOTAL} ${c.TOTAL === 1 ? "gift" : "gifts"}: ${c.SENT} sent, ${c.IN_PROCESS} in process, ${c.YET_TO_SEND} yet to send`;
+  const parts = RECIPIENT_STATUSES.filter((s) => (c[s] ?? 0) > 0).map((s) => `${c[s]} ${RECIPIENT_STATUS_LABEL[s].toLowerCase()}`);
+  return `${c.TOTAL} ${c.TOTAL === 1 ? "gift" : "gifts"}: ${parts.join(", ")}`;
 }
 
 /** What the campaign covers, for a list: "Chaya Pore" or "Chaya Pore and 2 more". */
@@ -34,11 +60,37 @@ export function worksLine(works: { title?: string }[]): string {
   return works.length === 1 ? first : `${first} and ${works.length - 1} more`;
 }
 
-/** The chosen gifts an action can apply to: dispatch takes those yet to send, "sent" takes the rest. */
-export function actionable(recipients: GiftRecipient[], chosen: Set<string>, action: "dispatch" | "sent"): string[] {
-  return recipients
-    .filter((r) => chosen.has(r.id) && (action === "dispatch" ? r.status === "YET_TO_SEND" : r.status !== "SENT"))
-    .map((r) => r.id);
+export type GiftTransitions = Partial<Record<GiftRecipientStatus, GiftRecipientStatus[]>>;
+
+/** Whether a gift in `from` may move to `to`, by the API's own list. */
+export function canMove(transitions: GiftTransitions, from: GiftRecipientStatus, to: GiftRecipientStatus): boolean {
+  return (transitions[from] ?? []).includes(to);
+}
+
+/** The chosen gifts that can move to `to` (others are left as they are). */
+export function actionable(recipients: GiftRecipient[], chosen: Set<string>, to: GiftRecipientStatus, transitions: GiftTransitions): string[] {
+  return recipients.filter((r) => chosen.has(r.id) && canMove(transitions, r.status, to)).map((r) => r.id);
+}
+
+/** The moves the chosen gifts allow, in tracking order, each with the gifts it applies to. */
+export function movesFor(recipients: GiftRecipient[], chosen: Set<string>, transitions: GiftTransitions): { to: GiftRecipientStatus; ids: string[] }[] {
+  return RECIPIENT_STATUSES.map((to) => ({ to, ids: actionable(recipients, chosen, to, transitions) })).filter((m) => m.ids.length > 0);
+}
+
+/** Whether a dispatch time is still to come. */
+export function isLater(iso: string | null, now: Date): boolean {
+  return iso !== null && new Date(iso).getTime() > now.getTime();
+}
+
+/** The date a row shows beside its status: when it ended, left, will leave or was prepared. */
+export function trackedSince(r: GiftRecipient): { label: string; at: string } | null {
+  if (r.outcome_at && (r.status === "RECEIVED" || r.status === "RETURNED" || r.status === "MISSING")) {
+    return { label: RECIPIENT_STATUS_LABEL[r.status], at: r.outcome_at };
+  }
+  if (r.status === "DISPATCHED" && r.dispatched_at) return { label: "Left", at: r.dispatched_at };
+  if (r.status === "PREPARED" && r.dispatch_at) return { label: "Leaves", at: r.dispatch_at };
+  if (r.status === "PREPARED" && r.prepared_at) return { label: "Prepared", at: r.prepared_at };
+  return null;
 }
 
 /** Whether staff are looking at a new campaign or a change to a live one. */

@@ -1,25 +1,25 @@
 "use client";
 
 /*
- * One gift campaign (owner, 2026-10-28, D-CAMPAIGN-02): how many gifts are sent, in process and yet
- * to send; the buyers who earned it; dispatching (each buyer is emailed that it is on its way) and
- * marking sent; pausing, restarting and changing it (changes to a live campaign wait for Corner
- * Room). Who sees buyers' details and who may dispatch is decided by the API.
+ * One gift campaign (owner, 2026-10-28, D-CAMPAIGN-02), for the artist and for Corner Room staff:
+ * the buyers who earned it and the tracking of each collectible (owner, 2026-11-06, D-CAMPAIGN-03:
+ * not prepared, prepared, dispatched now or at a time, received, returned, missing); pausing,
+ * restarting and changing it (changes to a live campaign wait for Corner Room). Who sees buyers'
+ * details and who may update the gifts is decided by the API.
  */
 
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, CircleAlert, Pause, Play, Send, Truck, Undo2 } from "lucide-react";
+import { ArrowLeft, CircleAlert, Pause, Play, Send, Undo2 } from "lucide-react";
 
-import { Button, ButtonLink, Card, DateTime, ErrorState, Skeleton } from "@/components/ds";
+import { Button, ButtonLink, Card, ErrorState, Skeleton } from "@/components/ds";
 import { CampaignForm } from "@/components/gifts/campaign-form";
+import { CollectibleTracking } from "@/components/gifts/collectible-tracking";
 import { AccountPage } from "@/components/shell/account-page";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import {
-  dispatchGifts,
   fetchGiftCampaign,
-  markGiftsSent,
   pauseGiftCampaign,
   resumeGiftCampaign,
   submitGiftCampaign,
@@ -28,31 +28,11 @@ import {
   type GiftCampaignDetail,
 } from "@/features/gifts/api";
 import { ApiError } from "@/lib/api/client";
-import { actionable, CAMPAIGN_STATUS_LABEL, RECIPIENT_STATUS_LABEL, SENDER_LABEL, worksLine } from "@/lib/gifts-view";
-
-function Tiles({ c }: { c: GiftCampaignDetail }) {
-  const tiles = [
-    { label: "Yet to send", value: c.counts.YET_TO_SEND },
-    { label: "In process", value: c.counts.IN_PROCESS },
-    { label: "Sent", value: c.counts.SENT },
-    { label: "Everyone who earned it", value: c.counts.TOTAL },
-  ];
-  return (
-    <dl className="grid gap-3 sm:grid-cols-4">
-      {tiles.map((t) => (
-        <Card key={t.label} className="p-4">
-          <dt className="text-sm text-fg-muted">{t.label}</dt>
-          <dd className="cr-num mt-1 text-3xl font-bold text-fg">{t.value}</dd>
-        </Card>
-      ))}
-    </dl>
-  );
-}
+import { CAMPAIGN_STATUS_LABEL, SENDER_LABEL, worksLine } from "@/lib/gifts-view";
 
 function Campaign({ id }: { id: string }) {
   const data = useAsync(() => fetchGiftCampaign(id), [id]);
   const [override, setOverride] = useState<GiftCampaignDetail | null>(null);
-  const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -68,18 +48,12 @@ function Campaign({ id }: { id: string }) {
     setError(null);
     try {
       setOverride(await fn());
-      setChosen(new Set());
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "That didn't go through. Please try again.");
     } finally {
       setBusy(null);
     }
   }
-
-  const toDispatch = actionable(c.recipients, chosen, "dispatch");
-  const toSend = actionable(c.recipients, chosen, "sent");
-  const allIds = c.recipients.map((r) => r.id);
-  const pick = (rid: string) => setChosen((s) => (s.has(rid) ? new Set([...s].filter((x) => x !== rid)) : new Set([...s, rid])));
 
   return (
     <div className="grid gap-6">
@@ -142,84 +116,7 @@ function Campaign({ id }: { id: string }) {
         </Card>
       ) : null}
 
-      {c.status !== "DRAFT" && c.status !== "IN_REVIEW" ? (
-        <>
-          <Tiles c={c} />
-          <section aria-labelledby="recipients-title">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 id="recipients-title" className="text-lg font-bold text-fg">
-                Who gets it
-              </h3>
-              {c.can_dispatch ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" disabled={!toDispatch.length} busy={busy === "dispatch"} onClick={() => void run("dispatch", () => dispatchGifts(c.id, toDispatch))}>
-                    <Truck aria-hidden="true" /> Dispatch {toDispatch.length || ""} and email them
-                  </Button>
-                  <Button size="sm" variant="secondary" disabled={!toSend.length} busy={busy === "sent"} onClick={() => void run("sent", () => markGiftsSent(c.id, toSend))}>
-                    Mark {toSend.length || ""} as sent
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-sm text-fg-muted">Corner Room&apos;s team sends these gifts and keeps this list up to date.</p>
-              )}
-            </div>
-            {c.can_dispatch ? (
-              <p className="mt-1 text-sm text-fg-muted">
-                Dispatching tells each buyer by email that their gift is on its way and should reach them in the next few days.
-              </p>
-            ) : null}
-            {c.recipients.length === 0 ? (
-              <p className="mt-3 text-sm text-fg">No one has earned this gift yet. Buyers appear here once their payment is confirmed.</p>
-            ) : (
-              <div className="mt-3 overflow-x-auto">
-                <table className="w-full min-w-[40rem] text-left text-sm">
-                  <thead className="text-xs text-fg-muted">
-                    <tr className="border-b border-line">
-                      {c.can_dispatch ? (
-                        <th className="py-2 pr-3">
-                          <input
-                            type="checkbox"
-                            aria-label="Choose everyone"
-                            checked={chosen.size === allIds.length && allIds.length > 0}
-                            onChange={(e) => setChosen(e.target.checked ? new Set(allIds) : new Set())}
-                          />
-                        </th>
-                      ) : null}
-                      <th className="py-2 pr-3 font-semibold">Buyer</th>
-                      {c.shows_contact ? <th className="py-2 pr-3 font-semibold">Phone</th> : null}
-                      {c.shows_contact ? <th className="py-2 pr-3 font-semibold">Address</th> : null}
-                      <th className="py-2 pr-3 font-semibold">Gift</th>
-                      <th className="py-2 font-semibold">Since</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {c.recipients.map((r, i) => (
-                      <tr key={r.id} className="border-b border-line align-top">
-                        {c.can_dispatch ? (
-                          <td className="py-2 pr-3">
-                            <input type="checkbox" aria-label={`Choose ${r.name ?? `buyer ${i + 1}`}`} checked={chosen.has(r.id)} onChange={() => pick(r.id)} />
-                          </td>
-                        ) : null}
-                        <td className="py-2 pr-3 text-fg">
-                          {r.name ?? (c.shows_contact ? "No name given" : `Buyer ${i + 1}`)}
-                          {r.email ? <span className="block text-xs text-fg-muted">{r.email}</span> : null}
-                          {!r.has_account ? <span className="block text-xs text-fg-muted">Pre-sale, no account yet</span> : null}
-                        </td>
-                        {c.shows_contact ? <td className="py-2 pr-3 text-fg">{r.phone ?? <span className="text-fg-muted">None</span>}</td> : null}
-                        {c.shows_contact ? <td className="max-w-72 py-2 pr-3 text-fg">{r.address ?? <span className="text-fg-muted">None</span>}</td> : null}
-                        <td className="py-2 pr-3 font-semibold text-fg">{RECIPIENT_STATUS_LABEL[r.status]}</td>
-                        <td className="py-2 text-fg-muted">
-                          {r.sent_at ? <DateTime value={r.sent_at} format="date" /> : r.dispatched_at ? <DateTime value={r.dispatched_at} format="date" /> : "Not yet"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        </>
-      ) : null}
+      {c.status !== "DRAFT" && c.status !== "IN_REVIEW" ? <CollectibleTracking c={c} onChange={setOverride} /> : null}
       {error ? (
         <p role="alert" className="flex items-center gap-2 text-sm text-danger">
           <CircleAlert aria-hidden="true" className="size-4" /> {error}

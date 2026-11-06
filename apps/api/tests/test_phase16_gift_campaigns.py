@@ -13,7 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from cornerroom.infra.db import get_engine
+from cornerroom.kernel.events import GIFT_MARKED_MISSING, GIFT_RETURNED
 from cornerroom.modules.commerce.application.gifts import build_gift_email, in_periods
+from cornerroom.modules.commerce.domain.gifts import RECIPIENT_STATUSES, RECIPIENT_TRANSITIONS, can_move
 from cornerroom.modules.notifications.domain.models import Notification
 from cornerroom.worker import drain_outbox
 from tests.auth_helpers import bearer, register_and_login
@@ -36,6 +38,34 @@ def test_gift_email_for_buyers_without_an_account() -> None:
     assert subject == "A gift is on its way"
     assert "MIZULS" in body and "signed poster" in body and "Chaya Pore" in body and "next few days" in body
     assert "https://www.cornerroom.live" in body
+
+
+def test_collectible_moves() -> None:
+    """D-CAMPAIGN-03: not prepared -> prepared -> dispatched -> received, returned or missing."""
+    assert can_move("YET_TO_SEND", "PREPARED") and can_move("PREPARED", "YET_TO_SEND")
+    assert can_move("PREPARED", "DISPATCHED")
+    assert not can_move("YET_TO_SEND", "DISPATCHED")  # prepare first
+    for outcome in ("RECEIVED", "RETURNED", "MISSING"):
+        assert can_move("DISPATCHED", outcome)
+    assert can_move("RETURNED", "PREPARED") and can_move("MISSING", "RECEIVED") and can_move("MISSING", "PREPARED")
+    assert RECIPIENT_TRANSITIONS["RECEIVED"] == ()
+    assert set(RECIPIENT_TRANSITIONS) == set(RECIPIENT_STATUSES)
+    assert all(t in RECIPIENT_STATUSES for targets in RECIPIENT_TRANSITIONS.values() for t in targets)
+
+
+def test_returned_and_missing_emails() -> None:
+    subject, body = build_gift_email(
+        artist="MIZULS", gift="a signed poster", music="Chaya Pore", web_base_url="https://www.cornerroom.live/", event_type=GIFT_RETURNED
+    )
+    assert subject == "Your gift couldn't be delivered"
+    assert body.startswith("Your gift from MIZULS (a signed poster), for buying Chaya Pore, couldn't be delivered")
+    assert "delivery address you gave us" in body and "it will be sent again" in body
+    subject, body = build_gift_email(
+        artist="MIZULS", gift="a signed poster", music="Chaya Pore", web_base_url="https://www.cornerroom.live/", event_type=GIFT_MARKED_MISSING
+    )
+    assert subject == "Your gift is taking longer than expected"
+    assert body.startswith("Your gift from MIZULS (a signed poster), for buying Chaya Pore, hasn't arrived yet")
+    assert "we'll send another" in body and "You don't need to do anything" in body
 
 
 @pytest.mark.postgres
@@ -84,7 +114,7 @@ async def test_gift_campaign_review_pause_tracking_and_dispatch(client: AsyncCli
     fan = await register_and_login(client, "gift-fan@example.com")
     await _buy(client, fan["access_token"], offer["id"])
     detail = (await client.get(f"/api/v1/studio/gift-campaigns/{cid}", headers=bearer(token))).json()
-    assert detail["counts"] == {"YET_TO_SEND": 1, "IN_PROCESS": 0, "SENT": 0, "TOTAL": 1}
+    assert detail["counts"] == {"YET_TO_SEND": 1, "PREPARED": 0, "DISPATCHED": 0, "RECEIVED": 0, "RETURNED": 0, "MISSING": 0, "TOTAL": 1, "SCHEDULED": 0}
     row = detail["recipients"][0]
     # The artist sends these gifts, so sees where to post them, but not the email.
     assert detail["shows_contact"] is True and row["address"] and row["phone"] and "email" not in {k for k, v in row.items() if v}
@@ -106,11 +136,27 @@ async def test_gift_campaign_review_pause_tracking_and_dispatch(client: AsyncCli
     detail = (await client.get(f"/api/v1/studio/gift-campaigns/{cid}", headers=bearer(token))).json()
     assert detail["counts"]["TOTAL"] == 2  # the paused-time buyer still doesn't count
 
-    # Dispatch one: it is in process and the buyer is told; then sent.
+    # Track one (D-CAMPAIGN-03): it can't leave before it is prepared; "mark all prepared" prepares
+    # everyone not prepared yet; dispatching tells the buyer; then received.
     fan_row = next(r for r in (await client.get(f"/api/v1/studio/gift-campaigns/{cid}", headers=bearer(reviewer))).json()["recipients"] if r["email"] == "gift-fan@example.com")
-    sent = await client.post(f"/api/v1/studio/gift-campaigns/{cid}/dispatch", headers=bearer(token), json={"recipient_ids": [fan_row["id"]]})
+    move = f"/api/v1/studio/gift-campaigns/{cid}/recipients/transition"
+    early_out = await client.post(move, headers=bearer(token), json={"to": "DISPATCHED", "recipient_ids": [fan_row["id"]]})
+    assert early_out.status_code == 200 and early_out.json()["moved"] == 0 and early_out.json()["skipped"] == 1
+    prepared = await client.post(move, headers=bearer(token), json={"to": "PREPARED", "every": "YET_TO_SEND"})
+    assert prepared.status_code == 200, prepared.text
+    assert prepared.json()["moved"] == 2 and prepared.json()["counts"] == {"YET_TO_SEND": 0, "PREPARED": 2, "DISPATCHED": 0, "RECEIVED": 0, "RETURNED": 0, "MISSING": 0, "TOTAL": 2, "SCHEDULED": 0}
+    assert prepared.json()["transitions"]["PREPARED"] == ["YET_TO_SEND", "DISPATCHED"]
+    # A dispatch time already gone is refused; a later one schedules it (still prepared).
+    gone = await client.post(move, headers=bearer(token), json={"to": "DISPATCHED", "recipient_ids": [fan_row["id"]], "dispatch_at": "2020-01-01T00:00:00+00:00"})
+    assert gone.status_code == 422 and gone.json()["code"] == "DISPATCH_TIME_PASSED"
+    later = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
+    scheduled = await client.post(move, headers=bearer(token), json={"to": "DISPATCHED", "recipient_ids": [fan_row["id"]], "dispatch_at": later})
+    assert scheduled.json()["counts"]["SCHEDULED"] == 1 and scheduled.json()["counts"]["PREPARED"] == 2
+    assert next(r for r in scheduled.json()["recipients"] if r["id"] == fan_row["id"])["dispatch_at"]
+    # Dispatch now instead: the buyer is told.
+    sent = await client.post(move, headers=bearer(token), json={"to": "DISPATCHED", "recipient_ids": [fan_row["id"]]})
     assert sent.status_code == 200, sent.text
-    assert sent.json()["counts"] == {"YET_TO_SEND": 1, "IN_PROCESS": 1, "SENT": 0, "TOTAL": 2}
+    assert sent.json()["counts"] == {"YET_TO_SEND": 0, "PREPARED": 1, "DISPATCHED": 1, "RECEIVED": 0, "RETURNED": 0, "MISSING": 0, "TOTAL": 2, "SCHEDULED": 0}
     while await drain_outbox({}):
         pass
     factory = async_sessionmaker(get_engine(), expire_on_commit=False)
@@ -118,8 +164,22 @@ async def test_gift_campaign_review_pause_tracking_and_dispatch(client: AsyncCli
         note = (await session.execute(select(Notification).where(Notification.type == "gift.dispatched"))).scalars().one()
     assert str(note.user_id) == fan["user"]["id"]
     assert "Gift Band" in note.body and "signed poster" in note.body and "next few days" in note.body
-    done = await client.post(f"/api/v1/studio/gift-campaigns/{cid}/sent", headers=bearer(token), json={"recipient_ids": [fan_row["id"]]})
-    assert done.json()["counts"] == {"YET_TO_SEND": 1, "IN_PROCESS": 0, "SENT": 1, "TOTAL": 2}
+    # Missing tells the buyer; then it turns up after all.
+    missing = await client.post(move, headers=bearer(token), json={"to": "MISSING", "recipient_ids": [fan_row["id"]]})
+    assert missing.json()["counts"]["MISSING"] == 1
+    while await drain_outbox({}):
+        pass
+    async with factory() as session:
+        note = (await session.execute(select(Notification).where(Notification.type == "gift.missing"))).scalars().one()
+    assert str(note.user_id) == fan["user"]["id"] and "we'll send another" in note.body
+    done = await client.post(move, headers=bearer(token), json={"to": "RECEIVED", "recipient_ids": [fan_row["id"]]})
+    assert done.json()["counts"] == {"YET_TO_SEND": 0, "PREPARED": 1, "DISPATCHED": 0, "RECEIVED": 1, "RETURNED": 0, "MISSING": 0, "TOTAL": 2, "SCHEDULED": 0}
+    assert next(r for r in done.json()["recipients"] if r["id"] == fan_row["id"])["outcome_at"]
+
+    # The release's collectibles, for its numbers page: the team sees this campaign's counts.
+    on_release = await client.get(f"/api/v1/studio/releases/{release_id}/collectibles", headers=bearer(token))
+    assert on_release.status_code == 200 and [c["id"] for c in on_release.json()] == [cid]
+    assert on_release.json()[0]["counts"]["RECEIVED"] == 1
 
     # A campaign Corner Room sends: the artist sees counts only and can't dispatch.
     team = await client.post(
@@ -133,9 +193,13 @@ async def test_gift_campaign_review_pause_tracking_and_dispatch(client: AsyncCli
     seen = (await client.get(f"/api/v1/studio/gift-campaigns/{tid}", headers=bearer(token))).json()
     assert seen["shows_contact"] is False and seen["can_dispatch"] is False
     assert all(r.get("address") is None and r.get("name") is None for r in seen["recipients"])
-    blocked = await client.post(f"/api/v1/studio/gift-campaigns/{tid}/dispatch", headers=bearer(token), json={"recipient_ids": [seen["recipients"][0]["id"]]})
+    blocked = await client.post(
+        f"/api/v1/studio/gift-campaigns/{tid}/recipients/transition", headers=bearer(token),
+        json={"to": "PREPARED", "recipient_ids": [seen["recipients"][0]["id"]]},
+    )
     assert blocked.status_code == 403
     staff_view = (await client.get(f"/api/v1/studio/gift-campaigns/{tid}", headers=bearer(reviewer))).json()
     assert staff_view["can_dispatch"] is True and staff_view["recipients"][0]["email"]
     outsider = await register_and_login(client, "gift-outsider@example.com")
     assert (await client.get(f"/api/v1/studio/gift-campaigns/{cid}", headers=bearer(outsider["access_token"]))).status_code == 404
+    assert (await client.get(f"/api/v1/studio/releases/{release_id}/collectibles", headers=bearer(outsider["access_token"]))).status_code == 404

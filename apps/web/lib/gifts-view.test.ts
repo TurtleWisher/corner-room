@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { GiftRecipient } from "@/features/gifts/api";
 
-import { actionable, countsLine, reviewKind, worksLine } from "./gifts-view";
+import { actionable, countsLine, isLater, movesFor, reviewKind, trackedSince, worksLine, type GiftTransitions } from "./gifts-view";
 
 describe("gift campaign words (owner, 2026-10-28)", () => {
-  it("sums up the gifts", () => {
-    expect(countsLine({ YET_TO_SEND: 0, IN_PROCESS: 0, SENT: 0, TOTAL: 0 })).toBe("No one has earned this gift yet");
-    expect(countsLine({ YET_TO_SEND: 4, IN_PROCESS: 3, SENT: 5, TOTAL: 12 })).toBe("12 gifts: 5 sent, 3 in process, 4 yet to send");
-    expect(countsLine({ YET_TO_SEND: 1, IN_PROCESS: 0, SENT: 0, TOTAL: 1 })).toBe("1 gift: 0 sent, 0 in process, 1 yet to send");
+  it("sums up the gifts, leaving out statuses with none", () => {
+    const zero = { YET_TO_SEND: 0, PREPARED: 0, DISPATCHED: 0, RECEIVED: 0, RETURNED: 0, MISSING: 0, TOTAL: 0, SCHEDULED: 0 };
+    expect(countsLine(zero)).toBe("No one has earned this gift yet");
+    expect(countsLine({ ...zero, YET_TO_SEND: 3, PREPARED: 4, RECEIVED: 5, TOTAL: 12 })).toBe("12 gifts: 3 not prepared, 4 prepared, 5 received");
+    expect(countsLine({ ...zero, MISSING: 1, TOTAL: 1 })).toBe("1 gift: 1 missing");
   });
 
   it("names the music it covers", () => {
@@ -24,13 +25,45 @@ describe("gift campaign words (owner, 2026-10-28)", () => {
   });
 });
 
-describe("actionable", () => {
+describe("tracking moves (D-CAMPAIGN-03)", () => {
+  const t: GiftTransitions = {
+    YET_TO_SEND: ["PREPARED"],
+    PREPARED: ["YET_TO_SEND", "DISPATCHED"],
+    DISPATCHED: ["RECEIVED", "RETURNED", "MISSING"],
+    RETURNED: ["PREPARED"],
+    MISSING: ["RECEIVED", "PREPARED"],
+    RECEIVED: [],
+  };
   const r = (id: string, status: GiftRecipient["status"]): GiftRecipient => ({ id, status, has_account: true });
-  const all = [r("a", "YET_TO_SEND"), r("b", "IN_PROCESS"), r("c", "SENT"), r("d", "YET_TO_SEND")];
-  it("dispatches only gifts yet to send, and marks sent only those not sent", () => {
-    const chosen = new Set(["a", "b", "c"]);
-    expect(actionable(all, chosen, "dispatch")).toEqual(["a"]);
-    expect(actionable(all, chosen, "sent")).toEqual(["a", "b"]);
-    expect(actionable(all, new Set(), "dispatch")).toEqual([]);
+  const all = [r("a", "YET_TO_SEND"), r("b", "PREPARED"), r("c", "DISPATCHED"), r("d", "RECEIVED"), r("e", "MISSING")];
+
+  it("applies a move only to the chosen gifts that can make it, by the API's list", () => {
+    const chosen = new Set(["a", "b", "c", "d"]);
+    expect(actionable(all, chosen, "PREPARED", t)).toEqual(["a"]);
+    expect(actionable(all, chosen, "DISPATCHED", t)).toEqual(["b"]);
+    expect(actionable(all, chosen, "RECEIVED", t)).toEqual(["c"]);
+    expect(actionable(all, new Set(), "PREPARED", t)).toEqual([]);
+  });
+
+  it("offers the moves the chosen gifts allow, in tracking order", () => {
+    expect(movesFor(all, new Set(["a", "e"]), t).map((m) => [m.to, m.ids])).toEqual([
+      ["PREPARED", ["a", "e"]],
+      ["RECEIVED", ["e"]],
+    ]);
+    expect(movesFor(all, new Set(["d"]), t)).toEqual([]);
+  });
+
+  it("checks a dispatch time is still to come", () => {
+    expect(isLater("2026-11-07T10:30:00+06:00", new Date("2026-11-01T00:00:00Z"))).toBe(true);
+    expect(isLater("2026-11-07T10:30:00+06:00", new Date("2026-12-01T00:00:00Z"))).toBe(false);
+    expect(isLater(null, new Date())).toBe(false);
+  });
+
+  it("shows the date that matters for each status", () => {
+    expect(trackedSince({ ...r("x", "PREPARED"), prepared_at: "2026-11-06T10:00:00Z" })).toEqual({ label: "Prepared", at: "2026-11-06T10:00:00Z" });
+    expect(trackedSince({ ...r("x", "PREPARED"), prepared_at: "2026-11-06T10:00:00Z", dispatch_at: "2026-11-08T09:00:00Z" })?.label).toBe("Leaves");
+    expect(trackedSince({ ...r("x", "DISPATCHED"), dispatched_at: "2026-11-07T09:00:00Z" })?.label).toBe("Left");
+    expect(trackedSince({ ...r("x", "RETURNED"), outcome_at: "2026-11-09T09:00:00Z" })?.label).toBe("Returned");
+    expect(trackedSince(r("x", "YET_TO_SEND"))).toBeNull();
   });
 });

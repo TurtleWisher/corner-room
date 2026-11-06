@@ -85,17 +85,24 @@ class CampaignOut(BaseModel):
     review_note: str | None
     submitted_at: datetime | None
     approved_at: datetime | None
-    # YET_TO_SEND, IN_PROCESS, SENT and TOTAL.
+    # One count per collectible status (YET_TO_SEND is "not prepared yet", then PREPARED,
+    # DISPATCHED, RECEIVED, RETURNED, MISSING), TOTAL, and SCHEDULED (prepared with a dispatch
+    # time set; already inside PREPARED).
     counts: dict[str, int]
 
 
 class RecipientOut(BaseModel):
     id: UUID
-    # YET_TO_SEND, IN_PROCESS (dispatched, the buyer was told) or SENT.
+    # YET_TO_SEND (not prepared yet), PREPARED, DISPATCHED (the buyer was told), RECEIVED, RETURNED
+    # or MISSING (D-CAMPAIGN-03).
     status: str
     has_account: bool
+    prepared_at: datetime | None = None
+    # Set on a prepared gift that will be dispatched at this time.
+    dispatch_at: datetime | None = None
     dispatched_at: datetime | None
-    sent_at: datetime | None
+    # When it was received, returned or marked missing.
+    outcome_at: datetime | None = None
     # Staff only.
     email: str | None = None
     # Staff, and the artist when they send the gifts themselves.
@@ -106,13 +113,28 @@ class RecipientOut(BaseModel):
 
 class CampaignDetailOut(CampaignOut):
     viewer_role: Literal["owner", "staff"]
+    # Whether this viewer may update the gifts (staff always; the artist when they send them).
     can_dispatch: bool
     shows_contact: bool
+    # Where each status may go next.
+    transitions: dict[str, list[str]] = Field(default_factory=dict)
     recipients: list[RecipientOut]
+    # After an update: how many gifts moved, and how many couldn't make that move.
+    moved: int | None = None
+    skipped: int | None = None
 
 
-class RecipientsIn(BaseModel):
-    recipient_ids: list[UUID] = Field(min_length=1, max_length=500)
+RecipientStatus = Literal["YET_TO_SEND", "PREPARED", "DISPATCHED", "RECEIVED", "RETURNED", "MISSING"]
+
+
+class RecipientsTransitionIn(BaseModel):
+    """Move chosen gifts, or every gift in one status (`every`), to `to`. Dispatching with
+    `dispatch_at` (a future time with its zone) schedules it instead of sending now."""
+
+    to: RecipientStatus
+    recipient_ids: list[UUID] | None = Field(default=None, max_length=500)
+    every: RecipientStatus | None = None
+    dispatch_at: datetime | None = None
 
 
 class ReviewIn(BaseModel):
@@ -169,15 +191,21 @@ async def resume_campaign(campaign_id: UUID, ctx: Ctx, svc: Svc) -> CampaignDeta
     return CampaignDetailOut(**await svc.resume(ctx, campaign_id))
 
 
-@router.post("/studio/gift-campaigns/{campaign_id}/dispatch", response_model=CampaignDetailOut)
-async def dispatch_gifts(campaign_id: UUID, body: RecipientsIn, ctx: Ctx, svc: Svc) -> CampaignDetailOut:
-    """Gifts leaving now: each chosen buyer is told by email (and in-app) that it is on its way."""
-    return CampaignDetailOut(**await svc.dispatch(ctx, campaign_id, body.recipient_ids))
+@router.post("/studio/gift-campaigns/{campaign_id}/recipients/transition", response_model=CampaignDetailOut)
+async def track_gifts(campaign_id: UUID, body: RecipientsTransitionIn, ctx: Ctx, svc: Svc) -> CampaignDetailOut:
+    """Collectible tracking (D-CAMPAIGN-03): prepare, dispatch now or at a time (the buyer is told it
+    is on its way), then received, returned or missing (returned and missing tell the buyer)."""
+    return CampaignDetailOut(
+        **await svc.transition(
+            ctx, campaign_id, to=body.to, ids=body.recipient_ids, every=body.every, dispatch_at=body.dispatch_at
+        )
+    )
 
 
-@router.post("/studio/gift-campaigns/{campaign_id}/sent", response_model=CampaignDetailOut)
-async def mark_gifts_sent(campaign_id: UUID, body: RecipientsIn, ctx: Ctx, svc: Svc) -> CampaignDetailOut:
-    return CampaignDetailOut(**await svc.mark_sent(ctx, campaign_id, body.recipient_ids))
+@router.get("/studio/releases/{release_id}/collectibles", response_model=list[CampaignOut])
+async def release_collectibles(release_id: UUID, ctx: Ctx, svc: Svc) -> list[CampaignOut]:
+    """Collectible campaigns covering this release, with how far their gifts have got."""
+    return [CampaignOut(**c) for c in await svc.for_release(ctx, release_id)]
 
 
 @router.get("/catalog-intake/gift-campaigns", response_model=list[CampaignOut])

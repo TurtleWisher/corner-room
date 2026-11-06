@@ -54,6 +54,9 @@ import {
   type RingPlane,
 } from "@/lib/lyrics-view";
 import { creditHref } from "@/lib/music-view";
+import { LYRICS_PREF, lyricsChoice, lyricsOnFrom, lyricsSwitch } from "@/lib/room-controls-view";
+import { useRoomFullscreen } from "@/components/music/room-fullscreen";
+import { RoomLyricsSwitch } from "@/components/music/room-lyrics-switch";
 import { clock, durationLabel } from "@/lib/player-model";
 import { cn } from "@/lib/utils";
 
@@ -329,15 +332,14 @@ export function RoomTitle({ track, className }: { track: PlayerTrack; className:
 }
 
 /**
- * Floating lyrics (owner, 2026-10-27, D-LYRICS-01): off until the listener turns them on with the
- * small button by the volume. Lines float in 3D around the playing cover (owner, 2026-11-01).
+ * Floating lyrics (owner, 2026-10-27, D-LYRICS-01): on by default since 2026-11-06 (D-ROOM-05),
+ * with a switch under the close button and the small button by the volume. Lines float in 3D around the playing cover (owner, 2026-11-01).
  * When staff have timed the song (D-LYRICS-03) each line arrives as it is sung; otherwise the
  * lines are paced across the song, an estimate. Decorative here: the song page has the full
  * lyrics for reading and screen readers.
  */
-type RoomLyrics = { trackId: string | null; lines: string[]; times: number[] | null; on: boolean; toggle: () => void };
-const LyricsContext = createContext<RoomLyrics>({ trackId: null, lines: [], times: null, on: false, toggle: () => {} });
-const LYRICS_PREF = "cr.room.lyrics";
+type RoomLyrics = { trackId: string | null; loaded: boolean; lines: string[]; times: number[] | null; on: boolean; toggle: () => void };
+const LyricsContext = createContext<RoomLyrics>({ trackId: null, loaded: false, lines: [], times: null, on: false, toggle: () => {} });
 type LoadedLyrics = { text: string | null; timingsMs: number[] | null };
 const lyricsCache = new Map<string, Promise<LoadedLyrics>>();
 
@@ -354,18 +356,20 @@ function loadLyrics(trackId: string): Promise<LoadedLyrics> {
 }
 
 function useRoomLyrics(trackId: string | null): RoomLyrics {
-  const [on, setOn] = useState(false);
+  // On by default (owner, 2026-11-06, D-ROOM-05): listeners could not find them behind the small
+  // button. A listener who turns them off is remembered in this browser.
+  const [on, setOn] = useState(true);
   useEffect(() => {
     try {
-      setOn(window.localStorage.getItem(LYRICS_PREF) === "1");
+      setOn(lyricsOnFrom(window.localStorage.getItem(LYRICS_PREF)));
     } catch {
-      // Storage blocked: lyrics stay off until turned on.
+      // Storage blocked: a first visit, so lyrics stay on.
     }
   }, []);
   const toggle = useCallback(() => {
     setOn((was) => {
       try {
-        window.localStorage.setItem(LYRICS_PREF, was ? "0" : "1");
+        window.localStorage.setItem(LYRICS_PREF, lyricsChoice(!was));
       } catch {
         // Remembering is a convenience only.
       }
@@ -379,7 +383,13 @@ function useRoomLyrics(trackId: string | null): RoomLyrics {
   const timingsMs = mine?.timingsMs ?? null;
   const lines = useMemo(() => lyricLines(text), [text]);
   const times = useMemo(() => lyricTimes(lines.length, timingsMs), [lines, timingsMs]);
-  return { trackId, lines, times, on, toggle };
+  return { trackId, loaded: mine !== null, lines, times, on, toggle };
+}
+
+/** The lyrics switch under the close button, on the room's one lyrics state. */
+function TopLyricsSwitch() {
+  const lyrics = useContext(LyricsContext);
+  return <RoomLyricsSwitch state={lyricsSwitch({ loaded: lyrics.loaded, lineCount: lyrics.lines.length, on: lyrics.on })} onToggle={lyrics.toggle} />;
 }
 
 function LyricsToggle() {
@@ -916,6 +926,7 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
   const focusKey = useRef<HTMLButtonElement>(null);
   const moved = useRef(false);
   const lyrics = useRoomLyrics(track?.id ?? null);
+  const fullscreen = useRoomFullscreen();
 
   useEffect(() => {
     if (!track || track.id === announced.current || !track.title) return;
@@ -966,6 +977,8 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
         if (zone !== edge) setEdge(zone);
       }}
       onPointerLeave={() => edge && setEdge(null)}
+      onClickCapture={fullscreen.onClickCapture}
+      onKeyDownCapture={fullscreen.onKeyDownCapture}
     >
       <Backdrop track={track} />
       <PointerLightLayer />
@@ -978,15 +991,24 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
             </div>
             <span className="cr-eyebrow hidden text-[0.6875rem] text-fg-muted sm:inline">Listening room</span>
           </div>
-          <div className="flex items-center gap-2">
-            {track && mode === "focus" ? (
-              <button type="button" onClick={exitFocus} className="lr-chip cr-cut cr-cut-sm cr-focus">
-                <ArrowLeft aria-hidden="true" className="size-4" /> All tracks
+          <div className="lr-top-end">
+            <div className="flex items-center gap-2">
+              {track && mode === "focus" ? (
+                <button type="button" onClick={exitFocus} className="lr-chip cr-cut cr-cut-sm cr-focus">
+                  <ArrowLeft aria-hidden="true" className="size-4" /> All tracks
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={leave}
+                aria-label="Leave the listening room"
+                data-room-leave=""
+                className="lr-chip lr-chip-icon cr-cut cr-cut-sm cr-focus"
+              >
+                <X aria-hidden="true" className="size-4" />
               </button>
-            ) : null}
-            <button type="button" onClick={leave} aria-label="Leave the listening room" className="lr-chip lr-chip-icon cr-cut cr-cut-sm cr-focus">
-              <X aria-hidden="true" className="size-4" />
-            </button>
+            </div>
+            {track ? <TopLyricsSwitch /> : null}
           </div>
         </header>
 
