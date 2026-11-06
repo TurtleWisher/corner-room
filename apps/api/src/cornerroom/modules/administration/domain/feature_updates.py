@@ -453,8 +453,14 @@ FEATURES: Final[list[dict]] = [
         "area": "Platform",
         "audience": ["Fans", "Artists", "Staff"],
         "summary": "The Corner Room look: tokens, fonts, glass cards and the letter cube.",
-        "description": "One design system for every page: colour tokens tested for contrast, brand fonts, glass cards and frosted bars, the letter-cube logo and formatting for money and dates.",
+        "description": (
+            "One design system for every page: colour tokens tested for contrast, brand fonts, glass cards and "
+            "frosted bars, the letter-cube logo and formatting for money and dates. Every logo tilts toward the "
+            "pointer in 3D, lifts and catches a sheen; the Artist Studio's green logo sits on a soft mint glow."
+        ),
         "updates": [
+            {"date": "2026-11-07", "kind": "IMPROVED", "title": "Logos come alive", "details": "Every logo tilts toward the pointer, lifts and catches a sheen; still on touch and with reduced motion."},
+            {"date": "2026-11-07", "kind": "IMPROVED", "title": "Studio logo without the square", "details": "The green Studio logo sits on a soft mint glow instead of a flat square tile."},
             {"date": "2026-10-13", "kind": "IMPROVED", "title": "Restyle", "details": "Finer grain, page-wide corner light, glass cards and frosted bars."},
             {"date": "2026-10-12", "kind": "NEW", "title": "Customer frontend rebuilt", "details": "Rebuilt customer frontend and complete buying flow."},
             {"date": "2026-10-11", "kind": "NEW", "title": "Design system", "details": "Phase 16 design system foundation."},

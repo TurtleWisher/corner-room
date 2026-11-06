@@ -22,15 +22,13 @@ import { cn } from "@/lib/utils";
 
 const WORLD = "artist-studio";
 
-/** The mint mark (D-THEME-02): the official mint colourway on its Signal Mint field, never on the dark base. */
+/** The mint mark (D-THEME-02): the official mint colourway on its own soft Signal Mint field (D-LOGO-01). */
 function StudioMark({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-3">
       <div className="flex items-end gap-2">
-        <Link href="/studio" className="cr-focus" aria-label="Artist Studio home">
-          <span className="cr-cut cr-cut-sm inline-flex shrink-0 p-1.5 [--cut-fill:var(--cr-brand)]">
-            <Logo variant="artist-mint" height={40} alt="" />
-          </span>
+        <Link href="/studio" className="cr-focus inline-flex" aria-label="Artist Studio home">
+          <Logo variant="artist-mint" height={40} alt="" />
         </Link>
         <BetaTag className="pb-0.5" />
       </div>
