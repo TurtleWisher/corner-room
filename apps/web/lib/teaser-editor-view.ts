@@ -1,5 +1,5 @@
 /*
- * The Teaser Studio editor, as pure maths and words (owner, 2026-11-07, D-TEASER-00 to D-TEASER-03).
+ * The Preview Studio editor, as pure maths and words (owner, 2026-11-07, D-TEASER-00 to D-TEASER-03).
  *
  * The editor never changes the master: it only chooses edit settings (start, end, fades, gain), and
  * the server cuts the teaser from the master with exactly those numbers. Every value here is a whole
@@ -112,6 +112,38 @@ export function msToX(ms: number, view: View, width: number): number {
 
 export function xToMs(x: number, view: View, width: number): number {
   return width > 0 ? Math.round(view.fromMs + (x / width) * (view.toMs - view.fromMs)) : view.fromMs;
+}
+
+/** How far from a line a press still grabs it, in pixels: a finger needs much more room than a mouse. */
+export const GRAB_PX = { touch: 24, mouse: 10 } as const;
+
+export type WaveTarget = Handle | "region" | "playhead" | "scrub";
+
+/**
+ * What a press on the waveform at `x` takes hold of (D-TEASER-06): the nearest of the start edge,
+ * end edge and play line within `grabPx`, else the chosen part (to slide it), else a new play point.
+ * An edge wins a tie with the play line. When both edges sit under the finger, the side of the press
+ * picks: left of them takes the start, right takes the end.
+ */
+export function pickTarget(
+  x: number,
+  /** Where the lines are, in pixels from the left (outside 0..width when zoomed past them); no play line while nothing plays. */
+  lines: { start: number; end: number; playhead: number | null },
+  grabPx: number,
+): WaveTarget {
+  const near: { t: Handle | "playhead"; d: number }[] = [];
+  near.push({ t: "start", d: Math.abs(x - lines.start) });
+  near.push({ t: "end", d: Math.abs(x - lines.end) });
+  if (lines.playhead !== null) near.push({ t: "playhead", d: Math.abs(x - lines.playhead) + 0.5 });
+  const grabbed = near.filter((n) => n.d <= grabPx).sort((a, b) => a.d - b.d);
+  if (grabbed.length > 0) {
+    const edges = grabbed.filter((n) => n.t !== "playhead");
+    if (edges.length === 2 && Math.abs(lines.end - lines.start) <= grabPx) {
+      return x <= (lines.start + lines.end) / 2 ? "start" : "end";
+    }
+    return grabbed[0].t;
+  }
+  return x > lines.start && x < lines.end ? "region" : "scrub";
 }
 
 /** The peaks inside the view, one bar per pixel column (max of the buckets it covers). */

@@ -18,11 +18,16 @@ export interface TabsProps {
   value?: string;
   defaultValue?: string;
   onValueChange?: (id: string) => void;
+  /** Keep every panel in the page (only the chosen one shows), so typing in a form isn't lost on a switch. */
+  keepMounted?: boolean;
+  /** "sm" for tabs inside a card. */
+  size?: "md" | "sm";
   className?: string;
+  panelClassName?: string;
 }
 
 /** WAI-ARIA tabs: arrow keys, Home and End move focus; automatic activation. */
-export function Tabs({ items, label, value, defaultValue, onValueChange, className }: TabsProps) {
+export function Tabs({ items, label, value, defaultValue, onValueChange, keepMounted = false, size = "md", className, panelClassName }: TabsProps) {
   const [inner, setInner] = React.useState(defaultValue ?? items[0]?.id);
   const active = value ?? inner;
   const base = React.useId().replace(/:/g, "");
@@ -50,7 +55,13 @@ export function Tabs({ items, label, value, defaultValue, onValueChange, classNa
 
   return (
     <div className={className}>
-      <div role="tablist" aria-label={label} className="flex gap-1 border-b border-line" onKeyDown={onKeyDown}>
+      {/* On a narrow screen the tabs scroll sideways instead of wrapping or pushing the page wide. */}
+      <div
+        role="tablist"
+        aria-label={label}
+        className="flex gap-1 overflow-x-auto shadow-[inset_0_-1px_0_var(--cr-line)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        onKeyDown={onKeyDown}
+      >
         {items.map((t) => {
           const selected = t.id === active;
           return (
@@ -68,7 +79,8 @@ export function Tabs({ items, label, value, defaultValue, onValueChange, classNa
               disabled={t.disabled}
               onClick={() => select(t.id)}
               className={cn(
-                "cr-focus relative -mb-px h-11 px-4 font-ui text-sm font-semibold transition-colors duration-[var(--cr-dur-interaction)]",
+                "cr-focus relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap font-ui font-semibold transition-colors duration-[var(--cr-dur-interaction)]",
+                size === "sm" ? "h-9 px-3 text-[0.8125rem]" : "h-11 px-4 text-sm",
                 "border-b-2 disabled:opacity-40",
                 selected ? "border-highlight text-fg" : "border-transparent text-fg-muted hover:text-fg",
               )}
@@ -86,9 +98,9 @@ export function Tabs({ items, label, value, defaultValue, onValueChange, classNa
           aria-labelledby={`${base}-tab-${t.id}`}
           hidden={t.id !== active}
           tabIndex={0}
-          className="cr-focus pt-5"
+          className={cn("cr-focus", size === "sm" ? "pt-4" : "pt-5", panelClassName)}
         >
-          {t.id === active ? t.content : null}
+          {keepMounted || t.id === active ? t.content : null}
         </div>
       ))}
     </div>

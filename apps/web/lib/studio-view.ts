@@ -75,7 +75,7 @@ const READINESS_TEXT: Record<string, string> = {
   P_LINE: "Sound recording copyright (℗ line)",
   C_LINE: "Copyright (© line)",
   COVER: "Cover art that passed its checks",
-  TRACKS: "At least one song (add it under Tracks)",
+  TRACKS: "At least one song (add it under Songs)",
   TRACK_ORDER: "Track order",
   PRICE: "A proposed price for the release",
   TRACK_TITLE: "Track title",

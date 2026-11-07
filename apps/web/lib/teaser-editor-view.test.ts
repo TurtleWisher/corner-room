@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { TeaserLimits, TeaserSettings } from "@/features/teasers/api";
 
 import {
+  pickTarget,
   barsFor,
   fadeLevel,
   fitSettings,
@@ -153,5 +154,36 @@ describe("words", () => {
     expect(problemWords("TOO_LONG,FADE_TOO_LONG")).toEqual(["The teaser is too long.", "A fade is longer than allowed."]);
     expect(problemWords("UNKNOWN")).toEqual([]);
     expect(problemWords(null)).toEqual([]);
+  });
+});
+
+describe("pickTarget", () => {
+  const lines = { start: 100, end: 300, playhead: 200 };
+  it("grabs the nearest line within reach", () => {
+    expect(pickTarget(110, lines, 24)).toBe("start");
+    expect(pickTarget(290, lines, 24)).toBe("end");
+    expect(pickTarget(205, lines, 24)).toBe("playhead");
+  });
+  it("slides the chosen part or sets a new play point elsewhere", () => {
+    expect(pickTarget(150, lines, 24)).toBe("region");
+    expect(pickTarget(40, lines, 24)).toBe("scrub");
+    expect(pickTarget(400, lines, 24)).toBe("scrub");
+  });
+  it("needs a mouse to be closer than a finger", () => {
+    expect(pickTarget(120, lines, 24)).toBe("start");
+    expect(pickTarget(120, lines, 10)).toBe("region");
+  });
+  it("lets an edge win a tie with the play line", () => {
+    expect(pickTarget(100, { start: 100, end: 300, playhead: 100 }, 24)).toBe("start");
+  });
+  it("picks by side when both edges are under the finger", () => {
+    const close = { start: 100, end: 110, playhead: null };
+    expect(pickTarget(98, close, 24)).toBe("start");
+    expect(pickTarget(112, close, 24)).toBe("end");
+  });
+  it("works with edges outside the view when zoomed in", () => {
+    expect(pickTarget(110, { start: -400, end: 300, playhead: null }, 24)).toBe("region");
+    expect(pickTarget(110, { start: -400, end: 900, playhead: null }, 24)).toBe("region");
+    expect(pickTarget(110, { start: 500, end: 900, playhead: null }, 24)).toBe("scrub");
   });
 });
