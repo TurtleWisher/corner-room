@@ -1,7 +1,7 @@
 """Teasers: short excerpts of a song's master that anyone can hear for free. Additive only.
 
-Revision ID: 0052_teasers
-Revises: 0051_collectible_tracking
+Revision ID: 0053_teasers
+Revises: 0052_gift_people_added
 Create Date: 2026-11-07
 
 Owner, 2026-11-07 (D-TEASER-00 to D-TEASER-04): an artist cuts a teaser from the song's own master
@@ -23,8 +23,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0052_teasers"
-down_revision: Union[str, Sequence[str], None] = "0051_collectible_tracking"
+revision: str = "0053_teasers"
+down_revision: Union[str, Sequence[str], None] = "0052_gift_people_added"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
