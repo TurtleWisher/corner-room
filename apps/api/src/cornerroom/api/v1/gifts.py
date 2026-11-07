@@ -86,8 +86,8 @@ class CampaignOut(BaseModel):
     submitted_at: datetime | None
     approved_at: datetime | None
     # One count per collectible status (YET_TO_SEND is "not prepared yet", then PREPARED,
-    # DISPATCHED, RECEIVED, RETURNED, MISSING), TOTAL, and SCHEDULED (prepared with a dispatch
-    # time set; already inside PREPARED).
+    # DISPATCHED, RECEIVED, RETURNED, MISSING), TOTAL, SCHEDULED (prepared with a dispatch time set;
+    # already inside PREPARED) and WAITING (people the act added, waiting for staff; not in TOTAL).
     counts: dict[str, int]
 
 
@@ -96,11 +96,13 @@ class RecipientOut(BaseModel):
     # YET_TO_SEND (not prepared yet), PREPARED, DISPATCHED (the buyer was told), RECEIVED, RETURNED
     # or MISSING (D-CAMPAIGN-03).
     status: str
+    # BUYER (found on Corner Room or the pre-sale list) or ADDED (typed in or from a sheet, D-CAMPAIGN-04).
+    source: str = "BUYER"
     has_account: bool
     prepared_at: datetime | None = None
     # Set on a prepared gift that will be dispatched at this time.
     dispatch_at: datetime | None = None
-    dispatched_at: datetime | None
+    dispatched_at: datetime | None = None
     # When it was received, returned or marked missing.
     outcome_at: datetime | None = None
     # Staff only.
@@ -119,9 +121,16 @@ class CampaignDetailOut(CampaignOut):
     # Where each status may go next.
     transitions: dict[str, list[str]] = Field(default_factory=dict)
     recipients: list[RecipientOut]
-    # After an update: how many gifts moved, and how many couldn't make that move.
+    # D-CAMPAIGN-04: whether people can be added now, whether this viewer approves the act's additions,
+    # and the additions still waiting for staff (with the details the act typed in).
+    can_add: bool = False
+    can_review: bool = False
+    waiting: list[RecipientOut] = Field(default_factory=list)
+    # After an update: how many gifts moved, and how many couldn't make that move. After adding
+    # people: how many were added, and how many were already in the campaign.
     moved: int | None = None
     skipped: int | None = None
+    added: int | None = None
 
 
 RecipientStatus = Literal["YET_TO_SEND", "PREPARED", "DISPATCHED", "RECEIVED", "RETURNED", "MISSING"]
@@ -135,6 +144,24 @@ class RecipientsTransitionIn(BaseModel):
     recipient_ids: list[UUID] | None = Field(default=None, max_length=500)
     every: RecipientStatus | None = None
     dispatch_at: datetime | None = None
+
+
+class PersonIn(BaseModel):
+    name: str | None = Field(default=None, max_length=200)
+    email: str | None = Field(default=None, max_length=320)
+    phone: str | None = Field(default=None, max_length=40)
+    address: str | None = Field(default=None, max_length=1000)
+
+
+class AddPeopleIn(BaseModel):
+    """People who bought outside Corner Room (D-CAMPAIGN-04): an email or a phone each."""
+
+    people: list[PersonIn] = Field(min_length=1, max_length=2000)
+
+
+class ReviewPeopleIn(BaseModel):
+    recipient_ids: list[UUID] = Field(min_length=1, max_length=2000)
+    action: Literal["approve", "reject"]
 
 
 class ReviewIn(BaseModel):
@@ -200,6 +227,26 @@ async def track_gifts(campaign_id: UUID, body: RecipientsTransitionIn, ctx: Ctx,
             ctx, campaign_id, to=body.to, ids=body.recipient_ids, every=body.every, dispatch_at=body.dispatch_at
         )
     )
+
+
+@router.post("/studio/gift-campaigns/{campaign_id}/recipients", response_model=CampaignDetailOut)
+async def add_people(campaign_id: UUID, body: AddPeopleIn, ctx: Ctx, svc: Svc) -> CampaignDetailOut:
+    """Add people by hand or from a sheet. Staff additions count at once; the act's wait for staff."""
+    return CampaignDetailOut(**await svc.add_people(ctx, campaign_id, [p.model_dump() for p in body.people]))
+
+
+@router.post("/studio/gift-campaigns/{campaign_id}/recipients/review", response_model=CampaignDetailOut)
+async def review_people(campaign_id: UUID, body: ReviewPeopleIn, ctx: Ctx, svc: Svc) -> CampaignDetailOut:
+    """Staff approve the act's additions, or turn them away (they are removed)."""
+    return CampaignDetailOut(
+        **await svc.review_people(ctx, campaign_id, body.recipient_ids, approve=body.action == "approve")
+    )
+
+
+@router.delete("/studio/gift-campaigns/{campaign_id}/recipients/{recipient_id}", response_model=CampaignDetailOut)
+async def remove_person(campaign_id: UUID, recipient_id: UUID, ctx: Ctx, svc: Svc) -> CampaignDetailOut:
+    """Take back someone added by hand by mistake, before anything happened to their gift."""
+    return CampaignDetailOut(**await svc.remove_person(ctx, campaign_id, recipient_id))
 
 
 @router.get("/studio/releases/{release_id}/collectibles", response_model=list[CampaignOut])

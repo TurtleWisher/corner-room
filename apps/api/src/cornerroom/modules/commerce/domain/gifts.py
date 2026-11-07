@@ -3,6 +3,7 @@ prices and no money anywhere here."""
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from uuid import UUID
 
@@ -29,6 +30,38 @@ RECIPIENT_TRANSITIONS: dict[str, tuple[str, ...]] = {
 }
 # Moves that end a delivery, stamped as the gift's outcome.
 OUTCOMES = ("RECEIVED", "RETURNED", "MISSING")
+
+
+#: Most people added to a campaign in one go (a technical limit, not a business rule).
+MAX_PEOPLE_PER_ADD = 2000
+_EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$")
+
+
+def phone_key(phone: str | None) -> str | None:
+    """A phone number as digits only, for spotting the same person twice ("+880 1712-345678" and
+    "8801712345678" match; a leading 0 after the country code is kept as written)."""
+    digits = re.sub(r"\D", "", phone or "")
+    return digits or None
+
+
+def clean_person(raw: dict) -> tuple[dict | None, str | None]:
+    """One person to add by hand (D-CAMPAIGN-04): a name, an email and/or a phone (one is required),
+    and an address. Returns the cleaned person, or None and the reason it can't be added."""
+    def line(value: object, limit: int) -> str | None:
+        text_ = " ".join(str(value or "").split())
+        return text_[:limit] or None
+
+    email = (str(raw.get("email") or "").strip().lower()) or None
+    phone = line(raw.get("phone"), 40)
+    name = line(raw.get("name"), 200)
+    address = str(raw.get("address") or "").replace("\r\n", "\n").strip()[:1000] or None
+    if email is not None and (len(email) > 320 or not _EMAIL.match(email)):
+        return None, f"{email[:80]} isn't an email address"
+    if phone is not None and len(phone_key(phone) or "") < 6:
+        return None, f"{phone} isn't a phone number"
+    if email is None and phone is None:
+        return None, f"{name or 'Someone'} needs an email or a phone"
+    return {"name": name, "email": email, "phone": phone, "address": address}, None
 
 
 def can_move(current: str, target: str) -> bool:
@@ -104,12 +137,26 @@ class GiftRecipient(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             postgresql_where=text("status = 'PREPARED' AND dispatch_at IS NOT NULL"),
         ),
         Index("uq_gift_recipients_email", "campaign_id", text("lower(email)"), unique=True),
+        CheckConstraint("source IN ('BUYER','ADDED')", name="source"),
+        CheckConstraint("email IS NOT NULL OR phone IS NOT NULL", name="reachable"),
         {"schema": "commerce"},
     )
 
     campaign_id: Mapped[UUID] = mapped_column(ForeignKey("commerce.gift_campaigns.id"), nullable=False)
     user_id: Mapped[UUID | None] = mapped_column(ForeignKey("identity.users.id"), nullable=True)
-    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    # Optional since D-CAMPAIGN-04: someone added by hand may only have a phone.
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    # D-CAMPAIGN-04 (owner, 2026-11-07): BUYER (found on Corner Room or the pre-sale list) or ADDED
+    # (typed in or pasted from a sheet, with their own name, phone and address). An addition by the
+    # act's team waits for staff (`waiting`) and counts for nothing until approved.
+    source: Mapped[str] = mapped_column(String(8), nullable=False, default="BUYER", server_default="BUYER")
+    name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    added_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    waiting: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+    approved_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     order_id: Mapped[UUID | None] = mapped_column(nullable=True)
     presale_claim_id: Mapped[UUID | None] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="YET_TO_SEND", server_default="YET_TO_SEND")

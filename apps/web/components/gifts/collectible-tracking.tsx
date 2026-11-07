@@ -11,7 +11,9 @@ import { useMemo, useState } from "react";
 import { CalendarClock, CircleAlert, PackageCheck, Truck } from "lucide-react";
 
 import { Button, Card, DateTime, Input } from "@/components/ds";
-import { trackGifts, type GiftCampaignDetail, type GiftMove, type GiftRecipientStatus } from "@/features/gifts/api";
+import { AddPeople } from "@/components/gifts/add-people";
+import { WaitingPeople } from "@/components/gifts/waiting-people";
+import { removeGiftPerson, trackGifts, type GiftCampaignDetail, type GiftMove, type GiftRecipientStatus } from "@/features/gifts/api";
 import { ApiError } from "@/lib/api/client";
 import { fromLocalInput, toLocalInput } from "@/lib/artist-mail-view";
 import { isLater, MOVE_LABEL, MOVE_TELLS_BUYER, movesFor, RECIPIENT_STATUS_LABEL, RECIPIENT_STATUSES, trackedSince } from "@/lib/gifts-view";
@@ -56,13 +58,17 @@ export function CollectibleTracking({ c, onChange }: { c: GiftCampaignDetail; on
   const shownIds = shown.map((r) => r.id);
   const allShownChosen = shownIds.length > 0 && shownIds.every((id) => chosen.has(id));
 
-  async function run(key: string, move: GiftMove, done: (n: number) => string) {
+  async function run(key: string, move: GiftMove, done: (n: number) => string, call?: () => Promise<GiftCampaignDetail>) {
     setBusy(key);
     setMessage(null);
     try {
-      const next = await trackGifts(c.id, move);
+      const next = await (call ? call() : trackGifts(c.id, move));
       onChange(next);
       setChosen(new Set());
+      if (call) {
+        setMessage({ ok: true, text: "Taken off the list." });
+        return;
+      }
       const skipped = next.skipped ?? 0;
       setMessage({
         ok: true,
@@ -105,6 +111,10 @@ export function CollectibleTracking({ c, onChange }: { c: GiftCampaignDetail; on
       </div>
 
       <Tiles c={c} filter={filter} onFilter={(s) => setFilter(s)} />
+
+      {/* Buyers Corner Room doesn't know about (D-CAMPAIGN-04), and the act's additions waiting for staff. */}
+      <AddPeople c={c} onChange={onChange} />
+      <WaitingPeople c={c} onChange={onChange} />
 
       {c.can_dispatch && chosen.size > 0 ? (
         <Card className="grid gap-3 p-4" aria-label="Update chosen gifts">
@@ -224,7 +234,20 @@ export function CollectibleTracking({ c, onChange }: { c: GiftCampaignDetail; on
                     <td className="py-2 pr-3 text-fg">
                       {r.name ?? (c.shows_contact ? "No name given" : `Buyer ${i + 1}`)}
                       {r.email ? <span className="block text-xs text-fg-muted">{r.email}</span> : null}
-                      {!r.has_account ? <span className="block text-xs text-fg-muted">Pre-sale, no account yet</span> : null}
+                      {r.source === "ADDED" ? (
+                        <span className="block text-xs text-fg-muted">Added by hand{r.has_account ? ", has an account" : ""}</span>
+                      ) : !r.has_account ? (
+                        <span className="block text-xs text-fg-muted">Pre-sale, no account yet</span>
+                      ) : null}
+                      {c.can_review && r.source === "ADDED" && r.status === "YET_TO_SEND" ? (
+                        <button
+                          type="button"
+                          className="cr-focus mt-1 text-xs font-semibold text-link underline"
+                          onClick={() => void run(`remove-${r.id}`, { to: "YET_TO_SEND" } as GiftMove, () => "", () => removeGiftPerson(c.id, r.id))}
+                        >
+                          Take back
+                        </button>
+                      ) : null}
                     </td>
                     {c.shows_contact ? <td className="py-2 pr-3 text-fg">{r.phone ?? <span className="text-fg-muted">None</span>}</td> : null}
                     {c.shows_contact ? <td className="max-w-72 py-2 pr-3 text-fg">{r.address ?? <span className="text-fg-muted">None</span>}</td> : null}

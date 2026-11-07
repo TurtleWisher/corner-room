@@ -10,7 +10,8 @@ export type GiftCampaignStatus = "DRAFT" | "IN_REVIEW" | "ACTIVE" | "PAUSED" | "
 /** Collectible tracking (owner, 2026-11-06, D-CAMPAIGN-03). YET_TO_SEND is "not prepared yet". */
 export type GiftRecipientStatus = "YET_TO_SEND" | "PREPARED" | "DISPATCHED" | "RECEIVED" | "RETURNED" | "MISSING";
 /** One count per status, TOTAL, and SCHEDULED (prepared with a dispatch time; inside PREPARED). */
-export type GiftCounts = Record<GiftRecipientStatus, number> & { TOTAL: number; SCHEDULED: number };
+/** WAITING: people the act added by hand, waiting for staff (not in TOTAL), D-CAMPAIGN-04. */
+export type GiftCounts = Record<GiftRecipientStatus, number> & { TOTAL: number; SCHEDULED: number; WAITING?: number };
 
 export type GiftCampaign = {
   id: string;
@@ -35,6 +36,8 @@ export type GiftCampaign = {
 export type GiftRecipient = {
   id: string;
   status: GiftRecipientStatus;
+  /** BUYER (found on Corner Room or the pre-sale list) or ADDED (typed in or from a sheet). */
+  source?: "BUYER" | "ADDED";
   has_account: boolean;
   prepared_at?: string | null;
   /** A prepared gift set to leave at this time. */
@@ -56,10 +59,20 @@ export type GiftCampaignDetail = GiftCampaign & {
   /** Where each status may go next (from the API; the page never hard-codes it). */
   transitions: Partial<Record<GiftRecipientStatus, GiftRecipientStatus[]>>;
   recipients: GiftRecipient[];
-  /** After an update: how many moved, and how many couldn't make that move. */
+  /** D-CAMPAIGN-04: whether people can be added now, whether this viewer approves the act's
+   * additions, and the additions still waiting for staff. */
+  can_add?: boolean;
+  can_review?: boolean;
+  waiting?: GiftRecipient[];
+  /** After an update: how many moved, and how many couldn't make that move. After adding people:
+   * how many were added, and how many were already in the campaign. */
   moved?: number | null;
   skipped?: number | null;
+  added?: number | null;
 };
+
+/** Someone who bought outside Corner Room (D-CAMPAIGN-04): an email or a phone each. */
+export type GiftPersonInput = { name: string | null; email: string | null; phone: string | null; address: string | null };
 
 export type GiftCampaignInput = {
   title?: string;
@@ -120,6 +133,31 @@ export function trackGifts(id: string, move: GiftMove): Promise<GiftCampaignDeta
     body: JSON.stringify(move),
     retry: false,
   });
+}
+
+/** Add people by hand or from a sheet (staff: at once; the act's: waiting for staff). */
+export function addGiftPeople(id: string, people: GiftPersonInput[]): Promise<GiftCampaignDetail> {
+  return apiFetch<GiftCampaignDetail>(`/api/v1/studio/gift-campaigns/${id}/recipients`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify({ people }),
+    retry: false,
+  });
+}
+
+/** Staff approve the act's additions, or turn them away. */
+export function reviewGiftPeople(id: string, recipientIds: string[], action: "approve" | "reject"): Promise<GiftCampaignDetail> {
+  return apiFetch<GiftCampaignDetail>(`/api/v1/studio/gift-campaigns/${id}/recipients/review`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify({ recipient_ids: recipientIds, action }),
+    retry: false,
+  });
+}
+
+/** Take back someone added by hand by mistake. */
+export function removeGiftPerson(id: string, recipientId: string): Promise<GiftCampaignDetail> {
+  return apiFetch<GiftCampaignDetail>(`/api/v1/studio/gift-campaigns/${id}/recipients/${recipientId}`, { method: "DELETE", retry: false });
 }
 
 /** Collectible campaigns covering a release, with how far their gifts have got. */
