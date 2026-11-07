@@ -1118,7 +1118,8 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
           </form>
         ) : null}
         <Problem message={tracksAction.error} />
-        {detail.tracks.length > 0 ? (
+        {/* Teaser Studio is the artist's tool; staff review teasers in Catalog, never in Studio (owner, 2026-11-08). */}
+        {detail.tracks.length > 0 && detail.viewer_role !== "staff" ? (
           <Card tone="outline" className="mt-6 flex flex-wrap items-center justify-between gap-3 p-4 text-sm text-fg">
             <p className="max-w-prose">
               <span className="font-semibold">Teasers.</span> Cut a short part of a song that anyone can listen to for free, as often as they
@@ -1156,12 +1157,14 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
       {canProposePresale(detail.release.status) && detail.presale ? (
         // D-PRESALE-03: open a pre-sale before the music is finished, preview it, write the release-day email.
         <Section id="presale" title="Pre-sale" done={!!detail.presale.listed}>
-          {/* D-PRESALE-04: the pre-sale's own pages, with live numbers and share links. */}
-          <p className="mb-4">
-            <ButtonLink href={campaignHref(detail.release.id)} variant="secondary" size="sm">
-              <ChartLine aria-hidden="true" /> Pre-sale campaign: live numbers and sharing
-            </ButtonLink>
-          </p>
+          {/* D-PRESALE-04: the pre-sale's own pages, with live numbers and share links (the artist's Studio; not for staff). */}
+          {detail.viewer_role !== "staff" ? (
+            <p className="mb-4">
+              <ButtonLink href={campaignHref(detail.release.id)} variant="secondary" size="sm">
+                <ChartLine aria-hidden="true" /> Pre-sale campaign: live numbers and sharing
+              </ButtonLink>
+            </p>
+          ) : null}
           <PresalePanel
             key={`${detail.release.id}-${detail.release.version}`}
             detail={detail}

@@ -173,6 +173,8 @@ FEATURES: Final[list[dict]] = [
             "earn a campaign gift."
         ),
         "updates": [
+            {"date": "2026-11-08", "kind": "IMPROVED", "title": "Clearer gift emails", "details": "Each status shows the email buyers get now, three steps (write, approval, buyers get it), a check before emailing buyers, and each buyer's own line saying on its way, sent or couldn't send."},
+            {"date": "2026-11-08", "kind": "FIXED", "title": "Staff stay in the staff console", "details": "Staff approve gift emails and added people right in the staff gift list; the staff release page no longer opens the artist's Teaser Studio or pre-sale pages."},
             {"date": "2026-11-07", "kind": "IMPROVED", "title": "Gift email composer", "details": "One-click templates, a preview as each buyer by name, a button, files, a test to yourself, and emailing chosen buyers by status."},
             {"date": "2026-11-07", "kind": "NEW", "title": "Your own gift emails", "details": "Artists word the dispatched, returned and missing emails for each gift campaign in Studio's email editor; Corner Room approves them once."},
             {"date": "2026-11-07", "kind": "FIXED", "title": "Waiting people in the staff list", "details": "The staff list says how many people an artist added wait for approval, with a link to approve them."},
