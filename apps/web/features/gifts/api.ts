@@ -31,6 +31,8 @@ export type GiftCampaign = {
   submitted_at?: string | null;
   approved_at?: string | null;
   counts: GiftCounts;
+  /** The act's own status emails waiting for staff (D-CAMPAIGN-05). */
+  emails_waiting?: number;
 };
 
 export type GiftRecipient = {
@@ -183,4 +185,65 @@ export function reviewGiftCampaign(id: string, action: "approve" | "reject", not
 export function fetchPublicGifts(params: { releaseId?: string; trackId?: string }): Promise<PublicGift[]> {
   const q = params.releaseId ? `release_id=${params.releaseId}` : `track_id=${params.trackId}`;
   return apiFetch<PublicGift[]>(`/api/v1/gift-campaigns?${q}`, { skipAuth: true, skipRefresh: true, retry: false });
+}
+
+// --- the act's own collectible status emails (D-CAMPAIGN-05) ------------------------------------
+
+export type StatusMailStatus = "DISPATCHED" | "RETURNED" | "MISSING";
+export type StatusMailState = "DRAFT" | "IN_REVIEW" | "APPROVED" | "RETURNED";
+
+export type StatusMail = {
+  status: StatusMailStatus;
+  /** Corner Room's wording: what sends while the act has no approved words of its own. */
+  default_subject: string;
+  default_body: string;
+  subject: string | null;
+  body: string | null;
+  /** Null: the act hasn't written its own. */
+  state: StatusMailState | null;
+  review_note: string | null;
+  /** The act's approved words are the ones sending. */
+  live: boolean;
+  live_subject: string | null;
+  live_body: string | null;
+  sent_count: number;
+  submitted_at: string | null;
+  approved_at: string | null;
+  can_review: boolean;
+};
+
+export type StatusMails = {
+  campaign: { id: string; title: string; gift_items: string; status: GiftCampaignStatus };
+  artist: string;
+  music: string;
+  viewer_role: "owner" | "staff";
+  fill_ins: string[];
+  items: StatusMail[];
+};
+
+const mailsPath = (id: string) => `/api/v1/studio/gift-campaigns/${id}/status-emails`;
+
+export function fetchStatusMails(id: string): Promise<StatusMails> {
+  return apiFetch<StatusMails>(mailsPath(id), { retry: false });
+}
+
+export function saveStatusMail(id: string, status: StatusMailStatus, body: { subject: string; body: string }): Promise<StatusMails> {
+  return apiFetch<StatusMails>(`${mailsPath(id)}/${status}`, { method: "PUT", headers: json, body: JSON.stringify(body), retry: false });
+}
+
+export function submitStatusMail(id: string, status: StatusMailStatus): Promise<StatusMails> {
+  return apiFetch<StatusMails>(`${mailsPath(id)}/${status}/submit`, { method: "POST", retry: false });
+}
+
+export function reviewStatusMail(id: string, status: StatusMailStatus, action: "approve" | "reject", note?: string): Promise<StatusMails> {
+  return apiFetch<StatusMails>(`${mailsPath(id)}/${status}/review`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify({ action, note: note || null }),
+    retry: false,
+  });
+}
+
+export function resetStatusMail(id: string, status: StatusMailStatus): Promise<StatusMails> {
+  return apiFetch<StatusMails>(`${mailsPath(id)}/${status}`, { method: "DELETE", retry: false });
 }

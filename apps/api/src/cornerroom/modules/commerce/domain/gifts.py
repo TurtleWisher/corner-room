@@ -7,7 +7,7 @@ import re
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -172,3 +172,40 @@ class GiftRecipient(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     dispatch_set_by: Mapped[UUID | None] = mapped_column(nullable=True)
     outcome_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     outcome_by: Mapped[UUID | None] = mapped_column(nullable=True)
+
+
+# The statuses that email the buyer, and so the ones an act may word itself (owner, 2026-11-07,
+# D-CAMPAIGN-05). Prepared and received don't email anyone.
+STATUS_MAIL_STATUSES = ("DISPATCHED", "RETURNED", "MISSING")
+STATUS_MAIL_STATES = ("DRAFT", "IN_REVIEW", "APPROVED", "RETURNED")
+
+
+class GiftStatusMail(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """An act's own email for one collectible status of one campaign (D-CAMPAIGN-05). `subject` and
+    `body` are the words being written; `live_subject`/`live_body` are the approved words that send.
+    Without live words, Corner Room's own wording sends."""
+
+    __tablename__ = "gift_status_mails"
+    __table_args__ = (
+        CheckConstraint("status IN ('DISPATCHED','RETURNED','MISSING')", name="status"),
+        CheckConstraint("state IN ('DRAFT','IN_REVIEW','APPROVED','RETURNED')", name="state"),
+        UniqueConstraint("campaign_id", "status", name="uq_gift_status_mails_campaign_status"),
+        Index("ix_gift_status_mails_state", "state"),
+        {"schema": "commerce"},
+    )
+
+    campaign_id: Mapped[UUID] = mapped_column(ForeignKey("commerce.gift_campaigns.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    subject: Mapped[str] = mapped_column(String(200), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="DRAFT", server_default="DRAFT")
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    live_subject: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    live_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    updated_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    submitted_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    approved_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

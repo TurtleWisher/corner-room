@@ -11,9 +11,9 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link2, Link2Off } from "lucide-react";
 
-import { FILL_INS, FILL_KEYS, parseRich, type FillKey, type MailValues } from "@/lib/artist-mail-view";
+import { ALL_FILL_KEYS, FILL_INS, GIFT_UPDATE_FILL_INS, parseRich, type FillKey, type MailValues } from "@/lib/artist-mail-view";
 
-const FILL_HINT = Object.fromEntries(FILL_INS.map((f) => [f.key, f.hint])) as Record<FillKey, string>;
+const FILL_HINT = Object.fromEntries(GIFT_UPDATE_FILL_INS.map((f) => [f.key, f.hint])) as Record<FillKey, string>;
 
 function chip(key: FillKey, values: MailValues): HTMLElement {
   const el = document.createElement("span");
@@ -21,7 +21,7 @@ function chip(key: FillKey, values: MailValues): HTMLElement {
   el.dataset.fill = key;
   el.className = "am-chip";
   el.title = FILL_HINT[key];
-  el.textContent = values[key];
+  el.textContent = values[key] ?? `{${key}}`;
   return el;
 }
 
@@ -62,7 +62,7 @@ function serialize(root: Node): string {
         return;
       }
       if (!(child instanceof HTMLElement)) return;
-      if (child.dataset.fill && FILL_KEYS.includes(child.dataset.fill as FillKey)) {
+      if (child.dataset.fill && ALL_FILL_KEYS.includes(child.dataset.fill as FillKey)) {
         out += `{${child.dataset.fill}}`;
         return;
       }

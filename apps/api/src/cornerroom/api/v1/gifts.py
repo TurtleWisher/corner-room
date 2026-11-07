@@ -15,6 +15,7 @@ from cornerroom.api.deps import db_session, get_auth_context, settings_dep
 from cornerroom.infra.settings import Settings
 from cornerroom.infra.review_policy import approve_at_once
 from cornerroom.kernel.auth_context import AuthContext
+from cornerroom.modules.commerce.application.gift_status_mails import GiftStatusMailService
 from cornerroom.modules.commerce.application.gifts import GiftCampaignService
 
 router = APIRouter(tags=["gifts"])
@@ -90,6 +91,8 @@ class CampaignOut(BaseModel):
     # DISPATCHED, RECEIVED, RETURNED, MISSING), TOTAL, SCHEDULED (prepared with a dispatch time set;
     # already inside PREPARED) and WAITING (people the act added, waiting for staff; not in TOTAL).
     counts: dict[str, int]
+    # The act's own status emails waiting for staff (D-CAMPAIGN-05).
+    emails_waiting: int = 0
 
 
 class RecipientOut(BaseModel):
@@ -282,3 +285,91 @@ async def public_gifts(
 ) -> list[PublicGiftOut]:
     """Live gift campaigns covering this release or song (public)."""
     return [PublicGiftOut(**g) for g in await svc.public_for(release_id=release_id, track_id=track_id)]
+
+
+# --- the act's own status emails (D-CAMPAIGN-05) ------------------------------------------------
+
+
+async def status_mails(
+    session: Annotated[AsyncSession, Depends(db_session)],
+    settings: Annotated[Settings, Depends(settings_dep)],
+) -> GiftStatusMailService:
+    return GiftStatusMailService(session, settings)
+
+
+MailSvc = Annotated[GiftStatusMailService, Depends(status_mails)]
+MailStatus = Literal["DISPATCHED", "RETURNED", "MISSING"]
+
+
+class StatusMailIn(BaseModel):
+    subject: str = Field(max_length=400)
+    body: str = Field(max_length=12000)
+
+
+class StatusMailOut(BaseModel):
+    status: str
+    # Corner Room's wording, which sends while the act has no approved words of its own.
+    default_subject: str
+    default_body: str
+    subject: str | None = None
+    body: str | None = None
+    state: str | None = None
+    review_note: str | None = None
+    live: bool = False
+    live_subject: str | None = None
+    live_body: str | None = None
+    sent_count: int = 0
+    submitted_at: datetime | None = None
+    approved_at: datetime | None = None
+    can_review: bool = False
+
+
+class StatusMailCampaignOut(BaseModel):
+    id: UUID
+    title: str
+    gift_items: str
+    status: str
+
+
+class StatusMailsOut(BaseModel):
+    campaign: StatusMailCampaignOut
+    artist: str
+    music: str
+    viewer_role: str
+    fill_ins: list[str]
+    items: list[StatusMailOut]
+
+
+@router.get("/studio/gift-campaigns/{campaign_id}/status-emails", response_model=StatusMailsOut)
+async def status_emails(campaign_id: UUID, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
+    """The emails each collectible status sends the buyer: Corner Room's wording or the act's own."""
+    return StatusMailsOut(**await svc.view(ctx, campaign_id))
+
+
+@router.put("/studio/gift-campaigns/{campaign_id}/status-emails/{status}", response_model=StatusMailsOut)
+async def save_status_email(campaign_id: UUID, status: MailStatus, body: StatusMailIn, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
+    """Save the act's words for one status (a draft until staff approve it)."""
+    return StatusMailsOut(**await svc.save(ctx, campaign_id, status, body.subject, body.body))
+
+
+@router.post("/studio/gift-campaigns/{campaign_id}/status-emails/{status}/submit", response_model=StatusMailsOut)
+async def submit_status_email(campaign_id: UUID, status: MailStatus, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
+    out = await svc.submit(ctx, campaign_id, status)
+    # Approved at once when the sender may approve it (D-REVIEW-SOLO-01).
+    if await approve_at_once(
+        svc.session, lambda: svc.review(ctx, campaign_id, status, approve=True, note=None), settings=svc.settings
+    ):
+        out = await svc.view(ctx, campaign_id)
+    return StatusMailsOut(**out)
+
+
+@router.post("/studio/gift-campaigns/{campaign_id}/status-emails/{status}/review", response_model=StatusMailsOut)
+async def review_status_email(campaign_id: UUID, status: MailStatus, body: ReviewIn, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
+    """Staff approve the act's words (they send from then on) or send them back with a note."""
+    return StatusMailsOut(**await svc.review(ctx, campaign_id, status, approve=body.action == "approve", note=body.note))
+
+
+@router.delete("/studio/gift-campaigns/{campaign_id}/status-emails/{status}", response_model=StatusMailsOut)
+async def reset_status_email(campaign_id: UUID, status: MailStatus, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
+    """Back to Corner Room's own wording for this status."""
+    return StatusMailsOut(**await svc.reset(ctx, campaign_id, status))

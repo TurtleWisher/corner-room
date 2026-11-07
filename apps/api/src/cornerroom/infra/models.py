@@ -92,7 +92,7 @@ from cornerroom.modules.commerce.domain.artist_mail import (
     ArtistMailTemplate,
     ArtistMailThankYou,
 )
-from cornerroom.modules.commerce.domain.gifts import GiftCampaign, GiftCampaignPeriod, GiftRecipient
+from cornerroom.modules.commerce.domain.gifts import GiftCampaign, GiftCampaignPeriod, GiftRecipient, GiftStatusMail
 from cornerroom.modules.commerce.domain.music_gifts import MusicGift, MusicGiftRecipient
 from cornerroom.modules.commerce.domain.presale_campaign import PresaleCount, PresaleShareLink
 from cornerroom.modules.entitlements.domain.models import Entitlement
@@ -234,6 +234,7 @@ __all__ = [
     "GiftCampaign",
     "GiftCampaignPeriod",
     "GiftRecipient",
+    "GiftStatusMail",
     "MusicGift",
     "MusicGiftRecipient",
     "PresaleCount",
