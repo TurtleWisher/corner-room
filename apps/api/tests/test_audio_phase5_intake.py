@@ -72,12 +72,12 @@ async def test_staff_prepare_catalog_only_and_cannot_submit(client: AsyncClient)
         "release", "cover_url", "profile", "viewer_role", "display_state", "tracks", "readiness", "proposals", "intake", "history",
         # Catalog fields added 2026-10-28: a waiting cover (D-COVER-01) and changes to released music (D-CHANGES-01).
         "cover_waiting", "pending_cover_url", "cover_review_note", "change_request", "last_change_decision",
-        # When fans see the cover before release (D-COVER-02, 2026-11-02): times and flags only.
+        # Whether fans see the cover clearly before release (D-COVER-03, 2026-11-07): the switch only.
         "cover_reveal",
         # Early pre-sale and its release-day email (D-PRESALE-03, 2026-11-03).
         "presale",
     }
-    assert set(detail["cover_reveal"]) == {"lead_minutes", "revealed_at", "reveal_at", "revealed", "can_change", "can_reveal_now"}
+    assert set(detail["cover_reveal"]) == {"revealed", "revealed_at", "can_switch", "preview_url"}
     assert set(detail["profile"]) == {"kind", "id", "display_name"}
     assert set(detail["release"]) == {
         "id", "title", "release_type", "status", "release_at", "release_timezone", "cover_asset_id", "language_code",

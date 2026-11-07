@@ -87,7 +87,7 @@ function SoonRow({ presale }: { presale: PresalePageRecord }) {
       onClick={() => notePlace(presale.id, "HOME")}
       className="cr-cut cr-focus cr-glass-card cr-hover flex items-center gap-4 p-4"
     >
-      <PresaleCover coverUrl={coverUrl({ signed: presale.cover_url }, 160)} title={presale.title} artist={presale.artist} className="w-16 shrink-0" />
+      <PresaleCover coverUrl={coverUrl({ signed: presale.cover_url }, 160)} revealed={presale.cover_revealed} title={presale.title} artist={presale.artist} className="w-16 shrink-0" />
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold">
           <span className="ps-badge text-highlight">Pre-sale</span>

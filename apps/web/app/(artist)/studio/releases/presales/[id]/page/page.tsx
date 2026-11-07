@@ -1,8 +1,8 @@
 "use client";
 
-/* What fans see of this pre-sale (owner, 2026-11-06, D-PRESALE-04): the cover as it shows now
- * (lightly blurred once the artist shows it, else the title on its glowing screen) and when the
- * cover is shown. */
+/* What fans see of this pre-sale (owner, 2026-11-06, D-PRESALE-04): the cover as it shows now, and
+ * the switch that shows it clearly (D-COVER-03; off: a little blurred). Without a cover, the title
+ * on its glowing screen, blurred or clear the same way. */
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -11,9 +11,8 @@ import { ExternalLink } from "lucide-react";
 import { ButtonLink, Card, DateTime } from "@/components/ds";
 import { PresaleCover } from "@/components/music/presale-cover";
 import { CampaignShell } from "@/components/studio/campaign-shell";
-import { CoverReveal } from "@/components/studio/cover-reveal";
+import { CoverSwitch } from "@/components/studio/cover-reveal";
 import { coverUrl } from "@/lib/cover-view";
-import { revealStatus } from "@/lib/cover-reveal-view";
 import { RELEASE_TYPE_LABEL } from "@/lib/studio-view";
 
 export default function CampaignFansPage() {
@@ -21,7 +20,7 @@ export default function CampaignFansPage() {
   return (
     <CampaignShell releaseId={id}>
       {(detail, reload) => {
-        const shown = Boolean(detail.cover_reveal) && revealStatus(detail.cover_reveal) === "revealed";
+        const shown = Boolean(detail.cover_reveal?.revealed);
         const date = detail.presale?.release_at ?? detail.presale?.requested_release_at ?? detail.release.release_at;
         return (
           <div className="grid gap-8 lg:grid-cols-[minmax(0,22rem)_1fr] lg:items-start">
@@ -29,7 +28,8 @@ export default function CampaignFansPage() {
               <p className="cr-eyebrow mb-3 text-[0.6875rem] text-fg-muted">What fans see now</p>
               <div data-theme="sky" className="cr-scope p-4">
                 <PresaleCover
-                  coverUrl={shown ? coverUrl({ signed: detail.cover_url }, 480) : null}
+                  coverUrl={coverUrl({ signed: detail.cover_reveal?.preview_url }, 480)}
+                  revealed={shown}
                   title={detail.release.title}
                   artist={detail.profile.display_name}
                 />
@@ -49,18 +49,19 @@ export default function CampaignFansPage() {
               </ButtonLink>
             </div>
             <div className="grid gap-4">
+              <Card tone="solid" className="p-5">
+                <CoverSwitch detail={detail} reload={reload} />
+              </Card>
               <Card tone="outline" className="p-5 text-sm text-fg">
                 <p>
-                  {shown
-                    ? "Fans see your cover under a very light blur: enough to know it, not enough to see it clearly. It opens fully on release day."
-                    : "Until you show your cover, fans see your title as a cube on a curved, glowing screen. Nothing of the cover, songs or credits shows before release."}
+                  Switch it off and on as often as you like before release. Nothing of your songs or credits shows before release, and on
+                  release day the cover shows clearly anyway.
                 </p>
                 <p className="mt-2 text-fg-muted">
                   Fans see the title, your name, the date and the pre-sale price. To change the title or date once the pre-sale is approved, ask
                   Corner Room.
                 </p>
               </Card>
-              <CoverReveal key={`${detail.release.id}-${detail.release.version}`} detail={detail} reload={reload} />
               {!detail.cover_url ? (
                 <p className="text-sm text-fg-muted">
                   No cover yet.{" "}

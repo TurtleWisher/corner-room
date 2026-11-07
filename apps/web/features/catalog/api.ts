@@ -178,8 +178,10 @@ export type PresalePageRecord = {
   artist: string | null;
   artist_kind: string | null;
   artist_id: string | null;
-  /** Present only when the artist has allowed the cover to be previewed; the UI keeps it blurred. */
+  /** The cover: the server's lightly blurred copy until the artist switches it on (D-COVER-03). */
   cover_url: string | null;
+  /** The artist's switch: on shows the cover (or title screen) clearly, off a little blurred. */
+  cover_revealed?: boolean;
   offer: { id: string; amount_minor: number; currency_code: string };
   /** False once the date has passed while the release waits to be finished: no pre-orders then. */
   open?: boolean;

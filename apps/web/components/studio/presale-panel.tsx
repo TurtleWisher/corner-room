@@ -10,6 +10,7 @@ import { CalendarClock, CircleAlert, CircleCheck, Clock, ExternalLink, Mail, Sen
 import { Button, Card, DateTime, Field, Input, Money } from "@/components/ds";
 import { Textarea } from "@/components/ds/input";
 import { PresaleCover } from "@/components/music/presale-cover";
+import { CoverSwitch } from "@/components/studio/cover-reveal";
 import {
   requestPresale,
   savePresaleEmail,
@@ -18,7 +19,6 @@ import {
   type StudioReleaseDetail,
 } from "@/features/studio/api";
 import { coverUrl } from "@/lib/cover-view";
-import { revealStatus } from "@/lib/cover-reveal-view";
 import { friendlyError } from "@/lib/error-copy";
 import { fromLocalInput, toLocalInput } from "@/lib/artist-mail-view";
 import { preorderLabel, studioPresaleStage } from "@/lib/presale-view";
@@ -132,9 +132,10 @@ function FanPreview({ detail, date }: { detail: StudioReleaseDetail; date: strin
         Fan preview
       </p>
       <div className="mt-3 grid gap-5 border border-line bg-surface-sunken p-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center">
-        {/* The cover as fans see it now (D-PRESALE-04): lightly blurred once shown, else the title screen. */}
+        {/* The cover as fans see it now (D-COVER-03): a little blurred until the switch is on. */}
         <PresaleCover
-          coverUrl={detail.cover_reveal && revealStatus(detail.cover_reveal) === "revealed" ? coverUrl({ signed: detail.cover_url }, 480) : null}
+          coverUrl={coverUrl({ signed: detail.cover_reveal?.preview_url }, 480)}
+          revealed={Boolean(detail.cover_reveal?.revealed)}
           title={detail.release.title}
           artist={detail.profile.display_name}
           className="w-36"
@@ -163,8 +164,8 @@ function FanPreview({ detail, date }: { detail: StudioReleaseDetail; date: strin
         </div>
       </div>
       <p className="mt-3 text-sm text-fg-muted">
-        Fans never see your songs, credits or anything else before release, even when you&apos;ve uploaded them. Your cover shows only if you
-        choose to show it early, and then lightly blurred; until then they see your title on a glowing screen.
+        Fans never see your songs, credits or anything else before release, even when you&apos;ve uploaded them. Your cover (or, without one,
+        your title on a glowing screen) shows a little blurred until you switch it on above.
       </p>
     </Card>
   );
@@ -295,6 +296,15 @@ export function PresalePanel({ detail, reload, priceRow }: { detail: StudioRelea
           </Button>
         ) : null}
         <Problem message={error} />
+
+        {detail.cover_reveal?.can_switch ? (
+          <>
+            <h3 className="mt-6 text-base font-bold text-fg">3. Cover for fans</h3>
+            <div className="mt-2">
+              <CoverSwitch detail={detail} reload={reload} />
+            </div>
+          </>
+        ) : null}
       </Card>
 
       <FanPreview detail={detail} date={shownDate} />

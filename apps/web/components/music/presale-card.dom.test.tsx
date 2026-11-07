@@ -36,19 +36,28 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("Pre-sale cover (D-PRESALE-04)", () => {
-  it("shows the title screen, sharp, when there is no cover", () => {
+describe("Pre-sale cover (D-PRESALE-04, switch D-COVER-03)", () => {
+  it("shows the title screen, a little blurred, when there is no cover and the switch is off", () => {
     const { container } = render(<PresaleCover coverUrl={null} title="Night Signal" artist="Early Act" />);
     const frame = container.querySelector(".psc")!;
     expect(frame.getAttribute("data-kind")).toBe("screen");
+    expect(frame.hasAttribute("data-soft")).toBe(true);
     expect(container.querySelector(".psc-screen .psc-tube .psc-gloss")).not.toBeNull();
     expect(container.querySelector(".psc-art")).toBeNull();
   });
 
-  it("puts a shown cover under the light blur layer", () => {
-    const { container } = render(<PresaleCover coverUrl="/api/v1/covers/x.webp" title="Night Signal" />);
-    expect(container.querySelector(".psc")!.getAttribute("data-kind")).toBe("art");
-    expect(container.querySelector(".psc-art img")).not.toBeNull();
+  it("shows the title screen clearly once the switch is on", () => {
+    const { container } = render(<PresaleCover coverUrl={null} revealed title="Night Signal" />);
+    expect(container.querySelector(".psc")!.hasAttribute("data-soft")).toBe(false);
+  });
+
+  it("shows the cover it is given, blurred by the server while off, as it is once on", () => {
+    const off = render(<PresaleCover coverUrl="/api/v1/covers/signed/t/480" title="Night Signal" />);
+    expect(off.container.querySelector(".psc")!.getAttribute("data-kind")).toBe("art");
+    expect(off.container.querySelector(".psc-art img")!.getAttribute("src")).toBe("/api/v1/covers/signed/t/480");
+    off.unmount();
+    const on = render(<PresaleCover coverUrl="/api/v1/covers/signed/t/1200" revealed title="Night Signal" />);
+    expect(on.container.querySelector(".psc")!.hasAttribute("data-soft")).toBe(false);
   });
 });
 

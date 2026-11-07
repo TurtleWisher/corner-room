@@ -44,10 +44,10 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
     <main id="main" data-theme="sky" className="cr-scope">
       <LitSurface as="section" theme="sky" aria-labelledby="presale-title">
         <div className="mx-auto grid max-w-[90rem] items-center gap-10 px-4 py-12 md:grid-cols-[minmax(0,26rem)_1fr] md:px-6 md:py-16">
-          <PresaleCover coverUrl={cover} title={presale.title} artist={presale.artist}>
+          <PresaleCover coverUrl={cover} revealed={presale.cover_revealed} title={presale.title} artist={presale.artist}>
             {open && !preordered ? (
               <div className="psc-cta">
-                <PrebookLink presale={presale} place="PAGE" size="lg" />
+                <PrebookLink presale={presale} place="PAGE" size="lg" look="liquid" />
               </div>
             ) : null}
           </PresaleCover>

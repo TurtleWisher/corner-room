@@ -36,8 +36,6 @@ const COPY: Record<string, string> = {
   PROFILE_REVIEW_REQUIRED: "Profile changes go to staff for approval. Send them from Studio, Profile.",
   SAME_PERSON_REVIEW: "Someone else must approve this: you can't approve your own changes.",
   // Early cover reveal (owner, 2026-11-02, D-COVER-02).
-  REVEAL_TIME_PASSED: "That time has already passed. Choose a shorter time, or use Reveal now.",
-  COVER_ALREADY_REVEALED: "Fans can already see this cover, so it can't be hidden again.",
   COVER_REQUIRED: "Add a cover first.",
   // Early pre-sale (owner, 2026-11-03, D-PRESALE-03).
   HAS_BUYERS: "Someone has paid for this release. Cancel its pre-sale first and let the refunds finish, then delete it.",
