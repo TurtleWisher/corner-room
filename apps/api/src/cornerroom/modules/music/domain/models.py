@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     PrimaryKeyConstraint,
     String,
     Text,
@@ -441,3 +442,118 @@ class ReleaseReview(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     from_status: Mapped[str] = mapped_column(String(32), nullable=False)
     to_status: Mapped[str] = mapped_column(String(32), nullable=False)
+
+
+# --- Teasers (owner, 2026-11-07, D-TEASER-00 to D-TEASER-04, migration 0052) -------------------
+# A teaser is a short excerpt cut from a track's own master that anyone may hear for free, as often
+# as they like. It is never the released song: its files are class teaser_audio, never
+# catalog_audio, and a teaser play is never a PlaybackEvent, a listen or royalty input.
+
+
+class Teaser(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Base):
+    __tablename__ = "teasers"
+    __table_args__ = (
+        CheckConstraint("status IN ('DRAFT','IN_REVIEW','PUBLISHED','UNPUBLISHED')", name="status"),
+        Index("ix_teasers_track", "track_id", postgresql_where=text("deleted_at IS NULL")),
+        {"schema": "music"},
+    )
+
+    # Fixed at creation: the release link. The same teaser stays on the same song when it is released.
+    track_id: Mapped[UUID] = mapped_column(ForeignKey("music.tracks.id"), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="DRAFT", server_default="DRAFT")
+    live_version_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("music.teaser_versions.id", use_alter=True, name="fk_teasers_live_version"), nullable=True
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    __mapper_args__ = {"version_id_col": version}
+
+
+class TeaserVersion(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """Edit settings cut from one exact master, and their review. Settings never change once
+    processing starts; editing again makes a new version (non-destructive)."""
+
+    __tablename__ = "teaser_versions"
+    __table_args__ = (
+        UniqueConstraint("teaser_id", "number", name="number"),
+        CheckConstraint("start_ms >= 0 AND end_ms > start_ms", name="span"),
+        CheckConstraint("fade_in_ms >= 0 AND fade_out_ms >= 0", name="fades"),
+        CheckConstraint("status IN ('DRAFT','PROCESSING','READY','FAILED')", name="status"),
+        CheckConstraint(
+            "review_status IS NULL OR review_status IN ('WAITING','APPROVED','RETURNED','WITHDRAWN')",
+            name="review",
+        ),
+        {"schema": "music"},
+    )
+
+    teaser_id: Mapped[UUID] = mapped_column(ForeignKey("music.teasers.id"), nullable=False)
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_track_version_id: Mapped[UUID] = mapped_column(ForeignKey("music.track_versions.id"), nullable=False)
+    start_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    fade_in_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    fade_out_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Hundredths of a dB, so stored settings are exact integers.
+    gain_cdb: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="DRAFT", server_default="DRAFT")
+    failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    processing_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    integrated_lufs: Mapped[float | None] = mapped_column(Numeric(6, 2, asdecimal=False), nullable=True)
+    true_peak_dbtp: Mapped[float | None] = mapped_column(Numeric(6, 2, asdecimal=False), nullable=True)
+    review_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    submitted_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[UUID | None] = mapped_column(nullable=True)
+
+
+class TeaserRendition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "teaser_renditions"
+    __table_args__ = (
+        UniqueConstraint("teaser_version_id", "profile_key", "profile_version", name="profile"),
+        {"schema": "music"},
+    )
+
+    teaser_version_id: Mapped[UUID] = mapped_column(ForeignKey("music.teaser_versions.id"), nullable=False)
+    profile_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    profile_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    media_asset_id: Mapped[UUID] = mapped_column(ForeignKey("documents.media_assets.id"), nullable=False)
+    codec: Mapped[str] = mapped_column(String(16), nullable=False)
+    container: Mapped[str] = mapped_column(String(16), nullable=False)
+    bitrate_kbps: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    encoder_version: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class TrackWaveform(Base):
+    """Peaks of one master for the Teaser Studio editor, made once by the worker."""
+
+    __tablename__ = "track_waveforms"
+    __table_args__ = {"schema": "music"}
+
+    track_version_id: Mapped[UUID] = mapped_column(ForeignKey("music.track_versions.id"), primary_key=True)
+    points: Mapped[list[int]] = mapped_column(JSONB, nullable=False)
+    bucket_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+
+class TeaserCount(Base):
+    """Running totals per teaser per hour (Q-TS-14). Nothing about a listener is stored."""
+
+    __tablename__ = "teaser_counts"
+    __table_args__ = {"schema": "music"}
+
+    teaser_id: Mapped[UUID] = mapped_column(ForeignKey("music.teasers.id"), primary_key=True)
+    hour: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    starts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    completes: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    prompt_clicks: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

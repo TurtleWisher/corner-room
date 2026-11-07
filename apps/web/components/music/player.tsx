@@ -53,12 +53,25 @@ import {
   type PlayProblem,
   type RepeatMode,
 } from "@/lib/player-model";
+import { countTeaser, fetchTeaserAudio, fetchTrackTeasers, type TeaserSummary } from "@/features/teasers/api";
 import { coverUrl } from "@/lib/cover-view";
 import { mediaSessionInfo } from "@/lib/media-session-view";
 import { DOCK_IDLE_MS, atPageEdge, dockLook, dockTravel, pointerWantsDock, settleDock, stepDock } from "@/lib/player-dock-view";
+import { isCompletion, teaserKey, teaserPath } from "@/lib/teaser-room-view";
 import { cn } from "@/lib/utils";
 
-export type PlayerTrack = { id: string; title: string; artist?: string | null };
+/**
+ * A song, or a teaser of one (D-TEASER-00). A teaser is keyed `teaser:<id>` so the song's own Play
+ * buttons never light up for it; it opens no listening session and reports no plays.
+ */
+export type PlayerTrack = {
+  id: string;
+  title: string;
+  artist?: string | null;
+  teaser?: { id: string; trackId: string } | null;
+};
+
+export type TeaserPlay = { teaserId: string; trackId: string; title: string; artist?: string | null; label?: string | null };
 
 /** Where a play came from: the list becomes Up next, `source` names it ("Night Bus"). */
 export type PlayOptions = { queue?: PlayerTrack[]; source?: string | null };
@@ -138,6 +151,10 @@ type PlayerApi = PlayerState & {
   /** Whether levelling can work here: element volume is ignored on some devices (iOS). */
   levellingAvailable: boolean;
   isCurrent: (trackId: string) => boolean;
+  /** Play a teaser (D-TEASER-00): no session, no reported plays, no Up next. */
+  playTeaser: (teaser: TeaserPlay) => Promise<void>;
+  /** Called after each full listen of a teaser (about 90 % really heard); returns an unsubscribe. */
+  onTeaserComplete: (listener: (teaserId: string) => void) => () => void;
   /** The audio's own clock, read now (progress reports come only a few times a second). */
   exactPosition: () => number;
 };
@@ -226,6 +243,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // Set once media has played in CORS mode: later failures are then never blamed on CORS.
   const corsProven = useRef(false);
   const audioCtx = useRef<AudioContext | null>(null);
+  // Teasers: who wants to hear about a full listen, and whether this play's start was counted.
+  const teaserListeners = useRef<Set<(teaserId: string) => void>>(new Set());
+  const teaserStarted = useRef<number | null>(null);
   const graph = useRef<{ gain: GainNode } | null>(null);
   const [routed, setRouted] = useState(false);
   const [corsSeen, setCorsSeen] = useState(false);
@@ -308,6 +328,35 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       failedCodecs.current = new Set();
       progress.set({ position: 0, duration: 0 });
       setState((s) => ({ ...s, track: meta, status: "loading", problem: null, queue, index, source, needsGesture: false, buffering: false, gainDb: null, format: null }));
+      if (meta.teaser) {
+        // A teaser plays from its own route: no listening session, nothing reported (D-TEASER-00).
+        teaserStarted.current = null;
+        try {
+          const delivery = await fetchTeaserAudio(meta.teaser.id, accept.current);
+          if (seq !== loadSeq.current) return;
+          alternates.current = [...(delivery.alternates ?? [])];
+          const format = noteDelivery(delivery.codec, null);
+          a.src = resolveMediaUrl(delivery.url);
+          setState((s) => ({ ...s, gainDb: delivery.gain_db ?? null, format }));
+          try {
+            await a.play();
+          } catch (err) {
+            if (seq !== loadSeq.current || isSuperseded(err)) return;
+            if (isAutoplayBlocked(err)) {
+              a.preload = "metadata";
+              a.load();
+              setState((s) => ({ ...s, status: "paused", needsGesture: true }));
+              return;
+            }
+            if (a.error) return;
+            throw err;
+          }
+        } catch (err) {
+          if (seq !== loadSeq.current) return;
+          setState((s) => ({ ...s, status: "problem", problem: playProblem(err) }));
+        }
+        return;
+      }
       try {
         const [opened, row] = await Promise.all([
           openListeningSession(meta.id),
@@ -381,6 +430,35 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     },
     [load, wakeAudio],
   );
+
+  const playTeaser = useCallback(
+    async (t: TeaserPlay) => {
+      const a = audio.current;
+      if (!a) return;
+      const meta: PlayerTrack = {
+        id: teaserKey(t.teaserId),
+        title: t.title,
+        artist: t.artist ?? null,
+        teaser: { id: t.teaserId, trackId: t.trackId },
+      };
+      const s = stateRef.current;
+      wakeAudio();
+      if (s.track?.id === meta.id && (s.status === "paused" || s.status === "playing")) {
+        if (a.paused) await a.play().catch((err) => isAutoplayBlocked(err) && setState((x) => ({ ...x, needsGesture: true })));
+        return;
+      }
+      original.current = null;
+      await load(meta, [meta], 0, t.label ?? "Teaser");
+    },
+    [load, wakeAudio],
+  );
+
+  const onTeaserComplete = useCallback((listener: (teaserId: string) => void) => {
+    teaserListeners.current.add(listener);
+    return () => {
+      teaserListeners.current.delete(listener);
+    };
+  }, []);
 
   const toggle = useCallback(() => {
     const a = audio.current;
@@ -512,7 +590,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
       retried.current = true;
       const usable = accept.current.filter((c) => !failedCodecs.current.has(c));
-      const delivery = await fetchTrackAudio(s.track.id, usable.length > 0 ? usable : accept.current);
+      const codecs = usable.length > 0 ? usable : accept.current;
+      const delivery = s.track.teaser
+        ? { ...(await fetchTeaserAudio(s.track.teaser.id, codecs)), bitrate_kbps: null }
+        : await fetchTrackAudio(s.track.id, codecs);
       if (seq !== loadSeq.current) return;
       alternates.current = (delivery.alternates ?? []).filter((alt) => !failedCodecs.current.has(alt.codec));
       const format = noteDelivery(delivery.codec, delivery.bitrate_kbps);
@@ -613,7 +694,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const ms = typeof navigator !== "undefined" ? navigator.mediaSession : undefined;
     if (!ms || typeof MediaMetadata === "undefined") return;
     const { track, source } = stateRef.current;
-    ms.metadata = track ? new MediaMetadata(mediaSessionInfo(track, source, window.location.origin)) : null;
+    // A teaser shows its song's cover: the player keys it `teaser:<id>`, which is not a song id.
+    const shown = track?.teaser ? { ...track, id: track.teaser.trackId } : track;
+    ms.metadata = shown ? new MediaMetadata(mediaSessionInfo(shown, source, window.location.origin)) : null;
   }, []);
   useEffect(() => {
     showMediaInfo();
@@ -654,8 +737,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       levellingAvailable: volumeSettable,
       isCurrent: (id) => state.track?.id === id,
       exactPosition: () => audio.current?.currentTime ?? progress.get().position,
+      playTeaser,
+      onTeaserComplete,
     }),
-    [state, hasNext, volumeSettable, progress, play, toggle, seek, next, previous, setVolume, toggleMute, toggleShuffle, cycleRepeat, toggleNormalise],
+    [state, hasNext, volumeSettable, progress, play, toggle, seek, next, previous, setVolume, toggleMute, toggleShuffle, cycleRepeat, toggleNormalise, playTeaser, onTeaserComplete],
   );
 
   return (
@@ -674,6 +759,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           // minutes, Q-P8-01; songs may run 60) may be refreshed once more. A fresh link that fails
           // at once never reaches here, so this cannot loop.
           retried.current = false;
+          const now = stateRef.current.track;
+          if (now?.teaser && teaserStarted.current !== loadSeq.current) {
+            teaserStarted.current = loadSeq.current;
+            countTeaser(now.teaser.id, "start");
+          }
           if (cors.current && !corsProven.current) {
             corsProven.current = true;
             setCorsSeen(true);
@@ -686,9 +776,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           report(false);
           heard.current = heardAfterJump(heard.current);
         }}
-        onEnded={() => {
+        onEnded={(e) => {
           report(true);
           const s = stateRef.current;
+          const t = s.track?.teaser;
+          if (t && isCompletion(heard.current.heardMs, e.currentTarget.duration)) {
+            countTeaser(t.id, "complete");
+            for (const listener of teaserListeners.current) listener(t.id);
+          }
+          // Each full listen is its own: the next play starts counting from nothing.
+          if (t) heard.current = NOTHING_HEARD;
           const step = afterEnd(s.index, s.queue.length, s.repeat);
           // Each play, a repeat included, is its own listening session and listen.
           if (step.kind === "go") {
@@ -911,13 +1008,34 @@ function useScrollDock(ref: React.RefObject<HTMLElement | null>, enabled: boolea
   }, [ref, enabled]);
 }
 
+/** A song the listener can't play yet: its newest teaser, if it has one (D-TEASER-00). */
+function useBlockedSongTeaser(trackId: string | null): TeaserSummary | null {
+  const [teaser, setTeaser] = useState<TeaserSummary | null>(null);
+  useEffect(() => {
+    setTeaser(null);
+    if (!trackId) return;
+    let live = true;
+    fetchTrackTeasers(trackId)
+      .then((rows) => live && setTeaser(rows[0] ?? null))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [trackId]);
+  return teaser;
+}
+
 export function PlayerBar() {
   const p = usePlayer();
   const pathname = usePathname();
   const dock = useRef<HTMLElement>(null);
-  const shown = Boolean(p.track) && !isRoomPath(pathname);
+  const blockedTeaser = useBlockedSongTeaser(p.status === "problem" && p.problem?.kind === "needs_access" && p.track && !p.track.teaser ? p.track.id : null);
+  const teaser = p.track?.teaser ?? null;
+  // The teaser room draws its own controls for the teaser it shows.
+  const inOwnRoom = Boolean(teaser && pathname === teaserPath(teaser.id));
+  const shown = Boolean(p.track) && !isRoomPath(pathname) && !inOwnRoom;
   useScrollDock(dock, shown);
-  if (!p.track || isRoomPath(pathname)) return null;
+  if (!p.track || isRoomPath(pathname) || inOwnRoom) return null;
   const playing = p.status === "playing";
   const label = p.track.title || "Track";
   const status = playerStatusText(p);
@@ -933,22 +1051,26 @@ export function PlayerBar() {
         <div className="cr-glass mx-auto flex h-20 max-w-[90rem] items-center gap-3 px-3 md:gap-5 md:px-6">
           {/* cr-now-cover: grows into the room's front card on the way in (room-transition.tsx). */}
           <Link
-            href={`/listen/${p.track.id}`}
-            aria-label={`Open the listening room for ${label}`}
+            href={teaser ? teaserPath(teaser.id) : `/listen/${p.track.id}`}
+            aria-label={teaser ? `Open the teaser of ${label}` : `Open the listening room for ${label}`}
             className="cr-focus size-12 shrink-0 bg-cr-sky [view-transition-name:cr-now-cover]"
           >
             <CoverArt
-              src={coverUrl({ track: p.track.id }, 160)}
+              src={coverUrl({ track: teaser ? teaser.trackId : p.track.id }, 160)}
               fallback={<RoomCube front={label} side={p.track.artist || label} tone="sky" size="front" label="" className="size-full" />}
               className="size-full"
             />
           </Link>
           <div className="min-w-0 flex-1 md:flex-none md:basis-56">
             {/* The song's name opens its page (owner, 2026-10-30); the cover opens the listening room. */}
-            <Link href={`/tracks/${p.track.id}`} className="cr-focus block truncate text-sm font-bold text-fg hover:text-highlight hover:underline">
+            <Link
+              href={teaser ? teaserPath(teaser.id) : `/tracks/${p.track.id}`}
+              className="cr-focus block truncate text-sm font-bold text-fg hover:text-highlight hover:underline"
+            >
               {label}
             </Link>
             <p className="truncate text-xs text-fg-muted">
+              {teaser ? "Teaser · " : ""}
               {p.status === "playing" && !p.buffering ? (p.track.artist ?? "") : status}
             </p>
           </div>
@@ -959,9 +1081,29 @@ export function PlayerBar() {
                   <LogIn aria-hidden="true" /> Sign in
                 </ButtonLink>
               ) : p.problem.kind === "needs_access" ? (
-                <ButtonLink href={`/tracks/${p.track.id}`} size="sm">
-                  <ShoppingBag aria-hidden="true" /> Get access
-                </ButtonLink>
+                <>
+                  {blockedTeaser ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        p.track &&
+                        void p.playTeaser({
+                          teaserId: blockedTeaser.id,
+                          trackId: p.track.id,
+                          title: p.track.title,
+                          artist: p.track.artist,
+                          label: blockedTeaser.title ?? "Teaser",
+                        })
+                      }
+                      className="cr-focus inline-flex items-center gap-1.5 text-xs font-semibold text-link hover:underline"
+                    >
+                      <Play aria-hidden="true" className="size-3.5" /> Play the teaser
+                    </button>
+                  ) : null}
+                  <ButtonLink href={`/tracks/${p.track.id}`} size="sm">
+                    <ShoppingBag aria-hidden="true" /> Get access
+                  </ButtonLink>
+                </>
               ) : null}
             </div>
           ) : (
@@ -1000,10 +1142,10 @@ export function PlayerBar() {
               </div>
               <BarProgress label={label} />
               <Link
-                href={`/listen/${p.track.id}`}
+                href={teaser ? teaserPath(teaser.id) : `/listen/${p.track.id}`}
                 className="cr-focus hidden items-center gap-1.5 text-xs font-semibold text-link hover:underline md:inline-flex"
               >
-                <Maximize2 aria-hidden="true" className="size-3.5" /> Listening room
+                <Maximize2 aria-hidden="true" className="size-3.5" /> {teaser ? "Teaser room" : "Listening room"}
               </Link>
             </>
           )}

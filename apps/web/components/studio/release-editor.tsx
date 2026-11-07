@@ -4,7 +4,7 @@
  * re-renders from the server's answer; nothing here decides permission, readiness or state. */
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, ChartLine, CircleAlert, CircleCheck, GripVertical, Plus, Save, Send, Trash2, Undo2, UserRound } from "lucide-react";
+import { ArrowDown, ArrowUp, AudioLines, ChartLine, CircleAlert, CircleCheck, GripVertical, Plus, Save, Send, Trash2, Undo2, UserRound } from "lucide-react";
 
 import { Button, ButtonLink, Card, DateTime, ErrorState, Field, Input, Money, Select, Skeleton } from "@/components/ds";
 import { Textarea } from "@/components/ds/input";
@@ -1121,6 +1121,17 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
           </form>
         ) : null}
         <Problem message={tracksAction.error} />
+        {detail.tracks.length > 0 ? (
+          <Card tone="outline" className="mt-6 flex flex-wrap items-center justify-between gap-3 p-4 text-sm text-fg">
+            <p className="max-w-prose">
+              <span className="font-semibold">Teasers.</span> Cut a short part of a song that anyone can listen to for free, as often as they
+              like, until they decide to buy it.
+            </p>
+            <ButtonLink href={`/studio/releases/${detail.release.id}/teasers`} variant="secondary" size="sm">
+              <AudioLines aria-hidden="true" /> Teaser Studio
+            </ButtonLink>
+          </Card>
+        ) : null}
       </Section>
 
       <Section id="price" title="Price">

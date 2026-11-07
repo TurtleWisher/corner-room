@@ -16,6 +16,7 @@ import { BandLineup } from "@/components/artists/band-lineup";
 import { CreditFace } from "@/components/music/credit-face";
 import { GiftNote } from "@/components/music/gift-note";
 import { PresaleView } from "@/components/music/presale-view";
+import { ReleaseTeasers } from "@/components/teasers/song-teasers";
 import { useReleaseOpenCount } from "@/components/music/use-release-count";
 import { useCredits } from "@/components/music/credits";
 import { SongCredits } from "@/components/music/song-credits";
@@ -445,6 +446,7 @@ export default function ReleasePage() {
             <TrackList rows={rows} playable={playable} signedIn={signedIn} artist={artist} commerce={commerce} playFrom={playFrom} releaseId={release.id} />
           )}
         </section>
+        <ReleaseTeasers releaseId={release.id} artist={artist} />
         <GiftNote releaseId={release.id} className="max-w-xl" />
         {release.primary_band_id ? <BandLineup bandId={release.primary_band_id} /> : null}
         {canStaff && !canModerateMusic(user?.permissions) ? <ReleaseArtistTools release={release} /> : null}

@@ -177,7 +177,7 @@ class MediaJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "media_jobs"
     __table_args__ = (
         UniqueConstraint("idempotency_key", name="uq_media_jobs_idempotency_key"),
-        CheckConstraint("kind IN ('INSPECT','TRANSCODE')", name="kind"),
+        CheckConstraint("kind IN ('INSPECT','TRANSCODE','WAVEFORM','TEASER')", name="kind"),
         CheckConstraint(
             "status IN ('QUEUED','RUNNING','SUCCEEDED','FAILED','DEAD','CANCELLED')", name="status"
         ),

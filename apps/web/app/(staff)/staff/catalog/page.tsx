@@ -12,6 +12,7 @@ import { ArtistMailReview } from "@/components/staff/artist-mail-review";
 import { ChangesQueue } from "@/components/staff/changes-review";
 import { GiftsReview } from "@/components/staff/gifts-review";
 import { MusicGiftsReview } from "@/components/staff/music-gifts-review";
+import { TeasersReview } from "@/components/staff/teasers-review";
 import { PresaleQueue } from "@/components/staff/presale-review";
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
 import { useWorkspace } from "@/components/workspace-provider";
@@ -423,6 +424,7 @@ export default function StaffCatalogPage() {
         <ChangesQueue />
         <GiftsReview />
         <MusicGiftsReview />
+        <TeasersReview />
         <ArtistMailReview />
         <LyricsQueue />
         <TimeLyrics />
