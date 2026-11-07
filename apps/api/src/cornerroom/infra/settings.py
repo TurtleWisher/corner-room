@@ -121,6 +121,12 @@ class Settings(BaseSettings):
     # hour; more are dropped silently, so a script can't pump an artist's numbers. Many phones in
     # Bangladesh share one carrier address, hence a roomy number. 0 turns the limit off.
     presale_count_max_per_hour: int = 60
+    # Teasers (owner, 2026-11-07): at most 60 s (D-TEASER-03); 0 blocks making any (fail closed).
+    # The 5 s floor only stops an empty file; it is not a product rule (Q-TS-06). Counts of teaser
+    # starts and full listens use the same per-address hourly cap idea as pre-sale counts.
+    teaser_max_ms: int = 60_000
+    teaser_min_ms: int = 5_000
+    teaser_count_max_per_hour: int = 60
     listen_min_ms: int = 30000
     listen_daily_cap: int = 30
     verification_challenge_ttl_seconds: int = 0

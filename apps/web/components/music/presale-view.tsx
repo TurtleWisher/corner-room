@@ -10,6 +10,7 @@ import { Display, Eyebrow } from "@/components/brand/display";
 import { ButtonLink, DateTime, Money } from "@/components/ds";
 import { useCustomerCommerce } from "@/components/music/commerce";
 import { PrebookLink } from "@/components/music/presale-card";
+import { ReleaseTeasers } from "@/components/teasers/song-teasers";
 import { PresaleCover } from "@/components/music/presale-cover";
 import { useReleaseOpenCount } from "@/components/music/use-release-count";
 import { countPresale } from "@/features/presales/api";
@@ -120,6 +121,10 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
           </div>
         </div>
       </LitSurface>
+      {/* A song's teaser may be public before release (D-TEASER-04): free to hear here. */}
+      <div className="mx-auto max-w-[90rem] px-4 pb-16 pt-10 empty:hidden md:px-6">
+        <ReleaseTeasers releaseId={presale.id} artist={presale.artist} />
+      </div>
     </main>
   );
 }

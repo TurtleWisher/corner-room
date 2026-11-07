@@ -12,6 +12,7 @@ import { canPlay, TrackBuyControl, useCustomerCommerce, usePlayableCatalog } fro
 import { useCredits } from "@/components/music/credits";
 import { ListeningRoom, RoomTitle } from "@/components/music/listening-room";
 import { usePlayer } from "@/components/music/player";
+import { SongTeaserMain, useSongTeasers } from "@/components/teasers/song-teasers";
 import { useAsync } from "@/components/use-async";
 import { fetchTrack } from "@/lib/api";
 import { coverUrl } from "@/lib/cover-view";
@@ -42,6 +43,7 @@ export default function ListeningRoomPage() {
   const artist = track.status === "ok" ? creditName(track.data, people.artists, people.bands) : null;
   const owns = commerce.ready && canPlay(commerce, trackId, releaseIdsFor(catalog.map, trackId));
   const current = player.track?.id === trackId;
+  const teasers = useSongTeasers(commerce.ready && !owns ? trackId : null);
 
   // One effect, so the order is fixed: first notice that the player moved on inside the room
   // (Next, Previous, a corridor pick, the end of a track) and keep the address on the playing
@@ -102,6 +104,8 @@ export default function ListeningRoomPage() {
                   <div className="mt-6 flex flex-wrap gap-3">
                     <TrackBuyControl track={{ id: trackId, title, artist }} commerce={commerce} size="lg" releaseIds={track.status === "ok" && track.data.release_ids?.length ? track.data.release_ids : releaseIdsFor(catalog.map, trackId)} />
                   </div>
+                  {/* Can't play the song yet: its teaser is free to hear (D-TEASER-00). */}
+                  <SongTeaserMain teasers={teasers} trackId={trackId} songTitle={title || "Track"} artist={artist} className="mt-6" />
                 </div>
               </div>
             )

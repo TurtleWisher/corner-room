@@ -21,6 +21,7 @@ import { SongLyrics } from "@/components/music/song-lyrics";
 import { useCredits } from "@/components/music/credits";
 import { TrackAudioPanel } from "@/components/music/track-audio-panel";
 import { RetryButton, StaffPanel } from "@/components/shell/staff-panel";
+import { SongTeaserMain, SongTeasersSection, useSongTeasers } from "@/components/teasers/song-teasers";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import {
   ApiError,
@@ -167,6 +168,8 @@ export default function TrackPage() {
     source: "Your music",
   };
   const [override, setOverride] = useState<TrackRecord | null>(null);
+  // Teasers (D-TEASER-00): the free way to hear this song for anyone who hasn't bought it.
+  const teasers = useSongTeasers(id);
   const data = useAsync(async () => {
     if (status === "loading") return null;
     const opts = { skipAuth: !signedIn };
@@ -258,6 +261,9 @@ export default function TrackPage() {
                 />
               )}
             </div>
+            {buy.kind !== "owned" ? (
+              <SongTeaserMain teasers={teasers} trackId={track.id} songTitle={track.title} artist={artist} className="music-rise mt-4" />
+            ) : null}
             {buy.kind === "owned" ? (
               <p className="mt-3 text-sm text-fg">
                 {buy.via === "track"
@@ -272,6 +278,7 @@ export default function TrackPage() {
             </p>
             {/* A live gift campaign for this song (D-CAMPAIGN-01). */}
             <GiftNote trackId={track.id} className="mt-6 max-w-md" />
+            <SongTeasersSection teasers={teasers} trackId={track.id} songTitle={track.title} artist={artist} className="mt-8" />
           </div>
           {/* Phones: the same sections, after the title and buy button. */}
           <div className="md:hidden">

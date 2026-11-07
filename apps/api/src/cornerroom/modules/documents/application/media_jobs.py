@@ -167,7 +167,11 @@ class MediaJobService:
         if job is None or job.status != "RUNNING":
             return
         self._failed(job, code)
-        if job.status == "DEAD":
+        if job.status == "DEAD" and job.kind == "TEASER":
+            from cornerroom.modules.music.application import teaser_jobs
+
+            await teaser_jobs.job_dead(self, job)
+        elif job.status == "DEAD" and job.kind != "WAVEFORM":
             await self._mark_versions_stalled(job)
         await self.session.flush()
 
@@ -195,6 +199,14 @@ class MediaJobService:
                 await self._inspect_master(job, asset)
         elif job.kind == "TRANSCODE":
             await self._transcode(job, asset)
+        elif job.kind in ("WAVEFORM", "TEASER"):
+            # Teaser Studio (D-TEASER-00): editor peaks and teaser copies, both read the master only.
+            from cornerroom.modules.music.application import teaser_jobs
+
+            if job.kind == "WAVEFORM":
+                await teaser_jobs.run_waveform(self, job, asset)
+            else:
+                await teaser_jobs.run_teaser(self, job, asset)
         job.status = "SUCCEEDED"
         job.finished_at = self.clock.now()
         job.last_error_code = None
@@ -569,9 +581,16 @@ class MediaJobService:
             raise AppError("INVALID_TRANSITION", "This job can't be cancelled now", 409)
         job.status = "CANCELLED"
         job.finished_at = self.clock.now()
-        music = MusicService(self.session, settings=self.settings)
-        for version in await music.versions_for_master(job.media_asset_id):
-            await music.system_reject_version(version, "PROCESSING_FAILED")
+        if job.kind in ("INSPECT", "TRANSCODE"):
+            music = MusicService(self.session, settings=self.settings)
+            for version in await music.versions_for_master(job.media_asset_id):
+                await music.system_reject_version(version, "PROCESSING_FAILED")
+        elif job.kind == "TEASER":
+            # A teaser job never touches the song's master: only its teaser version fails.
+            from cornerroom.modules.music.application import teaser_jobs
+
+            job.last_error_code = job.last_error_code or "CANCELLED"
+            await teaser_jobs.job_dead(self, job)
         await self.session.flush()
         await self.audit.record(
             action="media_job.cancelled", entity_type="MediaJob", entity_id=job.id, actor_id=str(actor_id),

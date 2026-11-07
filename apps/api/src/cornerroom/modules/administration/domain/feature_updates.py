@@ -16,6 +16,37 @@ AREAS: Final = ("Music", "Listening", "Events", "Money", "Artists", "Fans", "Sta
 
 FEATURES: Final[list[dict]] = [
     {
+        "id": "teasers",
+        "name": "Teasers",
+        "area": "Music",
+        "audience": ["Artists", "Fans", "Staff"],
+        "summary": "A short part of a song that anyone can hear free, as often as they like, until they buy it.",
+        "description": (
+            "In Studio, the Teaser Studio (from a release's Tracks section) lets an artist or band pick a "
+            "part of a song on its waveform (at most 60 seconds), add a fade in, a fade out and a volume "
+            "change, hear it as they edit, and have Corner Room make it from the song's own master, which "
+            "never changes. Staff approve each teaser on Catalog > Releases. Once approved, anyone can "
+            "listen on its own teaser page or from the song page, release page, pre-sale page and player, "
+            "without signing in or buying. After each full listen a gentle suggestion offers to buy the "
+            "song or its release (or pre-book it), never stopping a replay. Teasers work before and after "
+            "release and stay on the same song. A newer version waits for approval while the live one "
+            "keeps playing. Teaser plays are not song plays: they never count as listens or earn "
+            "royalties. Artists see how many times each teaser was started and listened to the end."
+        ),
+        "updates": [
+            {
+                "date": "2026-11-07",
+                "kind": "NEW",
+                "title": "Teaser Studio and teaser listening",
+                "details": (
+                    "Waveform editor with zoom, typed times, fades, volume, undo and live preview; "
+                    "versions with staff review; public teaser page; teasers on song, release and "
+                    "pre-sale pages; buy suggestion after a full listen; start and full-listen counts."
+                ),
+            },
+        ],
+    },
+    {
         "id": "music-gifts",
         "name": "Music gifts",
         "area": "Artists",
