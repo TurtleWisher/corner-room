@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.infra.errors import AppError, ConflictError, NotFoundError
 from cornerroom.infra.settings import Settings, get_settings
+from cornerroom.infra.review_policy import second_review_on
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import (
@@ -465,7 +466,7 @@ class ChangeRequestService:
             # themselves. Anything else (details, audio), and the profile's own people, still need
             # someone else (two-person rule, D-AUDIO-09).
             owners = await self.music.catalog_owner_ids(release.primary_artist_id, release.primary_band_id)
-            if not (credits_only(req.changes or {}) and ctx.user_id not in owners):
+            if second_review_on(self.settings) and not (credits_only(req.changes or {}) and ctx.user_id not in owners):
                 await self.music.assert_independent_reviewer(ctx, [release.id])
                 if ctx.user_id in {req.submitted_by, req.created_by}:
                     raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You made these changes")

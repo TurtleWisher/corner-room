@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.api.deps import db_session, get_auth_context, settings_dep
 from cornerroom.infra.settings import Settings
+from cornerroom.infra.review_policy import approve_at_once
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.commerce.application.gift_status_mails import GiftStatusMailService
 from cornerroom.modules.commerce.application.gifts import GiftCampaignService
@@ -198,12 +199,19 @@ async def campaign_detail(campaign_id: UUID, ctx: Ctx, svc: Svc) -> CampaignDeta
 @router.patch("/studio/gift-campaigns/{campaign_id}", response_model=CampaignDetailOut)
 async def change_campaign(campaign_id: UUID, body: CampaignIn, ctx: Ctx, svc: Svc) -> CampaignDetailOut:
     """A draft changes at once; a live or paused campaign's change waits for staff."""
-    return CampaignDetailOut(**await svc.update(ctx, campaign_id, _data(body)))
+    out = await svc.update(ctx, campaign_id, _data(body))
+    # A live campaign's change waits for staff; approved at once for staff (D-REVIEW-SOLO-01).
+    if await approve_at_once(svc.session, lambda: svc.review(ctx, campaign_id, approve=True, note=None), settings=svc.settings):
+        out = await svc.detail(ctx, campaign_id)
+    return CampaignDetailOut(**out)
 
 
 @router.post("/studio/gift-campaigns/{campaign_id}/submit", response_model=CampaignDetailOut)
 async def submit_campaign(campaign_id: UUID, ctx: Ctx, svc: Svc) -> CampaignDetailOut:
-    return CampaignDetailOut(**await svc.submit(ctx, campaign_id))
+    out = await svc.submit(ctx, campaign_id)
+    if await approve_at_once(svc.session, lambda: svc.review(ctx, campaign_id, approve=True, note=None), settings=svc.settings):
+        out = await svc.detail(ctx, campaign_id)
+    return CampaignDetailOut(**out)
 
 
 @router.post("/studio/gift-campaigns/{campaign_id}/withdraw", response_model=CampaignDetailOut)
@@ -346,7 +354,13 @@ async def save_status_email(campaign_id: UUID, status: MailStatus, body: StatusM
 
 @router.post("/studio/gift-campaigns/{campaign_id}/status-emails/{status}/submit", response_model=StatusMailsOut)
 async def submit_status_email(campaign_id: UUID, status: MailStatus, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
-    return StatusMailsOut(**await svc.submit(ctx, campaign_id, status))
+    out = await svc.submit(ctx, campaign_id, status)
+    # Approved at once when the sender may approve it (D-REVIEW-SOLO-01).
+    if await approve_at_once(
+        svc.session, lambda: svc.review(ctx, campaign_id, status, approve=True, note=None), settings=svc.settings
+    ):
+        out = await svc.view(ctx, campaign_id)
+    return StatusMailsOut(**out)
 
 
 @router.post("/studio/gift-campaigns/{campaign_id}/status-emails/{status}/review", response_model=StatusMailsOut)

@@ -36,6 +36,22 @@ FEATURES: Final[list[dict]] = [
         "updates": [
             {
                 "date": "2026-11-07",
+                "kind": "IMPROVED",
+                "title": "Teaser editor on one screen",
+                "details": (
+                    "The whole editor fits one screen: the play key and loop sit on the waveform's own "
+                    "toolbar with undo and zoom, times, fades and volume share one row, and the actions "
+                    "sit at the bottom. Glossy buttons; versions fold away."
+                ),
+            },
+            {
+                "date": "2026-11-07",
+                "kind": "FIXED",
+                "title": "Deleting a teaser deletes its versions",
+                "details": "Deleting a teaser that was never public now removes every version of it too.",
+            },
+            {
+                "date": "2026-11-07",
                 "kind": "NEW",
                 "title": "Teaser Studio and teaser listening",
                 "details": (
@@ -459,6 +475,17 @@ FEATURES: Final[list[dict]] = [
             "Money > Customers and users lists every account and order with its payment status and a CSV."
         ),
         "updates": [
+            {
+                "date": "2026-11-07",
+                "kind": "IMPROVED",
+                "title": "One staff member approves alone",
+                "details": (
+                    "While Corner Room has one staff member, nobody else is needed to approve: what staff "
+                    "send in (releases, pre-sales, changes, lyrics, emails, gifts, teasers, managers, "
+                    "profile changes) is approved at once, and staff may approve their own work. Artists "
+                    "without staff rights still wait for staff. A setting turns the second approval back on."
+                ),
+            },
             {"date": "2026-11-06", "kind": "NEW", "title": "Feature updates log", "details": "Admin > Feature updates."},
             {"date": "2026-11-06", "kind": "NEW", "title": "Music gifts review", "details": "Catalog > Releases: music gifts waiting for review."},
             {"date": "2026-10-28", "kind": "IMPROVED", "title": "Customers with payment status", "details": "Every order a person started, with its payment status; staff menu icons."},

@@ -127,6 +127,10 @@ class Settings(BaseSettings):
     teaser_max_ms: int = 60_000
     teaser_min_ms: int = 5_000
     teaser_count_max_per_hour: int = 60
+    # Owner, 2026-11-07 (D-REVIEW-SOLO-01): while the owner is the only staff, nobody else can be the
+    # second person, so the rule "someone else must approve this" is off and whatever a person with
+    # the staff right to approve sends in is approved at once. Turn it on (true) when more staff join.
+    staff_second_review: bool = False
     listen_min_ms: int = 30000
     listen_daily_cap: int = 30
     verification_challenge_ttl_seconds: int = 0

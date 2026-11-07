@@ -10,7 +10,7 @@ import { TeaserEditor } from "@/components/teasers/teaser-editor";
 export default function TeaserEditorPage() {
   const { id, teaserId } = useParams<{ id: string; teaserId: string }>();
   return (
-    <AccountPage audience="artist" eyebrow="Teaser Studio" title="Edit teaser" what="your teaser">
+    <AccountPage audience="artist" eyebrow="Teaser Studio" title="Edit teaser" what="your teaser" compact>
       <TeaserEditor teaserId={teaserId} releaseId={id} />
     </AccountPage>
   );

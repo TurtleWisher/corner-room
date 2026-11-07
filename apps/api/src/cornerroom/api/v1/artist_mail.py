@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cornerroom.api.deps import db_session, get_auth_context, settings_dep
 from cornerroom.infra.errors import AppError
 from cornerroom.infra.settings import Settings
+from cornerroom.infra.review_policy import approve_at_once
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.commerce.application.artist_mail import ArtistMailService
 
@@ -424,8 +425,12 @@ async def copy_mail(mail_id: UUID, ctx: Ctx, svc: Svc) -> MailOut:
 
 @router.post("/studio/mails/{mail_id}/submit", response_model=MailOut)
 async def submit_mail(mail_id: UUID, ctx: Ctx, svc: Svc) -> MailOut:
-    """Send for Corner Room's review; it goes out once approved, or at its time."""
-    return MailOut(**await svc.submit_mail(ctx, mail_id))
+    """Send for Corner Room's review; it goes out once approved, or at its time. Approved at once
+    when the sender may approve it (D-REVIEW-SOLO-01)."""
+    out = await svc.submit_mail(ctx, mail_id)
+    if await approve_at_once(svc.session, lambda: svc.review(ctx, mail_id, approve=True, note=None), settings=svc.settings):
+        out = await svc.mail_detail(ctx, mail_id)
+    return MailOut(**out)
 
 
 @router.post("/studio/mails/{mail_id}/withdraw", response_model=MailOut)

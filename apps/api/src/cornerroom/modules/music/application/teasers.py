@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cornerroom.infra.errors import AppError, NotFoundError, UnauthorizedError
 from cornerroom.infra.outbox import enqueue_outbox
 from cornerroom.infra.settings import Settings, get_settings
+from cornerroom.infra.review_policy import second_review_on
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import TEASER_PROCESSING_FAILED, TEASER_PUBLISHED, DomainEvent
@@ -517,12 +518,46 @@ class TeaserService:
         teaser, track, _release, _role = await self._teaser(ctx, teaser_id)
         if "delete" not in self._actions(teaser, await self._latest(teaser.id)):
             raise AppError("TEASER_WAS_PUBLIC", "A teaser that was public can be unpublished, not deleted", 409)
-        teaser.deleted_at = self.clock.now()
-        teaser.updated_by = ctx.user_id
+        # Owner, 2026-11-07: deleting a teaser removes it with every version, not only the teaser.
+        # It was never public, so nobody heard it: its versions, made files' records, counts and
+        # waiting jobs go too. The audit entry below keeps the trace.
+        from sqlalchemy import delete, update
+
+        from cornerroom.modules.documents.domain.models import MediaJob
+
+        now = self.clock.now()
+        version_ids = list(
+            (await self.session.execute(select(TeaserVersion.id).where(TeaserVersion.teaser_id == teaser.id))).scalars()
+        )
+        previous = {"status": teaser.status, "versions": len(version_ids)}
+        if version_ids:
+            await self.session.execute(
+                update(MediaJob)
+                .where(MediaJob.kind == "TEASER", MediaJob.target_id.in_(version_ids), MediaJob.status.in_(("QUEUED", "FAILED")))
+                .values(status="CANCELLED", finished_at=now)
+            )
+            asset_ids = list(
+                (
+                    await self.session.execute(
+                        select(TeaserRendition.media_asset_id).where(TeaserRendition.teaser_version_id.in_(version_ids))
+                    )
+                ).scalars()
+            )
+            await self.session.execute(delete(TeaserRendition).where(TeaserRendition.teaser_version_id.in_(version_ids)))
+            if asset_ids:
+                await self.session.execute(
+                    update(MediaAsset).where(MediaAsset.id.in_(asset_ids), MediaAsset.deleted_at.is_(None)).values(deleted_at=now)
+                )
+        teaser.live_version_id = None
         await self.music._flush_versioned()
+        await self.session.execute(delete(TeaserCount).where(TeaserCount.teaser_id == teaser.id))
+        if version_ids:
+            await self.session.execute(delete(TeaserVersion).where(TeaserVersion.id.in_(version_ids)))
+        await self.session.execute(delete(Teaser).where(Teaser.id == teaser_id))
         await self.audit.record_from_auth(
-            ctx, action="teaser.deleted", entity_type="Teaser", entity_id=teaser.id,
-            previous_state={"status": teaser.status}, new_state={"deleted": True}, organization_id=track.primary_org_id,
+            ctx, action="teaser.deleted", entity_type="Teaser", entity_id=teaser_id,
+            previous_state=previous, new_state={"deleted": True, "versions_deleted": len(version_ids)},
+            organization_id=track.primary_org_id,
         )
 
     # --- staff review ------------------------------------------------------------------------
@@ -609,7 +644,7 @@ class TeaserService:
                     await self.session.execute(select(ReleaseTrack.release_id).where(ReleaseTrack.track_id == track.id))
                 ).scalars().all()
                 await self.music.assert_independent_reviewer(ctx, list(links))
-                if version.submitted_by == ctx.user_id or version.created_by == ctx.user_id:
+                if second_review_on(self.settings) and ctx.user_id in {version.submitted_by, version.created_by}:
                     raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You made or sent this teaser")
                 if teaser.live_version_id is not None:
                     old = await self.session.get(TeaserVersion, teaser.live_version_id)

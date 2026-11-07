@@ -23,6 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cornerroom.infra.errors import AppError, ConflictError, NotFoundError
 from cornerroom.infra.outbox import enqueue_outbox
 from cornerroom.infra.settings import Settings, get_settings
+from cornerroom.infra.review_policy import second_review_on
+from cornerroom.infra.review_policy import approve_at_once
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import ARTIST_TEAM_CHANGED, DomainEvent
@@ -190,7 +192,7 @@ class TeamService:
         org = artist.primary_org_id
         if org is None or ctx.organization_id != org:
             return False
-        if ctx.user_id in await team_user_ids(self.session, artist.id):
+        if second_review_on(self.settings) and ctx.user_id in await team_user_ids(self.session, artist.id):
             return False
         return await self.artists._is_allowed(
             ctx.user_id, "artist.manage", resource_type="artist", resource_id=artist.id, organization_id=org
@@ -272,6 +274,8 @@ class TeamService:
         self.session.add(row)
         await self.session.flush()
         await self._record(ctx, artist, row, "artist.team_manager_picked", None)
+        # Approved at once when the owner may approve managers too (D-REVIEW-SOLO-01).
+        await approve_at_once(self.session, lambda: self.review(ctx, row.id, "approve", None), settings=self.settings)
         return await self._team_view(artist, ctx)
 
     async def take_off(self, ctx: AuthContext, kind: str, pid: UUID, member_id: UUID) -> dict[str, Any]:
@@ -365,7 +369,7 @@ class TeamService:
         artist = await self.session.get(Artist, row.artist_id)
         if artist is None or artist.deleted_at is not None:
             raise NotFoundError("Request not found")
-        if ctx.user_id in await team_user_ids(self.session, artist.id):
+        if second_review_on(self.settings) and ctx.user_id in await team_user_ids(self.session, artist.id):
             raise AppError(
                 "SAME_PERSON_REVIEW", "Someone else must approve this", 403,
                 "The people who run a profile can't approve its managers",

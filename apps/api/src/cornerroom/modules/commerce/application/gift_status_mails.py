@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.infra.errors import AppError, NotFoundError
 from cornerroom.infra.outbox import enqueue_outbox
+from cornerroom.infra.review_policy import second_review_on
 from cornerroom.infra.settings import Settings, get_settings
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
@@ -238,7 +239,9 @@ class GiftStatusMailService:
                 campaign.profile_id if campaign.profile_type == "artist" else None,
                 campaign.profile_id if campaign.profile_type == "band" else None,
             )
-            if ctx.user_id in owners or ctx.user_id in {row.created_by, row.updated_by, row.submitted_by}:
+            if second_review_on(self.settings) and (
+                ctx.user_id in owners or ctx.user_id in {row.created_by, row.updated_by, row.submitted_by}
+            ):
                 raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You wrote or changed this email")
             row.live_subject, row.live_body = row.subject, row.body
             row.state = "APPROVED"

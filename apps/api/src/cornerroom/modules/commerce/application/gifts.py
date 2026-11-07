@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cornerroom.infra.errors import AppError, NotFoundError
 from cornerroom.infra.outbox import enqueue_outbox
 from cornerroom.infra.settings import Settings, get_settings
+from cornerroom.infra.review_policy import second_review_on
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import (
@@ -384,7 +385,9 @@ class GiftCampaignService:
                 campaign.profile_id if campaign.profile_type == "artist" else None,
                 campaign.profile_id if campaign.profile_type == "band" else None,
             )
-            if ctx.user_id in owners or ctx.user_id in {campaign.created_by, campaign.submitted_by, campaign.pending_by}:
+            if second_review_on(self.settings) and (
+                ctx.user_id in owners or ctx.user_id in {campaign.created_by, campaign.submitted_by, campaign.pending_by}
+            ):
                 raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You set up or changed this campaign")
             if campaign.status == "IN_REVIEW":
                 campaign.status = "ACTIVE"
@@ -717,6 +720,13 @@ class GiftCampaignService:
         }
         now = self.clock.now()
         waiting = role != "staff"
+        if waiting and not second_review_on(self.settings):
+            # D-REVIEW-SOLO-01: people added by someone who may approve them don't wait.
+            try:
+                await self._reviewer(ctx, campaign)
+                waiting = False
+            except NotFoundError:
+                pass
         added = skipped = 0
         for p in cleaned:
             key = phone_key(p["phone"])

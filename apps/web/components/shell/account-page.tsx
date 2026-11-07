@@ -45,6 +45,7 @@ export function AccountPage({
   what,
   actions,
   audience = "fan",
+  compact = false,
   children,
 }: {
   eyebrow?: string;
@@ -54,6 +55,8 @@ export function AccountPage({
   actions?: React.ReactNode;
   /** Artist pages send signed-out visitors to artist sign-in (artists join by their label's link). */
   audience?: PageAudience;
+  /** Tools that should fit one screen (the Teaser Studio editor): a smaller header and less space. */
+  compact?: boolean;
   children: React.ReactNode;
 }) {
   const { status } = useAuth();
@@ -62,17 +65,17 @@ export function AccountPage({
   return (
     <main id="main" data-theme={world} className="cr-scope">
       <LitSurface as="section" theme={world} aria-labelledby="account-page-title" className="min-h-[70dvh]">
-        <div className="mx-auto max-w-[72rem] px-4 py-12 md:px-6 md:py-14">
+        <div className={compact ? "mx-auto max-w-[72rem] px-4 py-6 md:px-6 md:py-7" : "mx-auto max-w-[72rem] px-4 py-12 md:px-6 md:py-14"}>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               {eyebrow ? <p className="cr-eyebrow text-highlight">{eyebrow}</p> : null}
-              <h1 id="account-page-title" className="mt-3 text-3xl font-bold text-fg md:text-4xl">
+              <h1 id="account-page-title" className={compact ? "mt-1 text-2xl font-bold text-fg md:text-[1.75rem]" : "mt-3 text-3xl font-bold text-fg md:text-4xl"}>
                 {title}
               </h1>
             </div>
             {status === "authenticated" ? actions : null}
           </div>
-          <div className="mt-8">
+          <div className={compact ? "mt-4" : "mt-8"}>
             {status === "loading" ? (
               <Skeleton className="h-48 w-full" />
             ) : status === "authenticated" ? (

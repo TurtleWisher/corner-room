@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.infra.errors import AppError, NotFoundError
 from cornerroom.infra.settings import Settings, get_settings
+from cornerroom.infra.review_policy import second_review_on
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import (
@@ -492,7 +493,7 @@ class MusicGiftService:
                 gift.profile_id if gift.profile_type == "artist" else None,
                 gift.profile_id if gift.profile_type == "band" else None,
             )
-            if ctx.user_id in owners or ctx.user_id in {gift.created_by, gift.submitted_by}:
+            if second_review_on(self.settings) and (ctx.user_id in owners or ctx.user_id in {gift.created_by, gift.submitted_by}):
                 raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You set up or sent this gift")
             await self._clean_works(gift.profile_type, gift.profile_id, gift.works)
             gift.approved_by = ctx.user_id

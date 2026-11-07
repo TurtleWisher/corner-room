@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.infra.errors import AppError, NotFoundError
 from cornerroom.infra.settings import Settings, get_settings
+from cornerroom.infra.review_policy import second_review_on
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import RELEASE_COVER_CHANGED, RELEASE_COVER_REJECTED
@@ -79,7 +80,7 @@ class CoverReviewService:
         previous = release.cover_asset_id
         if approve:
             await self.music.assert_independent_reviewer(ctx, [release.id])
-            if release.cover_pending_by == ctx.user_id:
+            if second_review_on(self.settings) and release.cover_pending_by == ctx.user_id:
                 raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You uploaded this cover")
             release.cover_asset_id = release.cover_pending_asset_id
             release.cover_review_note = None

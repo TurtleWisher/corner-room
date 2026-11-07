@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cornerroom.infra.errors import AppError, NotFoundError
 from cornerroom.infra.outbox import enqueue_outbox
 from cornerroom.infra.settings import Settings, get_settings
+from cornerroom.infra.review_policy import second_review_on
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import (
@@ -93,7 +94,7 @@ class ProfileChangeService:
         org = row.primary_org_id
         if org is not None and ctx.organization_id != org:
             return False
-        if ctx.user_id in await self.owner_ids(kind, row.id):
+        if second_review_on(self.settings) and ctx.user_id in await self.owner_ids(kind, row.id):
             return False
         return await self.artists._is_allowed(
             ctx.user_id, "artist.manage", resource_type=kind, resource_id=row.id, organization_id=org
@@ -325,7 +326,7 @@ class ProfileChangeService:
             if ctx.user_id not in owners:
                 raise NotFoundError("Request not found")
         elif to in {"APPROVED", "REJECTED"}:
-            if ctx.user_id in owners:
+            if second_review_on(self.settings) and ctx.user_id in owners:
                 raise AppError(
                     "SAME_PERSON_REVIEW", "Someone else must approve this", 403,
                     "The people who run a profile can't approve its changes",
