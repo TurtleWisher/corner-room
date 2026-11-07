@@ -1,114 +1,164 @@
 "use client";
 
-/* The act's own collectible status emails for one gift campaign (owner, 2026-11-07, D-CAMPAIGN-05).
- * One card per status that emails the buyer (Dispatched, Returned, Missing): what sends now, the
- * artist-email editor with fill-ins (the gift too), send for review, and back to Corner Room's
- * wording. Staff approve or send back here. They always send, whatever the buyer's email choices:
- * they're about a gift the buyer is owed. Every state comes from the API. */
+/* Gift status emails for one gift campaign (owner, 2026-11-07, D-CAMPAIGN-05 and D-CAMPAIGN-06),
+ * built like the act's other emails: one tab per status that emails the buyer (Dispatched,
+ * Returned, Missing). Pick a ready-made template in one click and change a line; preview it as any
+ * buyer, by their own name; add a button and files; send yourself a test; send it for review. The
+ * version that sends now can also go to chosen buyers in that status at once. These emails always
+ * send, whatever the buyer's email choices: they're about a gift the buyer is owed. Every state
+ * comes from the API; the server writes and sends every email. */
 
-import { useState } from "react";
-import { Check, CircleAlert, PenLine, RotateCcw, Send, Undo2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Check, CircleAlert, MousePointerClick, RotateCcw, Send, SendHorizontal, Sparkles, Undo2, Users } from "lucide-react";
 
+import { Segmented } from "@/components/artist-mail/audience-builder";
+import { FilesPicker } from "@/components/artist-mail/files-picker";
+import { MailPreview } from "@/components/artist-mail/mail-preview";
 import { RichEditor } from "@/components/artist-mail/rich-editor";
-import { Button, Card, ErrorState, Skeleton } from "@/components/ds";
+import { Button, Card, ErrorState, Input, Skeleton } from "@/components/ds";
 import { Textarea } from "@/components/ds/input";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
+import { fetchMailOverview, type MailFile } from "@/features/artist-mail/api";
 import {
   fetchStatusMails,
   resetStatusMail,
   reviewStatusMail,
   saveStatusMail,
+  sendStatusMail,
   submitStatusMail,
+  testStatusMail,
   type StatusMail,
+  type StatusMailInput,
+  type StatusMailPerson,
   type StatusMails,
+  type StatusMailStatus,
 } from "@/features/gifts/api";
-import { ALL_FILL_KEYS, GIFT_UPDATE_FILL_INS, plainText, unfilledMarks, unknownFillIns, type MailValues } from "@/lib/artist-mail-view";
+import { ALL_FILL_KEYS, GIFT_UPDATE_FILL_INS, unfilledMarks, unknownFillIns } from "@/lib/artist-mail-view";
 import { friendlyError } from "@/lib/error-copy";
+import { giftTemplates } from "@/lib/gift-status-mail-templates";
 import {
   STATE_LABEL,
+  STATUS_MAIL_TAB,
   STATUS_MAIL_TITLE,
   STATUS_MAIL_WHEN,
+  buttonProblem,
+  changed,
+  peopleIn,
   previewValues,
   sendingLine,
-  sendingWords,
+  sendingVersion,
   sentCountLine,
-  startingWords,
+  startingVersion,
+  subjectForAll,
 } from "@/lib/gift-status-mail-view";
+
+const STATUSES: StatusMailStatus[] = ["DISPATCHED", "RETURNED", "MISSING"];
 
 export function StatusEmails({ campaignId }: { campaignId: string }) {
   const data = useAsync(() => fetchStatusMails(campaignId), [campaignId]);
   const [override, setOverride] = useState<StatusMails | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [tab, setTab] = useState<StatusMailStatus>("DISPATCHED");
   if (data.status === "loading") return <Skeleton className="h-64 w-full" />;
   if (data.status === "error") {
     return <ErrorState title="Emails unavailable" message={loadErrorMessage(data.error, "these emails")} action={<RetryButton onClick={data.reload} />} />;
   }
   const mails = override && override.campaign.id === campaignId ? override : data.data;
-  const values = previewValues(mails.artist, mails.music, mails.campaign.gift_items);
+  const item = mails.items.find((i) => i.status === tab) ?? mails.items[0];
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-5">
       <p className="text-sm text-fg-muted">
-        These go to every buyer of this campaign when their gift moves, from &quot;{mails.artist} via Corner Room&quot;. They always send, even to
-        buyers who stopped your other emails, because they&apos;re about a gift the buyer is owed. Corner Room checks your words once before they
-        replace ours.
+        Each buyer gets these from &quot;{mails.artist} via Corner Room&quot;, greeted by their own name, when their gift moves. They always send, even to
+        buyers who stopped your other emails, because they&apos;re about a gift the buyer is owed. Corner Room checks your version once before it
+        replaces ours.
       </p>
+      <Segmented<StatusMailStatus>
+        label="Gift status"
+        value={tab}
+        options={Object.fromEntries(
+          STATUSES.map((s) => {
+            const it = mails.items.find((i) => i.status === s);
+            return [s, `${STATUS_MAIL_TAB[s]}${it?.state === "IN_REVIEW" ? " · waiting" : it?.live ? " · yours" : ""}`];
+          }),
+        ) as Record<StatusMailStatus, string>}
+        onChange={setTab}
+      />
       <p role="status" className="text-sm font-semibold text-fg empty:hidden">
         {notice}
       </p>
-      {mails.items.map((item) => (
-        <StatusMailCard
-          key={`${item.status}-${item.state}-${item.subject}`}
-          campaignId={campaignId}
-          item={item}
-          values={values}
-          onChanged={(next, message) => {
-            setOverride(next);
-            setNotice(`${STATUS_MAIL_TITLE[item.status]}: ${message}`);
-          }}
-        />
-      ))}
+      <StatusMailComposer
+        key={`${item.status}-${item.state}-${item.subject}-${item.live_subject}`}
+        campaignId={campaignId}
+        mails={mails}
+        item={item}
+        onChanged={(next, message) => {
+          setOverride(next);
+          setNotice(message ? `${STATUS_MAIL_TITLE[item.status]}: ${message}` : null);
+        }}
+      />
     </div>
   );
 }
 
-function StatusMailCard({
+function StatusMailComposer({
   campaignId,
+  mails,
   item,
-  values,
   onChanged,
 }: {
   campaignId: string;
+  mails: StatusMails;
   item: StatusMail;
-  values: MailValues;
-  onChanged: (next: StatusMails, message: string) => void;
+  onChanged: (next: StatusMails, message: string | null) => void;
 }) {
-  const start = startingWords(item);
-  const [editing, setEditing] = useState(false);
-  const [subject, setSubject] = useState(start.subject);
-  const [body, setBody] = useState(start.body);
+  const saved = startingVersion(item);
+  const [draft, setDraft] = useState<StatusMailInput>(saved);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const overview = useAsync(() => fetchMailOverview(mails.profile), [mails.profile.kind, mails.profile.id]);
+  const [files, setFiles] = useState<MailFile[] | null>(null);
+  const allFiles = files ?? (overview.status === "ok" ? overview.data.files : []);
 
-  async function run(key: string, job: () => Promise<StatusMails>, message: string) {
+  const voice = mails.profile.kind === "band" ? "we" : "I";
+  const web = typeof window === "undefined" ? "" : window.location.origin;
+  const templates = useMemo(() => giftTemplates(item.status, voice, web), [item.status, voice, web]);
+  const named = mails.people.filter((p) => p.reachable);
+  const previewPerson: StatusMailPerson | null =
+    named.find((p) => p.id === previewId) ?? peopleIn(named, item.status)[0] ?? named[0] ?? null;
+  const values = previewValues(previewPerson, mails.artist, mails.music, mails.campaign.gift_items);
+
+  const editing = item.state !== "IN_REVIEW";
+  const dirty = changed(draft, saved);
+  const marks = unfilledMarks(`${draft.subject}\n${draft.body}\n${draft.button_label ?? ""}`);
+  const typos = unknownFillIns(`${draft.subject}\n${draft.body}`, ALL_FILL_KEYS);
+  const buttonIssue = buttonProblem(draft.button_label, draft.button_url);
+  const canSave = Boolean(draft.subject.trim() && draft.body.trim()) && !typos.length && !buttonIssue;
+  const shown = editing ? draft : startingVersion(item);
+  const set = (patch: Partial<StatusMailInput>) => setDraft((d) => ({ ...d, ...patch }));
+  const payload = (): StatusMailInput => ({
+    ...draft,
+    button_label: draft.button_label?.trim() || null,
+    button_url: draft.button_url?.trim() || null,
+  });
+
+  async function run(key: string, job: () => Promise<StatusMails | null>, message: string) {
     setBusy(key);
     setError(null);
+    setInfo(null);
     try {
       const next = await job();
-      setEditing(false);
-      onChanged(next, message);
+      if (next) onChanged(next, message);
+      else if (message) setInfo(message);
     } catch (err) {
       setError(friendlyError(err, "That didn't go through. Please try again."));
     } finally {
       setBusy(null);
     }
   }
-
-  const words = sendingWords(item);
-  const marks = unfilledMarks(subject + "\n" + body);
-  const unknown = unknownFillIns(subject + "\n" + body, ALL_FILL_KEYS);
-  const canSubmit = item.state === "DRAFT" || item.state === "RETURNED";
 
   return (
     <Card tone="solid" className="p-5" aria-labelledby={`sm-${item.status}`}>
@@ -124,7 +174,7 @@ function StatusMailCard({
           <p className="text-fg-muted">{sentCountLine(item.sent_count)}</p>
         </div>
       </div>
-
+      <p className="mt-2 text-sm text-fg">{sendingLine(item)}</p>
       {item.state === "RETURNED" && item.review_note ? (
         <p className="mt-3 flex items-start gap-2 text-sm text-fg">
           <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-danger" />
@@ -133,62 +183,163 @@ function StatusMailCard({
       ) : null}
 
       {editing ? (
-        <div className="mt-4 grid gap-3">
-          <RichEditor label="Subject" singleLine value={subject} onChange={setSubject} values={values} fillIns={GIFT_UPDATE_FILL_INS} />
-          <RichEditor label="Message" value={body} onChange={setBody} values={values} fillIns={GIFT_UPDATE_FILL_INS} />
-          {marks.length ? <p className="text-sm text-fg">Write these parts before sending for review: {marks.join(", ")}</p> : null}
-          {unknown.length ? <p className="text-sm text-danger">Not a fill-in: {unknown.join(", ")}</p> : null}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              busy={busy === "save"}
-              disabled={!subject.trim() || !body.trim() || unknown.length > 0}
-              onClick={() => void run("save", () => saveStatusMail(campaignId, item.status, { subject, body }), "Saved.")}
+        <fieldset className="mt-5">
+          <legend className="flex items-center gap-2 text-[0.8125rem] font-semibold text-fg">
+            <Sparkles aria-hidden="true" className="size-4 text-highlight" /> Start from a template
+          </legend>
+          <p className="mt-1 text-sm text-fg-muted">One click writes the whole email. Then add a line or change a word.</p>
+          <div className="am-chips mt-2">
+            <button
+              type="button"
+              className="am-occasion cr-focus"
+              aria-pressed={draft.subject === item.default_subject && draft.body === item.default_body}
+              onClick={() => setDraft({ subject: item.default_subject, body: item.default_body, button_label: null, button_url: null, file_ids: draft.file_ids })}
             >
-              <Check aria-hidden="true" /> Save
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setEditing(false);
-                setSubject(start.subject);
-                setBody(start.body);
-              }}
-            >
-              Cancel
-            </Button>
+              Corner Room&apos;s wording
+            </button>
+            {templates.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className="am-occasion cr-focus"
+                aria-pressed={draft.subject === t.subject && draft.body === t.body}
+                onClick={() =>
+                  setDraft({ subject: t.subject, body: t.body, button_label: t.button?.label ?? null, button_url: t.button?.url ?? null, file_ids: draft.file_ids })
+                }
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
-        </div>
-      ) : (
-        <div className="mt-4 border border-line bg-surface-sunken p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{sendingLine(item)}</p>
-          <p className="mt-2 font-semibold text-fg">{plainText(words.subject, values)}</p>
-          <p className="mt-1 whitespace-pre-line text-sm text-fg">{plainText(words.body, values)}</p>
-          {item.state && item.state !== "APPROVED" && item.subject && item.body ? (
-            <div className="mt-4 border-t border-line pt-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">Your new words</p>
-              <p className="mt-2 font-semibold text-fg">{plainText(item.subject, values)}</p>
-              <p className="mt-1 whitespace-pre-line text-sm text-fg">{plainText(item.body, values)}</p>
-            </div>
-          ) : null}
-        </div>
-      )}
+        </fieldset>
+      ) : null}
 
-      {!editing ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {item.state !== "IN_REVIEW" ? (
-            <Button variant="secondary" onClick={() => setEditing(true)}>
-              <PenLine aria-hidden="true" /> {item.state ? "Edit" : "Write your own"}
-            </Button>
+      <div className="mt-5 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="grid content-start gap-4">
+          {named.length ? (
+            <label className="grid gap-1 text-[0.8125rem] font-semibold text-fg">
+              Preview as
+              <select
+                className="cr-focus min-h-10 border border-line-strong bg-surface-sunken px-3 text-sm text-fg"
+                value={previewPerson?.id ?? ""}
+                onChange={(e) => setPreviewId(e.target.value)}
+              >
+                {named.slice(0, 500).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name || "A buyer with no name on file"}
+                  </option>
+                ))}
+              </select>
+            </label>
           ) : null}
-          {canSubmit ? (
-            <Button
-              busy={busy === "submit"}
-              disabled={unfilledMarks((item.subject ?? "") + "\n" + (item.body ?? "")).length > 0}
-              onClick={() => void run("submit", () => submitStatusMail(campaignId, item.status), "Sent to Corner Room for review.")}
-            >
-              <Send aria-hidden="true" /> Send for review
-            </Button>
-          ) : null}
+          {editing ? (
+            <>
+              <RichEditor label="Subject" singleLine value={draft.subject} onChange={(subject) => set({ subject })} values={values} fillIns={GIFT_UPDATE_FILL_INS} />
+              <RichEditor label="Message" value={draft.body} onChange={(body) => set({ body })} values={values} fillIns={GIFT_UPDATE_FILL_INS} />
+              <p className="text-xs text-fg-muted">Highlighted words change for each buyer. Select words and tap Link to add a link. Write in any language.</p>
+              <fieldset className="grid gap-2">
+                <legend className="flex items-center gap-2 text-[0.8125rem] font-semibold text-fg">
+                  <MousePointerClick aria-hidden="true" className="size-4 text-highlight" /> Button (optional)
+                </legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input
+                    aria-label="Button words"
+                    placeholder="For example: Track your parcel"
+                    value={draft.button_label ?? ""}
+                    maxLength={80}
+                    onChange={(e) => set({ button_label: e.target.value })}
+                  />
+                  <Input
+                    aria-label="Button link"
+                    placeholder="https://"
+                    inputMode="url"
+                    value={draft.button_url ?? ""}
+                    onChange={(e) => set({ button_url: e.target.value })}
+                  />
+                </div>
+                {buttonIssue ? <p className="text-sm text-danger">{buttonIssue}</p> : null}
+              </fieldset>
+              {marks.length ? (
+                <p role="alert" className="text-sm text-danger">
+                  Fill in {marks.join(", ")} before sending for review.
+                </p>
+              ) : null}
+              {typos.length ? <p className="text-sm text-danger">{typos.join(", ")} won&apos;t be filled in. Use the buttons above the message.</p> : null}
+            </>
+          ) : (
+            <p className="text-sm text-fg">
+              Waiting for Corner Room. Your version is in the preview; you can still send the version that sends now to chosen buyers below.
+            </p>
+          )}
+        </div>
+        <MailPreview
+          artist={mails.artist}
+          subject={shown.subject}
+          body={shown.body}
+          values={values}
+          kind="GIFT_UPDATE"
+          button={shown.button_label && shown.button_url ? { label: shown.button_label, url: shown.button_url } : null}
+          files={allFiles.filter((f) => shown.file_ids.includes(f.id))}
+        />
+      </div>
+
+      {editing && overview.status === "ok" ? (
+        <div className="mt-5">
+          <FilesPicker
+            profile={mails.profile}
+            files={allFiles}
+            onFiles={setFiles}
+            value={draft.file_ids}
+            onChange={(file_ids) => set({ file_ids })}
+            maxBytes={overview.data.file_max_bytes}
+          />
+        </div>
+      ) : null}
+
+      {editing ? (
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Button
+            busy={busy === "submit"}
+            disabled={!canSave || marks.length > 0 || (!dirty && item.state !== "DRAFT" && item.state !== "RETURNED")}
+            onClick={() =>
+              void run(
+                "submit",
+                async () => {
+                  if (dirty || !item.state) await saveStatusMail(campaignId, item.status, payload());
+                  return submitStatusMail(campaignId, item.status);
+                },
+                "Sent to Corner Room for review.",
+              )
+            }
+          >
+            <SendHorizontal aria-hidden="true" /> Send for review
+          </Button>
+          <Button
+            variant="secondary"
+            busy={busy === "save"}
+            disabled={!canSave || !dirty}
+            onClick={() => void run("save", () => saveStatusMail(campaignId, item.status, payload()), "Saved.")}
+          >
+            <Check aria-hidden="true" /> Save
+          </Button>
+          <Button
+            variant="ghost"
+            busy={busy === "test"}
+            disabled={!canSave}
+            onClick={() =>
+              void run(
+                "test",
+                async () => {
+                  const out = await testStatusMail(campaignId, item.status, { ...payload(), recipient_id: previewPerson?.id ?? null });
+                  setInfo(`A test${previewPerson?.name ? `, written as ${previewPerson.name} will see it,` : ""} is on its way to ${out.sent_to}.`);
+                  return null;
+                },
+                "",
+              )
+            }
+          >
+            <Send aria-hidden="true" /> Send me a test
+          </Button>
           {item.state ? (
             <Button
               variant="ghost"
@@ -201,13 +352,13 @@ function StatusMailCard({
         </div>
       ) : null}
 
-      {item.can_review && !editing ? (
+      {item.can_review ? (
         <div className="mt-5 border-t border-line pt-4">
           <p className="text-sm font-semibold text-fg">Corner Room review</p>
           <div className="mt-2 flex flex-wrap items-end gap-2">
             <Button
               busy={busy === "approve"}
-              onClick={() => void run("approve", () => reviewStatusMail(campaignId, item.status, "approve"), "Approved. These words send from now on.")}
+              onClick={() => void run("approve", () => reviewStatusMail(campaignId, item.status, "approve"), "Approved. This version sends from now on.")}
             >
               <Check aria-hidden="true" /> Approve
             </Button>
@@ -232,6 +383,94 @@ function StatusMailCard({
           {error}
         </p>
       ) : null}
+      {info ? (
+        <p role="status" className="mt-3 text-sm text-fg">
+          {info}
+        </p>
+      ) : null}
+
+      <SendToChosen campaignId={campaignId} mails={mails} item={item} onChanged={onChanged} />
     </Card>
+  );
+}
+
+/** Send the version that sends now to chosen buyers whose gift is in this status. */
+function SendToChosen({
+  campaignId,
+  mails,
+  item,
+  onChanged,
+}: {
+  campaignId: string;
+  mails: StatusMails;
+  item: StatusMail;
+  onChanged: (next: StatusMails, message: string | null) => void;
+}) {
+  const people = peopleIn(mails.people, item.status);
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const version = sendingVersion(item);
+  const all = people.length > 0 && people.every((p) => chosen.has(p.id));
+  const flip = (id: string) =>
+    setChosen((c) => {
+      const next = new Set(c);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  async function send() {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await sendStatusMail(campaignId, item.status, [...chosen]);
+      setChosen(new Set());
+      onChanged(next, `emailed ${next.sent ?? 0} ${next.sent === 1 ? "buyer" : "buyers"} now.`);
+    } catch (err) {
+      setError(friendlyError(err, "That didn't go through. Please try again."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="mt-6 border-t border-line pt-5" aria-labelledby={`send-${item.status}`}>
+      <h4 id={`send-${item.status}`} className="flex items-center gap-2 text-sm font-bold text-fg">
+        <Users aria-hidden="true" className="size-4 text-highlight" /> Email chosen buyers now
+      </h4>
+      <p className="mt-1 text-sm text-fg-muted">
+        Sends &quot;{subjectForAll(version.subject, mails.artist, mails.music, mails.campaign.gift_items)}&quot; ({item.live ? "your approved email" : "Corner Room's wording"}) to the
+        buyers you tick whose gift is {STATUS_MAIL_TAB[item.status].toLowerCase()}.
+      </p>
+      {people.length === 0 ? (
+        <p className="mt-3 text-sm text-fg">No gift is {STATUS_MAIL_TAB[item.status].toLowerCase()} right now.</p>
+      ) : (
+        <>
+          <label className="mt-3 flex items-center gap-2 text-sm font-semibold text-fg">
+            <input type="checkbox" checked={all} onChange={() => setChosen(all ? new Set() : new Set(people.map((p) => p.id)))} />
+            Everyone here ({people.length})
+          </label>
+          <ul className="mt-2 grid max-h-64 gap-1 overflow-auto sm:grid-cols-2">
+            {people.map((p) => (
+              <li key={p.id}>
+                <label className="flex items-center gap-2 text-sm text-fg">
+                  <input type="checkbox" checked={chosen.has(p.id)} onChange={() => flip(p.id)} />
+                  {p.name || "A buyer with no name on file"}
+                </label>
+              </li>
+            ))}
+          </ul>
+          <Button className="mt-3" variant="secondary" busy={busy} disabled={chosen.size === 0} onClick={() => void send()}>
+            <Send aria-hidden="true" /> Email {chosen.size || ""} {chosen.size === 1 ? "buyer" : "buyers"} now
+          </Button>
+        </>
+      )}
+      {error ? (
+        <p role="alert" className="mt-2 text-sm text-danger">
+          {error}
+        </p>
+      ) : null}
+    </section>
   );
 }

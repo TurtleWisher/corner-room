@@ -833,30 +833,23 @@ class GiftCampaignService:
         titles = [w["title"] for w in await self._work_names(campaign.works or [])]
         return ", ".join(titles[:3]) + (f" and {len(titles) - 3} more" if len(titles) > 3 else "")
 
-    def _buyer_payload(self, r: GiftRecipient, campaign: GiftCampaign, name: str, music: str, artist_mail: bool = False) -> dict[str, Any]:
-        """What a buyer email needs: account holders through notifications, others by address.
-        `artist_mail`: the act's own approved email for this status sends instead of Corner Room's
-        (D-CAMPAIGN-05), to account holders too; their in-app note stays."""
+    def _buyer_payload(self, r: GiftRecipient, campaign: GiftCampaign, name: str, music: str) -> dict[str, Any]:
+        """Who the gift belongs to, for the in-app note. `artist_mail`: the email itself goes out as
+        an artist email (D-CAMPAIGN-06, `gift_status_mails.py`), to every buyer by name; the note
+        sends no second email."""
         return {
             "user_id": str(r.user_id) if r.user_id else None, "email": None if r.user_id else r.email,
             "artist": name, "gift": campaign.gift_items, "music": music, "campaign_id": str(campaign.id),
-            **({"artist_mail": True} if artist_mail else {}),
+            "artist_mail": True,
         }
 
-    async def _live_mails(self, campaign: GiftCampaign) -> set[str]:
-        from cornerroom.modules.commerce.application.gift_status_mails import GiftStatusMailService
-
-        return await GiftStatusMailService(self.session, self.settings, self.clock).live_statuses(campaign.id)
-
-    async def _dispatch_one(
-        self, ctx: AuthContext | None, campaign: GiftCampaign, r: GiftRecipient, name: str, music: str, artist_mail: bool = False
-    ) -> None:
+    async def _dispatch_one(self, ctx: AuthContext | None, campaign: GiftCampaign, r: GiftRecipient, name: str, music: str) -> None:
         """A prepared gift leaves now: the buyer is told it is on its way (once per dispatch)."""
         r.status = "DISPATCHED"
         r.dispatched_at = self.clock.now()
         r.dispatched_by = ctx.user_id if ctx else r.dispatch_set_by
         r.dispatch_at = None
-        payload = self._buyer_payload(r, campaign, name, music, artist_mail)
+        payload = self._buyer_payload(r, campaign, name, music)
         await self._event(ctx, GIFT_DISPATCHED, "GiftRecipient", r.id, payload, campaign.organization_id)
 
     async def transition(
@@ -884,9 +877,7 @@ class GiftCampaignService:
             if dispatch_at <= now:
                 raise AppError("DISPATCH_TIME_PASSED", "That time has already gone. Dispatch now or choose a later time.", 422)
         campaign, rows, name = await self._recipients_for_action(ctx, campaign_id, ids, every)
-        tells_buyer = to in ("DISPATCHED", "RETURNED", "MISSING")
-        music = await self._music_line(campaign) if tells_buyer else ""
-        live_mails = await self._live_mails(campaign) if tells_buyer else set()
+        music = await self._music_line(campaign) if to in ("DISPATCHED", "RETURNED", "MISSING") else ""
         moved = skipped = 0
         for r in rows:
             unschedule = to == "PREPARED" and r.status == "PREPARED" and r.dispatch_at is not None
@@ -896,7 +887,7 @@ class GiftCampaignService:
             moved += 1
             if to == "DISPATCHED":
                 if dispatch_at is None:
-                    await self._dispatch_one(ctx, campaign, r, name, music, "DISPATCHED" in live_mails)
+                    await self._dispatch_one(ctx, campaign, r, name, music)
                 else:
                     r.dispatch_at = dispatch_at
                     r.dispatch_set_by = ctx.user_id
@@ -931,7 +922,7 @@ class GiftCampaignService:
                     r.sent_by = r.sent_by or ctx.user_id
                 else:
                     # Returned and missing tell the buyer (owner, 2026-11-06).
-                    payload = self._buyer_payload(r, campaign, name, music, to in live_mails)
+                    payload = self._buyer_payload(r, campaign, name, music)
             await self._event(ctx, MOVE_EVENTS[to], "GiftRecipient", r.id, payload, campaign.organization_id)
         await self.session.flush()
         await self.audit.record_from_auth(
@@ -972,9 +963,8 @@ class GiftCampaignService:
             except (NotFoundError, AppError):
                 continue
             music = await self._music_line(campaign)
-            live_mails = await self._live_mails(campaign)
             for r in rows:
-                await self._dispatch_one(None, campaign, r, name, music, "DISPATCHED" in live_mails)
+                await self._dispatch_one(None, campaign, r, name, music)
                 sent += 1
             await self.audit.record(
                 action="gift_campaign.dispatched_on_time", entity_type="GiftCampaign", entity_id=campaign.id,
@@ -1064,22 +1054,13 @@ async def consume_gift_email_event(event: DomainEvent, session: AsyncSession, se
     settings = settings or get_settings()
     log = structlog.get_logger("commerce.gifts")
     if payload.get("artist_mail"):
-        # The act's own approved words (D-CAMPAIGN-05), to every buyer by email.
-        from cornerroom.modules.commerce.application.gift_status_mails import send_artist_status_mail
+        # Every gift status email goes out as an artist email (D-CAMPAIGN-06): the act's approved
+        # words or Corner Room's, to every buyer by name.
+        from cornerroom.modules.commerce.application.gift_status_mails import queue_gift_email
 
-        sender = email_sender_for(settings)
-        if sender is None:
-            log.warning("gift_email_skipped", reason="no_email_provider", event_id=str(event.event_id))
-            return
-        if await send_artist_status_mail(event, session, settings, sender):
-            log.info("gift_artist_email_sent", recipient_id=str(event.aggregate_id), kind=event.event_type)
-            return
-        # Taken back since: Corner Room's wording, to account holders too (their note sent no email).
-        if not payload.get("email") and payload.get("user_id"):
-            from cornerroom.modules.identity.domain.models import User
-
-            user = await session.get(User, UUID(str(payload["user_id"])))
-            payload = {**payload, "email": user.email if user else None, "user_id": None}
+        if await queue_gift_email(event, session, settings):
+            log.info("gift_email_queued", recipient_id=str(event.aggregate_id), kind=event.event_type)
+        return
     to = str(payload.get("email") or "").strip()
     if not to or payload.get("user_id"):
         return
