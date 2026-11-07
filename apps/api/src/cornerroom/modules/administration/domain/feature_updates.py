@@ -105,6 +105,7 @@ FEATURES: Final[list[dict]] = [
             "their music when their email is verified."
         ),
         "updates": [
+            {"date": "2026-11-07", "kind": "FIXED", "title": "Numbers fit the page", "details": "Long site names wrap inside their card instead of being cut off at the right edge."},
             {"date": "2026-11-06", "kind": "NEW", "title": "Pre-sale campaigns in Studio", "details": "Live numbers, set-up, fan page and named share links per pre-sale; numbers carry on after release."},
             {"date": "2026-11-03", "kind": "NEW", "title": "Pre-sales in the fan Store", "details": "An \"On pre-sale\" group first in the Store, on Releases and on artist profiles."},
             {"date": "2026-11-03", "kind": "NEW", "title": "Back to pre-sale", "details": "Music released before its pre-sale date can go back to pre-sale; Release now asks first."},
@@ -153,6 +154,7 @@ FEATURES: Final[list[dict]] = [
             "earn a campaign gift."
         ),
         "updates": [
+            {"date": "2026-11-07", "kind": "NEW", "title": "Add people by hand", "details": "Add buyers who paid outside Corner Room, typed in, pasted from a sheet or from a .csv file; the act's additions wait for staff."},
             {"date": "2026-11-06", "kind": "IMPROVED", "title": "Collectible tracking", "details": "Prepared, dispatched now or later, received, returned and missing; mark all prepared in one click."},
             {"date": "2026-11-06", "kind": "NEW", "title": "Collectibles on release numbers", "details": "A release's numbers page shows how far each of its collectibles has got."},
             {"date": "2026-11-06", "kind": "IMPROVED", "title": "Given music doesn't count", "details": "Music an artist gave away through a music gift doesn't earn a campaign gift."},
@@ -211,12 +213,16 @@ FEATURES: Final[list[dict]] = [
         "description": (
             "Play opens the listening room: a full-screen view with the blurred cover, a carousel, and the "
             "lyrics on a ring round the cover that follow the song when staff have timed them. Lyrics are on "
-            "from the start, with a Lyrics switch under the close button; turning them off is remembered on "
-            "that device. The room fills the window, and the first click goes properly full screen. The big "
+            "from the start, with a Lyrics switch under the close button (beside it on phones); turning them "
+            "off is remembered on that device. The room is one still screen that fits the window without "
+            "scrolling, and a double-click on empty space goes properly full screen (the same again comes "
+            "out). The big "
             "title links to the song page. When the browser blocks the automatic start, the room shows the "
             "song's real length and a lit play key."
         ),
         "updates": [
+            {"date": "2026-11-07", "kind": "FIXED", "title": "One still screen", "details": "The room no longer scrolls or jumps as lyrics move; cover, title and bar always fit the window."},
+            {"date": "2026-11-07", "kind": "IMPROVED", "title": "Full screen on double-click", "details": "Double-click empty space for full screen and again to leave; buttons never trigger it."},
             {"date": "2026-11-06", "kind": "IMPROVED", "title": "Lyrics on from the start", "details": "A Lyrics switch under the close button; turning lyrics off is remembered on the device."},
             {"date": "2026-11-06", "kind": "IMPROVED", "title": "Full screen room", "details": "The room fills the window, and the first click in it goes properly full screen."},
             {"date": "2026-11-02", "kind": "IMPROVED", "title": "Room bar polish", "details": "Save and playlist buttons get the glossy hover; the playlist panel is solid."},
@@ -484,8 +490,14 @@ FEATURES: Final[list[dict]] = [
         "area": "Platform",
         "audience": ["Fans", "Artists", "Staff"],
         "summary": "The Corner Room look: tokens, fonts, glass cards and the letter cube.",
-        "description": "One design system for every page: colour tokens tested for contrast, brand fonts, glass cards and frosted bars, the letter-cube logo and formatting for money and dates.",
+        "description": (
+            "One design system for every page: colour tokens tested for contrast, brand fonts, glass cards and "
+            "frosted bars, the letter-cube logo and formatting for money and dates. Every logo tilts toward the "
+            "pointer in 3D, lifts and catches a sheen; the Artist Studio's green logo sits on a soft mint glow."
+        ),
         "updates": [
+            {"date": "2026-11-07", "kind": "IMPROVED", "title": "Logos come alive", "details": "Every logo tilts toward the pointer, lifts and catches a sheen; still on touch and with reduced motion."},
+            {"date": "2026-11-07", "kind": "IMPROVED", "title": "Studio logo without the square", "details": "The green Studio logo sits on a soft mint glow instead of a flat square tile."},
             {"date": "2026-10-13", "kind": "IMPROVED", "title": "Restyle", "details": "Finer grain, page-wide corner light, glass cards and frosted bars."},
             {"date": "2026-10-12", "kind": "NEW", "title": "Customer frontend rebuilt", "details": "Rebuilt customer frontend and complete buying flow."},
             {"date": "2026-10-11", "kind": "NEW", "title": "Design system", "details": "Phase 16 design system foundation."},

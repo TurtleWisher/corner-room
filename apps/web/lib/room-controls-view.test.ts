@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isRoomGestureKey, lyricsChoice, lyricsOnFrom, lyricsSwitch, shouldAskFullscreen } from "./room-controls-view";
+import { doubleClickFullscreen, lyricsChoice, lyricsOnFrom, lyricsSwitch, ROOM_CONTROLS } from "./room-controls-view";
 
 describe("lyricsOnFrom", () => {
   it("is on for a first visit or blocked storage", () => {
@@ -34,29 +34,23 @@ describe("lyricsSwitch", () => {
   });
 });
 
-describe("isRoomGestureKey", () => {
-  it("counts deliberate keys", () => {
-    for (const key of ["Enter", " ", "ArrowRight", "k"]) expect(isRoomGestureKey(key)).toBe(true);
+describe("doubleClickFullscreen", () => {
+  const base = { supported: true, onControl: false, pageFullscreen: false, browserFullscreen: false };
+  it("goes into full screen from a double-click on empty space", () => {
+    expect(doubleClickFullscreen(base)).toBe("enter");
   });
-  it("never counts leaving, moving focus or modifiers", () => {
-    for (const key of ["Escape", "Tab", "Shift", "Control", "Alt", "Meta", "F11", ""]) expect(isRoomGestureKey(key)).toBe(false);
+  it("comes out again with the same double-click", () => {
+    expect(doubleClickFullscreen({ ...base, pageFullscreen: true })).toBe("exit");
   });
-});
-
-describe("shouldAskFullscreen", () => {
-  const base = { asked: false, supported: true, alreadyFullscreen: false, leavesRoom: false, typing: false };
-  it("asks on the first gesture", () => {
-    expect(shouldAskFullscreen(base)).toBe(true);
+  it("does nothing on a button or other control", () => {
+    expect(doubleClickFullscreen({ ...base, onControl: true })).toBeNull();
+    expect(doubleClickFullscreen({ ...base, onControl: true, pageFullscreen: true })).toBeNull();
   });
-  it("asks once per visit", () => {
-    expect(shouldAskFullscreen({ ...base, asked: true })).toBe(false);
+  it("leaves the browser's own full screen and browsers without it alone", () => {
+    expect(doubleClickFullscreen({ ...base, browserFullscreen: true })).toBeNull();
+    expect(doubleClickFullscreen({ ...base, supported: false })).toBeNull();
   });
-  it("never asks where the browser cannot, or when already full screen", () => {
-    expect(shouldAskFullscreen({ ...base, supported: false })).toBe(false);
-    expect(shouldAskFullscreen({ ...base, alreadyFullscreen: true })).toBe(false);
-  });
-  it("never asks for a gesture that leaves the room or types", () => {
-    expect(shouldAskFullscreen({ ...base, leavesRoom: true })).toBe(false);
-    expect(shouldAskFullscreen({ ...base, typing: true })).toBe(false);
+  it("counts the room's controls as controls", () => {
+    for (const s of ["button", "a[href]", '[role="switch"]', '[role="slider"]', ".lr-bar"]) expect(ROOM_CONTROLS).toContain(s);
   });
 });

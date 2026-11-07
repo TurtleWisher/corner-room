@@ -27,8 +27,8 @@ export function AuthCard({
       <LitSurface as="section" theme={theme} aria-labelledby="auth-title" className="min-h-[80dvh]">
         <div className="mx-auto flex max-w-md flex-col items-center px-4 py-12 md:py-20">
           {theme === "artist-studio" ? (
-            // The mint colourway only ever sits on its Signal Mint field (D-THEME-02).
-            <span className="cr-cut inline-flex px-6 py-4 [--cut-fill:var(--cr-brand)]">
+            // The mint colourway brings its own soft Signal Mint field (D-THEME-02, D-LOGO-01).
+            <span className="inline-flex px-6 py-4">
               <Logo variant="artist-mint" height={72} alt="Corner Room Artist Studio" />
             </span>
           ) : (

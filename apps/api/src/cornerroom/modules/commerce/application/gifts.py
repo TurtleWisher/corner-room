@@ -46,12 +46,15 @@ from cornerroom.kernel.events import (
 )
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.commerce.domain.gifts import (
+    MAX_PEOPLE_PER_ADD,
     RECIPIENT_STATUSES,
     RECIPIENT_TRANSITIONS,
     GiftCampaign,
     GiftCampaignPeriod,
     GiftRecipient,
     can_move,
+    clean_person,
+    phone_key,
 )
 from cornerroom.modules.commerce.domain.models import Order, OrderDeliveryAddress, OrderItem, PresaleClaim, Product
 
@@ -350,7 +353,12 @@ class GiftCampaignService:
             await self.session.execute(
                 select(GiftCampaign)
                 .where(GiftCampaign.organization_id == org)
-                .where((GiftCampaign.status == "IN_REVIEW") | GiftCampaign.pending.is_not(None))
+                .where(
+                    (GiftCampaign.status == "IN_REVIEW")
+                    | GiftCampaign.pending.is_not(None)
+                    # People the act added, waiting for staff (D-CAMPAIGN-04).
+                    | GiftCampaign.id.in_(select(GiftRecipient.campaign_id).where(GiftRecipient.waiting.is_(True)))
+                )
                 .order_by(GiftCampaign.updated_at)
             )
         ).scalars().all()
@@ -445,6 +453,7 @@ class GiftCampaignService:
         existing = {
             r.email.lower(): r
             for r in (await self.session.execute(select(GiftRecipient).where(GiftRecipient.campaign_id == campaign.id))).scalars()
+            if r.email
         }
         by_user = {r.user_id: r for r in existing.values() if r.user_id}
         wanted: dict[str, dict[str, Any]] = {}
@@ -499,6 +508,14 @@ class GiftCampaignService:
             if row is not None:
                 if row.user_id is None and item.get("user_id"):
                     row.user_id = item["user_id"]
+                if row.order_id is None and item.get("order_id"):
+                    row.order_id = item["order_id"]
+                if row.presale_claim_id is None and item.get("presale_claim_id"):
+                    row.presale_claim_id = item["presale_claim_id"]
+                # Someone added by hand who turns out to be a real buyer needs no approval.
+                if row.waiting:
+                    row.waiting = False
+                    row.approved_at = now
                 continue
             self.session.add(
                 GiftRecipient(
@@ -510,12 +527,21 @@ class GiftCampaignService:
 
     async def _counts(self, campaign_id: UUID) -> dict[str, int]:
         rows = await self.session.execute(
-            select(GiftRecipient.status, func.count()).where(GiftRecipient.campaign_id == campaign_id).group_by(GiftRecipient.status)
+            select(GiftRecipient.status, func.count())
+            .where(GiftRecipient.campaign_id == campaign_id, GiftRecipient.waiting.is_(False))
+            .group_by(GiftRecipient.status)
         )
         counts = {status: 0 for status in RECIPIENT_STATUSES}
         for status, n in rows:
             counts[status] = int(n)
         counts["TOTAL"] = sum(counts.values())
+        # People the act added who wait for staff (D-CAMPAIGN-04): not part of the total.
+        counts["WAITING"] = int(
+            await self.session.scalar(
+                select(func.count()).where(GiftRecipient.campaign_id == campaign_id, GiftRecipient.waiting.is_(True))
+            )
+            or 0
+        )
         # Prepared gifts with a dispatch time set (part of PREPARED, not added to the total).
         counts["SCHEDULED"] = int(
             await self.session.scalar(
@@ -558,11 +584,13 @@ class GiftCampaignService:
         for r in recipients:
             address = (on_order.get(r.order_id) if r.order_id else None) or (saved.get(r.user_id) if r.user_id else None)
             claim = claims.get(r.presale_claim_id) if r.presale_claim_id else None
+            # Details typed in for someone added by hand come first (D-CAMPAIGN-04).
             out[r.id] = {
-                "name": (names.get(r.user_id) if r.user_id else None) or (address.recipient_name if address else None)
+                "name": r.name or (names.get(r.user_id) if r.user_id else None) or (address.recipient_name if address else None)
                 or (claim.buyer_name if claim else None),
-                "phone": (address.phone if address else None) or (getattr(claim, "phone", None) if claim else None),
-                "address": _address_text(address) if address else (getattr(claim, "address", None) if claim else None),
+                "phone": r.phone or (address.phone if address else None) or (getattr(claim, "phone", None) if claim else None),
+                "address": r.address
+                or (_address_text(address) if address else (getattr(claim, "address", None) if claim else None)),
             }
         return out
 
@@ -592,21 +620,28 @@ class GiftCampaignService:
         # Staff always; the artist only when they send the gifts themselves (owner, 2026-10-28).
         show_contact = role == "staff" or campaign.sender == "ARTIST"
         can_dispatch = campaign.status in TRACKABLE and (role == "staff" or campaign.sender == "ARTIST")
-        recipients = (
+        rows = (
             await self.session.execute(
                 select(GiftRecipient).where(GiftRecipient.campaign_id == campaign.id).order_by(GiftRecipient.created_at)
             )
         ).scalars().all()
+        recipients = [r for r in rows if not r.waiting]
+        waiting = [r for r in rows if r.waiting]
         contact = await self._contact(list(recipients)) if show_contact else {}
         out["viewer_role"] = role
         out["can_dispatch"] = can_dispatch
         out["shows_contact"] = show_contact
+        # D-CAMPAIGN-04: staff and the act's team may add people once the campaign has been live;
+        # the team's additions wait for staff, who approve or turn them away.
+        out["can_add"] = campaign.status in TRACKABLE
+        out["can_review"] = role == "staff"
         # Where each status may go next; the page offers only these (it never hard-codes them).
         out["transitions"] = {k: list(v) for k, v in RECIPIENT_TRANSITIONS.items()}
         out["recipients"] = [
             {
                 "id": r.id,
                 "status": r.status,
+                "source": r.source,
                 "has_account": r.user_id is not None,
                 "prepared_at": r.prepared_at,
                 "dispatch_at": r.dispatch_at if r.status == "PREPARED" else None,
@@ -617,7 +652,136 @@ class GiftCampaignService:
             }
             for r in recipients
         ]
+        # The act typed these details in themselves, so its team sees them as well as staff.
+        out["waiting"] = [
+            {
+                "id": r.id, "status": r.status, "source": r.source, "has_account": r.user_id is not None,
+                "name": r.name, "email": r.email, "phone": r.phone, "address": r.address,
+            }
+            for r in waiting
+        ]
         return out
+
+    # --- people added by hand (D-CAMPAIGN-04) ---------------------------------------------------------
+
+    async def add_people(self, ctx: AuthContext, campaign_id: UUID, people: list[dict[str, Any]]) -> dict[str, Any]:
+        """Add people who bought outside Corner Room (owner, 2026-11-07): typed in or pasted from a
+        sheet. Anyone already in the campaign (same email, or same phone) is skipped; an email that
+        belongs to an account is linked to it. Staff additions count at once; the act's wait for
+        staff. Every problem is reported before anything is added."""
+        from cornerroom.modules.identity.domain.models import User
+
+        campaign, role, _name = await self._campaign(ctx, campaign_id)
+        if campaign.status not in TRACKABLE:
+            raise AppError("INVALID_TRANSITION", "The campaign isn't live yet", 409)
+        if not people:
+            raise AppError("VALIDATION_ERROR", "Add at least one person", 422)
+        if len(people) > MAX_PEOPLE_PER_ADD:
+            raise AppError("VALIDATION_ERROR", f"Add at most {MAX_PEOPLE_PER_ADD} people at a time", 422)
+        cleaned: list[dict[str, Any]] = []
+        problems: list[str] = []
+        for i, raw in enumerate(people):
+            person, problem = clean_person(raw if isinstance(raw, dict) else {})
+            if problem:
+                problems.append(f"Row {i + 1}: {problem}")
+            elif person:
+                cleaned.append(person)
+        if problems:
+            raise AppError("VALIDATION_ERROR", "; ".join(problems[:5]) + (f" (and {len(problems) - 5} more)" if len(problems) > 5 else ""), 422)
+        await self.sync_recipients(campaign)
+        rows = (await self.session.execute(select(GiftRecipient).where(GiftRecipient.campaign_id == campaign.id))).scalars().all()
+        emails = {r.email.lower() for r in rows if r.email}
+        phones = {k for k in (phone_key(r.phone) for r in rows) if k}
+        accounts = {
+            u.email.lower(): u.id
+            for u in (
+                await self.session.execute(
+                    select(User).where(
+                        func.lower(User.email).in_({p["email"] for p in cleaned if p["email"]} or {""}), User.deleted_at.is_(None)
+                    )
+                )
+            ).scalars()
+        }
+        now = self.clock.now()
+        waiting = role != "staff"
+        added = skipped = 0
+        for p in cleaned:
+            key = phone_key(p["phone"])
+            if (p["email"] and p["email"] in emails) or (key and key in phones):
+                skipped += 1
+                continue
+            self.session.add(
+                GiftRecipient(
+                    campaign_id=campaign.id, user_id=accounts.get(p["email"] or ""), email=p["email"], status="YET_TO_SEND",
+                    source="ADDED", name=p["name"], phone=p["phone"], address=p["address"], added_by=ctx.user_id,
+                    waiting=waiting, approved_by=None if waiting else ctx.user_id, approved_at=None if waiting else now,
+                )
+            )
+            if p["email"]:
+                emails.add(p["email"])
+            if key:
+                phones.add(key)
+            added += 1
+        await self.session.flush()
+        await self.audit.record_from_auth(
+            ctx, action="gift_campaign.people_added", entity_type="GiftCampaign", entity_id=campaign.id,
+            new_state={"added": added, "skipped": skipped, "waiting": waiting}, organization_id=campaign.organization_id,
+        )
+        out = await self.detail(ctx, campaign.id)
+        out["added"] = added
+        out["skipped"] = skipped
+        return out
+
+    async def review_people(self, ctx: AuthContext, campaign_id: UUID, ids: list[UUID], *, approve: bool) -> dict[str, Any]:
+        """Staff approve the act's additions (they then count like any buyer) or turn them away
+        (they are removed)."""
+        campaign, role, _name = await self._campaign(ctx, campaign_id)
+        if role != "staff":
+            raise AppError("FORBIDDEN", "Corner Room approves people added by the act", 403)
+        if not ids:
+            raise AppError("VALIDATION_ERROR", "Choose who to approve", 422)
+        rows = (
+            await self.session.execute(
+                select(GiftRecipient).where(
+                    GiftRecipient.campaign_id == campaign.id, GiftRecipient.waiting.is_(True), GiftRecipient.id.in_(ids[:MAX_PEOPLE_PER_ADD])
+                )
+            )
+        ).scalars().all()
+        now = self.clock.now()
+        for r in rows:
+            if approve:
+                r.waiting = False
+                r.approved_by = ctx.user_id
+                r.approved_at = now
+            else:
+                await self.session.delete(r)
+        await self.session.flush()
+        await self.audit.record_from_auth(
+            ctx, action="gift_campaign.people_approved" if approve else "gift_campaign.people_turned_away",
+            entity_type="GiftCampaign", entity_id=campaign.id, new_state={"people": len(rows)}, organization_id=campaign.organization_id,
+        )
+        out = await self.detail(ctx, campaign.id)
+        out["moved"] = len(rows)
+        return out
+
+    async def remove_person(self, ctx: AuthContext, campaign_id: UUID, recipient_id: UUID) -> dict[str, Any]:
+        """Take back someone added by hand by mistake, while nothing has happened to their gift:
+        staff any such person, the act only its own additions still waiting."""
+        campaign, role, _name = await self._campaign(ctx, campaign_id)
+        r = await self.session.get(GiftRecipient, recipient_id)
+        if r is None or r.campaign_id != campaign.id or r.source != "ADDED":
+            raise NotFoundError("Person not found")
+        if r.status != "YET_TO_SEND":
+            raise AppError("INVALID_TRANSITION", "Their gift is already on its way, so they stay on the list", 409)
+        if role != "staff" and not r.waiting:
+            raise AppError("FORBIDDEN", "Ask Corner Room to remove someone they approved", 403)
+        await self.session.delete(r)
+        await self.session.flush()
+        await self.audit.record_from_auth(
+            ctx, action="gift_campaign.person_removed", entity_type="GiftCampaign", entity_id=campaign.id,
+            new_state={"recipient_id": str(recipient_id)}, organization_id=campaign.organization_id,
+        )
+        return await self.detail(ctx, campaign.id)
 
     async def _recipients_for_action(
         self, ctx: AuthContext, campaign_id: UUID, ids: list[UUID] | None, every: str | None = None
@@ -628,7 +792,8 @@ class GiftCampaignService:
             raise AppError("INVALID_TRANSITION", "The campaign isn't live yet", 409)
         if role != "staff" and campaign.sender != "ARTIST":
             raise AppError("FORBIDDEN", "Corner Room sends these gifts", 403)
-        query = select(GiftRecipient).where(GiftRecipient.campaign_id == campaign.id)
+        # People still waiting for staff can't be tracked yet (D-CAMPAIGN-04).
+        query = select(GiftRecipient).where(GiftRecipient.campaign_id == campaign.id, GiftRecipient.waiting.is_(False))
         if every is not None:
             if every not in RECIPIENT_STATUSES:
                 raise AppError("VALIDATION_ERROR", "Unknown status", 422)

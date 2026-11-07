@@ -977,8 +977,7 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
         if (zone !== edge) setEdge(zone);
       }}
       onPointerLeave={() => edge && setEdge(null)}
-      onClickCapture={fullscreen.onClickCapture}
-      onKeyDownCapture={fullscreen.onKeyDownCapture}
+      onDoubleClick={fullscreen.onDoubleClick}
     >
       <Backdrop track={track} />
       <PointerLightLayer />

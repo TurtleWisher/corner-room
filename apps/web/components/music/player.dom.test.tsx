@@ -488,22 +488,32 @@ describe("ListeningRoom", () => {
     expect(screen.getByText("No lyrics for this song yet").id).toBe(sw.getAttribute("aria-describedby"));
   });
 
-  it("asks the browser for full screen once, on the first click in the room, never on the way out", async () => {
+  it("goes full screen only on a double-click of empty space, and out again the same way", async () => {
     const request = vi.fn(async () => {});
+    const exit = vi.fn(async () => {});
+    let fsElement: Element | null = null;
     Object.defineProperty(document, "fullscreenEnabled", { value: true, configurable: true });
+    Object.defineProperty(document, "fullscreenElement", { get: () => fsElement, configurable: true });
+    Object.defineProperty(document, "exitFullscreen", { value: exit, configurable: true });
     Object.defineProperty(document.documentElement, "requestFullscreen", { value: request, configurable: true });
     try {
       renderRoom();
       await act(async () => screen.getByText("start t2").click());
-      // Leaving is not an invitation to go full screen.
-      await act(async () => screen.getByRole("button", { name: "Leave the listening room" }).click());
-      expect(request).not.toHaveBeenCalled();
+      // Single clicks on buttons, and double-clicks on them, never ask.
       await act(async () => screen.getByRole("button", { name: "Next track" }).click());
+      fireEvent.doubleClick(screen.getByRole("button", { name: "Previous track" }));
+      fireEvent.doubleClick(screen.getByRole("switch", { name: /Lyrics/ }));
+      expect(request).not.toHaveBeenCalled();
+      // Empty space: in, then out.
+      const room = document.querySelector(".lr") as HTMLElement;
+      fireEvent.doubleClick(room);
       expect(request).toHaveBeenCalledTimes(1);
-      await act(async () => screen.getByRole("button", { name: "Previous track" }).click());
+      fsElement = document.documentElement;
+      fireEvent.doubleClick(room);
+      expect(exit).toHaveBeenCalledTimes(1);
       expect(request).toHaveBeenCalledTimes(1);
     } finally {
-      delete (document as unknown as Record<string, unknown>).fullscreenEnabled;
+      for (const key of ["fullscreenEnabled", "fullscreenElement", "exitFullscreen"]) delete (document as unknown as Record<string, unknown>)[key];
       delete (document.documentElement as unknown as Record<string, unknown>).requestFullscreen;
     }
   });
