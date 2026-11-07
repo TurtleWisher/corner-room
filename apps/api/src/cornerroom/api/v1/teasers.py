@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cornerroom.api.deps import db_session, get_auth_context, get_optional_auth_context, settings_dep
 from cornerroom.infra.http_range import RangeNotSatisfiable, parse_byte_range
 from cornerroom.infra.settings import Settings
+from cornerroom.infra.review_policy import approve_at_once
 from cornerroom.infra.storage import get_storage
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.music.application.teasers import MintedAudio, TeaserService
@@ -327,7 +328,13 @@ async def process_teaser(teaser_id: UUID, ctx: Ctx, svc: Svc) -> TeaserDetailOut
 
 @router.post("/studio/teasers/{teaser_id}/transition", response_model=TeaserDetailOut)
 async def transition_teaser(teaser_id: UUID, body: TransitionIn, ctx: Ctx, svc: Svc) -> TeaserDetailOut:
-    return TeaserDetailOut(**await svc.transition(ctx, teaser_id, body.action))
+    out = await svc.transition(ctx, teaser_id, body.action)
+    # A teaser sent for review is approved at once when the sender may approve it (D-REVIEW-SOLO-01).
+    if body.action == "submit" and await approve_at_once(
+        svc.session, lambda: svc.review(ctx, teaser_id, "approve", None), settings=svc.settings
+    ):
+        out = await svc.detail(ctx, teaser_id)
+    return TeaserDetailOut(**out)
 
 
 @router.delete("/studio/teasers/{teaser_id}", status_code=204)

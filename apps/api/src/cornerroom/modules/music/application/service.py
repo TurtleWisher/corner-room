@@ -15,6 +15,7 @@ from cornerroom.infra.errors import AppError, ConflictError, ForbiddenError, Not
 from cornerroom.infra.outbox import enqueue_outbox
 from cornerroom.infra.settings import Settings, get_settings
 from cornerroom.infra.storage import assert_storage_class_allowed
+from cornerroom.infra.review_policy import second_review_on
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import (
@@ -1059,7 +1060,8 @@ class MusicService:
         schedule or release it."""
         from cornerroom.modules.music.domain.models import ReleaseContributor
 
-        if not release_ids:
+        if not release_ids or not second_review_on(self.settings):
+            # D-REVIEW-SOLO-01: off while the owner is the only staff (review_policy.py).
             return
         prepared = (
             await self.session.execute(

@@ -134,6 +134,10 @@ async def client(settings: Settings, postgres_available: str | None) -> AsyncIte
     os.environ["SANDBOX_PAYMENT_SECRET"] = settings.sandbox_payment_secret or ""
     os.environ["BOOTSTRAP_ADMIN_EMAIL"] = "admin@example.com"
     os.environ["BOOTSTRAP_ADMIN_PASSWORD"] = "adminpass12"
+    # The existing review tests check the full two-person rule, so they run with the second review
+    # on. Production runs with it off while the owner is the only staff (D-REVIEW-SOLO-01); the
+    # tests in test_phase16_solo_review.py turn it off themselves.
+    os.environ["STAFF_SECOND_REVIEW"] = "true"
     get_settings.cache_clear()
 
     from cornerroom.infra.base import Base

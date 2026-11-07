@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.infra.errors import AppError, NotFoundError
 from cornerroom.infra.settings import Settings, get_settings
+from cornerroom.infra.review_policy import second_review_on
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import TRACK_LYRICS_CHANGED, TRACK_LYRICS_REJECTED, TRACK_LYRICS_SUBMITTED
@@ -229,7 +230,7 @@ class LyricsService:
                 (await self.session.execute(select(ReleaseTrack.release_id).where(ReleaseTrack.track_id == track.id))).scalars()
             )
             await self.music.assert_independent_reviewer(ctx, releases)
-            if track.lyrics_pending_by == ctx.user_id:
+            if second_review_on(self.settings) and track.lyrics_pending_by == ctx.user_id:
                 raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You suggested these lyrics")
             track.lyrics = track.lyrics_pending
             _drop_stale_timings(track)

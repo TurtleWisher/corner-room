@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.api.deps import db_session, get_auth_context, settings_dep
 from cornerroom.infra.settings import Settings
+from cornerroom.infra.review_policy import approve_at_once
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.commerce.application.music_gifts import MusicGiftService
 
@@ -194,7 +195,10 @@ async def copy_gift(gift_id: UUID, ctx: Ctx, svc: Svc) -> GiftDetailOut:
 
 @router.post("/studio/music-gifts/{gift_id}/submit", response_model=GiftDetailOut)
 async def submit_gift(gift_id: UUID, ctx: Ctx, svc: Svc) -> GiftDetailOut:
-    return GiftDetailOut(**await svc.submit(ctx, gift_id))
+    out = await svc.submit(ctx, gift_id)
+    if await approve_at_once(svc.session, lambda: svc.review(ctx, gift_id, approve=True, note=None), settings=svc.settings):
+        out = await svc.detail(ctx, gift_id)
+    return GiftDetailOut(**out)
 
 
 @router.post("/studio/music-gifts/{gift_id}/withdraw", response_model=GiftDetailOut)

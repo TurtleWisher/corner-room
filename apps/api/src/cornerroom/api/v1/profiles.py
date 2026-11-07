@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cornerroom.api.deps import db_session, get_auth_context, settings_dep
 from cornerroom.api.v1.studio import CoverReportOut
 from cornerroom.infra.settings import Settings
+from cornerroom.infra.review_policy import approve_at_once
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.artists.application.profile_changes import ProfileChangeService
 
@@ -88,16 +89,21 @@ async def save_profile_change(
     kind: Literal["artist", "band"], profile_id: UUID, body: ProfileChangeIn, ctx: Ctx, svc: Svc
 ) -> StudioProfileOut:
     fields = body.model_fields_set
-    return StudioProfileOut(
-        **await svc.save(
-            ctx,
-            kind,
-            profile_id,
-            stage_name=body.stage_name,
-            bio=body.bio if "bio" in fields else ...,
-            remove_portrait=body.remove_portrait,
-        )
+    out = await svc.save(
+        ctx,
+        kind,
+        profile_id,
+        stage_name=body.stage_name,
+        bio=body.bio if "bio" in fields else ...,
+        remove_portrait=body.remove_portrait,
     )
+    # Approved at once when the sender may approve profile changes (D-REVIEW-SOLO-01).
+    waiting = await svc._open(kind, profile_id)
+    if waiting is not None and await approve_at_once(
+        svc.session, lambda: svc.transition(ctx, waiting.id, "APPROVED"), settings=svc.settings
+    ):
+        out = await svc.view(ctx, kind, profile_id)
+    return StudioProfileOut(**out)
 
 
 @router.get("/profile-changes", response_model=list[ReviewItemOut])

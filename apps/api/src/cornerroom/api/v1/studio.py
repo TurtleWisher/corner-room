@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.api.deps import db_session, get_auth_context, settings_dep
 from cornerroom.infra.settings import Settings
+from cornerroom.infra.review_policy import approve_at_once
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.music.application.studio import StudioService
 
@@ -457,7 +458,12 @@ async def save_lyrics(track_id: UUID, body: LyricsIn, ctx: Ctx, svc: StudioDep) 
     """Draft songs save now; approved or released songs wait for staff (D-LYRICS-01)."""
     from cornerroom.modules.music.application.lyrics import LyricsService
 
-    await LyricsService(svc.session, svc.settings, svc.clock).save(ctx, track_id, body.lyrics)
+    lyrics = LyricsService(svc.session, svc.settings, svc.clock)
+    await lyrics.save(ctx, track_id, body.lyrics)
+    # Lyrics that wait for staff (approved or released songs) are approved at once for staff.
+    track = await svc.music.get_track_row(track_id)
+    if track.lyrics_pending_by is not None:
+        await approve_at_once(svc.session, lambda: lyrics.review(ctx, track_id, approve=True, note=None), settings=svc.settings)
     return await _studio_track(svc, ctx, track_id)
 
 
@@ -485,7 +491,17 @@ async def new_version(track_id: UUID, ctx: Ctx, svc: StudioDep) -> VersionCreate
 
 @router.post("/studio/releases/{release_id}/submit", response_model=ReleaseDetailOut)
 async def submit(release_id: UUID, body: SubmitIn, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
+    from cornerroom.modules.music.application.review import ReviewService
+
     await svc.submit(ctx, release_id, rights_declaration=body.rights_declaration)
+
+    async def review_and_approve() -> None:
+        review = ReviewService(svc.session, svc.settings)
+        await review.act(ctx, release_id, action="start_review")
+        await review.act(ctx, release_id, action="approve")
+
+    # D-REVIEW-SOLO-01: approved at once when the sender may approve it (review_policy.py).
+    await approve_at_once(svc.session, review_and_approve, settings=svc.settings)
     return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
 
 
@@ -555,7 +571,12 @@ async def delete_release(release_id: UUID, ctx: Ctx, svc: StudioDep) -> Response
 @router.post("/studio/releases/{release_id}/presale/request", response_model=ReleaseDetailOut)
 async def request_presale(release_id: UUID, body: PresaleRequestIn, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
     """D-PRESALE-03: send an early pre-sale (title, artist, date, pre-sale price) for review."""
+    from cornerroom.modules.music.application.review import ReviewService
+
     await svc.request_presale(ctx, release_id, body.release_at)
+    await approve_at_once(
+        svc.session, lambda: ReviewService(svc.session, svc.settings).presale_decision(ctx, release_id, decision="approve"), settings=svc.settings
+    )
     return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
 
 
@@ -574,7 +595,16 @@ async def save_presale_email(release_id: UUID, body: PresaleEmailIn, ctx: Ctx, s
 
 @router.post("/studio/releases/{release_id}/presale/email/submit", response_model=ReleaseDetailOut)
 async def submit_presale_email(release_id: UUID, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
+    from cornerroom.modules.commerce.application.artist_mail import ArtistMailService
+
     await svc.submit_presale_email(ctx, release_id)
+    mail = await svc._presale_mail(await svc.music.get_release_row(release_id))
+    if mail is not None:
+        await approve_at_once(
+            svc.session,
+            lambda: ArtistMailService(svc.session, svc.settings, svc.clock).review(ctx, mail.id, approve=True, note=None),
+            settings=svc.settings,
+        )
     return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
 
 
@@ -970,7 +1000,16 @@ async def order_credits(track_id: UUID, body: CreditsIn, ctx: Ctx, svc: StudioDe
 
 @router.post("/studio/releases/{release_id}/changes/submit", response_model=ChangeRequestOut)
 async def submit_changes(release_id: UUID, ctx: Ctx, svc: StudioDep) -> ChangeRequestOut:
-    return ChangeRequestOut(**await _changes(svc).submit(ctx, release_id))
+    changes = _changes(svc)
+    out = await changes.submit(ctx, release_id)
+    decided: dict[str, Any] = {}
+
+    async def approve() -> None:
+        decided.update(await changes.review(ctx, release_id, approve=True, note=None))
+
+    if await approve_at_once(svc.session, approve, settings=svc.settings):
+        out = decided
+    return ChangeRequestOut(**out)
 
 
 @router.delete("/studio/releases/{release_id}/changes", status_code=204)
