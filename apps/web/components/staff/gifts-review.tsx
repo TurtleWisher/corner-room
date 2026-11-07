@@ -15,7 +15,7 @@ import { useWorkspace } from "@/components/workspace-provider";
 import { fetchGiftReviewQueue, reviewGiftCampaign, type GiftCampaign } from "@/features/gifts/api";
 import { ApiError } from "@/lib/api/client";
 import { friendlyError } from "@/lib/error-copy";
-import { reviewKind, SENDER_LABEL, waitingLine, worksLine } from "@/lib/gifts-view";
+import { emailsLine, reviewKind, SENDER_LABEL, waitingKindLabel, waitingLine, worksLine } from "@/lib/gifts-view";
 
 const FIELD = {
   title: "Name",
@@ -42,6 +42,7 @@ function Item({ c, onDone }: { c: GiftCampaign; onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const kind = reviewKind(c);
   const waiting = waitingLine(c);
+  const emails = emailsLine(c);
 
   async function act(action: "approve" | "reject") {
     if (action === "reject" && !note.trim()) {
@@ -67,7 +68,7 @@ function Item({ c, onDone }: { c: GiftCampaign; onDone: () => void }) {
         </Link>
         <span className="font-normal text-muted-foreground">
           {" "}
-          · {c.profile.display_name} · {kind === "new" ? "New campaign" : kind === "change" ? "Change to a live campaign" : "People waiting"}
+          · {c.profile.display_name} · {kind === "new" ? "New campaign" : kind === "change" ? "Change to a live campaign" : waitingKindLabel(c)}
         </span>
       </p>
       <p className="mt-1 text-sm">
@@ -94,6 +95,15 @@ function Item({ c, onDone }: { c: GiftCampaign; onDone: () => void }) {
           {waiting}.{" "}
           <Link href={`/studio/gifts/${c.id}`} className="font-medium underline">
             Review them on the campaign page
+          </Link>
+        </p>
+      ) : null}
+      {/* The artist's own status emails (D-CAMPAIGN-05) are approved in Studio > Gifts > Emails. */}
+      {emails ? (
+        <p className="mt-2 text-sm">
+          {emails}.{" "}
+          <Link href={`/studio/gifts/emails?view=gifts&campaign=${c.id}`} className="font-medium underline">
+            Review the emails
           </Link>
         </p>
       ) : null}

@@ -2,7 +2,9 @@
 
 /* Studio > Gifts > Emails (owner, 2026-11-02, D-MAIL-01 and D-MAIL-02): each profile's thank-you
  * emails for each audience, emails to buyers (Corner Room checks each one before it goes, now or at
- * a chosen time), saved templates, files for gifts, and a report. Buyers are names only. */
+ * a chosen time), saved templates, files for gifts, and a report. Buyers are names only.
+ * Gift updates (owner, 2026-11-07, D-CAMPAIGN-05): each gift campaign's own collectible status
+ * emails. `?view=gifts&campaign=<id>` opens one (the staff queue links here). */
 
 import { useEffect, useState } from "react";
 import { ArrowLeft, ChartNoAxesColumn, Copy, Mail, PenLine, Plus, Trash2, Undo2 } from "lucide-react";
@@ -13,6 +15,8 @@ import { ThankYouSection } from "@/components/artist-mail/thank-you-section";
 import { Segmented } from "@/components/artist-mail/audience-builder";
 import { Button, ButtonLink, Card, EmptyState, ErrorState, Skeleton } from "@/components/ds";
 import { GiftTabs } from "@/components/gifts/gift-tabs";
+import { StatusEmails } from "@/components/gifts/status-emails";
+import { Select } from "@/components/ds/input";
 import { AccountPage } from "@/components/shell/account-page";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
@@ -30,6 +34,7 @@ import {
   type MailProfile,
 } from "@/features/artist-mail/api";
 import { fetchMyProfiles, fetchProfileReleases, type CatalogProfile, type ReleaseCard } from "@/features/studio/api";
+import { fetchGiftCampaigns, type GiftCampaign } from "@/features/gifts/api";
 import { ApiError } from "@/lib/api/client";
 import { OCCASION_LABEL } from "@/lib/artist-mail-starters";
 import { audienceLine, MAIL_STATUS_LABEL, sentLine, whenLine } from "@/lib/artist-mail-view";
@@ -250,10 +255,56 @@ function ProfileMail({ profile, view }: { profile: CatalogProfile; view: "write"
   );
 }
 
+type View = "write" | "report" | "gifts";
+
+/** Every gift campaign of the profiles the person publishes for, to pick one. */
+async function allCampaigns(profiles: CatalogProfile[]): Promise<GiftCampaign[]> {
+  const lists = await Promise.all(profiles.map((p) => fetchGiftCampaigns(p.kind, p.id)));
+  return lists.flat();
+}
+
+function GiftUpdates({ profiles, chosen, onChoose }: { profiles: CatalogProfile[]; chosen: string | null; onChoose: (id: string) => void }) {
+  const campaigns = useAsync(() => allCampaigns(profiles), [profiles]);
+  if (campaigns.status === "loading") return <Skeleton className="h-48 w-full" />;
+  if (campaigns.status === "error") {
+    return <ErrorState title="Gift campaigns unavailable" message={loadErrorMessage(campaigns.error, "your gift campaigns")} action={<RetryButton onClick={campaigns.reload} />} />;
+  }
+  if (campaigns.data.length === 0) {
+    return <EmptyState title="No gift campaigns yet" body="Set up a gift campaign first; then you can word the emails buyers get as their gift moves." />;
+  }
+  const current = campaigns.data.find((c) => c.id === chosen) ?? campaigns.data[0];
+  return (
+    <div className="grid gap-6">
+      <label className="grid max-w-md gap-1 text-sm font-semibold text-fg">
+        Gift campaign
+        <Select value={current.id} onChange={(e) => onChoose(e.target.value)}>
+          {campaigns.data.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.title} · {c.profile.display_name}
+            </option>
+          ))}
+        </Select>
+      </label>
+      <StatusEmails campaignId={current.id} />
+    </div>
+  );
+}
+
 function Emails() {
   const profiles = useAsync(() => fetchMyProfiles(), []);
-  const [view, setView] = useState<"write" | "report">("write");
+  const [view, setView] = useState<View>("write");
+  const [campaign, setCampaign] = useState<string | null>(null);
+  // A link from the staff queue or a campaign opens its gift updates.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("view") === "gifts") setView("gifts");
+    if (params.get("campaign")) setCampaign(params.get("campaign"));
+  }, []);
   if (profiles.status === "loading") return <Skeleton className="h-48 w-full" />;
+  // Staff opening one campaign's gift updates from their queue may publish for no profile.
+  if (view === "gifts" && campaign && (profiles.status === "error" || profiles.data.length === 0)) {
+    return <StatusEmails campaignId={campaign} />;
+  }
   if (profiles.status === "error") {
     return <ErrorState title="Emails unavailable" message={loadErrorMessage(profiles.error, "your profiles")} action={<RetryButton onClick={profiles.reload} />} />;
   }
@@ -268,17 +319,19 @@ function Emails() {
           Thank the people who buy your music and tell them what&apos;s new. Corner Room sends every email from &quot;your name via Corner Room&quot;. You see
           buyers&apos; names, never their email addresses.
         </p>
-        <Segmented<"write" | "report">
+        <Segmented<View>
           label="Show"
           value={view}
-          options={{ write: "Write and send", report: "Report" }}
+          options={{ write: "Write and send", report: "Report", gifts: "Gift updates" }}
           onChange={setView}
         />
       </div>
       <div className="mt-8">
-        {profiles.data.map((p) => (
-          <ProfileMail key={`${p.kind}-${p.id}`} profile={p} view={view} />
-        ))}
+        {view === "gifts" ? (
+          <GiftUpdates profiles={profiles.data} chosen={campaign} onChoose={setCampaign} />
+        ) : (
+          profiles.data.map((p) => <ProfileMail key={`${p.kind}-${p.id}`} profile={p} view={view} />)
+        )}
       </div>
     </div>
   );

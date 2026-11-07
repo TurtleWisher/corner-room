@@ -150,7 +150,9 @@ class NotificationService:
             return None
         title = title_for_event(event.event_type)
         locale, body, template_ok = await self._resolve_template(ntype, event)
-        create_email = email.action == DECISION_SEND
+        # The act's own approved gift email goes out from commerce instead (D-CAMPAIGN-05).
+        artist_mail = bool((event.payload or {}).get("artist_mail"))
+        create_email = email.action == DECISION_SEND and not artist_mail
         row = Notification(
             user_id=user_id,
             type=ntype,
@@ -204,14 +206,14 @@ class NotificationService:
                     provider_code="stub" if template_ok else None,
                 )
             )
-        elif email.action != DECISION_SEND:
+        elif email.action != DECISION_SEND or artist_mail:
             self.session.add(
                 NotificationDelivery(
                     notification_id=row.id,
                     channel=CHANNEL_EMAIL,
                     status="SUPPRESSED",
                     attempt=0,
-                    last_error=email.reason,
+                    last_error="artist_email" if artist_mail else email.reason,
                 )
             )
         await self.session.flush()

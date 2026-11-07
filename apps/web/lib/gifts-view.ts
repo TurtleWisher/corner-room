@@ -100,6 +100,21 @@ export function reviewKind(c: Pick<GiftCampaign, "status" | "pending">): "new" |
   return null;
 }
 
+/** The act's own status emails waiting for staff (D-CAMPAIGN-05), as staff read it in the queue. */
+export function emailsLine(c: Pick<GiftCampaign, "emails_waiting">): string | null {
+  const n = c.emails_waiting ?? 0;
+  if (!n) return null;
+  return `${n} gift ${n === 1 ? "email" : "emails"} written by the artist ${n === 1 ? "waits" : "wait"} for approval`;
+}
+
+/** What a campaign waits for in the staff queue when it isn't a new campaign or a change. */
+export function waitingKindLabel(c: Pick<GiftCampaign, "counts" | "emails_waiting">): string {
+  const people = (c.counts.WAITING ?? 0) > 0;
+  const emails = (c.emails_waiting ?? 0) > 0;
+  if (people && emails) return "People and emails waiting";
+  return emails ? "Emails waiting" : "People waiting";
+}
+
 /** People the act added by hand, waiting for staff (D-CAMPAIGN-04), as staff read it in the queue. */
 export function waitingLine(c: Pick<GiftCampaign, "counts">): string | null {
   const n = c.counts.WAITING ?? 0;
