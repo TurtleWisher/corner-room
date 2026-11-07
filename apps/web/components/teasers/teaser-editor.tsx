@@ -1,7 +1,7 @@
 "use client";
 
 /*
- * Teaser Studio editor (owner, 2026-11-07, D-TEASER-00 to D-TEASER-03). The artist picks a part of the
+ * Preview Studio editor (owner, 2026-11-07, D-TEASER-00 to D-TEASER-03). The artist picks a part of the
  * song on its waveform, adds fades and a volume change, hears it, and has Corner Room make it. Nothing
  * here changes the master: these are only settings, and every version keeps its own. Corner Room
  * approves a version before fans hear it; a live teaser keeps playing while a newer one waits.
@@ -301,7 +301,7 @@ function Editor({ initial, releaseId }: { initial: TeaserDetailRecord; releaseId
       if (!window.confirm("Delete this teaser and all its versions? This can't be undone.")) return;
       return run("delete", async () => {
         await deleteTeaser(detail.id);
-        router.push(`/studio/releases/${releaseId}/teasers`);
+        router.push(`/studio/releases/${releaseId}#preview`);
       });
     }
     return run(action, () => transitionTeaser(detail.id, action));
@@ -321,8 +321,8 @@ function Editor({ initial, releaseId }: { initial: TeaserDetailRecord; releaseId
       <Card tone="outline" className="p-5 text-sm text-fg">
         <p className="font-semibold">The song&apos;s master isn&apos;t ready.</p>
         <p className="mt-1 text-fg-muted">A teaser is cut from the song&apos;s checked master. Upload it in the release first.</p>
-        <Link href={`/studio/releases/${releaseId}`} className="cr-focus mt-3 inline-block font-semibold text-link underline">
-          Open the release
+        <Link href={`/studio/releases/${releaseId}#songs`} className="cr-focus mt-3 inline-block font-semibold text-link underline">
+          Open the songs
         </Link>
       </Card>
     );
@@ -694,8 +694,8 @@ export function TeaserEditor({ teaserId, releaseId }: { teaserId: string; releas
   const teaser = useAsync(() => fetchTeaser(teaserId), [teaserId]);
   return (
     <div>
-      <Link href={`/studio/releases/${releaseId}/teasers`} className="cr-focus mb-4 inline-flex items-center gap-1 text-sm font-semibold text-link hover:underline">
-        <ArrowLeft aria-hidden="true" className="size-4" /> All teasers of this release
+      <Link href={`/studio/releases/${releaseId}#preview`} className="cr-focus mb-4 inline-flex items-center gap-1 text-sm font-semibold text-link hover:underline">
+        <ArrowLeft aria-hidden="true" className="size-4" /> Preview Studio
       </Link>
       {teaser.status === "loading" ? (
         <Skeleton className="h-96 w-full" />

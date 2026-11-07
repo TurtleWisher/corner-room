@@ -22,18 +22,39 @@ FEATURES: Final[list[dict]] = [
         "audience": ["Artists", "Fans", "Staff"],
         "summary": "A short part of a song that anyone can hear free, as often as they like, until they buy it.",
         "description": (
-            "In Studio, the Teaser Studio (from a release's Tracks section) lets an artist or band pick a "
+            "In Studio, the Preview Studio (its own part of each release page) lets an artist or band pick a "
             "part of a song on its waveform (at most 60 seconds), add a fade in, a fade out and a volume "
             "change, hear it as they edit, and have Corner Room make it from the song's own master, which "
             "never changes. Staff approve each teaser on Catalog > Releases. Once approved, anyone can "
-            "listen on its own teaser page or from the song page, release page, pre-sale page and player, "
+            "listen in its Preview Room or from the song page, release page, pre-sale page and player, "
             "without signing in or buying. After each full listen a gentle suggestion offers to buy the "
             "song or its release (or pre-book it), never stopping a replay. Teasers work before and after "
             "release and stay on the same song. A newer version waits for approval while the live one "
             "keeps playing. Teaser plays are not song plays: they never count as listens or earn "
-            "royalties. Artists see how many times each teaser was started and listened to the end."
+            "royalties. Artists see how many times each teaser was started and listened to the end. "
+            "People who own a song find its teasers in the song's Preview Corner."
         ),
         "updates": [
+            {
+                "date": "2026-11-08",
+                "kind": "IMPROVED",
+                "title": "Preview Studio, Preview Room and Preview Corner",
+                "details": (
+                    "The Teaser Studio is now the Preview Studio and has its own part of the release page. "
+                    "The teaser page is the Preview Room, and a song's teasers section is its Preview "
+                    "Corner."
+                ),
+            },
+            {
+                "date": "2026-11-08",
+                "kind": "IMPROVED",
+                "title": "Waveform edges easy to drag with a finger",
+                "details": (
+                    "The start and end edges and the play line are easy to grab and drag with a finger: "
+                    "a press near a line takes it, the page no longer scrolls while dragging, and the time "
+                    "shows above the finger. Larger glossy grips on touch screens."
+                ),
+            },
             {
                 "date": "2026-11-07",
                 "kind": "IMPROVED",
@@ -349,6 +370,16 @@ FEATURES: Final[list[dict]] = [
             "pre-sales, gift campaigns, emails and music gifts. Changes to released music wait for staff."
         ),
         "updates": [
+            {
+                "date": "2026-11-08",
+                "kind": "IMPROVED",
+                "title": "Release page in parts",
+                "details": (
+                    "A release page shows one part at a time: Details, Songs, Preview Studio, Price and "
+                    "Review, with a count of what is still missing on each. Songs fold to one line and "
+                    "open on their own Song, Audio, Credits and Lyrics tabs."
+                ),
+            },
             {"date": "2026-11-06", "kind": "NEW", "title": "Releases area", "details": "All releases, pre-sale campaigns and numbers after release."},
             {"date": "2026-10-31", "kind": "IMPROVED", "title": "Credit-only changes", "details": "Staff approve credit-only changes they made themselves."},
             {"date": "2026-10-28", "kind": "NEW", "title": "Changes to released music", "details": "Reviewed changes to released music."},

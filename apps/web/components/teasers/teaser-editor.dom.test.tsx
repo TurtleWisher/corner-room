@@ -109,7 +109,7 @@ describe("TeaserEditor", () => {
       fireEvent.change(start, { target: { value: "ten" } });
       fireEvent.blur(start);
     });
-    expect(screen.getByText("Type a time like 1:05.250")).toBeTruthy();
+    expect(await screen.findByText("Type a time like 1:05.250", undefined, { timeout: 5000 })).toBeTruthy();
     await act(async () => {
       fireEvent.change(start, { target: { value: "15.5" } });
       fireEvent.blur(start);
