@@ -6,6 +6,10 @@ Images are served at a few fixed square web sizes made from the accepted origina
 storage next to it. Public reads resolve artwork only for released music and published events.
 Anything else (Studio, staff review, unpublished events) leaves only through short-lived signed
 links, because an <img> request carries no session.
+
+A pre-sale cover the artist hasn't switched on (owner, 2026-11-07, D-COVER-03) leaves only as a
+lightly blurred copy made here, so the sharp picture never reaches fans before it is shown; its
+signed link says so, and the same token can't fetch the sharp one.
 """
 
 from __future__ import annotations
@@ -32,14 +36,20 @@ COVER_TOKEN_USE = "cover"
 COVER_LINK_SECONDS = 3600
 USABLE_ASSET_STATUSES = frozenset({"ACCEPTED", "READY"})
 PUBLIC_STATUS = "RELEASED"
+# The light blur on a pre-sale cover that isn't shown yet: about 1 % of the width, enough to know
+# the picture, not to see it clearly (owner, 2026-11-07: "a little blurry").
+SOFT_SIZE = 480
+SOFT_BLUR_SHARE = 0.009
 
 
-def _resize(original: bytes, size: int) -> bytes:
-    from PIL import Image
+def _resize(original: bytes, size: int, soft: bool = False) -> bytes:
+    from PIL import Image, ImageFilter
 
     with Image.open(io.BytesIO(original)) as image:
         image = image.convert("RGB")
         image.thumbnail((size, size), Image.Resampling.LANCZOS)
+        if soft:
+            image = image.filter(ImageFilter.GaussianBlur(radius=max(2.0, image.width * SOFT_BLUR_SHARE)))
         out = io.BytesIO()
         image.save(out, format="JPEG", quality=86, optimize=True, progressive=True)
         return out.getvalue()
@@ -99,47 +109,54 @@ class CoverService:
 
     # --- signed links for unreleased covers ----------------------------------------------------
 
-    def signed_path(self, asset_id: UUID, size: int = 480, *, now: datetime | None = None) -> str:
+    def signed_path(self, asset_id: UUID, size: int = 480, *, soft: bool = False, now: datetime | None = None) -> str:
+        """A short-lived link to a cover; `soft` links only ever give the lightly blurred copy."""
         issued = now or datetime.now(UTC)
-        token = jwt.encode(
-            {
-                "iss": self.settings.jwt_issuer,
-                "aid": str(asset_id),
-                "iat": int(issued.timestamp()),
-                "exp": int((issued + timedelta(seconds=COVER_LINK_SECONDS)).timestamp()),
-                "token_use": COVER_TOKEN_USE,
-            },
-            self.settings.media_secret,
-            algorithm="HS256",
-        )
-        return f"/api/v1/covers/signed/{token}/{size}"
+        claims = {
+            "iss": self.settings.jwt_issuer,
+            "aid": str(asset_id),
+            "iat": int(issued.timestamp()),
+            "exp": int((issued + timedelta(seconds=COVER_LINK_SECONDS)).timestamp()),
+            "token_use": COVER_TOKEN_USE,
+        }
+        if soft:
+            claims["soft"] = True
+        token = jwt.encode(claims, self.settings.media_secret, algorithm="HS256")
+        return f"/api/v1/covers/signed/{token}/{SOFT_SIZE if soft else size}"
 
-    def asset_from_token(self, token: str) -> UUID:
+    def cover_from_token(self, token: str) -> tuple[UUID, bool]:
+        """The asset a signed link names, and whether it may give only the blurred copy."""
         try:
             payload = jwt.decode(token, self.settings.media_secret, algorithms=["HS256"], issuer=self.settings.jwt_issuer)
         except jwt.PyJWTError as exc:
             raise UnauthorizedError("Invalid or expired cover link") from exc
         if payload.get("token_use") != COVER_TOKEN_USE:
             raise UnauthorizedError("Invalid token type")
-        return UUID(payload["aid"])
+        return UUID(payload["aid"]), payload.get("soft") is True
+
+    def asset_from_token(self, token: str) -> UUID:
+        return self.cover_from_token(token)[0]
 
     # --- bytes -------------------------------------------------------------------------------
 
-    async def image(self, asset_id: UUID, size: int) -> bytes:
-        """A JPEG of the accepted cover at `size` px (made once, then kept in storage)."""
+    async def image(self, asset_id: UUID, size: int, *, soft: bool = False) -> bytes:
+        """A JPEG of the accepted cover at `size` px (made once, then kept in storage); `soft` is
+        the lightly blurred copy, always at SOFT_SIZE."""
+        if soft:
+            size = SOFT_SIZE
         if size not in COVER_SIZES:
             raise NotFoundError("Cover not found")
         asset = await self.session.get(MediaAsset, asset_id)
         if asset is None or asset.deleted_at is not None or asset.purpose != "COVER_ART" or asset.status not in USABLE_ASSET_STATUSES:
             raise NotFoundError("Cover not found")
-        key = f"catalog_art/covers/{asset.id}/web-{size}.jpg"
+        key = f"catalog_art/covers/{asset.id}/web-{size}{'-soft' if soft else ''}.jpg"
         if await self.storage.stat(key):
             return await self.storage.get_bytes(key)
         try:
             original = await self.storage.get_bytes(asset.object_key)
         except FileNotFoundError as exc:
             raise NotFoundError("Cover not found") from exc
-        data = await asyncio.to_thread(_resize, original, size)
+        data = await asyncio.to_thread(_resize, original, size, soft)
         await self.storage.put(object_key=key, data=data, mime="image/jpeg", storage_class="catalog_art")
         return data
 

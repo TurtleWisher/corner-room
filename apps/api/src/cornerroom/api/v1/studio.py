@@ -224,14 +224,13 @@ class ChangeRequestOut(BaseModel):
 
 
 class CoverRevealOut(BaseModel):
-    """D-COVER-02: whether fans see the cover before release, and when."""
+    """D-COVER-03: the pre-sale cover switch, and the cover as fans see it now."""
 
-    lead_minutes: int | None = None
-    revealed_at: datetime | None = None
-    reveal_at: datetime | None = None
     revealed: bool = False
-    can_change: bool = False
-    can_reveal_now: bool = False
+    revealed_at: datetime | None = None
+    can_switch: bool = False
+    # The cover as fans see it: lightly blurred while the switch is off. None without a cover.
+    preview_url: str | None = None
 
 
 class PresalePriceOut(BaseModel):
@@ -532,8 +531,8 @@ async def cover_report(release_id: UUID, ctx: Ctx, svc: StudioDep) -> CoverRepor
 
 
 class CoverRevealIn(BaseModel):
-    # Minutes before release that fans see the cover; null keeps it hidden until release.
-    lead_minutes: int | None = Field(default=None, ge=1)
+    # On: fans see the cover clearly before release. Off: lightly blurred.
+    revealed: bool
 
 
 class PresaleRequestIn(BaseModel):
@@ -580,15 +579,8 @@ async def submit_presale_email(release_id: UUID, ctx: Ctx, svc: StudioDep) -> Re
 
 @router.put("/studio/releases/{release_id}/cover-reveal", response_model=ReleaseDetailOut)
 async def set_cover_reveal(release_id: UUID, body: CoverRevealIn, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
-    """D-COVER-02: show the cover a chosen time before release, or only with the release."""
-    await svc.set_cover_reveal(ctx, release_id, body.lead_minutes)
-    return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
-
-
-@router.post("/studio/releases/{release_id}/cover-reveal/now", response_model=ReleaseDetailOut)
-async def reveal_cover_now(release_id: UUID, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
-    """D-COVER-02: show the cover to fans at once, ahead of a scheduled release."""
-    await svc.reveal_cover_now(ctx, release_id)
+    """D-COVER-03: the pre-sale cover switch, on (clear) or off (lightly blurred)."""
+    await svc.set_cover_shown(ctx, release_id, body.revealed)
     return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
 
 
@@ -1014,8 +1006,9 @@ class PresaleViewOut(BaseModel):
     artist: str | None
     artist_kind: str | None
     artist_id: UUID | None
-    # Present only after the artist explicitly reveals the cover early; songs stay hidden.
+    # Lightly blurred (made on the server) until the artist switches it on; songs stay hidden.
     cover_url: str | None
+    cover_revealed: bool = False
     offer: PresaleOfferOut
     # False once the date has passed while the release waits to be finished: no pre-orders then.
     open: bool = True

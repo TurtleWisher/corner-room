@@ -97,14 +97,17 @@ FEATURES: Final[list[dict]] = [
         "description": (
             "An artist proposes a pre-sale price and date in Studio, even before the music is finished; "
             "staff approve the title, artist, date and price. Fans see a Pre-book button, the release "
-            "time and what they get, with the cover hidden until release unless the artist reveals it "
-            "early. On release day the music unlocks, buyers are told, and a release-day email from the "
+            "time and what they get, with the cover a little blurred until the artist switches it on. "
+            "On release day the music unlocks, buyers are told, and a release-day email from the "
             "artist goes out. Staff can move the date (buyers are emailed), release early, send music "
             "back to pre-sale, or cancel with full refunds. Each pre-sale has its own Studio campaign "
             "pages with live numbers and share links. Buyers who paid before Corner Room launched get "
             "their music when their email is verified."
         ),
         "updates": [
+            {"date": "2026-11-07", "kind": "IMPROVED", "title": "Cover switch", "details": "One on/off switch in the pre-sale: off shows the cover, or the title screen, a little blurred; on shows it clearly."},
+            {"date": "2026-11-07", "kind": "FIXED", "title": "Shown covers no longer blurred", "details": "A cover the artist has shown now appears clearly instead of staying blurred."},
+            {"date": "2026-11-07", "kind": "IMPROVED", "title": "Glossy Pre-book button", "details": "The Pre-book button over a pre-sale cover is a glossy glass button."},
             {"date": "2026-11-07", "kind": "FIXED", "title": "Numbers fit the page", "details": "Long site names wrap inside their card instead of being cut off at the right edge."},
             {"date": "2026-11-06", "kind": "NEW", "title": "Pre-sale campaigns in Studio", "details": "Live numbers, set-up, fan page and named share links per pre-sale; numbers carry on after release."},
             {"date": "2026-11-03", "kind": "NEW", "title": "Pre-sales in the fan Store", "details": "An \"On pre-sale\" group first in the Store, on Releases and on artist profiles."},
