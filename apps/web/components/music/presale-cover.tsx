@@ -8,12 +8,15 @@ import { FISHEYE_SCALE, fisheyeMap } from "@/lib/fisheye-map";
 import { cn } from "@/lib/utils";
 
 /**
- * A release's cover while it is on pre-sale (owner, 2026-11-06, D-PRESALE-04).
+ * A release's cover while it is on pre-sale (owner, 2026-11-06, D-PRESALE-04; switch 2026-11-07,
+ * D-COVER-03).
  *
- * With a cover the artist chose to show: the picture under a very light blur, enough to recognise
- * it but not to see it clearly. No shade, no tint: the art stays the art.
+ * With a cover: the picture. Until the artist switches the cover on it is the server's lightly
+ * blurred copy (enough to recognise, not to see clearly; the sharp file never reaches fans); once
+ * on, the cover as it is. No shade, no tint: the art stays the art.
  *
- * Without one: the title cube, sharp, on an old curved TV screen seen through a wide lens. The
+ * Without one: the title cube on an old curved TV screen seen through a wide lens, a little
+ * blurred while the switch is off and sharp once it is on (`revealed`). The
  * screen swells in the middle (an SVG fisheye bend, where the browser draws it reliably), the
  * glass carries a slow gloss and a soft band of light rolls down it. The cube's faces stay clean
  * (brand: no texture on Room Cubes), so the old-TV feel comes from the glass, not from lines on
@@ -21,13 +24,16 @@ import { cn } from "@/lib/utils";
  */
 export function PresaleCover({
   coverUrl,
+  revealed = false,
   title,
   artist,
   className,
   children,
 }: {
-  /** From lib/cover-view; null when the artist hasn't shown a cover. */
+  /** From lib/cover-view; null when there is no cover. Already blurred by the server while off. */
   coverUrl: string | null;
+  /** The artist's switch: on shows everything clearly; off blurs the title screen a little. */
+  revealed?: boolean;
   title: string;
   artist?: string | null;
   className?: string;
@@ -36,7 +42,7 @@ export function PresaleCover({
 }) {
   const screen = <PresaleScreen title={title} artist={artist} />;
   return (
-    <div className={cn("psc", className)} data-kind={coverUrl ? "art" : "screen"}>
+    <div className={cn("psc", className)} data-kind={coverUrl ? "art" : "screen"} data-soft={revealed ? undefined : ""}>
       {coverUrl ? (
         <div className="psc-art">
           <CoverArt src={coverUrl} fallback={screen} className="w-full" />

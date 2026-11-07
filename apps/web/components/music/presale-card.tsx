@@ -26,10 +26,10 @@ export function PresaleCard({ presale, place, className }: { presale: PresalePag
   const price = { amount_minor: presale.offer.amount_minor, currency_code: presale.offer.currency_code };
   return (
     <Card as="article" className={cn("flex h-full flex-col p-4", className)}>
-      <PresaleCover coverUrl={coverUrl({ signed: presale.cover_url }, 480)} title={presale.title} artist={presale.artist}>
+      <PresaleCover coverUrl={coverUrl({ signed: presale.cover_url }, 480)} revealed={presale.cover_revealed} title={presale.title} artist={presale.artist}>
         {open ? (
           <div className="psc-cta">
-            <PrebookLink presale={presale} place={place} size="sm" />
+            <PrebookLink presale={presale} place={place} look="liquid" />
           </div>
         ) : null}
       </PresaleCover>
@@ -77,23 +77,39 @@ export function PresaleCard({ presale, place, className }: { presale: PresalePag
   );
 }
 
-/** Pre-book: to checkout when signed in, through sign-in otherwise. Each press is counted. */
+/** Pre-book: to checkout when signed in, through sign-in otherwise. Each press is counted. The
+ * `liquid` look is the glossy glass button laid over a pre-sale cover (owner, 2026-11-07). */
 export function PrebookLink({
   presale,
   place,
   size,
   block,
   className,
+  look = "button",
 }: {
   presale: PresalePageRecord;
   place: PresalePlace;
   size?: "sm" | "lg";
   block?: boolean;
   className?: string;
+  look?: "button" | "liquid";
 }) {
   const { status } = useAuth();
   const checkout = `/checkout?offer=${presale.offer.id}`;
   const signedIn = status === "authenticated";
+  if (look === "liquid") {
+    return (
+      <Link
+        href={signedIn ? checkout : `/login?next=${encodeURIComponent(checkout)}`}
+        className={cn("psc-liquid cr-focus", size === "lg" && "psc-liquid-lg", className)}
+        aria-label={signedIn ? `Pre-book ${presale.title}` : `Sign in to pre-book ${presale.title}`}
+        onClick={() => countPresale(presale.id, { kind: "prebook", place })}
+      >
+        <LockKeyhole aria-hidden="true" className="size-4" />
+        <span>{signedIn ? "Pre-book" : "Sign in to pre-book"}</span>
+      </Link>
+    );
+  }
   return (
     <ButtonLink
       href={signedIn ? checkout : `/login?next=${encodeURIComponent(checkout)}`}

@@ -97,4 +97,5 @@ async def _profile_picture(svc: CoverService, kind: str, profile_id: UUID, size:
 
 @router.get("/covers/signed/{token}/{size}", response_class=Response)
 async def signed_cover(token: str, size: int, svc: CoverDep) -> Response:
-    return _jpeg(await svc.image(svc.asset_from_token(token), size), SIGNED_CACHE)
+    asset_id, soft = svc.cover_from_token(token)
+    return _jpeg(await svc.image(asset_id, size, soft=soft), SIGNED_CACHE)

@@ -91,9 +91,10 @@ class PresaleService:
 
     async def public_view(self, release_id: UUID) -> dict[str, Any]:
         """What fans see of a release on pre-sale: title, artist, date and the offer only. Never
-        disclose songs. A cover can be shown only when the artist has explicitly revealed it, and
-        Corner Room's fan UI keeps that preview blurred until the release is public. `open` is
-        false once the date has passed while the release waits to be finished."""
+        disclose songs. The cover comes lightly blurred, made on the server, until the artist
+        switches it on (D-COVER-03), then as it is; `cover_revealed` tells the page which, so the
+        title screen can be blurred the same way when there is no cover. `open` is false once the
+        date has passed while the release waits to be finished."""
         from cornerroom.modules.documents.application.covers import CoverService
         from cornerroom.modules.music.application.studio import StudioService
         from cornerroom.modules.music.domain.cover_reveal import cover_revealed
@@ -109,7 +110,11 @@ class PresaleService:
         if kind is not None and pid is not None:
             _row, _org, artist = await studio._profile(kind, pid)
         offer = offers[0]
-        show_cover = release.cover_asset_id is not None and cover_revealed(release, self.clock.now())
+        revealed = cover_revealed(release, self.clock.now())
+        cover = None
+        if release.cover_asset_id is not None:
+            covers = CoverService(self.session, self.settings)
+            cover = covers.signed_path(release.cover_asset_id, 1200) if revealed else covers.signed_path(release.cover_asset_id, soft=True)
         return {
             "id": release.id,
             "title": release.title,
@@ -118,7 +123,8 @@ class PresaleService:
             "artist": artist,
             "artist_kind": kind,
             "artist_id": pid,
-            "cover_url": CoverService(self.session, self.settings).signed_path(release.cover_asset_id, 1200) if show_cover else None,
+            "cover_url": cover,
+            "cover_revealed": revealed,
             "offer": {"id": offer.id, "amount_minor": offer.amount_minor, "currency_code": offer.currency_code},
             "open": presale_open(release, self.clock.now()),
         }

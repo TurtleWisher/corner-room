@@ -385,19 +385,14 @@ export function backToPresale(releaseId: string, body: { release_at?: string | n
   });
 }
 
-/** D-COVER-02: show the cover this many minutes before release, or (null) only with the release. */
-export function setCoverReveal(releaseId: string, leadMinutes: number | null): Promise<StudioReleaseDetail> {
+/** D-COVER-03: the pre-sale cover switch. On: fans see the cover clearly; off: a little blurred. */
+export function setCoverReveal(releaseId: string, revealed: boolean): Promise<StudioReleaseDetail> {
   return apiFetch<StudioReleaseDetail>(`/api/v1/studio/releases/${releaseId}/cover-reveal`, {
     method: "PUT",
     headers: json,
-    body: JSON.stringify({ lead_minutes: leadMinutes }),
+    body: JSON.stringify({ revealed }),
     retry: false,
   });
-}
-
-/** D-COVER-02: show the cover to fans now, ahead of a scheduled release. It can't be hidden again. */
-export function revealCoverNow(releaseId: string): Promise<StudioReleaseDetail> {
-  return apiFetch<StudioReleaseDetail>(`/api/v1/studio/releases/${releaseId}/cover-reveal/now`, { method: "POST", retry: false });
 }
 
 export function withdrawStudioCover(releaseId: string): Promise<void> {
