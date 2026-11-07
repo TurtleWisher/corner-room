@@ -47,12 +47,15 @@ export function MailPreview({
   files = [],
   note = null,
   claimFor = null,
+  button = null,
 }: {
   artist: string;
   subject: string;
   body: string;
   values: MailValues;
-  kind: "THANK_YOU" | "MANUAL" | "GIFT";
+  kind: "THANK_YOU" | "MANUAL" | "GIFT" | "GIFT_UPDATE";
+  /** The act's own button (D-CAMPAIGN-06): its words; drawn only when it has both words and a link. */
+  button?: { label: string; url: string } | null;
   /** A music gift (D-GIFT-MUSIC-01): the person's own note, and whether they have an account yet. */
   note?: string | null;
   claimFor?: string | null;
@@ -90,6 +93,7 @@ export function MailPreview({
           ) : work?.title ? (
             <span className="am-preview-button">Listen to {work.title} on Corner Room</span>
           ) : null}
+          {button && button.label.trim() && button.url.trim() ? <span className="am-preview-button">{plainText(button.label, values)}</span> : null}
           {files.length ? (
             <div className="am-preview-files">
               <p className="mb-1 text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-[#5d5a7e]">From {artist}, for you</p>
@@ -107,6 +111,13 @@ export function MailPreview({
           {kind === "THANK_YOU" ? (
             <>
               Sent by Corner Room for {artist}. Replies to this email aren&apos;t read.
+              <br />
+              <span className="underline">Your music on Corner Room</span>
+            </>
+          ) : kind === "GIFT_UPDATE" ? (
+            <>
+              You&apos;re getting this because you&apos;re getting a gift from {artist} for music you bought on Corner Room. Replies to this email
+              aren&apos;t read.
               <br />
               <span className="underline">Your music on Corner Room</span>
             </>

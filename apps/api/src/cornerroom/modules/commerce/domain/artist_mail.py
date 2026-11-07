@@ -158,10 +158,11 @@ class ArtistMailMessage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "artist_mail_messages"
     __table_args__ = (
         CheckConstraint("profile_type IN ('artist','band')", name="profile_type"),
-        CheckConstraint("kind IN ('THANK_YOU','MANUAL','TEST','GIFT')", name="kind"),
+        CheckConstraint("kind IN ('THANK_YOU','MANUAL','TEST','GIFT','GIFT_UPDATE')", name="kind"),
         CheckConstraint("status IN ('PENDING','SENT','SUPPRESSED','FAILED')", name="status"),
         Index("ix_artist_mail_messages_mail", "mail_id", "status"),
         Index("ix_artist_mail_messages_profile", "profile_type", "profile_id", "kind"),
+        Index("ix_artist_mail_messages_gift_recipient", "gift_recipient_id"),
         Index("uq_artist_mail_messages_link_token", "link_token", unique=True, postgresql_where=text("link_token IS NOT NULL")),
         Index(
             "uq_artist_mail_messages_thank_you", "profile_type", "profile_id", "order_id",
@@ -194,6 +195,9 @@ class ArtistMailMessage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     # D-GIFT-MUSIC-01: the email that tells someone about a music gift (kind GIFT).
     music_gift_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    # D-CAMPAIGN-06: a gift status email (kind GIFT_UPDATE): whose gift, and which status.
+    gift_recipient_id: Mapped[UUID | None] = mapped_column(nullable=True)
+    gift_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     last_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
 

@@ -202,6 +202,13 @@ class GiftStatusMail(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     live_subject: Mapped[str | None] = mapped_column(String(200), nullable=True)
     live_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # D-CAMPAIGN-06: a button (its words and link) and files for the gift, written and approved.
+    button_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    button_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    file_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb"))
+    live_button_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    live_button_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    live_file_ids: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     sent_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     created_by: Mapped[UUID | None] = mapped_column(nullable=True)
     updated_by: Mapped[UUID | None] = mapped_column(nullable=True)

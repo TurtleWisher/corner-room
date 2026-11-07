@@ -304,6 +304,19 @@ MailStatus = Literal["DISPATCHED", "RETURNED", "MISSING"]
 class StatusMailIn(BaseModel):
     subject: str = Field(max_length=400)
     body: str = Field(max_length=12000)
+    # D-CAMPAIGN-06: a button (its words and https link) and the act's kept files.
+    button_label: str | None = Field(default=None, max_length=200)
+    button_url: str | None = Field(default=None, max_length=2100)
+    file_ids: list[UUID] = Field(default_factory=list, max_length=20)
+
+
+class StatusMailTestIn(StatusMailIn):
+    # Written as this buyer will read it (their name in the fill-ins).
+    recipient_id: UUID | None = None
+
+
+class StatusMailSendIn(BaseModel):
+    recipient_ids: list[UUID] = Field(min_length=1, max_length=2000)
 
 
 class StatusMailOut(BaseModel):
@@ -318,6 +331,12 @@ class StatusMailOut(BaseModel):
     live: bool = False
     live_subject: str | None = None
     live_body: str | None = None
+    button_label: str | None = None
+    button_url: str | None = None
+    file_ids: list[str] = Field(default_factory=list)
+    live_button_label: str | None = None
+    live_button_url: str | None = None
+    live_file_ids: list[str] = Field(default_factory=list)
     sent_count: int = 0
     submitted_at: datetime | None = None
     approved_at: datetime | None = None
@@ -331,13 +350,31 @@ class StatusMailCampaignOut(BaseModel):
     status: str
 
 
+class StatusMailPersonOut(BaseModel):
+    """A buyer by name (never their address), to preview as and to choose."""
+
+    id: UUID
+    name: str | None = None
+    status: str
+    reachable: bool
+
+
 class StatusMailsOut(BaseModel):
     campaign: StatusMailCampaignOut
+    profile: dict[str, Any]
     artist: str
     music: str
     viewer_role: str
     fill_ins: list[str]
     items: list[StatusMailOut]
+    people: list[StatusMailPersonOut] = Field(default_factory=list)
+    # After sending to chosen buyers: how many were emailed and how many weren't in that status.
+    sent: int | None = None
+    skipped: int | None = None
+
+
+class StatusMailTestOut(BaseModel):
+    sent_to: str
 
 
 @router.get("/studio/gift-campaigns/{campaign_id}/status-emails", response_model=StatusMailsOut)
@@ -348,8 +385,20 @@ async def status_emails(campaign_id: UUID, ctx: Ctx, svc: MailSvc) -> StatusMail
 
 @router.put("/studio/gift-campaigns/{campaign_id}/status-emails/{status}", response_model=StatusMailsOut)
 async def save_status_email(campaign_id: UUID, status: MailStatus, body: StatusMailIn, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
-    """Save the act's words for one status (a draft until staff approve it)."""
-    return StatusMailsOut(**await svc.save(ctx, campaign_id, status, body.subject, body.body))
+    """Save the act's version for one status (a draft until staff approve it)."""
+    return StatusMailsOut(**await svc.save(ctx, campaign_id, status, body.model_dump()))
+
+
+@router.post("/studio/gift-campaigns/{campaign_id}/status-emails/{status}/send", response_model=StatusMailsOut)
+async def send_status_email(campaign_id: UUID, status: MailStatus, body: StatusMailSendIn, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
+    """Email chosen buyers whose gift is in this status now, with the version that sends anyway."""
+    return StatusMailsOut(**await svc.send_to(ctx, campaign_id, status, body.recipient_ids))
+
+
+@router.post("/studio/gift-campaigns/{campaign_id}/status-emails/{status}/test", response_model=StatusMailTestOut)
+async def test_status_email(campaign_id: UUID, status: MailStatus, body: StatusMailTestIn, ctx: Ctx, svc: MailSvc) -> StatusMailTestOut:
+    """The version being written, to your own email, as one buyer will read it."""
+    return StatusMailTestOut(**await svc.send_test(ctx, campaign_id, status, body.model_dump()))
 
 
 @router.post("/studio/gift-campaigns/{campaign_id}/status-emails/{status}/submit", response_model=StatusMailsOut)

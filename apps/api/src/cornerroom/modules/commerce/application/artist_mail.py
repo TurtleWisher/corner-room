@@ -548,7 +548,7 @@ class ArtistMailService:
 
     async def _write(
         self, *, kind: str, subject: str, body: str, values: dict[str, str], work: dict[str, str] | None,
-        file_ids: list[str], stop_token: str | None,
+        file_ids: list[str], stop_token: str | None, button: tuple[str, str] | None = None,
     ) -> tuple[Written, str]:
         token = secrets.token_urlsafe(24)
         api, web = self._api_base(), self.settings.web_base_url.rstrip("/")
@@ -557,7 +557,7 @@ class ArtistMailService:
             kind=kind, subject=subject, body=body, values=values,
             click_url=lambda pos: f"{api}/api/v1/artist-mail/c/{token}/{pos}", web_base_url=web,
             cover_url=cover, listen=listen, files=await self._files_for(file_ids),
-            stop_url=f"{web}/email-stop/{stop_token}" if stop_token else None,
+            stop_url=f"{web}/email-stop/{stop_token}" if stop_token else None, button=button,
         )
         return written, token
 

@@ -206,19 +206,35 @@ export type StatusMail = {
   live: boolean;
   live_subject: string | null;
   live_body: string | null;
+  /** D-CAMPAIGN-06: the button (words and https link) and the act's kept files, written and approved. */
+  button_label: string | null;
+  button_url: string | null;
+  file_ids: string[];
+  live_button_label: string | null;
+  live_button_url: string | null;
+  live_file_ids: string[];
   sent_count: number;
   submitted_at: string | null;
   approved_at: string | null;
   can_review: boolean;
 };
 
+/** A buyer by name (never their address) and where their gift is. */
+export type StatusMailPerson = { id: string; name: string | null; status: GiftRecipientStatus; reachable: boolean };
+
+export type StatusMailInput = { subject: string; body: string; button_label: string | null; button_url: string | null; file_ids: string[] };
+
 export type StatusMails = {
   campaign: { id: string; title: string; gift_items: string; status: GiftCampaignStatus };
+  profile: { kind: "artist" | "band"; id: string };
   artist: string;
   music: string;
   viewer_role: "owner" | "staff";
   fill_ins: string[];
   items: StatusMail[];
+  people: StatusMailPerson[];
+  sent?: number | null;
+  skipped?: number | null;
 };
 
 const mailsPath = (id: string) => `/api/v1/studio/gift-campaigns/${id}/status-emails`;
@@ -227,7 +243,7 @@ export function fetchStatusMails(id: string): Promise<StatusMails> {
   return apiFetch<StatusMails>(mailsPath(id), { retry: false });
 }
 
-export function saveStatusMail(id: string, status: StatusMailStatus, body: { subject: string; body: string }): Promise<StatusMails> {
+export function saveStatusMail(id: string, status: StatusMailStatus, body: StatusMailInput): Promise<StatusMails> {
   return apiFetch<StatusMails>(`${mailsPath(id)}/${status}`, { method: "PUT", headers: json, body: JSON.stringify(body), retry: false });
 }
 
@@ -246,4 +262,17 @@ export function reviewStatusMail(id: string, status: StatusMailStatus, action: "
 
 export function resetStatusMail(id: string, status: StatusMailStatus): Promise<StatusMails> {
   return apiFetch<StatusMails>(`${mailsPath(id)}/${status}`, { method: "DELETE", retry: false });
+}
+
+export function sendStatusMail(id: string, status: StatusMailStatus, recipientIds: string[]): Promise<StatusMails> {
+  return apiFetch<StatusMails>(`${mailsPath(id)}/${status}/send`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify({ recipient_ids: recipientIds }),
+    retry: false,
+  });
+}
+
+export function testStatusMail(id: string, status: StatusMailStatus, body: StatusMailInput & { recipient_id: string | null }): Promise<{ sent_to: string }> {
+  return apiFetch<{ sent_to: string }>(`${mailsPath(id)}/${status}/test`, { method: "POST", headers: json, body: JSON.stringify(body), retry: false });
 }

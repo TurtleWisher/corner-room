@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from cornerroom.infra.db import get_engine
 from cornerroom.infra.errors import AppError
 from cornerroom.modules.commerce.application.artist_mail_render import write_email
-from cornerroom.modules.commerce.application.gift_status_mails import DEFAULTS, check_words, unfinished, with_gift
+from cornerroom.modules.commerce.application.gift_status_mails import DEFAULTS, check_button, check_words, mail_values, unfinished, with_gift
 from cornerroom.modules.notifications.domain.models import Notification, NotificationDelivery
 from cornerroom.worker import drain_outbox
 from tests.auth_helpers import bearer, register_and_login
@@ -31,15 +31,27 @@ def test_words_are_checked() -> None:
     assert with_gift("Your {gift} left", "signed poster") == "Your signed poster left"
     # Corner Room's starting words greet the buyer and name the gift.
     assert all("{first_name}" in body and "{gift}" in body for _subject, body in DEFAULTS.values())
+    # A button needs its words and an https address, or nothing at all.
+    assert check_button(None, " ") == (None, None)
+    assert check_button(" Track  it ", "https://example.com/t") == ("Track it", "https://example.com/t")
+    for label, url in (("Track", None), (None, "https://example.com"), ("Track", "example.com"), ("x" * 81, "https://e.com")):
+        with pytest.raises(AppError):
+            check_button(label, url)
+    # Each buyer is greeted by their own name; "there" only when there is none.
+    assert mail_values("Samiul Islam", "MIZULS", "Chaya Pore")["first_name"] == "Samiul"
+    assert mail_values(None, "MIZULS", "")["first_name"] == "there" and mail_values(None, "MIZULS", "")["music"] == "your music"
 
 
 def test_status_emails_have_no_stop_link() -> None:
     written = write_email(
         kind="GIFT_UPDATE", subject="On its way", body="Hi {first_name}, see [the map](https://example.com/map).",
         values={"artist": "MIZULS", "music": "Chaya Pore", "buyer_name": "Rumi Das", "first_name": "Rumi"},
-        click_url=lambda n: "https://example.com/map", web_base_url="https://cornerroom.example",
+        click_url=lambda n: f"https://cr.example/c/{n}", web_base_url="https://cornerroom.example",
+        button=("Track your parcel", "https://courier.example/123"),
     )
-    assert "Hi Rumi" in written.text and "https://example.com/map" in written.html
+    assert "Hi Rumi" in written.text and "https://cr.example/c/0" in written.html
+    assert "Track your parcel: https://cr.example/c/1" in written.text and ">Track your parcel</a>" in written.html
+    assert [link["url"] for link in written.links] == ["https://example.com/map", "https://courier.example/123"]
     assert "Stop emails" not in written.text and "/purchases" in written.text
 
 
@@ -70,7 +82,7 @@ async def test_act_writes_status_email_staff_approve_and_it_sends(client: AsyncC
     cid = created.json()["id"]
     await client.post(f"/api/v1/studio/gift-campaigns/{cid}/submit", headers=bearer(token))
     await client.post(f"/api/v1/catalog-intake/gift-campaigns/{cid}/review", headers=bearer(reviewer), json={"action": "approve"})
-    fan = await register_and_login(client, "smail-fan@example.com")
+    fan = await register_and_login(client, "smail-fan@example.com", display_name="Samiul Islam")
     offer = next(o for o in (await client.get("/api/v1/offers")).json()["items"] if o.get("subject_id") == release_id)
     await _buy(client, fan["access_token"], offer["id"])
     base = f"/api/v1/studio/gift-campaigns/{cid}/status-emails"
@@ -87,7 +99,12 @@ async def test_act_writes_status_email_staff_approve_and_it_sends(client: AsyncC
     assert draft.status_code == 200 and draft.json()["items"][0]["state"] == "DRAFT"
     assert (await client.post(f"{base}/DISPATCHED/submit", headers=bearer(token))).status_code == 422
     words = "Hi {first_name}, your {gift} from {artist} left today. Track it [here](https://example.com/track)."
-    await client.put(f"{base}/DISPATCHED", headers=bearer(token), json={"subject": "Your {gift} left", "body": words})
+    no_link = await client.put(f"{base}/DISPATCHED", headers=bearer(token), json={"subject": "x", "body": "y", "button_label": "Track"})
+    assert no_link.status_code == 422
+    await client.put(
+        f"{base}/DISPATCHED", headers=bearer(token),
+        json={"subject": "Your {gift} left", "body": words, "button_label": "Track your {gift}", "button_url": "https://courier.example/t"},
+    )
     sent_in = await client.post(f"{base}/DISPATCHED/submit", headers=bearer(token))
     assert sent_in.json()["items"][0]["state"] == "IN_REVIEW"
 
@@ -100,6 +117,7 @@ async def test_act_writes_status_email_staff_approve_and_it_sends(client: AsyncC
     assert approved.status_code == 200, approved.text
     item = approved.json()["items"][0]
     assert item["state"] == "APPROVED" and item["live"] and item["live_body"] == words
+    assert item["live_button_label"] == "Track your {gift}" and item["live_button_url"] == "https://courier.example/t"
 
     # An edit waits for staff while the approved words keep sending.
     edited = await client.put(f"{base}/DISPATCHED", headers=bearer(token), json={"subject": "New words", "body": "Hi {first_name}!"})
@@ -110,8 +128,9 @@ async def test_act_writes_status_email_staff_approve_and_it_sends(client: AsyncC
     # sends no email of its own.
     sender = _Sender()
     monkeypatch.setattr("cornerroom.modules.notifications.infra.email.email_sender_for", lambda _settings: sender)
-    detail = (await client.get(f"/api/v1/studio/gift-campaigns/{cid}", headers=bearer(token))).json()
-    rid = detail["recipients"][0]["id"]
+    people = (await client.get(base, headers=bearer(token))).json()["people"]
+    assert len(people) == 1 and people[0]["status"] == "YET_TO_SEND" and people[0]["reachable"] and "email" not in people[0]
+    rid = people[0]["id"]
     move = f"/api/v1/studio/gift-campaigns/{cid}/recipients/transition"
     await client.post(move, headers=bearer(token), json={"to": "PREPARED", "recipient_ids": [rid]})
     assert (await client.post(move, headers=bearer(token), json={"to": "DISPATCHED", "recipient_ids": [rid]})).status_code == 200
@@ -121,6 +140,9 @@ async def test_act_writes_status_email_staff_approve_and_it_sends(client: AsyncC
     assert len(mails) == 1
     assert mails[0]["subject"] == "Your A signed poster left"
     assert "your A signed poster from Mail Band left today" in mails[0]["body"] and "Stop emails" not in mails[0]["body"]
+    # Greeted by their own name, never a stand-in.
+    assert mails[0]["body"].startswith("Hi Samiul,") and "friend" not in mails[0]["body"]
+    assert "Track your A signed poster:" in mails[0]["body"]
     assert mails[0]["from_name"] == "Mail Band via Corner Room" and mails[0]["html"]
     factory = async_sessionmaker(get_engine(), expire_on_commit=False)
     async with factory() as session:
@@ -133,6 +155,24 @@ async def test_act_writes_status_email_staff_approve_and_it_sends(client: AsyncC
         ).scalar_one()
         assert email.status == "SUPPRESSED" and email.last_error == "artist_email"
     assert (await client.get(base, headers=bearer(token))).json()["items"][0]["sent_count"] == 1
+
+    # The dispatched email again to chosen buyers: only those whose gift is dispatched get it.
+    again = await client.post(f"{base}/DISPATCHED/send", headers=bearer(token), json={"recipient_ids": [rid]})
+    assert again.status_code == 200 and again.json()["sent"] == 1
+    wrong = await client.post(f"{base}/MISSING/send", headers=bearer(token), json={"recipient_ids": [rid]})
+    assert wrong.json()["sent"] == 0 and wrong.json()["skipped"] == 1
+    # A test of the words being written, to the act's own email, written as the chosen buyer.
+    test = await client.post(
+        f"{base}/RETURNED/test", headers=bearer(token),
+        json={"subject": "Back with us", "body": "Hi {first_name}, your {gift} came back.", "recipient_id": rid},
+    )
+    assert test.status_code == 200 and test.json()["sent_to"] == "smail-owner@example.com"
+    sender.sent.clear()
+    while await drain_outbox({}):
+        pass
+    assert [m["to"] for m in sender.sent].count("smail-fan@example.com") == 1
+    tests = [m for m in sender.sent if m["to"] == "smail-owner@example.com"]
+    assert tests and tests[0]["subject"] == "[Test] Back with us" and tests[0]["body"].startswith("Hi Samiul,")
 
     # Back to Corner Room's wording.
     reset = await client.delete(f"{base}/DISPATCHED", headers=bearer(token))

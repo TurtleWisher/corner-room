@@ -164,6 +164,7 @@ def write_email(
     web_base_url: str,
     cover_url: str | None = None,
     listen: tuple[str, str] | None = None,
+    button: tuple[str, str] | None = None,
     files: list[dict[str, Any]] | None = None,
     stop_url: str | None = None,
     note: str | None = None,
@@ -208,6 +209,18 @@ def write_email(
             f'<td style="background:{SKY}">'
             f'<a href="{html.escape(href)}" style="display:inline-block;padding:14px 22px;font-family:{FONT};font-size:15px;'
             f'font-weight:700;color:{INDIGO_INK};text-decoration:none">Listen to {html.escape(listen[1])} on Corner Room</a>'
+            "</td></tr></table>"
+        )
+    if button is not None and button[0].strip() and button[1].strip():
+        # The act's own button (D-CAMPAIGN-06), for example "Track your parcel".
+        label = " ".join(fill(button[0], values).split())[:80]
+        href = links.add(button[1].strip(), label, "LINK")
+        text_lines.append(f"{label}: {href}")
+        html_extra.append(
+            '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px"><tr>'
+            f'<td style="background:{SKY}">'
+            f'<a href="{html.escape(href)}" style="display:inline-block;padding:14px 22px;font-family:{FONT};font-size:15px;'
+            f'font-weight:700;color:{INDIGO_INK};text-decoration:none">{html.escape(label)}</a>'
             "</td></tr></table>"
         )
     if files:
