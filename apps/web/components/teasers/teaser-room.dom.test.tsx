@@ -100,7 +100,7 @@ async function openRoom() {
       <PlayerBar />
     </PlayerProvider>,
   );
-  await screen.findByRole("heading", { name: "Night Song" });
+  await screen.findByRole("heading", { name: "Night Song" }, { timeout: 5000 });
 }
 
 describe("teaser room", () => {

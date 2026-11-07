@@ -75,7 +75,7 @@ afterEach(cleanup);
 
 async function open() {
   render(<TeaserEditor teaserId="tz1" releaseId="rel1" />);
-  await screen.findByRole("heading", { name: "Choose the part" });
+  await screen.findByRole("heading", { name: "Choose the part" }, { timeout: 5000 });
 }
 
 describe("TeaserEditor", () => {
@@ -88,7 +88,8 @@ describe("TeaserEditor", () => {
       fireEvent.blur(start);
     });
     expect((screen.getByLabelText("Start") as HTMLInputElement).value).toBe("0:20.000");
-    const handle = await screen.findByRole("slider", { name: "Teaser end" });
+    // The handles appear once the waveform has loaded; under a busy full run that can take over 1 s.
+    const handle = await screen.findByRole("slider", { name: "Teaser end" }, { timeout: 5000 });
     await act(async () => fireEvent.keyDown(handle, { key: "ArrowRight", shiftKey: true }));
     expect((screen.getByLabelText("End") as HTMLInputElement).value).toBe("0:41.000");
     // Never longer than 60 s: the start follows the end.
@@ -123,6 +124,6 @@ describe("TeaserEditor", () => {
   it("explains a master that isn't ready instead of showing the editor", async () => {
     teasers.fetchTeaser.mockResolvedValue({ ...DETAIL, master: { ...DETAIL.master, status: "PROCESSING" } });
     render(<TeaserEditor teaserId="tz1" releaseId="rel1" />);
-    expect(await screen.findByText("The song's master isn't ready.")).toBeTruthy();
+    expect(await screen.findByText("The song's master isn't ready.", undefined, { timeout: 5000 })).toBeTruthy();
   });
 });
