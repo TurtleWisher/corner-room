@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { coverUrl, offerCoverSource } from "./cover-view";
+import { coverSrcSet, coverUrl, offerCoverSource } from "./cover-view";
+
+describe("coverSrcSet", () => {
+  it("offers the 480 and 1200 px copies so large covers stay sharp", () => {
+    expect(coverSrcSet({ track: "t1" }, "http://api.example")).toBe(
+      "http://api.example/api/v1/covers/tracks/t1/480 480w, http://api.example/api/v1/covers/tracks/t1/1200 1200w",
+    );
+  });
+
+  it("is null when it is known there is no cover", () => {
+    expect(coverSrcSet({ release: "r1", hasCover: false }, "http://api.example")).toBeNull();
+    expect(coverSrcSet({ signed: null }, "http://api.example")).toBeNull();
+  });
+});
 
 const BASE = "http://api.example";
 

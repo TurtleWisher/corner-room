@@ -42,7 +42,7 @@ import {
   titleAtoms,
 } from "@/lib/listening-room-view";
 import { fetchPlayableCatalog, fetchTrack, type PlayableTrackRecord } from "@/lib/api";
-import { coverUrl } from "@/lib/cover-view";
+import { coverSrcSet, coverUrl } from "@/lib/cover-view";
 import {
   floatingLines,
   lyricAgeAt,
@@ -82,9 +82,22 @@ const Cube = memo(function Cube({ title, artist }: { title: string; artist: stri
   return <RoomCube front={title} side={artist} tone="sky" label="" className="size-full" />;
 });
 
+// How wide the room draws a cover (from `--card` and `--orbit` in listen.css), so the browser
+// takes the 1200 px copy whenever the 480 px one would be stretched.
+const CARD_SIZES = "(min-width: 1024px) 21rem, (min-width: 768px) 19rem, 64vw";
+const FOCUS_SIZES = "(min-width: 1024px) 36rem, 78vw";
+
 // The official cover when the song has one (OD-05), the cube otherwise.
-const Cover = memo(function Cover({ id, title, artist }: { id: string; title: string; artist: string }) {
-  return <CoverArt src={coverUrl({ track: id }, 480)} fallback={<Cube title={title} artist={artist} />} className="size-full" />;
+const Cover = memo(function Cover({ id, title, artist, sizes = CARD_SIZES }: { id: string; title: string; artist: string; sizes?: string }) {
+  return (
+    <CoverArt
+      src={coverUrl({ track: id }, 480)}
+      srcSet={coverSrcSet({ track: id })}
+      sizes={sizes}
+      fallback={<Cube title={title} artist={artist} />}
+      className="size-full"
+    />
+  );
 });
 
 function titleOf(t: PlayerTrack): string {
@@ -874,7 +887,7 @@ function FocusView({ track, edge, keyRef }: { track: PlayerTrack; edge: "left" |
       <div key={track.id} className="lr-focus-cover">
         <div className="lr-halo" aria-hidden="true" />
         <div className="lr-focus-art">
-          <Cover id={track.id} title={label} artist={track.artist || label} />
+          <Cover id={track.id} title={label} artist={track.artist || label} sizes={FOCUS_SIZES} />
         </div>
         <LyricOrbit axis="over" />
       </div>

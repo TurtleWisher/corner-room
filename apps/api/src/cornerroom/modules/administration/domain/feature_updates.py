@@ -222,6 +222,7 @@ FEATURES: Final[list[dict]] = [
             "song's real length and a lit play key."
         ),
         "updates": [
+            {"date": "2026-11-07", "kind": "FIXED", "title": "Sharp covers", "details": "Large covers in the room use the full-size picture, so they no longer look soft or pixelated."},
             {"date": "2026-11-07", "kind": "FIXED", "title": "One still screen", "details": "The room no longer scrolls or jumps as lyrics move; cover, title and bar always fit the window."},
             {"date": "2026-11-07", "kind": "IMPROVED", "title": "Full screen on double-click", "details": "Double-click empty space for full screen and again to leave; buttons never trigger it."},
             {"date": "2026-11-06", "kind": "IMPROVED", "title": "Lyrics on from the start", "details": "A Lyrics switch under the close button; turning lyrics off is remembered on the device."},
