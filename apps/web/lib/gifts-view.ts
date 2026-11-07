@@ -99,3 +99,10 @@ export function reviewKind(c: Pick<GiftCampaign, "status" | "pending">): "new" |
   if (c.pending && Object.keys(c.pending).length) return "change";
   return null;
 }
+
+/** People the act added by hand, waiting for staff (D-CAMPAIGN-04), as staff read it in the queue. */
+export function waitingLine(c: Pick<GiftCampaign, "counts">): string | null {
+  const n = c.counts.WAITING ?? 0;
+  if (!n) return null;
+  return `${n} ${n === 1 ? "person" : "people"} added by the artist ${n === 1 ? "waits" : "wait"} for approval`;
+}

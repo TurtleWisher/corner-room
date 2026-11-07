@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { GiftRecipient } from "@/features/gifts/api";
 
-import { actionable, countsLine, isLater, movesFor, reviewKind, trackedSince, worksLine, type GiftTransitions } from "./gifts-view";
+import { actionable, countsLine, isLater, movesFor, reviewKind, trackedSince, waitingLine, worksLine, type GiftTransitions } from "./gifts-view";
 
 describe("gift campaign words (owner, 2026-10-28)", () => {
   it("sums up the gifts, leaving out statuses with none", () => {
@@ -22,6 +22,13 @@ describe("gift campaign words (owner, 2026-10-28)", () => {
     expect(reviewKind({ status: "IN_REVIEW", pending: null })).toBe("new");
     expect(reviewKind({ status: "ACTIVE", pending: { title: "New" } })).toBe("change");
     expect(reviewKind({ status: "ACTIVE", pending: null })).toBeNull();
+  });
+
+  it("tells staff how many people the artist added wait for approval", () => {
+    const zero = { YET_TO_SEND: 0, PREPARED: 0, DISPATCHED: 0, RECEIVED: 0, RETURNED: 0, MISSING: 0, TOTAL: 0, SCHEDULED: 0 };
+    expect(waitingLine({ counts: zero })).toBeNull();
+    expect(waitingLine({ counts: { ...zero, WAITING: 1 } })).toBe("1 person added by the artist waits for approval");
+    expect(waitingLine({ counts: { ...zero, WAITING: 3 } })).toBe("3 people added by the artist wait for approval");
   });
 });
 

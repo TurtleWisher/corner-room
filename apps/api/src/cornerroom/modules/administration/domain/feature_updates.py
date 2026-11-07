@@ -123,6 +123,7 @@ FEATURES: Final[list[dict]] = [
             "earn a campaign gift."
         ),
         "updates": [
+            {"date": "2026-11-07", "kind": "FIXED", "title": "Waiting people in the staff list", "details": "The staff list says how many people an artist added wait for approval, with a link to approve them."},
             {"date": "2026-11-07", "kind": "NEW", "title": "Add people by hand", "details": "Add buyers who paid outside Corner Room, typed in, pasted from a sheet or from a .csv file; the act's additions wait for staff."},
             {"date": "2026-11-06", "kind": "IMPROVED", "title": "Collectible tracking", "details": "Prepared, dispatched now or later, received, returned and missing; mark all prepared in one click."},
             {"date": "2026-11-06", "kind": "NEW", "title": "Collectibles on release numbers", "details": "A release's numbers page shows how far each of its collectibles has got."},
