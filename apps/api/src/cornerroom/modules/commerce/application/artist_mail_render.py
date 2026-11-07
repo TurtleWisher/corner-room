@@ -241,6 +241,13 @@ def write_email(
             f"You're getting this because {artist} gave you music on Corner Room. Replies to this email aren't read.",
             (f"Stop emails from {artist}", stop_url or f"{web}/account"),
         ]
+    elif kind == "GIFT_UPDATE":
+        # A collectible status email (D-CAMPAIGN-05): about a gift the buyer is owed, so no stop link.
+        footer = [
+            f"You're getting this because you're getting a gift from {artist} for music you bought on Corner Room. "
+            "Replies to this email aren't read.",
+            ("Your music on Corner Room", f"{web}/purchases"),
+        ]
     else:
         footer = [
             f"You're getting this because you bought music from {artist} on Corner Room. Replies to this email aren't read.",

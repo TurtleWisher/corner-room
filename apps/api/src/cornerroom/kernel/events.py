@@ -128,6 +128,10 @@ GIFT_DISPATCH_SCHEDULED = "GiftDispatchScheduled"
 GIFT_RECEIVED = "GiftReceived"
 GIFT_RETURNED = "GiftReturned"
 GIFT_MARKED_MISSING = "GiftMarkedMissing"
+# D-CAMPAIGN-05: the act's own wording for those status emails, approved by staff.
+GIFT_STATUS_MAIL_SUBMITTED = "GiftStatusMailSubmitted"
+GIFT_STATUS_MAIL_APPROVED = "GiftStatusMailApproved"
+GIFT_STATUS_MAIL_RETURNED = "GiftStatusMailReturned"
 # D-MAIL-01: artists' emails to buyers (commerce/application/artist_mail.py). Staff approve each
 # email; one ArtistMailQueued per message is what sends it (thank-you, email to buyers or test).
 ARTIST_MAIL_SUBMITTED = "ArtistMailSubmitted"

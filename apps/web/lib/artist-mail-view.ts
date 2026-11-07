@@ -26,7 +26,8 @@ export const BUYER_TYPE_LABEL: Record<BuyerType, string> = {
   RETURNING: "Returning buyers",
 };
 
-export type FillKey = "first_name" | "buyer_name" | "music" | "artist";
+/** `gift` is only for collectible status emails (D-CAMPAIGN-05), never artist emails. */
+export type FillKey = "first_name" | "buyer_name" | "music" | "artist" | "gift";
 
 /** The fill-ins an email can use: each becomes that buyer's own words when it goes. */
 export const FILL_INS: { key: FillKey; label: string; hint: string }[] = [
@@ -38,14 +39,23 @@ export const FILL_INS: { key: FillKey; label: string; hint: string }[] = [
 
 export const FILL_KEYS = FILL_INS.map((f) => f.key);
 
-export type MailValues = Record<FillKey, string>;
+/** Collectible status emails (D-CAMPAIGN-05) also name the gift itself. */
+export const GIFT_UPDATE_FILL_INS: { key: FillKey; label: string; hint: string }[] = [
+  ...FILL_INS,
+  { key: "gift", label: "The gift", hint: "The gift this campaign gives" },
+];
+
+/** Every fill-in the editor can hold, whichever email it is writing. */
+export const ALL_FILL_KEYS: FillKey[] = GIFT_UPDATE_FILL_INS.map((f) => f.key);
+
+export type MailValues = Record<Exclude<FillKey, "gift">, string> & { gift?: string };
 
 /** Said in place of a buyer's name when Corner Room doesn't have one (as the server does). */
 export const NO_NAME = "friend";
 
 export type RichToken = { kind: "text"; text: string } | { kind: "fill"; key: FillKey } | { kind: "link"; label: string; url: string };
 
-const TOKEN = /\[([^\]\n]{1,300})\]\((https?:\/\/[^\s()<>"']{1,2000})\)|\{(first_name|buyer_name|music|artist)\}/g;
+const TOKEN = /\[([^\]\n]{1,300})\]\((https?:\/\/[^\s()<>"']{1,2000})\)|\{(first_name|buyer_name|music|artist|gift)\}/g;
 
 /** Text, fill-ins and links (`[words](https://address)`) in order, as the server reads them. */
 export function parseRich(text: string): RichToken[] {
@@ -86,7 +96,7 @@ export function previewValues(person: Pick<MailPerson, "name" | "has_name" | "bo
 /** Text with fill-ins replaced and links kept as their words (for a subject line or a list). */
 export function plainText(text: string, values: MailValues): string {
   return parseRich(text)
-    .map((t) => (t.kind === "text" ? t.text : t.kind === "fill" ? values[t.key] : t.label))
+    .map((t) => (t.kind === "text" ? t.text : t.kind === "fill" ? (values[t.key] ?? `{${t.key}}`) : t.label))
     .join("");
 }
 
@@ -96,10 +106,10 @@ export function unfilledMarks(text: string): string[] {
 }
 
 /** Braced words that aren't fill-ins, so the writer can catch a typo like {name}. */
-export function unknownFillIns(text: string): string[] {
+export function unknownFillIns(text: string, keys: FillKey[] = FILL_KEYS): string[] {
   const found = new Set<string>();
   for (const m of text.matchAll(/\{([^{}\s]{1,40})\}/g)) {
-    if (!FILL_KEYS.includes(m[1] as FillKey)) found.add(`{${m[1]}}`);
+    if (!keys.includes(m[1] as FillKey)) found.add(`{${m[1]}}`);
   }
   return [...found];
 }
