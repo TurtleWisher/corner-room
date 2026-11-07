@@ -11,12 +11,17 @@ import { cn } from "@/lib/utils";
  */
 export function CoverArt({
   src,
+  srcSet,
+  sizes,
   fallback,
   alt = "",
   className,
 }: {
   /** From lib/cover-view; null when it is known there is no cover. */
   src: string | null;
+  /** Larger copies (`coverSrcSet`) for covers drawn big, with the size they are drawn at. */
+  srcSet?: string | null;
+  sizes?: string;
   /** The letter cube for this release or track. */
   fallback: React.ReactNode;
   /** Empty when the title is already written next to the cover. */
@@ -42,6 +47,8 @@ export function CoverArt({
         <img
           ref={img}
           src={src}
+          srcSet={srcSet ?? undefined}
+          sizes={srcSet ? sizes : undefined}
           alt={alt}
           loading="lazy"
           decoding="async"

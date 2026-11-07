@@ -30,6 +30,18 @@ export function coverUrl(source: CoverSource, size: CoverSize = 480, base: strin
   return `${base}/api/v1/covers/tracks/${source.track}/${size}`;
 }
 
+/**
+ * Every web size of a cover as an `srcset`, so the browser takes the smallest one that is still
+ * sharp at the size it is drawn and the screen's pixel density (a large cover on a sharp screen
+ * gets the 1200 px copy instead of stretching the 480 px one). Null when there is no cover.
+ */
+export function coverSrcSet(source: CoverSource, base: string = getApiBaseUrl()): string | null {
+  const sizes = COVER_SIZES.filter((s) => s >= 480);
+  const urls = sizes.map((s) => coverUrl(source, s, base));
+  if (urls.some((u) => u === null)) return null;
+  return urls.map((u, i) => `${u} ${sizes[i]}w`).join(", ");
+}
+
 /** The cover for a store offer: its release or its song; plans and catalog passes have none. */
 export function offerCoverSource(productType: string | null | undefined, subjectId: string | null | undefined): CoverSource | null {
   if (!subjectId) return null;
