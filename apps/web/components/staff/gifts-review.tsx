@@ -15,7 +15,7 @@ import { useWorkspace } from "@/components/workspace-provider";
 import { fetchGiftReviewQueue, reviewGiftCampaign, type GiftCampaign } from "@/features/gifts/api";
 import { ApiError } from "@/lib/api/client";
 import { friendlyError } from "@/lib/error-copy";
-import { reviewKind, SENDER_LABEL, worksLine } from "@/lib/gifts-view";
+import { reviewKind, SENDER_LABEL, waitingLine, worksLine } from "@/lib/gifts-view";
 
 const FIELD = {
   title: "Name",
@@ -41,6 +41,7 @@ function Item({ c, onDone }: { c: GiftCampaign; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const kind = reviewKind(c);
+  const waiting = waitingLine(c);
 
   async function act(action: "approve" | "reject") {
     if (action === "reject" && !note.trim()) {
@@ -64,7 +65,10 @@ function Item({ c, onDone }: { c: GiftCampaign; onDone: () => void }) {
         <Link href={`/studio/gifts/${c.id}`} className="underline">
           {c.title}
         </Link>
-        <span className="font-normal text-muted-foreground"> · {c.profile.display_name} · {kind === "new" ? "New campaign" : "Change to a live campaign"}</span>
+        <span className="font-normal text-muted-foreground">
+          {" "}
+          · {c.profile.display_name} · {kind === "new" ? "New campaign" : kind === "change" ? "Change to a live campaign" : "People waiting"}
+        </span>
       </p>
       <p className="mt-1 text-sm">
         {c.gift_items} · {worksLine(c.works)} · {SENDER_LABEL[c.sender]}
@@ -84,6 +88,17 @@ function Item({ c, onDone }: { c: GiftCampaign; onDone: () => void }) {
           </tbody>
         </table>
       ) : null}
+      {/* People the artist added by hand (D-CAMPAIGN-04) are approved on the campaign's own page. */}
+      {waiting ? (
+        <p className="mt-2 text-sm">
+          {waiting}.{" "}
+          <Link href={`/studio/gifts/${c.id}`} className="font-medium underline">
+            Review them on the campaign page
+          </Link>
+        </p>
+      ) : null}
+      {kind ? (
+        <>
       <textarea
         className="mt-3 min-h-16 w-full rounded border p-2 text-sm"
         value={note}
@@ -100,6 +115,8 @@ function Item({ c, onDone }: { c: GiftCampaign; onDone: () => void }) {
           Send back
         </Button>
       </div>
+        </>
+      ) : null}
       {error ? (
         <p role="alert" className="mt-2 flex items-center gap-2 text-sm text-red-600">
           <CircleAlert aria-hidden="true" className="size-4" /> {error}
