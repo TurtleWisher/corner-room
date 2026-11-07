@@ -4,7 +4,7 @@
  * Pure helpers; the API keeps the emails, decides what sends and writes the real email.
  */
 
-import type { GiftRecipientStatus, StatusMail, StatusMailInput, StatusMailPerson, StatusMailState, StatusMailStatus } from "@/features/gifts/api";
+import type { GiftRecipientStatus, StatusMail, StatusMailInput, StatusMailPerson, StatusMailSent, StatusMailState, StatusMailStatus } from "@/features/gifts/api";
 import { plainText, type MailValues } from "@/lib/artist-mail-view";
 
 export const STATUS_MAIL_TITLE: Record<StatusMailStatus, string> = {
@@ -107,4 +107,92 @@ export function subjectForAll(subject: string, artist: string, music: string, gi
 export function sentCountLine(n: number): string {
   if (!n) return "Not sent yet";
   return `Sent ${n} ${n === 1 ? "time" : "times"}`;
+}
+
+// --- The workflow in plain words (owner, 2026-11-08: "did the email send or not") -----------------
+
+export type StepTone = "done" | "now" | "waiting" | "problem" | "skip";
+export type Step = { title: string; line: string; tone: StepTone };
+
+/** What happens to the act's words: write, approval, buyers get it. One line each, from the API's state. */
+export function workflowSteps(item: StatusMail, approvesAtOnce: boolean): Step[] {
+  const status = STATUS_MAIL_TAB[item.status].toLowerCase();
+  const write: Step =
+    item.state === null
+      ? { title: "Write your email", line: "Optional. Until you use your own, buyers get Corner Room's wording.", tone: "now" }
+      : item.state === "DRAFT"
+        ? { title: "Write your email", line: "Saved as a draft. Buyers don't get it yet.", tone: "now" }
+        : item.state === "RETURNED"
+          ? { title: "Write your email", line: "Corner Room asked for a change. Edit it and send it again.", tone: "problem" }
+          : { title: "Write your email", line: "Written.", tone: "done" };
+  let approval: Step;
+  if (item.state === null) approval = { title: "Approval", line: "Not needed for Corner Room's wording.", tone: "skip" };
+  else if (item.state === "IN_REVIEW") approval = { title: "Approval", line: "Waiting for Corner Room. Buyers get the email in use until then.", tone: "waiting" };
+  else if (item.state === "APPROVED") approval = { title: "Approval", line: "Approved. Your email is in use.", tone: "done" };
+  else if (item.state === "RETURNED") approval = { title: "Approval", line: `Sent back: ${item.review_note ?? "see the note"}`, tone: "problem" };
+  else if (approvesAtOnce) approval = { title: "Approval", line: "You can approve your own emails, so Use this email puts it in use at once.", tone: "now" };
+  else approval = { title: "Approval", line: "Press Send for approval when it's ready. Corner Room checks it once.", tone: "now" };
+  const sent = item.sent_count;
+  const deliver: Step = {
+    title: "Buyers get it",
+    line: `By itself when you mark a gift ${status}, or now to the buyers you pick below.${sent ? ` ${sentCountLine(sent)} so far.` : ""}`,
+    tone: sent ? "done" : "skip",
+  };
+  return [write, approval, deliver];
+}
+
+/** Whose words buyers get now. */
+export function inUseLabel(item: StatusMail): string {
+  return item.live ? "Your approved email" : "Corner Room's wording";
+}
+
+/** The act's newer words that are not what buyers get yet, in one line, or null when there are none. */
+export function notInUseLine(item: StatusMail): string | null {
+  if (item.state === "DRAFT") return "Your newer changes are saved but not in use yet.";
+  if (item.state === "IN_REVIEW") return "Your newer changes are waiting for Corner Room and not in use yet.";
+  if (item.state === "RETURNED") return "Corner Room sent your changes back, so they're not in use.";
+  return null;
+}
+
+/** The main button: what pressing it really does for this person. */
+export function submitLabel(approvesAtOnce: boolean): string {
+  return approvesAtOnce ? "Use this email" : "Send for approval";
+}
+
+/** Said after the main button, from the state the API came back with. */
+export function submitDoneLine(next: StatusMail | undefined): string {
+  const status = next ? STATUS_MAIL_TAB[next.status].toLowerCase() : "";
+  if (next?.state === "APPROVED") return `Approved and in use. From now on every buyer whose gift is marked ${status} gets this email. Nobody was emailed just now.`;
+  return "Sent to Corner Room for approval. Nobody was emailed. Until it's approved, buyers get the email in use now.";
+}
+
+export const DELIVERY_WORD: Record<StatusMailSent["state"], string> = {
+  PENDING: "On its way",
+  SENT: "Sent",
+  FAILED: "Couldn't send",
+  SUPPRESSED: "Not sent",
+};
+
+/** The newest email of this status to this buyer, if any. */
+export function lastEmail(history: StatusMailSent[], recipientId: string, status: StatusMailStatus): StatusMailSent | null {
+  return history.find((h) => h.recipient_id === recipientId && h.gift_status === status) ?? null;
+}
+
+/** Whether any email is still on its way (the page then asks again shortly). */
+export function anyOnItsWay(history: StatusMailSent[] | undefined): boolean {
+  return (history ?? []).some((h) => h.state === "PENDING");
+}
+
+/** "Samiul, Rumi and 3 others" */
+export function namesLine(names: string[]): string {
+  const shown = names.map((n) => n || "a buyer with no name");
+  if (shown.length <= 3) return shown.length < 2 ? (shown[0] ?? "") : `${shown.slice(0, -1).join(", ")} and ${shown[shown.length - 1]}`;
+  return `${shown.slice(0, 2).join(", ")} and ${shown.length - 2} others`;
+}
+
+/** After sending now: who it went to, and who it skipped. */
+export function sentNowLine(sent: number, skipped: number, names: string[]): string {
+  if (!sent) return "Nobody was emailed: none of the people you picked still has a gift in this status, or has an email address.";
+  const who = `${sent} ${sent === 1 ? "buyer" : "buyers"}${names.length ? ` (${namesLine(names)})` : ""}`;
+  return `Emailed ${who}. Each one's line below shows On its way, then Sent.${skipped ? ` ${skipped} skipped: their gift moved on or they have no email.` : ""}`;
 }

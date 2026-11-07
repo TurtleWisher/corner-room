@@ -154,11 +154,19 @@ async def test_act_writes_status_email_staff_approve_and_it_sends(client: AsyncC
             )
         ).scalar_one()
         assert email.status == "SUPPRESSED" and email.last_error == "artist_email"
-    assert (await client.get(base, headers=bearer(token))).json()["items"][0]["sent_count"] == 1
+    after = (await client.get(base, headers=bearer(token))).json()
+    assert after["items"][0]["sent_count"] == 1
+    # The page can say whether it went: one entry per email, gone out, never an address.
+    assert [(h["recipient_id"], h["gift_status"], h["state"]) for h in after["history"]] == [(rid, "DISPATCHED", "SENT")]
+    assert after["history"][0]["sent_at"] and "email" not in after["history"][0]
+    # With the second review on, nobody here approves their own words at once.
+    assert after["approves_at_once"] is False
 
     # The dispatched email again to chosen buyers: only those whose gift is dispatched get it.
     again = await client.post(f"{base}/DISPATCHED/send", headers=bearer(token), json={"recipient_ids": [rid]})
     assert again.status_code == 200 and again.json()["sent"] == 1
+    # Queued at once and shown as on its way until the worker sends it.
+    assert [h["state"] for h in again.json()["history"]] == ["PENDING", "SENT"]
     wrong = await client.post(f"{base}/MISSING/send", headers=bearer(token), json={"recipient_ids": [rid]})
     assert wrong.json()["sent"] == 0 and wrong.json()["skipped"] == 1
     # A test of the words being written, to the act's own email, written as the chosen buyer.

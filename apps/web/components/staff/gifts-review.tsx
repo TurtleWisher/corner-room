@@ -6,10 +6,10 @@
  * changed it, and the profile's own people, can't approve (the API checks).
  */
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CircleAlert } from "lucide-react";
 
+import { StatusMailsReview, WaitingPeopleReview } from "@/components/staff/gift-campaign-extras";
 import { Button, Card, ErrorState, LoadingState } from "@/components/staff/kit";
 import { useWorkspace } from "@/components/workspace-provider";
 import { fetchGiftReviewQueue, reviewGiftCampaign, type GiftCampaign } from "@/features/gifts/api";
@@ -43,6 +43,8 @@ function Item({ c, onDone }: { c: GiftCampaign; onDone: () => void }) {
   const kind = reviewKind(c);
   const waiting = waitingLine(c);
   const emails = emailsLine(c);
+  // Opened here, never in the artist's Studio (owner, 2026-11-08).
+  const [open, setOpen] = useState<"people" | "emails" | null>(null);
 
   async function act(action: "approve" | "reject") {
     if (action === "reject" && !note.trim()) {
@@ -63,9 +65,7 @@ function Item({ c, onDone }: { c: GiftCampaign; onDone: () => void }) {
   return (
     <li className="border-b py-4">
       <p className="font-medium">
-        <Link href={`/studio/gifts/${c.id}`} className="underline">
-          {c.title}
-        </Link>
+        {c.title}
         <span className="font-normal text-muted-foreground">
           {" "}
           · {c.profile.display_name} · {kind === "new" ? "New campaign" : kind === "change" ? "Change to a live campaign" : waitingKindLabel(c)}
@@ -89,23 +89,25 @@ function Item({ c, onDone }: { c: GiftCampaign; onDone: () => void }) {
           </tbody>
         </table>
       ) : null}
-      {/* People the artist added by hand (D-CAMPAIGN-04) are approved on the campaign's own page. */}
+      {/* People the artist added by hand (D-CAMPAIGN-04), reviewed right here. */}
       {waiting ? (
-        <p className="mt-2 text-sm">
+        <div className="mt-2 text-sm">
           {waiting}.{" "}
-          <Link href={`/studio/gifts/${c.id}`} className="font-medium underline">
-            Review them on the campaign page
-          </Link>
-        </p>
+          <button type="button" className="font-medium underline" aria-expanded={open === "people"} onClick={() => setOpen(open === "people" ? null : "people")}>
+            {open === "people" ? "Hide them" : "Review them here"}
+          </button>
+          {open === "people" ? <WaitingPeopleReview campaignId={c.id} onDone={onDone} /> : null}
+        </div>
       ) : null}
-      {/* The artist's own status emails (D-CAMPAIGN-05) are approved in Studio > Gifts > Emails. */}
+      {/* The artist's own gift status emails (D-CAMPAIGN-05), reviewed right here. */}
       {emails ? (
-        <p className="mt-2 text-sm">
+        <div className="mt-2 text-sm">
           {emails}.{" "}
-          <Link href={`/studio/gifts/emails?view=gifts&campaign=${c.id}`} className="font-medium underline">
-            Review the emails
-          </Link>
-        </p>
+          <button type="button" className="font-medium underline" aria-expanded={open === "emails"} onClick={() => setOpen(open === "emails" ? null : "emails")}>
+            {open === "emails" ? "Hide the emails" : "Review the emails here"}
+          </button>
+          {open === "emails" ? <StatusMailsReview campaignId={c.id} onDone={onDone} /> : null}
+        </div>
       ) : null}
       {kind ? (
         <>
