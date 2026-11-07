@@ -359,6 +359,16 @@ class StatusMailPersonOut(BaseModel):
     reachable: bool
 
 
+class StatusMailSentOut(BaseModel):
+    """One gift status email to one buyer: whose gift, which status, queued when, gone out or not."""
+
+    recipient_id: UUID
+    gift_status: str
+    state: str
+    queued_at: datetime
+    sent_at: datetime | None = None
+
+
 class StatusMailsOut(BaseModel):
     campaign: StatusMailCampaignOut
     profile: dict[str, Any]
@@ -368,6 +378,9 @@ class StatusMailsOut(BaseModel):
     fill_ins: list[str]
     items: list[StatusMailOut]
     people: list[StatusMailPersonOut] = Field(default_factory=list)
+    history: list[StatusMailSentOut] = Field(default_factory=list)
+    # The viewer's own words are approved the moment they send them (D-REVIEW-SOLO-01).
+    approves_at_once: bool = False
     # After sending to chosen buyers: how many were emailed and how many weren't in that status.
     sent: int | None = None
     skipped: int | None = None
