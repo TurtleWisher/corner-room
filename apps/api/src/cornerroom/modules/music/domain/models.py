@@ -117,6 +117,8 @@ class Release(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, 
     presale_decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     presale_decided_by: Mapped[UUID | None] = mapped_column(nullable=True)
     presale_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # D-STORY-01: owners of its songs may share a moment as a story card; the act can turn it off.
+    story_sharing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     __mapper_args__ = {"version_id_col": version}
 

@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from cornerroom.api.deps import get_auth_context, get_optional_auth_context, streaming_service
+from cornerroom.infra.errors import NotFoundError
 from cornerroom.infra.http_range import RangeNotSatisfiable, parse_byte_range
 from cornerroom.infra.idempotency import (
     IdempotencyReplay,
@@ -460,6 +461,50 @@ async def my_stream_access(
     from cornerroom.modules.streaming.application.stream_access import StreamAccess
 
     return StreamAccessOut(track_ids=await StreamAccess(svc.session, svc.authz).track_ids(ctx.user_id))
+
+
+class StoryOut(BaseModel):
+    """D-STORY-01: whether this person may make a story card of the song now, and the longest moment."""
+
+    track_id: UUID
+    can_share: bool
+    reason: str
+    clip_max_ms: int
+
+
+@router.get("/playback/tracks/{track_id}/story", response_model=StoryOut)
+async def track_story(
+    track_id: UUID,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[StreamingService, Depends(streaming_service)],
+) -> StoryOut:
+    from sqlalchemy import select
+
+    from cornerroom.modules.music.domain.models import Release, ReleaseTrack, Track
+    from cornerroom.modules.music.domain.story_cards import story_reason
+    from cornerroom.modules.streaming.application.stream_access import StreamAccess
+
+    track = await svc.session.get(Track, track_id)
+    if track is None or track.deleted_at is not None:
+        raise NotFoundError("Track not found")
+    switches = (
+        await svc.session.execute(
+            select(Release.story_sharing)
+            .join(ReleaseTrack, ReleaseTrack.release_id == Release.id)
+            .where(ReleaseTrack.track_id == track_id, Release.deleted_at.is_(None), Release.status == "RELEASED")
+        )
+    ).scalars().all()
+    owns = await svc.entitlements.has_catalog_access(ctx.user_id, track_id) or await StreamAccess(
+        svc.session, svc.authz
+    ).can_stream(ctx.user_id, track_id)
+    clip_max_ms = int(svc.settings.story_clip_max_ms)
+    reason = story_reason(
+        owns=owns,
+        track_released=track.status == "RELEASED",
+        release_switches=[s is not False for s in switches],
+        clip_max_ms=clip_max_ms,
+    )
+    return StoryOut(track_id=track_id, can_share=reason == "OK", reason=reason, clip_max_ms=max(0, clip_max_ms))
 
 
 @router.get("/playback/tracks/{track_id}/audio")

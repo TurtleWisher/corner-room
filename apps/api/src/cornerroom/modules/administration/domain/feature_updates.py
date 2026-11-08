@@ -263,9 +263,23 @@ FEATURES: Final[list[dict]] = [
             "scrolling, and a double-click on empty space goes properly full screen (the same again comes "
             "out). The big "
             "title links to the song page. When the browser blocks the automatic start, the room shows the "
-            "song's real length and a lit play key."
+            "song's real length and a lit play key. People who own a song can share a moment of it, up to "
+            "30 seconds they pick, as a story on Instagram, Facebook, WhatsApp and other apps: a video of a "
+            "liquid glass Corner Room card with the song's sound and its lyrics moving with the singing, "
+            "made on their own phone or computer. Artists can turn story sharing off for a release."
         ),
         "updates": [
+            {
+                "date": "2026-11-08",
+                "kind": "NEW",
+                "title": "Share as a story",
+                "details": (
+                    "A Share button in the room for people who own the song: pick up to 30 seconds, see the "
+                    "card play, make the video and share it to Instagram, Facebook or WhatsApp stories (or "
+                    "save it). The card is liquid glass with the cover, title, artist and moving lyrics. "
+                    "Artists can turn it off per release under Details > Sharing."
+                ),
+            },
             {"date": "2026-11-07", "kind": "FIXED", "title": "Sharp covers", "details": "Large covers in the room use the full-size picture, so they no longer look soft or pixelated."},
             {"date": "2026-11-07", "kind": "FIXED", "title": "One still screen", "details": "The room no longer scrolls or jumps as lyrics move; cover, title and bar always fit the window."},
             {"date": "2026-11-07", "kind": "IMPROVED", "title": "Full screen on double-click", "details": "Double-click empty space for full screen and again to leave; buttons never trigger it."},

@@ -102,6 +102,8 @@ class ReleaseFieldsOut(BaseModel):
     intake_mode: str
     rights_declared_at: datetime | None
     version: int
+    # D-STORY-01: owners of its songs may share a moment as a story card.
+    story_sharing: bool = True
 
 
 class AudioVersionOut(BaseModel):
@@ -551,6 +553,11 @@ class CoverRevealIn(BaseModel):
     revealed: bool
 
 
+class StorySharingIn(BaseModel):
+    # On: people who own its songs can share a moment as a story card. Off: they can't.
+    on: bool
+
+
 class PresaleRequestIn(BaseModel):
     release_at: datetime
 
@@ -611,6 +618,13 @@ async def submit_presale_email(release_id: UUID, ctx: Ctx, svc: StudioDep) -> Re
 async def set_cover_reveal(release_id: UUID, body: CoverRevealIn, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
     """D-COVER-03: the pre-sale cover switch, on (clear) or off (lightly blurred)."""
     await svc.set_cover_shown(ctx, release_id, body.revealed)
+    return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
+
+
+@router.put("/studio/releases/{release_id}/story-sharing", response_model=ReleaseDetailOut)
+async def set_story_sharing(release_id: UUID, body: StorySharingIn, ctx: Ctx, svc: StudioDep) -> ReleaseDetailOut:
+    """D-STORY-01: the act's switch for story cards of this release's songs."""
+    await svc.set_story_sharing(ctx, release_id, body.on)
     return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
 
 

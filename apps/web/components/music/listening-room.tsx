@@ -57,6 +57,7 @@ import { creditHref } from "@/lib/music-view";
 import { LYRICS_PREF, lyricsChoice, lyricsOnFrom, lyricsSwitch } from "@/lib/room-controls-view";
 import { useRoomFullscreen } from "@/components/music/room-fullscreen";
 import { RoomLyricsSwitch } from "@/components/music/room-lyrics-switch";
+import { StoryShareButton } from "@/components/music/story-share";
 import { clock, durationLabel } from "@/lib/player-model";
 import { cn } from "@/lib/utils";
 
@@ -687,7 +688,13 @@ function Transport({ label, large = false, keyRef }: { label: string; large?: bo
 function Actions({ track }: { track: PlayerTrack }) {
   const p = usePlayer();
   if (p.status === "problem" && (p.problem?.kind === "signed_out" || p.problem?.kind === "needs_access")) return null;
-  return <TrackActions trackId={track.id} title={titleOf(track)} />;
+  return (
+    <>
+      <TrackActions trackId={track.id} title={titleOf(track)} />
+      {/* D-STORY-01: owners share a moment as a story card; shown only when the server says yes. */}
+      <StoryShareButton track={track} />
+    </>
+  );
 }
 
 function Status() {

@@ -1,0 +1,86 @@
+/*
+ * Share as a story (owner, 2026-11-08, D-STORY-01). The dialog wears the same liquid glass as the
+ * card it makes: the Sky glass fill, frosted, with a lit rim. Only the glass style was taken from the
+ * owner's reference; the cut corner and colours are Corner Room's.
+ */
+
+.sc-dialog.sc-dialog {
+  --cut-fill: var(--cr-glass-fill);
+  --cut-border: var(--cr-glass-edge-hover);
+  --cut-blur: blur(28px) saturate(1.5);
+  box-shadow: 0 40px 90px -40px rgb(0 0 0 / 0.85);
+}
+
+.sc-body {
+  display: grid;
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (min-width: 720px) {
+  .sc-body {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 1.75rem;
+  }
+}
+
+.sc-preview {
+  position: relative;
+  justify-self: center;
+  /* 9:16, never taller than the window allows. */
+  width: min(16.5rem, calc((100dvh - 14rem) * 9 / 16), 70vw);
+  aspect-ratio: 9 / 16;
+  clip-path: polygon(0.75rem 0, 100% 0, 100% 100%, 0 100%, 0 0.75rem);
+  background: var(--cr-surface-sunken);
+  box-shadow: 0 0 0 1px rgb(187 237 254 / 0.22);
+}
+.sc-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--cr-surface-sunken);
+}
+.sc-wait {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--cr-fg-muted);
+  background: rgb(18 15 38 / 0.6);
+}
+
+.sc-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.sc-line {
+  margin-top: 0.75rem;
+  font-size: 0.9375rem;
+  color: var(--cr-highlight);
+  overflow-wrap: anywhere;
+}
+
+.sc-progress {
+  height: 0.375rem;
+  background: rgb(187 237 254 / 0.16);
+  overflow: hidden;
+}
+.sc-progress > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--cr-highlight), var(--cr-accent));
+  transition: width 200ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-progress > span {
+    transition: none;
+  }
+}

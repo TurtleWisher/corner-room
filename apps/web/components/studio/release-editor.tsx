@@ -62,6 +62,7 @@ import { friendlyError } from "@/lib/error-copy";
 import { formatCount } from "@/lib/format/count";
 import { changeMode, pendingAudio, proposedRelease, proposedTrack, type ChangeMode } from "@/lib/changes-view";
 import { lyricsMode } from "@/lib/lyrics-view";
+import { StorySharingSwitch } from "@/components/studio/story-sharing-switch";
 import {
   addedSong,
   missingByPart,
@@ -1161,6 +1162,10 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
           ) : null}
           {/* The checks' verdict on the latest cover; the readiness list updates once they finish. */}
           <ArtworkReport load={() => fetchCoverReport(detail.release.id)} refresh={coverUploads} onSettled={() => reload()} />
+        </Section>
+        <Section id="story-sharing" title="Sharing">
+          {/* D-STORY-01: on by default; the act can turn story cards of these songs off. */}
+          <StorySharingSwitch detail={detail} reload={reload} />
         </Section>
       </>
     ),

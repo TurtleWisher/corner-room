@@ -55,6 +55,8 @@ export type StudioRelease = {
   intake_mode: string;
   rights_declared_at?: string | null;
   version: number;
+  /** D-STORY-01: people who own its songs can share a moment as a story card (on unless turned off). */
+  story_sharing?: boolean;
 };
 
 export type StudioCredit = {
@@ -391,6 +393,16 @@ export function setCoverReveal(releaseId: string, revealed: boolean): Promise<St
     method: "PUT",
     headers: json,
     body: JSON.stringify({ revealed }),
+    retry: false,
+  });
+}
+
+/** D-STORY-01: the act's switch for story cards of this release's songs. */
+export function setStorySharing(releaseId: string, on: boolean): Promise<StudioReleaseDetail> {
+  return apiFetch<StudioReleaseDetail>(`/api/v1/studio/releases/${releaseId}/story-sharing`, {
+    method: "PUT",
+    headers: json,
+    body: JSON.stringify({ on }),
     retry: false,
   });
 }

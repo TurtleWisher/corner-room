@@ -362,6 +362,8 @@ class StudioService:
             "label_name": r.label_name, "p_line": r.p_line, "c_line": r.c_line, "upc": r.upc,
             "track_sales": r.track_sales, "intake_mode": r.intake_mode, "rights_declared_at": r.rights_declared_at,
             "version": r.version,
+            # D-STORY-01: owners may share a moment of its songs as a story card (on unless turned off).
+            "story_sharing": r.story_sharing is not False,
         }
 
     async def update_release(self, ctx: AuthContext, release_id: UUID, changes: dict[str, Any], expected_version: int | None) -> Release:
@@ -1281,6 +1283,22 @@ class StudioService:
             ctx, action="release.cover_shown" if shown else "release.cover_hidden", entity_type="Release", entity_id=release.id,
             previous_state=previous,
             new_state={"cover_revealed_at": release.cover_revealed_at.isoformat() if release.cover_revealed_at else None},
+            organization_id=release.primary_org_id,
+        )
+        return release
+
+    async def set_story_sharing(self, ctx: AuthContext, release_id: UUID, on: bool) -> Release:
+        """D-STORY-01: the act's switch for story cards of this release's songs. On by default."""
+        release, _role = await self._release(ctx, release_id)
+        if (release.story_sharing is not False) == on:
+            return release
+        # Not release work, so staff flipping it don't become its preparer (two-person rule).
+        release.story_sharing = on
+        release.updated_by = ctx.user_id
+        await self.music._flush_versioned()
+        await self.audit.record_from_auth(
+            ctx, action="release.story_sharing_on" if on else "release.story_sharing_off", entity_type="Release",
+            entity_id=release.id, previous_state={"story_sharing": not on}, new_state={"story_sharing": on},
             organization_id=release.primary_org_id,
         )
         return release
