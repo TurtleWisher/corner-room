@@ -221,6 +221,14 @@ export type StatusMail = {
 
 /** A buyer by name (never their address) and where their gift is. */
 export type StatusMailPerson = { id: string; name: string | null; status: GiftRecipientStatus; reachable: boolean };
+/** One gift status email to one buyer: PENDING (on its way), SENT, FAILED (or SUPPRESSED). */
+export type StatusMailSent = {
+  recipient_id: string;
+  gift_status: StatusMailStatus;
+  state: "PENDING" | "SENT" | "FAILED" | "SUPPRESSED";
+  queued_at: string;
+  sent_at: string | null;
+};
 
 export type StatusMailInput = { subject: string; body: string; button_label: string | null; button_url: string | null; file_ids: string[] };
 
@@ -233,6 +241,10 @@ export type StatusMails = {
   fill_ins: string[];
   items: StatusMail[];
   people: StatusMailPerson[];
+  /** Every gift status email to this campaign's buyers, newest first. */
+  history?: StatusMailSent[];
+  /** The viewer's own words are approved the moment they send them (D-REVIEW-SOLO-01). */
+  approves_at_once?: boolean;
   sent?: number | null;
   skipped?: number | null;
 };

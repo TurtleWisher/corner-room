@@ -55,7 +55,7 @@ export function AccountPage({
   actions?: React.ReactNode;
   /** Artist pages send signed-out visitors to artist sign-in (artists join by their label's link). */
   audience?: PageAudience;
-  /** Tools that should fit one screen (the Teaser Studio editor): a smaller header and less space. */
+  /** Tools that should fit one screen (the Preview Studio editor): a smaller header and less space. */
   compact?: boolean;
   children: React.ReactNode;
 }) {

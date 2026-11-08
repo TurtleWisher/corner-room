@@ -1031,7 +1031,7 @@ export function PlayerBar() {
   const dock = useRef<HTMLElement>(null);
   const blockedTeaser = useBlockedSongTeaser(p.status === "problem" && p.problem?.kind === "needs_access" && p.track && !p.track.teaser ? p.track.id : null);
   const teaser = p.track?.teaser ?? null;
-  // The teaser room draws its own controls for the teaser it shows.
+  // The Preview Room draws its own controls for the teaser it shows.
   const inOwnRoom = Boolean(teaser && pathname === teaserPath(teaser.id));
   const shown = Boolean(p.track) && !isRoomPath(pathname) && !inOwnRoom;
   useScrollDock(dock, shown);
@@ -1052,7 +1052,7 @@ export function PlayerBar() {
           {/* cr-now-cover: grows into the room's front card on the way in (room-transition.tsx). */}
           <Link
             href={teaser ? teaserPath(teaser.id) : `/listen/${p.track.id}`}
-            aria-label={teaser ? `Open the teaser of ${label}` : `Open the listening room for ${label}`}
+            aria-label={teaser ? `Open the Preview Room for ${label}` : `Open the listening room for ${label}`}
             className="cr-focus size-12 shrink-0 bg-cr-sky [view-transition-name:cr-now-cover]"
           >
             <CoverArt
@@ -1145,7 +1145,7 @@ export function PlayerBar() {
                 href={teaser ? teaserPath(teaser.id) : `/listen/${p.track.id}`}
                 className="cr-focus hidden items-center gap-1.5 text-xs font-semibold text-link hover:underline md:inline-flex"
               >
-                <Maximize2 aria-hidden="true" className="size-3.5" /> {teaser ? "Teaser room" : "Listening room"}
+                <Maximize2 aria-hidden="true" className="size-3.5" /> {teaser ? "Preview Room" : "Listening room"}
               </Link>
             </>
           )}

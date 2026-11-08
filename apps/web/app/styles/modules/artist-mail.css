@@ -298,3 +298,105 @@
     transition: none;
   }
 }
+
+/* Gift status emails: what is in use, the three steps, and loud results (owner, 2026-11-08). */
+.gm-banner {
+  --gm-tone: var(--cr-success);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--gm-tone) 55%, transparent);
+  border-left-width: 4px;
+  background: color-mix(in srgb, var(--gm-tone) 14%, var(--cr-surface-sunken));
+  color: var(--cr-fg);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  scroll-margin-top: 6rem;
+}
+.gm-banner[data-tone="info"] { --gm-tone: var(--cr-info); }
+.gm-banner[data-tone="problem"] { --gm-tone: var(--cr-danger); }
+.gm-banner > svg { flex-shrink: 0; margin-top: 0.125rem; color: var(--gm-tone); }
+@media (prefers-reduced-motion: no-preference) {
+  .gm-banner { animation: gm-arrive 320ms var(--ease-corner) both; }
+}
+@keyframes gm-arrive {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.gm-inuse {
+  border: 1px solid var(--cr-line-strong);
+  background: var(--cr-surface-sunken);
+  padding: 1rem;
+}
+
+.gm-steps {
+  display: grid;
+  gap: 0.5rem;
+  counter-reset: gm-step;
+}
+@media (min-width: 768px) {
+  .gm-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.gm-step {
+  --gm-tone: var(--cr-line-strong);
+  display: flex;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 1px solid var(--cr-line);
+  border-top: 3px solid var(--gm-tone);
+  font-size: 0.8125rem;
+  color: var(--cr-fg-muted);
+}
+.gm-step[data-tone="done"] { --gm-tone: var(--cr-success); }
+.gm-step[data-tone="now"] { --gm-tone: var(--cr-accent); }
+.gm-step[data-tone="waiting"] { --gm-tone: var(--cr-warning); }
+.gm-step[data-tone="problem"] { --gm-tone: var(--cr-danger); }
+.gm-step-mark {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--gm-tone);
+  color: var(--cr-fg);
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+.gm-step[data-tone="done"] .gm-step-mark { background: color-mix(in srgb, var(--cr-success) 22%, transparent); }
+.gm-step-title { display: block; color: var(--cr-fg); font-weight: 700; }
+
+.gm-part {
+  border-top: 1px solid var(--cr-line);
+  padding-top: 1.25rem;
+}
+.gm-part-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--cr-fg);
+}
+.gm-part-num {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  background: var(--cr-accent);
+  color: var(--cr-on-accent);
+  font-size: 0.875rem;
+}
+.gm-person {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--cr-line);
+}
+.gm-person[data-chosen="true"] {
+  border-color: var(--cr-accent);
+  background: color-mix(in srgb, var(--cr-accent) 10%, transparent);
+}

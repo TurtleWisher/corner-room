@@ -49,6 +49,8 @@ BODY_MAX = 5000
 BUTTON_LABEL_MAX = 80
 MAX_FILES = 10
 MAX_SEND = 2000
+# How many past gift status emails the page lists (newest first).
+HISTORY_LIMIT = 500
 # The fill-ins these emails take: the artist-email ones plus the gift itself.
 FILL_INS = ("first_name", "buyer_name", "artist", "music", "gift")
 # Said in place of a name only when Corner Room has none (every account has one).
@@ -173,6 +175,25 @@ class GiftStatusMailService:
         )
         return {status: int(n) for status, n in rows.all() if status}
 
+    async def _history(self, campaign_id: UUID) -> list[dict[str, Any]]:
+        """Every gift status email to this campaign's buyers, newest first: whose gift, which status,
+        when it was queued and whether it has gone out (PENDING, SENT, FAILED). Never an address."""
+        rows = await self.session.execute(
+            select(
+                ArtistMailMessage.gift_recipient_id, ArtistMailMessage.gift_status, ArtistMailMessage.status,
+                ArtistMailMessage.created_at, ArtistMailMessage.sent_at,
+            )
+            .join(GiftRecipient, GiftRecipient.id == ArtistMailMessage.gift_recipient_id)
+            .where(GiftRecipient.campaign_id == campaign_id, ArtistMailMessage.kind == "GIFT_UPDATE")
+            .order_by(ArtistMailMessage.created_at.desc())
+            .limit(HISTORY_LIMIT)
+        )
+        return [
+            {"recipient_id": rid, "gift_status": gs, "state": st, "queued_at": at, "sent_at": sent}
+            for rid, gs, st, at, sent in rows.all()
+            if rid and gs
+        ]
+
     async def _people(self, campaign: GiftCampaign) -> list[dict[str, Any]]:
         """Each buyer by name (never their address) with where their gift is, to preview as and pick."""
         await self.gifts.sync_recipients(campaign)
@@ -222,7 +243,8 @@ class GiftStatusMailService:
     async def view(self, ctx: AuthContext, campaign_id: UUID) -> dict[str, Any]:
         campaign, role, name = await self.gifts._campaign(ctx, campaign_id)
         rows = await self._rows(campaign.id)
-        reviewer = role == "staff" and await self._can_review(ctx, campaign)
+        may_approve = await self._can_review(ctx, campaign)
+        reviewer = role == "staff" and may_approve
         sent = await self._sent_counts(campaign.id)
         return {
             "campaign": {"id": campaign.id, "title": campaign.title, "gift_items": campaign.gift_items, "status": campaign.status},
@@ -233,6 +255,10 @@ class GiftStatusMailService:
             "fill_ins": list(FILL_INS),
             "items": [self._item(s, rows.get(s), reviewer, sent.get(s, 0)) for s in STATUS_MAIL_STATUSES],
             "people": await self._people(campaign),
+            "history": await self._history(campaign.id),
+            # D-REVIEW-SOLO-01: whoever may approve these and has no second reviewer to wait for
+            # gets their words approved the moment they send them, so the page says "Use this email".
+            "approves_at_once": may_approve and not second_review_on(self.settings),
         }
 
     async def waiting_count(self, campaign_id: UUID) -> int:

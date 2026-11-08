@@ -103,10 +103,10 @@ async function openRoom() {
   await screen.findByRole("heading", { name: "Night Song" }, { timeout: 5000 });
 }
 
-describe("teaser room", () => {
+describe("Preview Room", () => {
   it("says it is a teaser and offers nothing before a listen", async () => {
     await openRoom();
-    expect(screen.getByText("Teaser · Chorus")).toBeTruthy();
+    expect(screen.getByText("Preview Room · Teaser · Chorus")).toBeTruthy();
     expect(screen.getByText(/not the full song/)).toBeTruthy();
     expect(screen.queryByText("Enjoying this teaser?")).toBeNull();
   });

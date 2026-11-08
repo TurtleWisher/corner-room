@@ -1,10 +1,13 @@
 "use client";
 
 /*
- * The Teaser Studio waveform (owner, 2026-11-07, D-TEASER-00): peaks from the server (never decoded in
- * the browser), the chosen part lit, fades drawn as ramps, two handles that are real sliders
- * (drag, or arrow keys: 10 ms, Shift 1 s; Home and End), and the selection itself can be slid.
- * A click outside the selection moves the play point. Maths in lib/teaser-editor-view.ts.
+ * The Preview Studio waveform (owner, 2026-11-07, D-TEASER-00; finger-friendly 2026-11-08,
+ * D-TEASER-06): peaks from the server (never decoded in the browser), the chosen part lit, fades drawn
+ * as ramps. A press anywhere takes the nearest thing within reach (`pickTarget`): the start or end
+ * edge, the play line, the chosen part (to slide it) or a new play point, with far more reach for a
+ * finger than for a mouse, and the page never scrolls under a drag. A small time label rides above
+ * the finger while dragging. The edges are also real sliders for the keyboard (arrow keys: 10 ms,
+ * Shift 1 s; Home and End). Maths in lib/teaser-editor-view.ts.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -15,11 +18,14 @@ import {
   COARSE_STEP_MS,
   FINE_STEP_MS,
   formatTime,
+  GRAB_PX,
   moveHandle,
   moveRegion,
   msToX,
+  pickTarget,
   type Handle,
   type View,
+  type WaveTarget,
   xToMs,
 } from "@/lib/teaser-editor-view";
 import { cn } from "@/lib/utils";
@@ -39,6 +45,16 @@ type Props = {
   className?: string;
 };
 
+type Drag = { kind: Exclude<WaveTarget, "playhead">; startX: number; from: TeaserSettings; pointerId: number };
+
+const CURSOR: Record<WaveTarget, string> = {
+  start: "ew-resize",
+  end: "ew-resize",
+  playhead: "ew-resize",
+  region: "grab",
+  scrub: "pointer",
+};
+
 function readColor(el: HTMLElement | null, name: string, fallback: string): string {
   if (!el) return fallback;
   const v = getComputedStyle(el).getPropertyValue(name).trim();
@@ -48,8 +64,19 @@ function readColor(el: HTMLElement | null, name: string, fallback: string): stri
 export function TeaserWaveform({ points, bucketMs, masterMs, view, settings, limits, playheadMs, onChange, onSeek, className }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const startRef = useRef<HTMLButtonElement>(null);
+  const endRef = useRef<HTMLButtonElement>(null);
   const [width, setWidth] = useState(0);
-  const drag = useRef<{ kind: Handle | "region"; startX: number; from: TeaserSettings } | null>(null);
+  const drag = useRef<Drag | null>(null);
+  const [dragging, setDragging] = useState<Drag["kind"] | null>(null);
+  /** Where a dragged play line is, until the finger lifts. */
+  const [scrubMs, setScrubState] = useState<number | null>(null);
+  const scrubRef = useRef<number | null>(null);
+  const setScrubMs = (ms: number | null) => {
+    scrubRef.current = ms;
+    setScrubState(ms);
+  };
+  const [cursor, setCursor] = useState("pointer");
   const latest = useRef(settings);
   latest.current = settings;
 
@@ -110,37 +137,77 @@ export function TeaserWaveform({ points, bucketMs, masterMs, view, settings, lim
     }
   }, [points, bucketMs, view, settings, width]);
 
+  const rect = () => box.current?.getBoundingClientRect() ?? null;
   const msAt = (clientX: number) => {
-    const r = box.current?.getBoundingClientRect();
-    return r ? xToMs(clientX - r.left, view, r.width) : 0;
+    const r = rect();
+    return r ? Math.min(masterMs, Math.max(0, xToMs(clientX - r.left, view, r.width))) : 0;
+  };
+  const shownPlayhead = scrubMs ?? playheadMs;
+  const targetAt = (clientX: number, pointerType: string): WaveTarget => {
+    const r = rect();
+    if (!r) return "scrub";
+    const s = latest.current;
+    return pickTarget(
+      clientX - r.left,
+      {
+        start: msToX(s.start_ms, view, r.width),
+        end: msToX(s.end_ms, view, r.width),
+        playhead: playheadMs !== null ? msToX(playheadMs, view, r.width) : null,
+      },
+      pointerType === "mouse" ? GRAB_PX.mouse : GRAB_PX.touch,
+    );
   };
 
-  const onPointerDown = (kind: Handle | "region") => (e: React.PointerEvent) => {
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
     e.preventDefault();
-    e.stopPropagation();
-    // preventDefault stops the browser focusing what was pressed: a pressed handle takes focus
-    // itself, so the arrow keys move it straight after a click.
-    if (kind !== "region") (e.currentTarget as HTMLElement).focus({ preventScroll: true });
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    drag.current = { kind, startX: e.clientX, from: latest.current };
+    const target = targetAt(e.clientX, e.pointerType);
+    const kind: Drag["kind"] = target === "playhead" ? "scrub" : target;
+    // The pressed edge takes focus, so the arrow keys move it straight after.
+    if (kind === "start") startRef.current?.focus({ preventScroll: true });
+    if (kind === "end") endRef.current?.focus({ preventScroll: true });
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    drag.current = { kind, startX: e.clientX, from: latest.current, pointerId: e.pointerId };
+    setDragging(kind);
+    if (kind === "scrub") setScrubMs(msAt(e.clientX));
+    if (kind === "region") setCursor("grabbing");
   };
 
-  const onPointerMove = (e: React.PointerEvent) => {
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
-    if (!d) return;
+    if (!d) {
+      if (e.pointerType === "mouse") setCursor(CURSOR[targetAt(e.clientX, "mouse")]);
+      return;
+    }
+    if (e.pointerId !== d.pointerId) return;
     if (d.kind === "region") {
-      const r = box.current?.getBoundingClientRect();
+      const r = rect();
       const delta = r ? xToMs(e.clientX - r.left, view, r.width) - xToMs(d.startX - r.left, view, r.width) : 0;
       onChange(moveRegion(d.from, delta, masterMs, limits), false);
+    } else if (d.kind === "scrub") {
+      setScrubMs(msAt(e.clientX));
     } else {
-      onChange(moveHandle(latest.current, d.kind, msAt(e.clientX), masterMs, limits), false);
+      // The edge keeps its distance from the finger, so it never jumps when taken a little to one side.
+      const from = d.kind === "start" ? d.from.start_ms : d.from.end_ms;
+      const r = rect();
+      const delta = r ? xToMs(e.clientX - r.left, view, r.width) - xToMs(d.startX - r.left, view, r.width) : 0;
+      onChange(moveHandle(latest.current, d.kind, from + delta, masterMs, limits), false);
     }
   };
 
-  const onPointerUp = () => {
-    if (!drag.current) return;
+  const finish = (e: React.PointerEvent<HTMLDivElement>, cancelled: boolean) => {
+    const d = drag.current;
+    if (!d || e.pointerId !== d.pointerId) return;
     drag.current = null;
-    onChange(latest.current, true);
+    setDragging(null);
+    if (d.kind === "scrub") {
+      const at = scrubRef.current;
+      setScrubMs(null);
+      if (!cancelled && at !== null) onSeek(at);
+    } else {
+      onChange(latest.current, true);
+    }
+    if (e.pointerType === "mouse") setCursor(CURSOR[targetAt(e.clientX, "mouse")]);
   };
 
   const onKey = (handle: Handle) => (e: React.KeyboardEvent) => {
@@ -158,64 +225,104 @@ export function TeaserWaveform({ points, bucketMs, masterMs, view, settings, lim
     onChange(moveHandle(settings, handle, to, masterMs, limits), true);
   };
 
-  const pct = (ms: number) => `${Math.min(100, Math.max(0, ((ms - view.fromMs) / Math.max(1, view.toMs - view.fromMs)) * 100))}%`;
+  const share = (ms: number) => Math.min(100, Math.max(0, ((ms - view.fromMs) / Math.max(1, view.toMs - view.fromMs)) * 100));
+  const pct = (ms: number) => `${share(ms)}%`;
   const startVisible = settings.start_ms >= view.fromMs && settings.start_ms <= view.toMs;
   const endVisible = settings.end_ms >= view.fromMs && settings.end_ms <= view.toMs;
-  const handleClass =
-    "cr-focus absolute top-0 bottom-0 z-20 w-4 -translate-x-1/2 cursor-ew-resize touch-none bg-transparent outline-none before:absolute before:inset-y-0 before:left-1/2 before:w-0.5 before:-translate-x-1/2 before:bg-highlight after:absolute after:left-1/2 after:top-1/2 after:h-8 after:w-2.5 after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-sm after:bg-highlight";
+  const playVisible = shownPlayhead !== null && shownPlayhead >= view.fromMs && shownPlayhead <= view.toMs;
 
+  // The time under the finger while dragging, kept inside the box.
+  const bubble =
+    dragging === "start"
+      ? { at: settings.start_ms, text: formatTime(settings.start_ms) }
+      : dragging === "end"
+        ? { at: settings.end_ms, text: formatTime(settings.end_ms) }
+        : dragging === "region"
+          ? { at: (settings.start_ms + settings.end_ms) / 2, text: `${formatTime(settings.start_ms)} to ${formatTime(settings.end_ms)}` }
+          : dragging === "scrub" && scrubMs !== null
+            ? { at: scrubMs, text: formatTime(scrubMs) }
+            : null;
+
+  const edgeClass = cn(
+    "ts-edge cr-focus pointer-events-none absolute inset-y-0 z-20 w-6 -translate-x-1/2 bg-transparent outline-none",
+    "before:absolute before:inset-y-0 before:left-1/2 before:w-0.5 before:-translate-x-1/2 before:bg-highlight",
+  );
+
+  // The outer frame takes every press (its side room too, so an edge at the very start or end of the
+  // song keeps a whole grip to hold); the inner area is the song's time line.
   return (
     <div
-      ref={box}
-      className={cn("relative h-40 select-none overflow-hidden border border-line bg-surface-sunken md:h-48", className)}
+      data-dragging={dragging ?? undefined}
+      className={cn("ts-wave relative h-40 touch-none select-none overflow-hidden border border-line bg-surface-sunken px-2.5 md:h-48", className)}
+      style={{ cursor }}
+      onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-      onPointerDown={(e) => {
-        if (e.target === box.current || e.target === canvas.current) onSeek(msAt(e.clientX));
-      }}
+      onPointerUp={(e) => finish(e, false)}
+      onPointerCancel={(e) => finish(e, true)}
+      onLostPointerCapture={(e) => finish(e, false)}
     >
-      <canvas ref={canvas} aria-hidden="true" className="absolute inset-0 size-full" />
-      {/* The chosen part: drag it to slide the whole selection. */}
-      <div
-        aria-hidden="true"
-        onPointerDown={onPointerDown("region")}
-        className="absolute inset-y-0 z-10 cursor-grab border-y-2 border-highlight/60 bg-highlight/10 active:cursor-grabbing"
-        style={{ left: pct(settings.start_ms), right: `calc(100% - ${pct(settings.end_ms)})` }}
-      />
-      {startVisible ? (
-        <button
-          type="button"
-          role="slider"
-          aria-label="Teaser start"
-          aria-valuemin={0}
-          aria-valuemax={masterMs}
-          aria-valuenow={settings.start_ms}
-          aria-valuetext={formatTime(settings.start_ms)}
-          onPointerDown={onPointerDown("start")}
-          onKeyDown={onKey("start")}
-          className={handleClass}
-          style={{ left: pct(settings.start_ms) }}
+      <div ref={box} className="relative size-full">
+        <canvas ref={canvas} aria-hidden="true" className="pointer-events-none absolute inset-0 size-full" />
+        {/* The chosen part: drag it to slide the whole selection. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 z-10 border-y-2 border-highlight/60 bg-highlight/10"
+          style={{ left: pct(settings.start_ms), right: `calc(100% - ${pct(settings.end_ms)})` }}
         />
-      ) : null}
-      {endVisible ? (
-        <button
-          type="button"
-          role="slider"
-          aria-label="Teaser end"
-          aria-valuemin={0}
-          aria-valuemax={masterMs}
-          aria-valuenow={settings.end_ms}
-          aria-valuetext={formatTime(settings.end_ms)}
-          onPointerDown={onPointerDown("end")}
-          onKeyDown={onKey("end")}
-          className={handleClass}
-          style={{ left: pct(settings.end_ms) }}
-        />
-      ) : null}
-      {playheadMs !== null && playheadMs >= view.fromMs && playheadMs <= view.toMs ? (
-        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 z-30 w-px bg-fg" style={{ left: pct(playheadMs) }} />
-      ) : null}
+        {startVisible ? (
+          <button
+            ref={startRef}
+            type="button"
+            role="slider"
+            aria-label="Teaser start"
+            aria-valuemin={0}
+            aria-valuemax={masterMs}
+            aria-valuenow={settings.start_ms}
+            aria-valuetext={formatTime(settings.start_ms)}
+            onKeyDown={onKey("start")}
+            data-active={dragging === "start" || undefined}
+            className={edgeClass}
+            style={{ left: pct(settings.start_ms) }}
+          >
+            <span aria-hidden="true" className="ts-grip" />
+          </button>
+        ) : null}
+        {endVisible ? (
+          <button
+            ref={endRef}
+            type="button"
+            role="slider"
+            aria-label="Teaser end"
+            aria-valuemin={0}
+            aria-valuemax={masterMs}
+            aria-valuenow={settings.end_ms}
+            aria-valuetext={formatTime(settings.end_ms)}
+            onKeyDown={onKey("end")}
+            data-active={dragging === "end" || undefined}
+            className={edgeClass}
+            style={{ left: pct(settings.end_ms) }}
+          >
+            <span aria-hidden="true" className="ts-grip" />
+          </button>
+        ) : null}
+        {playVisible ? (
+          <div
+            aria-hidden="true"
+            data-active={dragging === "scrub" || undefined}
+            className="ts-playline pointer-events-none absolute inset-y-0 z-30 w-px -translate-x-1/2 bg-fg"
+            style={{ left: pct(shownPlayhead!) }}
+          />
+        ) : null}
+        {bubble ? (
+          <span
+            aria-hidden="true"
+            className="ts-bubble cr-num pointer-events-none absolute top-1.5 z-40 -translate-x-1/2 whitespace-nowrap px-2 py-0.5 text-xs font-semibold"
+            style={{ left: `clamp(3rem, ${share(bubble.at)}%, calc(100% - 3rem))` }}
+          >
+            {bubble.text}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

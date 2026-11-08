@@ -1,7 +1,7 @@
 "use client";
 
 /*
- * The teaser room (owner, 2026-11-07, D-TEASER-00 to D-TEASER-04, URL-11). Anyone can listen here,
+ * The Preview Room (owner, 2026-11-07, D-TEASER-00 to D-TEASER-04, URL-11; named 2026-11-08, D-TEASER-06). Anyone can listen here,
  * without an account, as often as they like: the teaser is the free way to hear a song before buying
  * it. It says "Teaser" in words, plays only the teaser's own audio through the site's player (no
  * listening session, no song play reported), and after each full listen offers a gentle next step
@@ -117,7 +117,7 @@ function Room({ teaser }: { teaser: PublicTeaserRecord }) {
           <Link href={back.href} className="cr-focus mb-6 inline-flex items-center gap-1 text-sm font-semibold text-link hover:underline">
             <ArrowLeft aria-hidden="true" className="size-4" /> {back.label}
           </Link>
-          <Eyebrow>{label}</Eyebrow>
+          <Eyebrow>Preview Room · {label}</Eyebrow>
           <Display as="h1" id="teaser-title" size="lg" className="mt-4">
             {teaser.track_title}
           </Display>

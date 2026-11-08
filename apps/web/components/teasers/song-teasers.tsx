@@ -3,8 +3,9 @@
 /*
  * Teasers on fan pages (owner, 2026-11-07, D-TEASER-00). A teaser is the free, permanent way to hear a
  * song for anyone who hasn't bought it, so wherever someone meets a song they can't play yet, its
- * teaser is the thing they can play. People who own the song find its teasers in a "Teasers &
- * trailers" section instead; their main play stays the full song.
+ * teaser is the thing they can play, in its Preview Room. People who own the song find its teasers in
+ * the song's "Preview Corner" instead (owner, 2026-11-08, D-TEASER-06); their main play stays the full
+ * song.
  */
 
 import Link from "next/link";
@@ -98,14 +99,14 @@ export function SongTeaserMain({
     <div className={cn("flex flex-wrap items-center gap-3", className)}>
       <TeaserPlayButton teaser={first} trackId={trackId} songTitle={songTitle} artist={artist} size="lg" variant="secondary" />
       <Link href={teaserPath(first.id)} className="cr-focus inline-flex items-center gap-1.5 text-sm font-semibold text-link hover:underline">
-        <AudioLines aria-hidden="true" className="size-4" /> Teaser room
+        <AudioLines aria-hidden="true" className="size-4" /> Preview Room
       </Link>
       <p className="w-full text-sm text-fg-muted">Listen to the teaser free, as often as you like.</p>
     </div>
   );
 }
 
-/** "Teasers & trailers": every published teaser of the song. */
+/** "Preview Corner": every published teaser of the song. */
 export function SongTeasersSection({
   teasers,
   trackId,
@@ -123,7 +124,7 @@ export function SongTeasersSection({
   return (
     <section aria-labelledby={`teasers-${trackId}`} className={cn("max-w-md", className)}>
       <h2 id={`teasers-${trackId}`} className="cr-eyebrow text-[0.6875rem] text-fg-muted">
-        Teasers &amp; trailers
+        Preview Corner
       </h2>
       <ul className="mt-3 grid gap-2">
         {teasers.map((t) => (
@@ -159,7 +160,7 @@ export function ReleaseTeasers({ releaseId, artist, className }: { releaseId: st
   return (
     <section aria-labelledby={`release-teasers-${releaseId}`} className={cn("max-w-xl", className)}>
       <h2 id={`release-teasers-${releaseId}`} className="text-xl font-bold text-fg">
-        Teasers &amp; trailers
+        Preview Corner
       </h2>
       <p className="mt-1 text-sm text-fg-muted">Short parts of the songs. Listen free, as often as you like.</p>
       <ul className="mt-4 grid gap-2">

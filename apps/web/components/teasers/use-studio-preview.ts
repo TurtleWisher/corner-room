@@ -1,7 +1,7 @@
 "use client";
 
 /*
- * Teaser Studio preview (owner, 2026-11-07, D-TEASER-00). Plays the song's playback copy (never the
+ * Preview Studio preview (owner, 2026-11-07, D-TEASER-00). Plays the song's playback copy (never the
  * master) and applies the chosen fades and gain while it plays, with the same linear curves the
  * server uses, so what the artist hears is what the teaser will sound like. A made version plays
  * as-is. One audio element, separate from the site's player, which is paused while previewing.
