@@ -25,7 +25,7 @@ const hrefs = (sections: { items: { href: string }[] }[]) => sections.flatMap((s
 
 describe("staffNavSections", () => {
   it("keeps the always-visible staff destinations without permissions", () => {
-    expect(hrefs(staffNavSections([]))).toEqual(["/staff/events", "/staff/venues", "/staff/catalog", "/staff/catalog/artists", "/staff/catalog/processing", "/staff/commerce", "/staff/royalties", "/staff/campaigns", "/staff/updates"]);
+    expect(hrefs(staffNavSections([]))).toEqual(["/staff/events", "/staff/venues", "/staff/catalog", "/staff/catalog/artists", "/staff/catalog/trending", "/staff/catalog/processing", "/staff/commerce", "/staff/royalties", "/staff/campaigns", "/staff/updates"]);
     expect(staffNavSections(undefined).map((s) => s.label)).toEqual(["Live", "Catalog", "Money", "Marketing", "Updates"]);
   });
 

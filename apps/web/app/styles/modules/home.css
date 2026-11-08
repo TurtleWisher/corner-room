@@ -22,7 +22,7 @@
    one line, sized so both columns always fit the width and the height. */
 [data-module="home"] .home-hero {
   padding-top: clamp(1.75rem, 4.5svh, 3rem);
-  padding-bottom: clamp(2.5rem, 7svh, 4rem);
+  padding-bottom: clamp(1.25rem, 3.5svh, 2.25rem);
 }
 [data-module="home"] .home-title {
   font-size: clamp(3.5rem, min(9vw, 14.5svh), 8.5rem);
@@ -31,7 +31,7 @@
   [data-module="home"] .home-hero {
     column-gap: clamp(3rem, 6vw, 6.5rem);
     padding-top: clamp(1.75rem, 6svh, 4rem);
-    padding-bottom: clamp(2.5rem, 8svh, 5rem);
+    padding-bottom: clamp(1.5rem, 4svh, 2.5rem);
   }
   [data-module="home"] .home-title {
     font-size: clamp(3.5rem, min(7.4vw, 16.5svh), 8.5rem);
@@ -230,7 +230,7 @@
 }
 @keyframes home-drift-far {
   to {
-    transform: translateY(-96px);
+    transform: translateY(-56px);
   }
 }
 
