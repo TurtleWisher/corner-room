@@ -176,6 +176,8 @@ export function staffNavSections(permissions: string[] | undefined): NavSection[
       items: [
         { href: "/staff/catalog", label: "Releases" },
         { href: "/staff/catalog/artists", label: "Artists and profiles" },
+        // The home page's Trending Corner picks (owner, 2026-11-08, D-TRENDING-01).
+        { href: "/staff/catalog/trending", label: "Trending Corner" },
         { href: "/staff/catalog/processing", label: "Audio processing" },
       ],
     },

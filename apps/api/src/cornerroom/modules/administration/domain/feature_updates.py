@@ -401,13 +401,16 @@ FEATURES: Final[list[dict]] = [
         "name": "Home page",
         "area": "Fans",
         "audience": ["Fans"],
-        "summary": "The landing page: a turning carousel of events and releases, and the Store.",
+        "summary": "The landing page: a turning carousel of events and releases, Trending Corner, and the Store.",
         "description": (
             "The home hero is one composition that fits the first screen, featuring events and releases "
             "in a turning 3D carousel. It keeps turning gently with Reduce Motion on, and phones show the "
-            "song, artist and cover."
+            "song, artist and cover. Trending Corner shows the music staff pick as selling and being heard "
+            "the most, as discs turning in a glass carousel, with a small player for the disc in front."
         ),
         "updates": [
+            {"date": "2026-11-08", "kind": "NEW", "title": "Trending Corner", "details": "Staff pick the music selling and being heard the most (Catalog > Trending Corner, with sales and listens beside each). On the home page it turns as discs you can point at, click, drag or swipe; the one in front plays below: the whole song for owners, its teaser for everyone else."},
+            {"date": "2026-11-08", "kind": "IMPROVED", "title": "Less empty space under the hero", "details": "The welcome shortcuts sit closer under the hero."},
             {"date": "2026-11-02", "kind": "FIXED", "title": "Carousel with Reduce Motion", "details": "Keeps turning with Reduce Motion on; phones show song, artist and cover."},
             {"date": "2026-11-01", "kind": "IMPROVED", "title": "Hero fits the first screen", "details": "The landing hero is one composition."},
             {"date": "2026-10-31", "kind": "NEW", "title": "3D carousel", "details": "Events and releases in a turning 3D carousel."},

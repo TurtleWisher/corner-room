@@ -1,0 +1,576 @@
+/*
+ * Home: Trending Corner (components/home/trending-corner.tsx, owner 2026-11-08, D-TRENDING-01).
+ * Picture CDs standing side by side at an angle, turning back to front. The component writes each
+ * disc's transform and opacity; everything here is the look and the hover. Nothing lays out or
+ * paints per frame: the discs glide and spin on the compositor.
+ */
+[data-module="home"] .tc {
+  --tc-disc: clamp(9.5rem, 21vw, 17.5rem);
+  display: grid;
+  gap: 1rem;
+}
+[data-module="home"] .tc-stage {
+  padding: 0.5rem 0 1.25rem;
+}
+[data-module="home"] .tc-viewport {
+  position: relative;
+  height: calc(var(--tc-disc) * 1.36 + 3.75rem);
+  overflow: hidden;
+  perspective: 1300px;
+  perspective-origin: 50% 38%;
+  touch-action: pan-y;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+[data-module="home"] .tc-viewport[data-dragging] {
+  cursor: grabbing;
+}
+[data-module="home"] .tc-viewport[data-count="1"] {
+  cursor: default;
+}
+[data-module="home"] .tc-ring {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+[data-module="home"] .tc-item {
+  position: absolute;
+  top: 1.5rem;
+  left: 50%;
+  width: var(--tc-disc);
+  margin-left: calc(var(--tc-disc) / -2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  transform-origin: 50% 40%;
+  will-change: transform, opacity;
+  -webkit-tap-highlight-color: transparent;
+}
+[data-module="home"] .tc-viewport[data-dragging] .tc-item {
+  cursor: grabbing;
+}
+[data-module="home"] .tc-item:focus-visible {
+  outline: none;
+}
+[data-module="home"] .tc-item:focus-visible .tc-disc {
+  outline: 2px solid var(--cr-accent);
+  outline-offset: 5px;
+}
+/* The hover lift ("twinkle up"): its own wrapper, so it never fights the carousel's transform. */
+[data-module="home"] .tc-lift {
+  display: block;
+  transition: transform 460ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+[data-module="home"] .tc-disc {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  /* The floor reflection (Chromium and Safari): strongest at the rim, gone a short way down. */
+  -webkit-box-reflect: below 6px linear-gradient(to bottom, transparent 76%, rgb(255 255 255 / 0.2));
+}
+[data-module="home"] .tc-disc > span {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+}
+[data-module="home"] .tc-face {
+  overflow: hidden;
+  background: #1a0b0b;
+  will-change: transform;
+}
+[data-module="home"] .tc-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  -webkit-user-drag: none;
+}
+[data-module="home"] .tc-art-plain {
+  display: grid;
+  place-items: center;
+  padding: 0 22% 46%;
+  background: radial-gradient(circle at 35% 30%, #b21f24, #831515 60%, #3b0909);
+  color: #f6ece6;
+  font-weight: 800;
+  font-size: calc(var(--tc-disc) * 0.075);
+  text-align: center;
+  line-height: 1.1;
+}
+/* Fine pressed grooves and a darker rim, like light falling off the disc's edge. */
+[data-module="home"] .tc-grooves {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, transparent 88%, rgb(0 0 0 / 0.3) 97%, rgb(0 0 0 / 0.5)),
+    repeating-radial-gradient(closest-side, rgb(255 255 255 / 0) 0 2px, rgb(0 0 0 / 0.07) 2px 3px);
+  box-shadow:
+    inset 0 0 0 1.5px rgb(255 255 255 / 0.22),
+    inset 0 0 0 4px rgb(0 0 0 / 0.18);
+}
+/* The clear hub: silver rings round the hole, as on a real CD (hole 15 mm of 120). */
+[data-module="home"] .tc-hub {
+  position: absolute;
+  inset: 31%;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    #0f0505 0 31%,
+    rgb(240 240 245 / 0.95) 32% 35%,
+    rgb(255 255 255 / 0.28) 36% 52%,
+    rgb(205 210 220 / 0.75) 53% 56%,
+    rgb(255 255 255 / 0.14) 57% 80%,
+    rgb(190 195 205 / 0.85) 81% 85%,
+    rgb(20 10 10 / 0.55) 86% 100%
+  );
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12);
+}
+/* Rainbow light on the data side. It does not spin with the disc; the carousel slides it round as
+   the disc turns, so the reflection moves the way it would on a real one. */
+[data-module="home"] .tc-light {
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgb(255 110 190 / 0.3) 24deg,
+    rgb(110 215 255 / 0.34) 48deg,
+    rgb(252 244 117 / 0.3) 72deg,
+    transparent 104deg,
+    transparent 180deg,
+    rgb(255 110 190 / 0.24) 204deg,
+    rgb(110 215 255 / 0.28) 228deg,
+    rgb(252 244 117 / 0.24) 252deg,
+    transparent 284deg
+  );
+  mix-blend-mode: screen;
+  -webkit-mask: radial-gradient(closest-side, transparent 11%, #000 12%, #000 100%);
+  mask: radial-gradient(closest-side, transparent 11%, #000 12%, #000 100%);
+  will-change: transform;
+}
+/* A fixed gloss from the lit corner, plus the sweep of light on hover. */
+[data-module="home"] .tc-gloss {
+  overflow: hidden;
+  background:
+    radial-gradient(55% 40% at 30% 20%, rgb(255 255 255 / 0.34), transparent 70%),
+    linear-gradient(140deg, rgb(255 255 255 / 0.14), transparent 38%, transparent 64%, rgb(255 255 255 / 0.07));
+  opacity: 0.8;
+  transition: opacity 320ms var(--ease-corner);
+}
+[data-module="home"] .tc-gloss::after {
+  content: "";
+  position: absolute;
+  inset: -10% -60%;
+  background: linear-gradient(100deg, transparent 40%, rgb(255 255 255 / 0.42) 50%, transparent 60%);
+  transform: translateX(-70%);
+  opacity: 0;
+}
+[data-module="home"] .tc-shade {
+  background: #120506;
+  opacity: 0;
+}
+/* The twinkle: a four-point star of lamp light that flares once on the rim. */
+[data-module="home"] .tc-disc > .tc-twinkle {
+  inset: 6% 9% auto auto;
+  width: 24%;
+  height: 24%;
+  border-radius: 0;
+  background: radial-gradient(closest-side, #fff 0, rgb(252 244 117 / 0.85) 18%, transparent 62%);
+  clip-path: polygon(50% 0, 58% 42%, 100% 50%, 58% 58%, 50% 100%, 42% 58%, 0 50%, 42% 42%);
+  opacity: 0;
+  transform: scale(0.2) rotate(-40deg);
+}
+[data-module="home"] .tc-label {
+  display: block;
+  margin-top: calc(var(--tc-disc) * 0.1 + 0.5rem);
+  text-align: center;
+  will-change: opacity;
+}
+[data-module="home"] .tc-label-in {
+  display: grid;
+  gap: 0.1rem;
+}
+[data-module="home"] .tc-label-title {
+  overflow: hidden;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--cr-fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 2px 10px rgb(0 0 0 / 0.6);
+}
+[data-module="home"] .tc-label-artist {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  color: var(--cr-fg-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-module="home"] .tc-item[data-front] .tc-label-title {
+  color: var(--cr-highlight);
+}
+/* A pool of lamp light on the floor where the front disc stands. */
+[data-module="home"] .tc-floor {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--tc-disc) * 0.86 + 2rem);
+  width: calc(var(--tc-disc) * 2.6);
+  height: calc(var(--tc-disc) * 0.6);
+  translate: -50% 0;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgb(252 244 117 / 0.13), rgb(255 90 78 / 0.1) 45%, transparent 75%);
+}
+[data-module="home"] .tc-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.375rem;
+}
+[data-module="home"] .tc-dots > span {
+  width: 1.25rem;
+  height: 3px;
+  background: color-mix(in srgb, var(--cr-fg) 22%, transparent);
+  transform: scaleX(0.35);
+  transition:
+    transform 420ms var(--ease-corner),
+    background-color 420ms var(--ease-corner);
+}
+[data-module="home"] .tc-dots > span[data-on] {
+  background: var(--cr-accent);
+  transform: scaleX(1);
+}
+@media (hover: hover) and (pointer: fine) {
+  [data-module="home"] .tc-item:hover .tc-lift {
+    transform: translateY(-14px) scale(1.045);
+  }
+  [data-module="home"] .tc-item:hover .tc-gloss {
+    opacity: 1;
+  }
+}
+[data-module="home"] .tc-item:focus-visible .tc-lift {
+  transform: translateY(-10px) scale(1.03);
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  [data-module="home"] .tc-item:hover .tc-twinkle {
+    animation: tc-twinkle 900ms var(--ease-corner) both;
+  }
+  [data-module="home"] .tc-item:hover .tc-gloss::after {
+    animation: tc-sweep 900ms var(--ease-corner) 80ms both;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-module="home"] .tc-label-in {
+    animation: tc-float 4.6s ease-in-out infinite alternate;
+  }
+}
+@keyframes tc-twinkle {
+  0% {
+    opacity: 0;
+    transform: scale(0.2) rotate(-40deg);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.55) rotate(45deg);
+  }
+}
+@keyframes tc-sweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-70%);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(70%);
+  }
+}
+@keyframes tc-float {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-4px);
+  }
+}
+
+/* ---------- The mini listening room under the carousel ---------- */
+[data-module="home"] .tc-room {
+  padding: 1.25rem;
+}
+@media (min-width: 768px) {
+  [data-module="home"] .tc-room {
+    padding: 1.5rem 1.75rem;
+  }
+}
+[data-module="home"] .tc-room-in {
+  display: grid;
+  grid-template-columns: clamp(6.5rem, 22vw, 10.5rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 1.25rem 1.75rem;
+  /* Centred under the front disc, never stretched across a wide screen. */
+  max-width: 50rem;
+  margin-inline: auto;
+}
+[data-module="home"] .tc-box {
+  position: relative;
+  display: block;
+  perspective: 700px;
+}
+[data-module="home"] .tc-box::before {
+  content: "";
+  position: absolute;
+  inset: 12% -8% -12% 10%;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgb(0 0 0 / 0.6), transparent);
+  pointer-events: none;
+}
+[data-module="home"] .tc-box-case {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  clip-path: polygon(var(--cr-cut-sm) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cr-cut-sm));
+  transform: rotateY(-14deg) rotateX(3deg);
+  transition: transform 520ms var(--ease-corner);
+}
+[data-module="home"] .tc-box:hover .tc-box-case,
+[data-module="home"] .tc-box:focus-visible .tc-box-case {
+  transform: rotateY(-4deg) rotateX(1deg) translateY(-3px);
+}
+/* The jewel case: a hinge down the left and a glossy front. No disc comes out of it (owner). */
+[data-module="home"] .tc-box-spine {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 7%;
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.3), rgb(255 255 255 / 0.06) 45%, rgb(0 0 0 / 0.28));
+  pointer-events: none;
+}
+[data-module="home"] .tc-box-gloss {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, rgb(255 255 255 / 0.24), transparent 34%, transparent 70%, rgb(255 255 255 / 0.08));
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 0.4);
+  pointer-events: none;
+}
+[data-module="home"] .tc-room-body {
+  min-width: 0;
+}
+[data-module="home"] .tc-room-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.6875rem;
+  color: var(--cr-highlight);
+}
+[data-module="home"] .tc-room-eyebrow > span + span {
+  color: var(--cr-fg-muted);
+}
+[data-module="home"] .tc-room-title {
+  display: block;
+  margin-top: 0.4rem;
+  overflow: hidden;
+  font-size: clamp(1.375rem, 2.6vw, 2rem);
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--cr-fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-module="home"] .tc-room-title:hover {
+  color: var(--cr-highlight);
+}
+[data-module="home"] .tc-room-artist {
+  margin-top: 0.2rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--cr-fg);
+  opacity: 0.86;
+}
+[data-module="home"] .tc-room-meta,
+[data-module="home"] .tc-room-status,
+[data-module="home"] .tc-room-note {
+  font-size: 0.8125rem;
+  color: var(--cr-fg-muted);
+}
+[data-module="home"] .tc-room-meta {
+  margin-top: 0.35rem;
+}
+[data-module="home"] .tc-room-status {
+  min-height: 1.25rem;
+  margin-top: 0.5rem;
+}
+[data-module="home"] .tc-room-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+[data-module="home"] .tc-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+[data-module="home"] .tc-key {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  color: var(--cr-fg);
+  isolation: isolate;
+  transition: transform 160ms var(--ease-corner);
+}
+[data-module="home"] .tc-key::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  clip-path: polygon(var(--cr-cut-sm) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cr-cut-sm));
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.22), rgb(255 255 255 / 0.05) 55%, rgb(255 255 255 / 0.1)),
+    rgb(20 7 7 / 0.3);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.35),
+    inset 0 0 0 1px rgb(255 255 255 / 0.16);
+}
+[data-module="home"] .tc-key:hover:not(:disabled)::before {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.34), rgb(255 255 255 / 0.08) 55%, rgb(255 255 255 / 0.14)),
+    rgb(20 7 7 / 0.24);
+}
+[data-module="home"] .tc-key:active:not(:disabled) {
+  transform: scale(0.92);
+}
+[data-module="home"] .tc-key:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+[data-module="home"] .tc-key:focus-visible {
+  outline: 2px solid var(--cr-accent);
+  outline-offset: 3px;
+}
+[data-module="home"] .tc-key-main {
+  width: 3.25rem;
+  height: 3.25rem;
+  color: var(--cr-on-accent, #140707);
+}
+[data-module="home"] .tc-key-main::before {
+  background: linear-gradient(180deg, #fff9a8, var(--cr-accent) 60%, #e9df52);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.7),
+    0 10px 24px -10px rgb(252 244 117 / 0.6);
+}
+[data-module="home"] .tc-key-main:hover:not(:disabled)::before {
+  background: linear-gradient(180deg, #fffcc8, #fdf68a 60%, var(--cr-accent));
+}
+[data-module="home"] .tc-key-main:disabled {
+  opacity: 0.45;
+}
+[data-module="home"] .tc-time {
+  display: grid;
+  gap: 0.375rem;
+  min-width: 8.5rem;
+  margin-left: 0.5rem;
+}
+[data-module="home"] .tc-time-text {
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--cr-fg);
+}
+[data-module="home"] .tc-time-line {
+  display: block;
+  height: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--cr-fg) 16%, transparent);
+}
+[data-module="home"] .tc-time-line > span {
+  display: block;
+  height: 100%;
+  background: var(--cr-accent);
+  transform-origin: left center;
+  transition: transform 260ms linear;
+}
+[data-module="home"] .tc-buy-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.875rem;
+  margin-top: 0.5rem;
+}
+[data-module="home"] .tc-buy {
+  --cut-fill: rgb(246 236 230 / 0.08);
+  --cut-border: rgb(252 244 117 / 0.5);
+  display: inline-flex;
+  height: 2.5rem;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+  padding: 0 1rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--cr-highlight);
+}
+[data-module="home"] .tc-buy-row > .tc-buy {
+  margin-top: 0;
+}
+[data-module="home"] .tc-buy:hover {
+  --cut-fill: var(--cr-accent);
+  --cut-border: var(--cr-accent);
+  color: var(--cr-on-accent, #140707);
+}
+@media (max-width: 479px) {
+  [data-module="home"] .tc-room-in {
+    gap: 1rem;
+  }
+  [data-module="home"] .tc-time {
+    flex-basis: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* Each new front arrives: the box swings in, the words rise. */
+  [data-module="home"] .tc-room-in > .tc-box .tc-box-case {
+    animation: tc-box-in 640ms var(--ease-corner) both;
+  }
+  [data-module="home"] .tc-room-in > .tc-room-body {
+    animation: tc-body-in 520ms var(--ease-corner) 60ms both;
+  }
+}
+@keyframes tc-box-in {
+  from {
+    opacity: 0;
+    transform: rotateY(-48deg) rotateX(3deg) translateX(-14px);
+  }
+}
+@keyframes tc-body-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-module="home"] .tc-lift,
+  [data-module="home"] .tc-box-case,
+  [data-module="home"] .tc-dots > span,
+  [data-module="home"] .tc-time-line > span {
+    transition: none;
+  }
+  [data-module="home"] .tc-item:hover .tc-lift,
+  [data-module="home"] .tc-item:focus-visible .tc-lift {
+    transform: none;
+  }
+}

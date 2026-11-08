@@ -14,6 +14,7 @@ import { EventRow } from "@/components/events/event-row";
 import { FeaturedCarousel } from "@/components/home/featured-carousel";
 import { MissionBand } from "@/components/home/mission-band";
 import { PosterTilt } from "@/components/home/poster-tilt";
+import { TrendingCorner } from "@/components/home/trending-corner";
 import { Reveal } from "@/components/ds/reveal";
 import { useCredits } from "@/components/music/credits";
 import { ReleaseCard } from "@/components/music/release-card";
@@ -25,6 +26,7 @@ import { cityFromTimeZone, featuredSlides, upcomingEvents } from "@/lib/home-vie
 import { creditName, sortReleases } from "@/lib/music-view";
 import { showStaffEntry, staffHomeHref } from "@/lib/nav-view";
 import { checkLabel, healthLabel } from "@/lib/ops-view";
+import { fetchTrending } from "@/features/trending/api";
 
 function cityOrTitle(event: EventRecord): string {
   return cityFromTimeZone(event.timezone) ?? event.title;
@@ -205,11 +207,33 @@ function SectionHead({ id, index, title, href, link }: { id: string; index: stri
   );
 }
 
+/* ---------- Trending Corner ---------- */
+
+/**
+ * The music staff picked as selling and being heard the most (owner, 2026-11-08, D-TRENDING-01).
+ * Hidden when nothing is picked or the list can't be loaded; a reserved block while it loads, so the
+ * page below never jumps.
+ */
+function Trending() {
+  const state = useAsync(() => fetchTrending(), []);
+  if (state.status === "error" || (state.status === "ok" && state.data.length === 0)) return null;
+  return (
+    <section id="trending" aria-labelledby="home-trending" className="scroll-mt-24">
+      <Reveal>
+        <SectionHead id="home-trending" index="01" title="Trending Corner" href="/releases" link="All releases" />
+      </Reveal>
+      <div className="pt-6">
+        {state.status === "loading" ? <Skeleton className="h-[30rem] w-full" /> : <TrendingCorner items={state.data} />}
+      </div>
+    </section>
+  );
+}
+
 function Upcoming({ state }: { state: ReturnType<typeof useAsync<EventRecord[]>> }) {
   const rows = state.status === "ok" ? upcomingEvents(state.data) : [];
   return (
     <Reveal as="section" aria-labelledby="home-upcoming">
-      <SectionHead id="home-upcoming" index="01" title="Upcoming" href="/events" link="All events" />
+      <SectionHead id="home-upcoming" index="02" title="Upcoming" href="/events" link="All events" />
       {state.status === "loading" ? (
         <div className="space-y-3 pt-4">
           <Skeleton className="h-20 w-full" />
@@ -245,7 +269,7 @@ function NewReleases() {
   return (
     <section aria-labelledby="home-releases" className="mx-auto max-w-[90rem] px-4 pb-10 pt-14 md:px-6">
       <Reveal>
-        <SectionHead id="home-releases" index="02" title="New releases" href="/releases" link="All releases" />
+        <SectionHead id="home-releases" index="03" title="New releases" href="/releases" link="All releases" />
       </Reveal>
       {state.status === "loading" ? (
         <div className="grid grid-cols-2 gap-6 pt-6 md:grid-cols-4">
@@ -377,11 +401,12 @@ export function HomeView() {
         </div>
       </LitSurface>
 
-      <div className="mx-auto max-w-[90rem] space-y-16 px-4 py-14 md:px-6">
+      <div className="home-below mx-auto max-w-[90rem] space-y-14 px-4 pb-14 pt-4 md:px-6">
         {/* Sign-in lands here ("/#welcome", HOME_WELCOME). The wrapper exists while the panel loads. */}
         <div id="welcome" className="scroll-mt-24">
           <YouPanel />
         </div>
+        <Trending />
         <Upcoming state={events} />
       </div>
 
