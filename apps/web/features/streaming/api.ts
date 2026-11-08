@@ -182,6 +182,13 @@ export async function fetchArtistPlayAggregates(artistId: string): Promise<Artis
   return apiFetch<ArtistPlayAggregates>(`/api/v1/artists/${artistId}/play-aggregates`, { retry: false });
 }
 
+/** D-STORY-01: whether this person may make a story card of the song now, and the longest moment. */
+export type StoryCheckRecord = { track_id: string; can_share: boolean; reason: string; clip_max_ms: number };
+
+export async function fetchStoryCheck(trackId: string): Promise<StoryCheckRecord> {
+  return apiFetch<StoryCheckRecord>(`/api/v1/playback/tracks/${trackId}/story`, { retry: false });
+}
+
 export function resolveMediaUrl(path: string): string {
   if (path.startsWith("http://") || path.startsWith("https://")) {
     return path;

@@ -127,6 +127,9 @@ class Settings(BaseSettings):
     teaser_max_ms: int = 60_000
     teaser_min_ms: int = 5_000
     teaser_count_max_per_hour: int = 60
+    # Story cards (owner, 2026-11-08, D-STORY-01): an owner shares a moment of a song they own, at
+    # most 30 s, chosen by them. 0 blocks story cards (fail closed).
+    story_clip_max_ms: int = 30_000
     # Owner, 2026-11-07 (D-REVIEW-SOLO-01): while the owner is the only staff, nobody else can be the
     # second person, so the rule "someone else must approve this" is off and whatever a person with
     # the staff right to approve sends in is approved at once. Turn it on (true) when more staff join.

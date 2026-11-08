@@ -82,7 +82,7 @@ async def test_staff_prepare_catalog_only_and_cannot_submit(client: AsyncClient)
     assert set(detail["release"]) == {
         "id", "title", "release_type", "status", "release_at", "release_timezone", "cover_asset_id", "language_code",
         "genre_primary", "genre_secondary", "label_name", "p_line", "c_line", "upc", "track_sales", "intake_mode",
-        "rights_declared_at", "version",
+        "rights_declared_at", "version", "story_sharing",
     }
     _no_private_data(created.text, email="intake-artist@example.com", user_id=artist_user["user"]["id"])
     release_id = detail["release"]["id"]
