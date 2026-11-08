@@ -57,11 +57,27 @@ async def test_staff_pick_order_and_remove(client: AsyncClient) -> None:
     assert (await client.get("/api/v1/staff/trending", headers=bearer(fan["access_token"]))).status_code == 404
     assert (await client.post("/api/v1/staff/trending", headers=bearer(fan["access_token"]), json={"kind": "RELEASE", "id": release_id})).status_code == 404
 
+    # The second release gets a second song, so it is an EP whose songs can trend on their own.
+    from cornerroom.infra.db import get_session_factory
+    from cornerroom.modules.music.domain.models import ReleaseTrack, Track
+
+    async with get_session_factory()() as session:
+        base = await session.get(Track, UUID(other_track))
+        extra = Track(title="Second Song", status="RELEASED", primary_org_id=base.primary_org_id, primary_artist_id=base.primary_artist_id)
+        session.add(extra)
+        await session.flush()
+        session.add(ReleaseTrack(release_id=UUID(other_release), track_id=extra.id, position=2))
+        await session.commit()
+
     view = await client.get("/api/v1/staff/trending", headers=bearer(staff))
     assert view.status_code == 200, view.text
     kinds = {(c["kind"], c["id"]) for c in view.json()["candidates"]}
-    assert ("RELEASE", release_id) in kinds and ("TRACK", track_id) in kinds
+    # A single's song is the single: listed once, as the release (owner, 2026-11-08: two Chaya Pore).
+    assert ("RELEASE", release_id) in kinds and ("TRACK", track_id) not in kinds
+    assert ("TRACK", other_track) in kinds
     assert all(c["sold"] == 0 and c["picked"] is False for c in view.json()["candidates"])
+    single_song = await client.post("/api/v1/staff/trending", headers=bearer(staff), json={"kind": "TRACK", "id": track_id})
+    assert single_song.status_code == 409 and single_song.json()["code"] == "PICK_THE_RELEASE"
 
     added = await client.post("/api/v1/staff/trending", headers=bearer(staff), json={"kind": "RELEASE", "id": release_id})
     assert added.status_code == 201, added.text
@@ -69,6 +85,9 @@ async def test_staff_pick_order_and_remove(client: AsyncClient) -> None:
     assert again.status_code == 409 and again.json()["code"] == "ALREADY_PICKED"
     second = await client.post("/api/v1/staff/trending", headers=bearer(staff), json={"kind": "TRACK", "id": other_track})
     assert second.status_code == 201, second.text
+    # Its release can't join beside it: the same music would show twice.
+    overlap = await client.post("/api/v1/staff/trending", headers=bearer(staff), json={"kind": "RELEASE", "id": other_release})
+    assert overlap.status_code == 409 and overlap.json()["code"] == "ALREADY_PICKED"
     picks = second.json()["picks"]
     assert [p["id"] for p in picks] == [release_id, other_track]
     assert next(c for c in second.json()["candidates"] if c["id"] == release_id)["picked"] is True
@@ -91,9 +110,6 @@ async def test_staff_pick_order_and_remove(client: AsyncClient) -> None:
     assert [i["kind"] for i in (await client.get("/api/v1/trending")).json()["items"]] == ["TRACK", "RELEASE"]
 
     # Music taken down leaves the public list at once, while staff still see it marked.
-    from cornerroom.infra.db import get_session_factory
-    from cornerroom.modules.music.domain.models import Track
-
     async with get_session_factory()() as session:
         await session.execute(update(Track).where(Track.id == UUID(other_track)).values(status="TAKEN_DOWN"))
         await session.commit()

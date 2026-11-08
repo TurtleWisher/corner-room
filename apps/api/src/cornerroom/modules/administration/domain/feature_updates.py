@@ -442,6 +442,7 @@ FEATURES: Final[list[dict]] = [
             "the most, as discs turning in a glass carousel, with a small player for the disc in front."
         ),
         "updates": [
+            {"date": "2026-11-08", "kind": "FIXED", "title": "Singles listed twice in Trending Corner", "details": "Staff saw a single twice (the single and its one song). A single now shows once, as the single, and a song and the release it is on can no longer both be picked."},
             {"date": "2026-11-08", "kind": "NEW", "title": "Trending Corner", "details": "Staff pick the music selling and being heard the most (Catalog > Trending Corner, with sales and listens beside each). On the home page it turns as discs you can point at, click, drag or swipe; the one in front plays below: the whole song for owners, its teaser for everyone else."},
             {"date": "2026-11-08", "kind": "IMPROVED", "title": "Less empty space under the hero", "details": "The welcome shortcuts sit closer under the hero."},
             {"date": "2026-11-02", "kind": "FIXED", "title": "Carousel with Reduce Motion", "details": "Keeps turning with Reduce Motion on; phones show song, artist and cover."},
