@@ -160,6 +160,10 @@ class TrendingService:
             trk_stmt = trk_stmt.where(Track.title.ilike(f"%{text}%"))
         cand_releases = list((await self.session.execute(rel_stmt.order_by(Release.release_at.desc().nulls_last()).limit(CANDIDATE_LIMIT))).scalars())
         cand_tracks = list((await self.session.execute(trk_stmt.order_by(Track.created_at.desc()).limit(CANDIDATE_LIMIT))).scalars())
+        # A single's song is the single: offering both listed the same music twice (owner,
+        # 2026-11-08: "why is there 2 Chaya Pore?"). Songs of albums and EPs stay pickable.
+        covered = await self._covered_songs([t.id for t in cand_tracks])
+        cand_tracks = [t for t in cand_tracks if t.id not in covered]
 
         picked_releases = await self._rows(Release, [p.release_id for p in picks if p.release_id])
         picked_tracks = await self._rows(Track, [p.track_id for p in picks if p.track_id])
@@ -219,6 +223,7 @@ class TrendingService:
         column = TrendingPick.release_id if kind == "RELEASE" else TrendingPick.track_id
         if (await self.session.execute(select(TrendingPick.id).where(column == subject_id))).first():
             raise AppError("ALREADY_PICKED", "It is already in Trending Corner", 409)
+        await self._refuse_overlap(kind, subject_id)
         count = (await self.session.execute(select(func.count()).select_from(TrendingPick))).scalar_one()
         if count >= MAX_PICKS:
             raise AppError("TOO_MANY", f"Trending Corner holds {MAX_PICKS} at most. Take one out first", 409)
@@ -269,7 +274,48 @@ class TrendingService:
             previous_state={"order": before}, new_state={"order": [str(p) for p in pick_ids]}, organization_id=org,
         )
 
+    async def _refuse_overlap(self, kind: str, subject_id: UUID) -> None:
+        """The same music never shows twice: not a single's song beside the single, not a song
+        beside the release it is on, not a release beside one of its songs."""
+        if kind == "TRACK":
+            if subject_id in await self._covered_songs([subject_id]):
+                raise AppError("PICK_THE_RELEASE", "This song is a single. Add the single instead", 409)
+            on_picked_release = await self.session.execute(
+                select(TrendingPick.id)
+                .join(ReleaseTrack, ReleaseTrack.release_id == TrendingPick.release_id)
+                .where(ReleaseTrack.track_id == subject_id)
+            )
+            if on_picked_release.first():
+                raise AppError("ALREADY_PICKED", "Its release is already in Trending Corner", 409)
+        else:
+            has_picked_song = await self.session.execute(
+                select(TrendingPick.id)
+                .join(ReleaseTrack, ReleaseTrack.track_id == TrendingPick.track_id)
+                .where(ReleaseTrack.release_id == subject_id)
+            )
+            if has_picked_song.first():
+                raise AppError("ALREADY_PICKED", "One of its songs is already in Trending Corner", 409)
+
     # --- reads ---------------------------------------------------------------------------------
+
+    async def _covered_songs(self, track_ids: list[UUID]) -> set[UUID]:
+        """Songs that are only ever out as a one-song release (a single): that release stands for
+        them, so they are never offered or picked as a second entry."""
+        released_on = await self._released_on(track_ids)
+        release_ids = list({r for ids in released_on.values() for r in ids})
+        if not release_ids:
+            return set()
+        counts = dict(
+            (
+                await self.session.execute(
+                    select(ReleaseTrack.release_id, func.count())
+                    .join(Track, Track.id == ReleaseTrack.track_id)
+                    .where(ReleaseTrack.release_id.in_(release_ids), Track.deleted_at.is_(None))
+                    .group_by(ReleaseTrack.release_id)
+                )
+            ).all()
+        )
+        return {tid for tid, ids in released_on.items() if ids and all(counts.get(r) == 1 for r in ids)}
 
     async def _rows(self, model: Any, ids: list[UUID]) -> dict[UUID, Any]:
         ids = [i for i in ids if i is not None]
