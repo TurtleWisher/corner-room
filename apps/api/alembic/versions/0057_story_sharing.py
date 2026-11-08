@@ -1,7 +1,7 @@
 """Story sharing switch on releases. Additive only.
 
-Revision ID: 0056_story_sharing
-Revises: 0055_gift_email_composer
+Revision ID: 0057_story_sharing
+Revises: 0056_trending_picks
 Create Date: 2026-11-08
 
 Owner, 2026-11-08 (D-STORY-01): people who own a song can share a moment of it, up to 30 seconds
@@ -14,8 +14,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0056_story_sharing"
-down_revision: Union[str, Sequence[str], None] = "0055_gift_email_composer"
+revision: str = "0057_story_sharing"
+down_revision: Union[str, Sequence[str], None] = "0056_trending_picks"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -559,3 +559,28 @@ class TeaserCount(Base):
     starts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     completes: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     prompt_clicks: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+
+class TrendingPick(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, Base):
+    """One song or release staff chose for the home page's Trending Corner (owner, 2026-11-08,
+    D-TRENDING-01). Picked by hand, never ranked by a formula; `position` orders the carousel."""
+
+    __tablename__ = "trending_picks"
+    __table_args__ = (
+        CheckConstraint("kind IN ('TRACK','RELEASE')", name="kind"),
+        CheckConstraint(
+            "(kind = 'TRACK' AND track_id IS NOT NULL AND release_id IS NULL)"
+            " OR (kind = 'RELEASE' AND release_id IS NOT NULL AND track_id IS NULL)",
+            name="one_subject",
+        ),
+        UniqueConstraint("track_id", name="uq_trending_picks_track"),
+        UniqueConstraint("release_id", name="uq_trending_picks_release"),
+        Index("ix_trending_picks_position", "position"),
+        {"schema": "music"},
+    )
+
+    kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    track_id: Mapped[UUID | None] = mapped_column(ForeignKey("music.tracks.id", ondelete="CASCADE"), nullable=True)
+    release_id: Mapped[UUID | None] = mapped_column(ForeignKey("music.releases.id", ondelete="CASCADE"), nullable=True)
+    organization_id: Mapped[UUID | None] = mapped_column(ForeignKey("identity.organizations.id"), nullable=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
