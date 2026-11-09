@@ -33,6 +33,9 @@ export type GiftCampaign = {
   counts: GiftCounts;
   /** The act's own status emails waiting for staff (D-CAMPAIGN-05). */
   emails_waiting?: number;
+  /** Emails to buyers the act picked, waiting for staff, and approved ones ready to send (D-CAMPAIGN-07). */
+  sends_waiting?: number;
+  sends_ready?: number;
 };
 
 export type GiftRecipient = {
@@ -224,11 +227,41 @@ export type StatusMailPerson = { id: string; name: string | null; status: GiftRe
 /** One gift status email to one buyer: PENDING (on its way), SENT, FAILED (or SUPPRESSED). */
 export type StatusMailSent = {
   recipient_id: string;
-  gift_status: StatusMailStatus;
+  /** OTHER: other gift news written to picked buyers (D-CAMPAIGN-07). */
+  gift_status: StatusMailStatus | "OTHER";
   state: "PENDING" | "SENT" | "FAILED" | "SUPPRESSED";
   queued_at: string;
   sent_at: string | null;
+  /** The picked-buyers email it was part of (D-CAMPAIGN-07); null for the automatic ones. */
+  send_id?: string | null;
+  subject?: string | null;
 };
+
+/** What a picked-buyers email is about: a gift status, or any other gift news (D-CAMPAIGN-07). */
+export type GiftSendPurpose = StatusMailStatus | "OTHER";
+/** IN_REVIEW: with Corner Room. RETURNED: sent back with a note. APPROVED: ready to send. SENT: gone out. */
+export type GiftSendState = "IN_REVIEW" | "RETURNED" | "APPROVED" | "SENT";
+
+export type GiftMailSend = {
+  id: string;
+  purpose: GiftSendPurpose;
+  subject: string;
+  body: string;
+  button_label: string | null;
+  button_url: string | null;
+  file_ids: string[];
+  recipient_ids: string[];
+  state: GiftSendState;
+  review_note: string | null;
+  submitted_at: string | null;
+  approved_at: string | null;
+  sent_at: string | null;
+  sent_count: number;
+  skipped_count: number;
+  can_review: boolean;
+};
+
+export type GiftMailSendInput = StatusMailInput & { purpose: GiftSendPurpose; recipient_ids: string[] };
 
 export type StatusMailInput = { subject: string; body: string; button_label: string | null; button_url: string | null; file_ids: string[] };
 
@@ -243,7 +276,10 @@ export type StatusMails = {
   people: StatusMailPerson[];
   /** Every gift status email to this campaign's buyers, newest first. */
   history?: StatusMailSent[];
-  /** The viewer's own words are approved the moment they send them (D-REVIEW-SOLO-01). */
+  /** Emails to buyers the act picked, newest first (D-CAMPAIGN-07). */
+  sends?: GiftMailSend[];
+  /** Staff outside the act's team: their words and emails need no approval (D-REVIEW-ARTIST-01).
+   * The act's own team always waits for Corner Room. */
   approves_at_once?: boolean;
   sent?: number | null;
   skipped?: number | null;
@@ -276,13 +312,35 @@ export function resetStatusMail(id: string, status: StatusMailStatus): Promise<S
   return apiFetch<StatusMails>(`${mailsPath(id)}/${status}`, { method: "DELETE", retry: false });
 }
 
-export function sendStatusMail(id: string, status: StatusMailStatus, recipientIds: string[]): Promise<StatusMails> {
-  return apiFetch<StatusMails>(`${mailsPath(id)}/${status}/send`, {
+// --- emails to buyers the act picks: words and people go to staff together (D-CAMPAIGN-07) ---------
+
+const sendsPath = (id: string) => `/api/v1/studio/gift-campaigns/${id}/mail-sends`;
+
+/** The act's team: goes to Corner Room. Staff: approved and sent at once. */
+export function createGiftSend(id: string, body: GiftMailSendInput): Promise<StatusMails> {
+  return apiFetch<StatusMails>(sendsPath(id), { method: "POST", headers: json, body: JSON.stringify(body), retry: false });
+}
+
+export function changeGiftSend(id: string, sendId: string, body: GiftMailSendInput): Promise<StatusMails> {
+  return apiFetch<StatusMails>(`${sendsPath(id)}/${sendId}`, { method: "PUT", headers: json, body: JSON.stringify(body), retry: false });
+}
+
+export function withdrawGiftSend(id: string, sendId: string): Promise<StatusMails> {
+  return apiFetch<StatusMails>(`${sendsPath(id)}/${sendId}`, { method: "DELETE", retry: false });
+}
+
+export function reviewGiftSend(id: string, sendId: string, action: "approve" | "reject", note?: string): Promise<StatusMails> {
+  return apiFetch<StatusMails>(`${sendsPath(id)}/${sendId}/review`, {
     method: "POST",
     headers: json,
-    body: JSON.stringify({ recipient_ids: recipientIds }),
+    body: JSON.stringify({ action, note: note || null }),
     retry: false,
   });
+}
+
+/** Send an approved email now. */
+export function deliverGiftSend(id: string, sendId: string): Promise<StatusMails> {
+  return apiFetch<StatusMails>(`${sendsPath(id)}/${sendId}/send`, { method: "POST", retry: false });
 }
 
 export function testStatusMail(id: string, status: StatusMailStatus, body: StatusMailInput & { recipient_id: string | null }): Promise<{ sent_to: string }> {

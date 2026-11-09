@@ -1,9 +1,9 @@
-"""One staff member for now (owner, 2026-11-07, D-REVIEW-SOLO-01), and deleting a teaser deletes it whole.
+"""Who approves what (D-REVIEW-SOLO-01, D-REVIEW-ARTIST-01), and deleting a teaser deletes it whole.
 
-With `STAFF_SECOND_REVIEW` off (production's default while the owner is the only staff), whatever is
-sent in by someone who holds the staff right to approve it is approved at once, and nobody is stopped
-from approving their own work. An artist without that right still waits for staff. Deleting a teaser
-that was never public removes its versions too.
+With `STAFF_SECOND_REVIEW` off (production's default while the owner is the only staff), whatever
+staff send for an act they are not part of is approved at once, and nobody is stopped from approving
+their own work. Anyone on an act's team waits for staff, staff or not. Deleting a teaser that was
+never public removes its versions too.
 """
 
 from __future__ import annotations
@@ -61,7 +61,10 @@ async def _rows(model_name: str, column: str, value: str) -> int:
 
 @pytest.mark.postgres
 @pytest.mark.asyncio
-async def test_staff_sends_are_approved_at_once_artists_still_wait(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_artists_always_wait_staff_never_do(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """D-REVIEW-ARTIST-01 (owner, 2026-11-09): whoever is on an act's team waits for staff, even a
+    staff member sending for their own act (the owner and MIZULS); staff working on someone else's
+    act are approved at once; and with the second review off staff may approve their own act's work."""
     _second_review_off(monkeypatch)
     admin, orgs = await _orgs(client)
     label = orgs["LABEL"]
@@ -70,32 +73,32 @@ async def test_staff_sends_are_approved_at_once_artists_still_wait(client: Async
     artist_token = artist["access_token"]
     other_artist = await _artist_for(artist["user"]["id"], label, name="Waiting Artist")
 
-    # The staff member's own release is approved the moment it is sent.
+    # Sent as their own act, the staff member's release waits like any artist's ...
     release_id, track_id = await _draft_single(client, staff, staff_artist, title="Own single")
     sent = await client.post(f"/api/v1/studio/releases/{release_id}/submit", headers=bearer(staff), json={"rights_declaration": True})
     assert sent.status_code == 200, sent.text
-    assert sent.json()["release"]["status"] == "APPROVED"
-    # ... and they may release their own work themselves (no second person).
-    out = await client.post(f"/api/v1/catalog-intake/releases/{release_id}/review", headers=bearer(staff), json={"action": "release"})
-    assert out.status_code == 200, out.text
+    assert sent.json()["release"]["status"] != "APPROVED"
+    # ... and they approve it from the staff side themselves (no second person while solo).
+    for action in ("start_review", "approve", "release"):
+        out = await client.post(f"/api/v1/catalog-intake/releases/{release_id}/review", headers=bearer(staff), json={"action": action})
+        assert out.status_code == 200, (action, out.text)
 
-    # Their teaser goes public the moment it is sent.
+    # Their own teaser waits too, and they approve it from the staff side.
     teaser_id = await _made_teaser(client, staff, track_id)
     sent = await client.post(f"/api/v1/studio/teasers/{teaser_id}/transition", headers=bearer(staff), json={"action": "submit"})
     assert sent.status_code == 200, sent.text
-    assert sent.json()["status"] == "PUBLISHED"
-    assert (await client.get(f"/api/v1/teasers/{teaser_id}")).status_code == 200
+    assert sent.json()["status"] == "IN_REVIEW"
+    approved = await client.post(f"/api/v1/catalog-intake/teasers/{teaser_id}/review", headers=bearer(staff), json={"action": "approve"})
+    assert approved.status_code == 200, approved.text
 
-    # An artist without the staff right still waits for staff, and staff may approve it.
-    other_release, other_track = await _draft_single(client, artist_token, other_artist, title="Their single")
-    sent = await client.post(f"/api/v1/studio/releases/{other_release}/submit", headers=bearer(artist_token), json={"rights_declaration": True})
-    assert sent.status_code == 200 and sent.json()["release"]["status"] != "APPROVED"
+    # An artist without the staff right waits for staff.
+    _other_release, other_track = await _draft_single(client, artist_token, other_artist, title="Their single")
     other_teaser = await _made_teaser(client, artist_token, other_track)
     sent = await client.post(f"/api/v1/studio/teasers/{other_teaser}/transition", headers=bearer(artist_token), json={"action": "submit"})
     assert sent.json()["status"] == "IN_REVIEW"
     assert (await client.get(f"/api/v1/teasers/{other_teaser}")).status_code == 404
-    approved = await client.post(f"/api/v1/catalog-intake/teasers/{other_teaser}/review", headers=bearer(staff), json={"action": "approve"})
-    assert approved.status_code == 200, approved.text
+    # (Staff sending for an act they are not part of is approved at once: see
+    # test_phase16_gift_status_mails.py, where staff's own email to picked buyers goes straight out.)
 
 
 @pytest.mark.postgres

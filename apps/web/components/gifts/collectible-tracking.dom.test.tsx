@@ -106,4 +106,29 @@ describe("CollectibleTracking", () => {
     expect(screen.queryByLabelText("Choose Tushar")).toBeNull();
     expect(screen.getByText(/Corner Room's team sends these gifts/)).toBeTruthy();
   });
+
+  it("searches buyers by name, email, phone or address", () => {
+    const withContact: GiftRecipient[] = [
+      { id: "r1", status: "YET_TO_SEND", has_account: true, name: "Rumi", phone: "+880 1712-345678", address: "Road 4, Dhaka" },
+      { id: "r2", status: "YET_TO_SEND", has_account: true, name: "Nila", email: "nila@example.com", address: "Sylhet" },
+    ];
+    render(<CollectibleTracking c={campaign(withContact)} onChange={() => {}} />);
+    const search = screen.getByLabelText("Search buyers");
+    fireEvent.change(search, { target: { value: "01712" } });
+    expect(screen.getByText("Rumi")).toBeTruthy();
+    expect(screen.queryByText("Nila")).toBeNull();
+    fireEvent.change(search, { target: { value: "sylhet" } });
+    expect(screen.getByText("Nila")).toBeTruthy();
+    fireEvent.change(search, { target: { value: "nobody" } });
+    expect(screen.getByText(/Nothing matches/)).toBeTruthy();
+  });
+
+  it("emails the chosen buyers from the floating bar", () => {
+    const onEmail = vi.fn();
+    render(<CollectibleTracking c={campaign(people)} onChange={() => {}} onEmail={onEmail} />);
+    fireEvent.click(screen.getByLabelText("Choose Rumi"));
+    fireEvent.click(screen.getByLabelText("Choose Tushar"));
+    fireEvent.click(screen.getByRole("button", { name: /Email these 2/ }));
+    expect(onEmail).toHaveBeenCalledWith(["r1", "r3"]);
+  });
 });

@@ -173,6 +173,7 @@ FEATURES: Final[list[dict]] = [
             "counts link clicks (no open tracking) and carries a one-click stop link."
         ),
         "updates": [
+            {"date": "2026-11-09", "kind": "NEW", "title": "Artist Mailbox", "details": "Studio > Mailbox: every email sent for an act, to whom, when, why and whether it went, with search, filters and a reading pane; plus waiting emails, writing, automatic emails, templates and the report in one place."},
             {"date": "2026-11-02", "kind": "NEW", "title": "Artist email studio", "details": "Thank-yous per audience, real-name editor with links, smart audiences, scheduling, click reports and gift files."},
             {"date": "2026-11-02", "kind": "FIXED", "title": "Scheduled emails job listed", "details": "The scheduled artist email job now runs with the other worker jobs."},
             {"date": "2026-11-02", "kind": "NEW", "title": "Artist emails", "details": "Thank-you on purchase, emails to buyers that staff approve, templates and stop links."},
@@ -194,6 +195,9 @@ FEATURES: Final[list[dict]] = [
             "earn a campaign gift."
         ),
         "updates": [
+            {"date": "2026-11-09", "kind": "NEW", "title": "Emails to buyers you pick need approval", "details": "An email to buyers picked by hand goes to Corner Room with its people as one request; once approved, the artist presses Send. Staff send at once."},
+            {"date": "2026-11-09", "kind": "IMPROVED", "title": "Emails on the campaign page", "details": "Each campaign has Collectibles and Emails parts: tick gifts and press Email them, see automatic emails and every gift email sent, with search."},
+            {"date": "2026-11-09", "kind": "IMPROVED", "title": "Calmer collectible tracking", "details": "Status chips with counts, search by name, email, phone or address, and a floating bar for the chosen gifts."},
             {"date": "2026-11-08", "kind": "IMPROVED", "title": "Clearer gift emails", "details": "Each status shows the email buyers get now, three steps (write, approval, buyers get it), a check before emailing buyers, and each buyer's own line saying on its way, sent or couldn't send."},
             {"date": "2026-11-08", "kind": "FIXED", "title": "Staff stay in the staff console", "details": "Staff approve gift emails and added people right in the staff gift list; the staff release page no longer opens the artist's Teaser Studio or pre-sale pages."},
             {"date": "2026-11-07", "kind": "IMPROVED", "title": "Gift email composer", "details": "One-click templates, a preview as each buyer by name, a button, files, a test to yourself, and emailing chosen buyers by status."},
@@ -527,6 +531,16 @@ FEATURES: Final[list[dict]] = [
             "Money > Customers and users lists every account and order with its payment status and a CSV."
         ),
         "updates": [
+            {
+                "date": "2026-11-09",
+                "kind": "IMPROVED",
+                "title": "Artists always wait, staff never do",
+                "details": (
+                    "Whatever an artist's team sends waits for staff, even when that person is also staff. "
+                    "What staff send for an act they are not part of is approved at once. Staff approve "
+                    "picked-buyer gift emails, words and people together, in the staff gift list."
+                ),
+            },
             {
                 "date": "2026-11-07",
                 "kind": "IMPROVED",

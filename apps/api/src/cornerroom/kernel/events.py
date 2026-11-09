@@ -132,6 +132,11 @@ GIFT_MARKED_MISSING = "GiftMarkedMissing"
 GIFT_STATUS_MAIL_SUBMITTED = "GiftStatusMailSubmitted"
 GIFT_STATUS_MAIL_APPROVED = "GiftStatusMailApproved"
 GIFT_STATUS_MAIL_RETURNED = "GiftStatusMailReturned"
+# D-CAMPAIGN-07: a one-off email to buyers the act picked (words and people together).
+GIFT_MAIL_SEND_SUBMITTED = "GiftMailSendSubmitted"
+GIFT_MAIL_SEND_APPROVED = "GiftMailSendApproved"
+GIFT_MAIL_SEND_RETURNED = "GiftMailSendReturned"
+GIFT_MAIL_SEND_SENT = "GiftMailSendSent"
 # D-MAIL-01: artists' emails to buyers (commerce/application/artist_mail.py). Staff approve each
 # email; one ArtistMailQueued per message is what sends it (thank-you, email to buyers or test).
 ARTIST_MAIL_SUBMITTED = "ArtistMailSubmitted"

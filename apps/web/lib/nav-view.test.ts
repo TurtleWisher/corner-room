@@ -132,7 +132,7 @@ describe("studioNavSections", () => {
     expect(studioNavSections([]).map((s) => s.items.map((i) => i.href))).toEqual([
       ["/studio", "/studio/profile", "/studio/team"],
       ["/studio/releases", "/studio/releases/presales"],
-      ["/studio/sales", "/studio/gifts", "/royalties"],
+      ["/studio/sales", "/studio/gifts", "/studio/mailbox", "/royalties"],
     ]);
     // Plain words, buttons only (owner, 2026-10-30), and nothing removed.
     expect(studioNavSections([]).map((s) => s.label)).toEqual(["Your music", "Releases", "Fans and money"]);

@@ -39,6 +39,12 @@ describe("gift campaign words (owner, 2026-10-28)", () => {
     expect(waitingKindLabel({ counts: zero, emails_waiting: 2 })).toBe("Emails waiting");
     expect(waitingKindLabel({ counts: { ...zero, WAITING: 1 }, emails_waiting: 0 })).toBe("People waiting");
     expect(waitingKindLabel({ counts: { ...zero, WAITING: 1 }, emails_waiting: 1 })).toBe("People and emails waiting");
+    // Emails to buyers the artist picked wait too (D-CAMPAIGN-07).
+    expect(emailsLine({ emails_waiting: 0, sends_waiting: 1 })).toBe("1 email to buyers the artist picked waits for approval");
+    expect(emailsLine({ emails_waiting: 1, sends_waiting: 2 })).toBe(
+      "1 gift email written by the artist waits for approval; 2 emails to buyers the artist picked wait for approval",
+    );
+    expect(waitingKindLabel({ counts: zero, emails_waiting: 0, sends_waiting: 1 })).toBe("Emails waiting");
   });
 });
 

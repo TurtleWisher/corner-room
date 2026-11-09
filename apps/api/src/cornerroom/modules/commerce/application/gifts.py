@@ -47,6 +47,7 @@ from cornerroom.kernel.events import (
 )
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.commerce.domain.gifts import (
+    GiftMailSend,
     MAX_PEOPLE_PER_ADD,
     RECIPIENT_STATUSES,
     RECIPIENT_TRANSITIONS,
@@ -111,6 +112,11 @@ class GiftCampaignService:
             raise NotFoundError("Campaign not found")
         role, _org, name = await self._profile_role(ctx, campaign.profile_type, campaign.profile_id)
         return campaign, role, name
+
+    async def act_of(self, campaign_id: UUID) -> UUID | None:
+        """The artist or band a campaign belongs to (D-REVIEW-ARTIST-01 decides who waits by it)."""
+        campaign = await self.session.get(GiftCampaign, campaign_id)
+        return campaign.profile_id if campaign else None
 
     async def _event(self, ctx: AuthContext | None, event_type: str, agg: str, agg_id: UUID, payload: dict[str, Any], org: UUID | None) -> None:
         await enqueue_outbox(
@@ -362,6 +368,8 @@ class GiftCampaignService:
                     | GiftCampaign.id.in_(select(GiftRecipient.campaign_id).where(GiftRecipient.waiting.is_(True)))
                     # The act's own status emails, waiting for staff (D-CAMPAIGN-05).
                     | GiftCampaign.id.in_(select(GiftStatusMail.campaign_id).where(GiftStatusMail.state == "IN_REVIEW"))
+                    # Emails to buyers the act picked, waiting for staff (D-CAMPAIGN-07).
+                    | GiftCampaign.id.in_(select(GiftMailSend.campaign_id).where(GiftMailSend.state == "IN_REVIEW"))
                 )
                 .order_by(GiftCampaign.updated_at)
             )
@@ -627,6 +635,26 @@ class GiftCampaignService:
                     )
                 ).scalar_one()
             ),
+            # Emails to buyers the act picked: approved and ready for the act to send (D-CAMPAIGN-07).
+            "sends_ready": int(
+                (
+                    await self.session.execute(
+                        select(func.count()).select_from(GiftMailSend).where(
+                            GiftMailSend.campaign_id == campaign.id, GiftMailSend.state == "APPROVED"
+                        )
+                    )
+                ).scalar_one()
+            ),
+            # Emails to buyers the act picked, waiting for staff (D-CAMPAIGN-07).
+            "sends_waiting": int(
+                (
+                    await self.session.execute(
+                        select(func.count()).select_from(GiftMailSend).where(
+                            GiftMailSend.campaign_id == campaign.id, GiftMailSend.state == "IN_REVIEW"
+                        )
+                    )
+                ).scalar_one()
+            ),
         }
 
     async def detail(self, ctx: AuthContext, campaign_id: UUID) -> dict[str, Any]:
@@ -719,14 +747,8 @@ class GiftCampaignService:
             ).scalars()
         }
         now = self.clock.now()
+        # D-REVIEW-ARTIST-01: people the act's own team adds always wait for staff; staff's count at once.
         waiting = role != "staff"
-        if waiting and not second_review_on(self.settings):
-            # D-REVIEW-SOLO-01: people added by someone who may approve them don't wait.
-            try:
-                await self._reviewer(ctx, campaign)
-                waiting = False
-            except NotFoundError:
-                pass
         added = skipped = 0
         for p in cleaned:
             key = phone_key(p["phone"])

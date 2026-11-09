@@ -352,6 +352,93 @@ async def mail_dashboard(kind: Kind, profile_id: UUID, ctx: Ctx, svc: Svc, days:
     return await svc.act_report(ctx, kind, profile_id, days)
 
 
+class MailboxWhyOut(BaseModel):
+    """Why this person got this email: its kind and what it was part of (D-MAILBOX-01)."""
+
+    kind: str
+    campaign: str | None = None
+    gift_status: str | None = None
+    picked: bool | None = None
+    send_id: UUID | None = None
+    mail_id: UUID | None = None
+    mail_subject: str | None = None
+    music_gift_id: UUID | None = None
+    gift_title: str | None = None
+    thank_you_id: UUID | None = None
+
+
+class MailboxItemOut(BaseModel):
+    """One email to one person: never their address."""
+
+    id: UUID
+    kind: str
+    subject: str
+    to_name: str | None = None
+    # PENDING (on its way), SENT, SUPPRESSED (they had stopped the act's emails), FAILED.
+    state: str
+    queued_at: datetime
+    sent_at: datetime | None = None
+    clicks: int = 0
+    why: MailboxWhyOut
+
+
+class MailboxOut(BaseModel):
+    items: list[MailboxItemOut]
+    # Pass as `before` for the next, older page; none when this is the last.
+    next_before: datetime | None = None
+    totals: dict[str, int]
+
+
+class MailboxLinkOut(BaseModel):
+    label: str | None = None
+    kind: str | None = None
+
+
+class MailboxMessageOut(BaseModel):
+    id: UUID
+    kind: str
+    subject: str
+    from_name: str
+    to_name: str | None = None
+    # The words as this person got them, with every web address taken out.
+    body: str
+    state: str
+    queued_at: datetime
+    sent_at: datetime | None = None
+    clicks: int = 0
+    links: list[MailboxLinkOut] = Field(default_factory=list)
+    campaign_id: UUID | None = None
+    gift_status: str | None = None
+    mail_id: UUID | None = None
+    music_gift_id: UUID | None = None
+
+
+def _mailbox(svc: Svc) -> Any:
+    from cornerroom.modules.commerce.application.artist_mailbox import ArtistMailboxService
+
+    return ArtistMailboxService(svc.session, svc.settings, svc.clock)
+
+
+@router.get("/studio/profiles/{kind}/{profile_id}/mailbox", response_model=MailboxOut)
+async def mailbox(
+    kind: Kind, profile_id: UUID, ctx: Ctx, svc: Svc,
+    q: str | None = Query(default=None, max_length=100),
+    kinds: list[str] = Query(default_factory=list),
+    states: list[str] = Query(default_factory=list),
+    before: datetime | None = None,
+    limit: int = Query(default=100, ge=1, le=200),
+) -> MailboxOut:
+    """Every email Corner Room sent for the act, newest first: to whom (names only), when, why and
+    whether it went (D-MAILBOX-01). Search matches the subject, the person's name and the gift."""
+    return MailboxOut(**await _mailbox(svc).history(ctx, kind, profile_id, q=q, kinds=kinds, states=states, before=before, limit=limit))
+
+
+@router.get("/studio/mail-messages/{message_id}", response_model=MailboxMessageOut)
+async def mailbox_message(message_id: UUID, ctx: Ctx, svc: Svc) -> MailboxMessageOut:
+    """One sent email, to read again as its person got it (links shown by their labels only)."""
+    return MailboxMessageOut(**await _mailbox(svc).message(ctx, message_id))
+
+
 @router.post("/studio/profiles/{kind}/{profile_id}/mail/files", response_model=FileOut, status_code=201)
 async def add_mail_file(
     kind: Kind, profile_id: UUID, ctx: Ctx, svc: Svc, settings: Annotated[Settings, Depends(settings_dep)],
@@ -426,9 +513,16 @@ async def copy_mail(mail_id: UUID, ctx: Ctx, svc: Svc) -> MailOut:
 @router.post("/studio/mails/{mail_id}/submit", response_model=MailOut)
 async def submit_mail(mail_id: UUID, ctx: Ctx, svc: Svc) -> MailOut:
     """Send for Corner Room's review; it goes out once approved, or at its time. Approved at once
-    when the sender may approve it (D-REVIEW-SOLO-01)."""
+    when staff send it (D-REVIEW-ARTIST-01)."""
+    from cornerroom.modules.commerce.domain.artist_mail import ArtistMail
+
     out = await svc.submit_mail(ctx, mail_id)
-    if await approve_at_once(svc.session, lambda: svc.review(ctx, mail_id, approve=True, note=None), settings=svc.settings):
+    mail = await svc.session.get(ArtistMail, mail_id)
+    act = mail.profile_id if mail else None
+    # D-REVIEW-ARTIST-01: the act's own team waits for staff; staff are approved at once.
+    if await approve_at_once(
+        svc.session, lambda: svc.review(ctx, mail_id, approve=True, note=None), ctx=ctx, act_id=act, settings=svc.settings
+    ):
         out = await svc.mail_detail(ctx, mail_id)
     return MailOut(**out)
 

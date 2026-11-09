@@ -1,0 +1,596 @@
+/*
+ * Studio kit and Mailbox (owner, 2026-11-09, D-MAILBOX-01): one calm, premium language for the
+ * artist's tools. Search fields, filter chips with counts, a floating bar for what's chosen, list
+ * rows that light from the lit side, and the Mailbox's three panes (folders, list, reading).
+ * Artist Studio world (mint, D-THEME-02), cut corners from .cr-cut, glass from the tokens.
+ * Motion is transform and opacity only and stops under reduced motion.
+ */
+
+/* --- search -------------------------------------------------------------------------------- */
+.sk-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.sk-search-input {
+  width: 100%;
+  height: 2.75rem;
+  padding: 0 2.6rem 0 2.6rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--cr-fg);
+  background:
+    linear-gradient(180deg, rgb(211 236 201 / 0.06), rgb(211 236 201 / 0.015)),
+    var(--cr-surface-sunken);
+  border: 1px solid var(--cr-line-strong);
+  transition:
+    border-color 180ms ease,
+    box-shadow 220ms ease,
+    background-color 180ms ease;
+}
+.sk-search-input::placeholder {
+  color: color-mix(in srgb, var(--cr-fg-muted) 80%, transparent);
+}
+.sk-search-input:hover {
+  border-color: var(--cr-fg-muted);
+}
+.sk-search-input:focus-visible {
+  outline: none;
+  border-color: var(--cr-focus);
+  box-shadow:
+    0 0 0 3px rgb(44 187 118 / 0.22),
+    0 10px 30px -18px rgb(44 187 118 / 0.6);
+}
+.sk-search-icon {
+  position: absolute;
+  left: 0.85rem;
+  width: 1rem;
+  height: 1rem;
+  color: var(--cr-fg-muted);
+  pointer-events: none;
+  transition: color 180ms ease;
+}
+.sk-search:focus-within .sk-search-icon {
+  color: var(--cr-highlight);
+}
+.sk-search-end {
+  position: absolute;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.sk-kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  padding: 0 0.3rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--cr-fg-muted);
+  border: 1px solid var(--cr-line);
+  background: var(--cr-surface-raised);
+}
+.sk-search:focus-within .sk-kbd {
+  opacity: 0;
+}
+.sk-clear {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--cr-fg-muted);
+  transition:
+    color 160ms ease,
+    transform 140ms cubic-bezier(0.22, 0.8, 0.16, 1);
+}
+.sk-clear:hover {
+  color: var(--cr-fg);
+}
+.sk-clear:active {
+  transform: scale(0.9);
+}
+
+/* --- filter chips ---------------------------------------------------------------------------- */
+.sk-chips {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0.15rem 0.1rem 0.35rem;
+  -webkit-mask-image: linear-gradient(90deg, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, #000 92%, transparent);
+}
+.sk-chips::-webkit-scrollbar {
+  display: none;
+}
+.sk-chip {
+  --cut: 7px;
+  --cut-fill: rgb(211 236 201 / 0.045);
+  --cut-border: var(--cr-line);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.45rem;
+  height: 2.25rem;
+  padding: 0 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cr-fg-muted);
+  white-space: nowrap;
+  transition:
+    color 160ms ease,
+    transform 160ms cubic-bezier(0.22, 0.8, 0.16, 1);
+}
+.sk-chip:hover {
+  --cut-fill: rgb(211 236 201 / 0.09);
+  --cut-border: var(--cr-line-strong);
+  color: var(--cr-fg);
+  transform: translateY(-1px);
+}
+.sk-chip:active {
+  transform: scale(0.97);
+}
+.sk-chip[aria-pressed="true"] {
+  --cut-fill: linear-gradient(180deg, rgb(44 187 118 / 0.34), rgb(44 187 118 / 0.14));
+  --cut-border: color-mix(in srgb, var(--cr-accent) 75%, white);
+  color: var(--cr-fg);
+}
+.sk-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--cr-fg);
+  background: rgb(211 236 201 / 0.1);
+}
+.sk-chip[aria-pressed="true"] .sk-count {
+  color: var(--cr-on-accent);
+  background: var(--cr-accent);
+}
+.sk-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: currentColor;
+  flex: none;
+}
+
+/* --- glossy primary (the one action that matters on a screen) -------------------------------- */
+.sk-gloss {
+  --cut-fill:
+    linear-gradient(180deg, rgb(255 255 255 / 0.36), rgb(255 255 255 / 0.08) 46%, rgb(255 255 255 / 0) 52%, rgb(7 17 11 / 0.16)),
+    var(--cr-accent);
+  --cut-border: color-mix(in srgb, var(--cr-accent) 70%, white);
+  color: var(--cr-on-accent);
+  filter: drop-shadow(0 8px 18px rgb(44 187 118 / 0.32));
+  transition:
+    transform 140ms cubic-bezier(0.22, 0.8, 0.16, 1),
+    filter 220ms ease;
+}
+.sk-gloss:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: drop-shadow(0 12px 26px rgb(44 187 118 / 0.5));
+}
+.sk-gloss:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* --- floating selection bar ------------------------------------------------------------------ */
+/* Fixed, not sticky: page shells clip overflow, which stops sticky. Pinned over the content side
+   (right), clear of the player bar while one is showing. */
+.sk-bar {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+  z-index: 40;
+  width: min(calc(100vw - 2rem), 46rem);
+  --cut: 12px;
+  --cut-fill: linear-gradient(135deg, rgb(18 37 26 / 0.97), rgb(11 23 16 / 0.98));
+  --cut-border: linear-gradient(135deg, rgb(44 187 118 / 0.7), rgb(211 236 201 / 0.2) 45%, rgb(211 236 201 / 0.12));
+  --cut-blur: blur(18px) saturate(1.4);
+  box-shadow: 0 30px 60px -24px rgb(0 0 0 / 0.85);
+  animation: sk-rise 260ms cubic-bezier(0.22, 0.8, 0.16, 1) both;
+}
+@keyframes sk-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sk-appear {
+  animation: sk-rise 280ms cubic-bezier(0.22, 0.8, 0.16, 1) both;
+}
+
+/* --- list rows ------------------------------------------------------------------------------- */
+.sk-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+}
+.sk-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cr-fg-muted);
+  background: var(--cr-surface);
+  border-bottom: 1px solid var(--cr-line);
+}
+.sk-table tbody td {
+  padding: 0.75rem;
+  vertical-align: top;
+  border-bottom: 1px solid color-mix(in srgb, var(--cr-line) 70%, transparent);
+  transition: background-color 160ms ease;
+}
+.sk-table tbody tr {
+  cursor: default;
+}
+.sk-table tbody tr:hover td {
+  background: rgb(211 236 201 / 0.035);
+}
+.sk-table tbody tr[data-chosen="true"] td {
+  background: rgb(44 187 118 / 0.09);
+}
+.sk-table tbody tr[data-chosen="true"] td:first-child {
+  box-shadow: inset 3px 0 0 var(--cr-accent);
+}
+
+/* A checkbox that feels like a control, not a form. */
+.sk-check {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+  border: 1.5px solid var(--cr-line-strong);
+  background: var(--cr-surface-sunken);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    transform 140ms cubic-bezier(0.22, 0.8, 0.16, 1);
+}
+.sk-check:hover {
+  border-color: var(--cr-highlight);
+}
+.sk-check:active {
+  transform: scale(0.88);
+}
+.sk-check:checked,
+.sk-check:indeterminate {
+  border-color: var(--cr-accent);
+  background: var(--cr-accent);
+}
+.sk-check:checked::after {
+  content: "";
+  width: 0.35rem;
+  height: 0.62rem;
+  margin-top: -0.12rem;
+  border: solid var(--cr-on-accent);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.sk-check:indeterminate::after {
+  content: "";
+  width: 0.55rem;
+  height: 2px;
+  background: var(--cr-on-accent);
+}
+.sk-check:focus-visible {
+  outline: 2px solid var(--cr-focus);
+  outline-offset: 2px;
+}
+
+/* Status mark: a coloured dot and the word, never colour alone. */
+.sk-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  color: var(--cr-fg);
+}
+.sk-status[data-tone="positive"] .sk-dot { color: var(--cr-success); }
+.sk-status[data-tone="info"] .sk-dot { color: var(--cr-info); }
+.sk-status[data-tone="warning"] .sk-dot { color: var(--cr-warning); }
+.sk-status[data-tone="negative"] .sk-dot { color: var(--cr-danger); }
+.sk-status[data-tone="neutral"] .sk-dot { color: var(--cr-fg-muted); }
+.sk-status[data-tone="accent"] .sk-dot { color: var(--cr-highlight); }
+
+/* Section header inside a page: a small label above a big plain title. */
+.sk-kicker {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cr-highlight);
+}
+
+/* The rule card that says how something works, in two lanes. */
+.sk-lanes {
+  display: grid;
+  gap: 0.75rem;
+}
+@media (min-width: 768px) {
+  .sk-lanes {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.sk-lane {
+  --cut: 12px;
+  --cut-fill: linear-gradient(160deg, rgb(211 236 201 / 0.06), rgb(211 236 201 / 0.015));
+  --cut-border: var(--cr-line);
+  padding: 1rem 1.1rem;
+  transition: transform 200ms cubic-bezier(0.22, 0.8, 0.16, 1);
+}
+.sk-lane:hover {
+  --cut-border: var(--cr-glass-edge-hover);
+  transform: translateY(-2px);
+}
+.sk-lane-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--cr-on-accent);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.3), rgb(255 255 255 / 0) 55%), var(--cr-accent);
+}
+
+/* --- Mailbox ---------------------------------------------------------------------------------- */
+.mb-shell {
+  display: grid;
+  gap: 1rem;
+}
+@media (min-width: 1024px) {
+  .mb-shell {
+    grid-template-columns: 14.5rem minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.mb-rail {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mb-rail::-webkit-scrollbar {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .mb-rail {
+    position: sticky;
+    top: 5.5rem;
+    flex-direction: column;
+    overflow: visible;
+  }
+}
+.mb-folder {
+  --cut: 9px;
+  --cut-fill: transparent;
+  --cut-border: transparent;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 2.75rem;
+  padding: 0 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--cr-fg-muted);
+  text-align: left;
+  transition:
+    color 160ms ease,
+    transform 160ms cubic-bezier(0.22, 0.8, 0.16, 1);
+}
+.mb-folder svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: none;
+}
+.mb-folder:hover {
+  --cut-fill: rgb(211 236 201 / 0.06);
+  color: var(--cr-fg);
+}
+@media (min-width: 1024px) {
+  .mb-folder:hover {
+    transform: translateX(2px);
+  }
+}
+.mb-folder[aria-current="page"] {
+  --cut-fill: linear-gradient(90deg, rgb(44 187 118 / 0.26), rgb(44 187 118 / 0.06));
+  --cut-border: color-mix(in srgb, var(--cr-accent) 55%, transparent);
+  color: var(--cr-fg);
+}
+.mb-folder[aria-current="page"] svg {
+  color: var(--cr-highlight);
+}
+.mb-folder .sk-count {
+  margin-left: auto;
+}
+.mb-compose {
+  margin-bottom: 0.5rem;
+}
+
+.mb-panes {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+@media (min-width: 1280px) {
+  .mb-panes[data-reading="true"] {
+    grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.mb-list {
+  min-width: 0;
+}
+.mb-day {
+  padding: 1rem 0.75rem 0.4rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cr-fg-muted);
+  border-bottom: 1px solid color-mix(in srgb, var(--cr-line) 60%, transparent);
+}
+.mb-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+  gap: 0.15rem 0.8rem;
+  align-items: start;
+  width: 100%;
+  padding: 0.8rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid color-mix(in srgb, var(--cr-line) 60%, transparent);
+  transition:
+    background-color 160ms ease,
+    transform 160ms cubic-bezier(0.22, 0.8, 0.16, 1);
+}
+.mb-row:hover {
+  background: rgb(211 236 201 / 0.04);
+}
+.mb-row:active {
+  transform: scale(0.995);
+}
+.mb-row[aria-current="true"] {
+  background: linear-gradient(90deg, rgb(44 187 118 / 0.16), rgb(44 187 118 / 0.03));
+  box-shadow: inset 3px 0 0 var(--cr-accent);
+}
+.mb-avatar {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--cr-fg);
+  background:
+    radial-gradient(120% 120% at 20% 10%, rgb(211 236 201 / 0.28), transparent 60%),
+    linear-gradient(135deg, rgb(44 187 118 / 0.45), rgb(50 96 0 / 0.55));
+  box-shadow: inset 0 0 0 1px rgb(211 236 201 / 0.18);
+}
+.mb-avatar[data-kind="TEST"] {
+  background: var(--cr-surface-raised);
+}
+.mb-name {
+  overflow: hidden;
+  font-weight: 700;
+  color: var(--cr-fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mb-subject {
+  overflow: hidden;
+  font-size: 0.875rem;
+  color: var(--cr-fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mb-why {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  color: var(--cr-fg-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mb-time {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--cr-fg-muted);
+  white-space: nowrap;
+  text-align: right;
+}
+.mb-reading {
+  --cut: 14px;
+  min-width: 0;
+  padding: 1.25rem;
+  animation: sk-rise 240ms cubic-bezier(0.22, 0.8, 0.16, 1) both;
+}
+@media (min-width: 1280px) {
+  .mb-reading {
+    position: sticky;
+    top: 5.5rem;
+    max-height: calc(100vh - 7rem);
+    overflow: auto;
+  }
+}
+.mb-letter {
+  white-space: pre-wrap;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--cr-fg);
+}
+.mb-meta {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.35rem 1rem;
+  font-size: 0.8125rem;
+}
+.mb-meta dt {
+  color: var(--cr-fg-muted);
+}
+.mb-meta dd {
+  color: var(--cr-fg);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Request cards for picked-buyer emails. */
+.gs-card {
+  --cut: 12px;
+  padding: 1rem 1.1rem;
+  transition: transform 200ms cubic-bezier(0.22, 0.8, 0.16, 1);
+}
+.gs-card:hover {
+  transform: translateY(-1px);
+}
+.gs-card[data-state="APPROVED"] {
+  --cut-border: linear-gradient(135deg, rgb(44 187 118 / 0.85), rgb(211 236 201 / 0.2) 50%, rgb(211 236 201 / 0.1));
+}
+.gs-card[data-state="RETURNED"] {
+  --cut-border: linear-gradient(135deg, rgb(245 165 36 / 0.7), rgb(211 236 201 / 0.12) 50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-bar,
+  .sk-appear,
+  .mb-reading {
+    animation: none;
+  }
+  .sk-chip,
+  .sk-lane,
+  .mb-folder,
+  .mb-row,
+  .gs-card,
+  .sk-gloss,
+  .sk-check,
+  .sk-clear {
+    transition: none;
+    transform: none !important;
+  }
+}
+
+/* Above the player bar while a song is loaded (it docks at the bottom of Studio pages). */
+body:has(.cr-player-dock) .sk-bar {
+  bottom: calc(6.5rem + env(safe-area-inset-bottom));
+}

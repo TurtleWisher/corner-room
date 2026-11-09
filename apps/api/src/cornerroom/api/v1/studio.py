@@ -20,6 +20,12 @@ from cornerroom.infra.review_policy import approve_at_once
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.music.application.studio import StudioService
 
+
+def _act(release: Any) -> UUID | None:
+    """The act a release belongs to (a band's id is also its artist row's id, D-ARTIST-UNIFY-01)."""
+    return release.primary_artist_id or release.primary_band_id
+
+
 router = APIRouter(tags=["studio"])
 
 
@@ -464,7 +470,10 @@ async def save_lyrics(track_id: UUID, body: LyricsIn, ctx: Ctx, svc: StudioDep) 
     # Lyrics that wait for staff (approved or released songs) are approved at once for staff.
     track = await svc.music.get_track_row(track_id)
     if track.lyrics_pending_by is not None:
-        await approve_at_once(svc.session, lambda: lyrics.review(ctx, track_id, approve=True, note=None), settings=svc.settings)
+        _t, release, _role = await svc._track(ctx, track_id)
+        await approve_at_once(
+            svc.session, lambda: lyrics.review(ctx, track_id, approve=True, note=None), ctx=ctx, act_id=_act(release), settings=svc.settings
+        )
     return await _studio_track(svc, ctx, track_id)
 
 
@@ -501,8 +510,10 @@ async def submit(release_id: UUID, body: SubmitIn, ctx: Ctx, svc: StudioDep) -> 
         await review.act(ctx, release_id, action="start_review")
         await review.act(ctx, release_id, action="approve")
 
-    # D-REVIEW-SOLO-01: approved at once when the sender may approve it (review_policy.py).
-    await approve_at_once(svc.session, review_and_approve, settings=svc.settings)
+    # D-REVIEW-ARTIST-01: approved at once when staff send it; the act's own team waits.
+    await approve_at_once(
+        svc.session, review_and_approve, ctx=ctx, act_id=_act(await svc.music.get_release_row(release_id)), settings=svc.settings
+    )
     return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
 
 
@@ -581,7 +592,8 @@ async def request_presale(release_id: UUID, body: PresaleRequestIn, ctx: Ctx, sv
 
     await svc.request_presale(ctx, release_id, body.release_at)
     await approve_at_once(
-        svc.session, lambda: ReviewService(svc.session, svc.settings).presale_decision(ctx, release_id, decision="approve"), settings=svc.settings
+        svc.session, lambda: ReviewService(svc.session, svc.settings).presale_decision(ctx, release_id, decision="approve"),
+        ctx=ctx, act_id=_act(await svc.music.get_release_row(release_id)), settings=svc.settings,
     )
     return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
 
@@ -604,12 +616,13 @@ async def submit_presale_email(release_id: UUID, ctx: Ctx, svc: StudioDep) -> Re
     from cornerroom.modules.commerce.application.artist_mail import ArtistMailService
 
     await svc.submit_presale_email(ctx, release_id)
-    mail = await svc._presale_mail(await svc.music.get_release_row(release_id))
+    release = await svc.music.get_release_row(release_id)
+    mail = await svc._presale_mail(release)
     if mail is not None:
         await approve_at_once(
             svc.session,
             lambda: ArtistMailService(svc.session, svc.settings, svc.clock).review(ctx, mail.id, approve=True, note=None),
-            settings=svc.settings,
+            ctx=ctx, act_id=_act(release), settings=svc.settings,
         )
     return ReleaseDetailOut(**await svc.release_detail(ctx, release_id))
 
@@ -1013,7 +1026,7 @@ async def submit_changes(release_id: UUID, ctx: Ctx, svc: StudioDep) -> ChangeRe
     async def approve() -> None:
         decided.update(await changes.review(ctx, release_id, approve=True, note=None))
 
-    if await approve_at_once(svc.session, approve, settings=svc.settings):
+    if await approve_at_once(svc.session, approve, ctx=ctx, act_id=_act(await svc.music.get_release_row(release_id)), settings=svc.settings):
         out = decided
     return ChangeRequestOut(**out)
 

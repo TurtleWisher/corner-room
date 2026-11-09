@@ -6,7 +6,8 @@ import Link from "next/link";
 const TABS = [
   { key: "campaigns", href: "/studio/gifts", label: "Gift campaigns" },
   { key: "music", href: "/studio/gifts/music", label: "Music gifts" },
-  { key: "emails", href: "/studio/gifts/emails", label: "Emails" },
+  // The Mailbox holds every email now (owner, 2026-11-09, D-MAILBOX-01).
+  { key: "emails", href: "/studio/mailbox", label: "Emails" },
 ] as const;
 
 export function GiftTabs({ current }: { current: (typeof TABS)[number]["key"] }) {

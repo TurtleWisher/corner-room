@@ -137,6 +137,15 @@ class TeaserService:
         track, release, role = await self._track(ctx, teaser.track_id)
         return teaser, track, release, role
 
+    async def act_of(self, teaser_id: UUID) -> UUID | None:
+        """The act whose song this teaser is (D-REVIEW-ARTIST-01 decides who waits by it)."""
+        teaser = await self.session.get(Teaser, teaser_id)
+        if teaser is None:
+            return None
+        link = (await self.session.execute(select(ReleaseTrack).where(ReleaseTrack.track_id == teaser.track_id))).scalars().first()
+        release = await self.session.get(Release, link.release_id) if link else None
+        return (release.primary_artist_id or release.primary_band_id) if release else None
+
     async def _is_reviewer(self, ctx: AuthContext, track: Track) -> bool:
         if track.primary_org_id is None:
             return False
