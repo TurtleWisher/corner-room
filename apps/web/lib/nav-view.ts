@@ -78,6 +78,8 @@ export function studioNavSections(profiles: { kind: string; id: string; display_
       items: [
         { href: "/studio/sales", label: "Sales and buyers" },
         { href: "/studio/gifts", label: "Gifts" },
+        // Owner, 2026-11-09 (D-MAILBOX-01, URL-12): every email to fans in one place.
+        { href: "/studio/mailbox", label: "Mailbox" },
         { href: "/royalties", label: "Royalties" },
       ],
     },

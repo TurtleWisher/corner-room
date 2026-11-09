@@ -198,6 +198,8 @@ class ArtistMailMessage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # D-CAMPAIGN-06: a gift status email (kind GIFT_UPDATE): whose gift, and which status.
     gift_recipient_id: Mapped[UUID | None] = mapped_column(nullable=True)
     gift_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # D-CAMPAIGN-07: the one-off email to picked buyers this message belongs to.
+    gift_send_id: Mapped[UUID | None] = mapped_column(nullable=True)
     last_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
 

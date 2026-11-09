@@ -216,3 +216,44 @@ class GiftStatusMail(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     approved_by: Mapped[UUID | None] = mapped_column(nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# What a one-off email to picked buyers is about (D-CAMPAIGN-07): a status, or any other gift news.
+SEND_PURPOSES = ("DISPATCHED", "RETURNED", "MISSING", "OTHER")
+SEND_STATES = ("IN_REVIEW", "RETURNED", "APPROVED", "SENT")
+
+
+class GiftMailSend(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """One email to buyers the act picked by hand, about one gift campaign (owner, 2026-11-09,
+    D-CAMPAIGN-07). The words and the people go to staff together as one request; nothing reaches a
+    buyer until staff approve it and then someone presses Send. Staff's own requests are approved
+    and sent at once. For a status purpose, only buyers whose gift is still in that status get it."""
+
+    __tablename__ = "gift_mail_sends"
+    __table_args__ = (
+        CheckConstraint("purpose IN ('DISPATCHED','RETURNED','MISSING','OTHER')", name="purpose"),
+        CheckConstraint("state IN ('IN_REVIEW','RETURNED','APPROVED','SENT')", name="state"),
+        Index("ix_gift_mail_sends_campaign", "campaign_id"),
+        Index("ix_gift_mail_sends_state", "state"),
+        {"schema": "commerce"},
+    )
+
+    campaign_id: Mapped[UUID] = mapped_column(ForeignKey("commerce.gift_campaigns.id", ondelete="CASCADE"), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    subject: Mapped[str] = mapped_column(String(200), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    button_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    button_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    file_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb"))
+    recipient_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb"))
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="IN_REVIEW", server_default="IN_REVIEW")
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    updated_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    approved_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

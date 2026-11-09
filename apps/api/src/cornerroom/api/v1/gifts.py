@@ -93,6 +93,9 @@ class CampaignOut(BaseModel):
     counts: dict[str, int]
     # The act's own status emails waiting for staff (D-CAMPAIGN-05).
     emails_waiting: int = 0
+    # Emails to buyers the act picked, waiting for staff, and approved ones ready to send (D-CAMPAIGN-07).
+    sends_waiting: int = 0
+    sends_ready: int = 0
 
 
 class RecipientOut(BaseModel):
@@ -200,8 +203,11 @@ async def campaign_detail(campaign_id: UUID, ctx: Ctx, svc: Svc) -> CampaignDeta
 async def change_campaign(campaign_id: UUID, body: CampaignIn, ctx: Ctx, svc: Svc) -> CampaignDetailOut:
     """A draft changes at once; a live or paused campaign's change waits for staff."""
     out = await svc.update(ctx, campaign_id, _data(body))
-    # A live campaign's change waits for staff; approved at once for staff (D-REVIEW-SOLO-01).
-    if await approve_at_once(svc.session, lambda: svc.review(ctx, campaign_id, approve=True, note=None), settings=svc.settings):
+    # A live campaign's change waits for staff; approved at once for staff (D-REVIEW-ARTIST-01).
+    if await approve_at_once(
+        svc.session, lambda: svc.review(ctx, campaign_id, approve=True, note=None),
+        ctx=ctx, act_id=await svc.act_of(campaign_id), settings=svc.settings,
+    ):
         out = await svc.detail(ctx, campaign_id)
     return CampaignDetailOut(**out)
 
@@ -209,7 +215,10 @@ async def change_campaign(campaign_id: UUID, body: CampaignIn, ctx: Ctx, svc: Sv
 @router.post("/studio/gift-campaigns/{campaign_id}/submit", response_model=CampaignDetailOut)
 async def submit_campaign(campaign_id: UUID, ctx: Ctx, svc: Svc) -> CampaignDetailOut:
     out = await svc.submit(ctx, campaign_id)
-    if await approve_at_once(svc.session, lambda: svc.review(ctx, campaign_id, approve=True, note=None), settings=svc.settings):
+    if await approve_at_once(
+        svc.session, lambda: svc.review(ctx, campaign_id, approve=True, note=None),
+        ctx=ctx, act_id=await svc.act_of(campaign_id), settings=svc.settings,
+    ):
         out = await svc.detail(ctx, campaign_id)
     return CampaignDetailOut(**out)
 
@@ -315,8 +324,33 @@ class StatusMailTestIn(StatusMailIn):
     recipient_id: UUID | None = None
 
 
-class StatusMailSendIn(BaseModel):
+class GiftMailSendIn(StatusMailIn):
+    """An email to buyers the act picked (D-CAMPAIGN-07): what it is about, the words and the people."""
+
+    purpose: Literal["DISPATCHED", "RETURNED", "MISSING", "OTHER"]
     recipient_ids: list[UUID] = Field(min_length=1, max_length=2000)
+
+
+class GiftMailSendOut(BaseModel):
+    """One email to picked buyers: waiting for staff (IN_REVIEW), sent back (RETURNED, with a note),
+    approved and ready to send (APPROVED) or gone out (SENT, with how many got it)."""
+
+    id: UUID
+    purpose: str
+    subject: str
+    body: str
+    button_label: str | None = None
+    button_url: str | None = None
+    file_ids: list[str] = Field(default_factory=list)
+    recipient_ids: list[str] = Field(default_factory=list)
+    state: str
+    review_note: str | None = None
+    submitted_at: datetime | None = None
+    approved_at: datetime | None = None
+    sent_at: datetime | None = None
+    sent_count: int = 0
+    skipped_count: int = 0
+    can_review: bool = False
 
 
 class StatusMailOut(BaseModel):
@@ -367,6 +401,9 @@ class StatusMailSentOut(BaseModel):
     state: str
     queued_at: datetime
     sent_at: datetime | None = None
+    # The picked-buyers email it was part of (D-CAMPAIGN-07); none for the automatic ones.
+    send_id: UUID | None = None
+    subject: str | None = None
 
 
 class StatusMailsOut(BaseModel):
@@ -379,9 +416,11 @@ class StatusMailsOut(BaseModel):
     items: list[StatusMailOut]
     people: list[StatusMailPersonOut] = Field(default_factory=list)
     history: list[StatusMailSentOut] = Field(default_factory=list)
-    # The viewer's own words are approved the moment they send them (D-REVIEW-SOLO-01).
+    sends: list[GiftMailSendOut] = Field(default_factory=list)
+    # The viewer's own words and emails are approved the moment they send them: staff outside the
+    # act's team (D-REVIEW-ARTIST-01). The act's own team always waits for staff.
     approves_at_once: bool = False
-    # After sending to chosen buyers: how many were emailed and how many weren't in that status.
+    # After sending a picked-buyers email: how many were emailed and how many weren't in that status.
     sent: int | None = None
     skipped: int | None = None
 
@@ -402,10 +441,41 @@ async def save_status_email(campaign_id: UUID, status: MailStatus, body: StatusM
     return StatusMailsOut(**await svc.save(ctx, campaign_id, status, body.model_dump()))
 
 
-@router.post("/studio/gift-campaigns/{campaign_id}/status-emails/{status}/send", response_model=StatusMailsOut)
-async def send_status_email(campaign_id: UUID, status: MailStatus, body: StatusMailSendIn, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
-    """Email chosen buyers whose gift is in this status now, with the version that sends anyway."""
-    return StatusMailsOut(**await svc.send_to(ctx, campaign_id, status, body.recipient_ids))
+@router.post("/studio/gift-campaigns/{campaign_id}/mail-sends", response_model=StatusMailsOut, status_code=201)
+async def create_mail_send(campaign_id: UUID, body: GiftMailSendIn, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
+    """An email to buyers the act picked: the words and the people go to staff together
+    (D-CAMPAIGN-07). Staff's own (outside the act's team) are approved and sent at once."""
+    send_id = await svc.create_send(ctx, campaign_id, body.model_dump())
+    if await approve_at_once(
+        svc.session, lambda: svc.review_send(ctx, campaign_id, send_id, approve=True, note=None),
+        ctx=ctx, act_id=await svc.gifts.act_of(campaign_id), settings=svc.settings,
+    ):
+        return StatusMailsOut(**await svc.deliver_send(ctx, campaign_id, send_id))
+    return StatusMailsOut(**await svc.view(ctx, campaign_id))
+
+
+@router.put("/studio/gift-campaigns/{campaign_id}/mail-sends/{send_id}", response_model=StatusMailsOut)
+async def change_mail_send(campaign_id: UUID, send_id: UUID, body: GiftMailSendIn, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
+    """Change a waiting or sent-back email; it goes to staff again."""
+    return StatusMailsOut(**await svc.update_send(ctx, campaign_id, send_id, body.model_dump()))
+
+
+@router.delete("/studio/gift-campaigns/{campaign_id}/mail-sends/{send_id}", response_model=StatusMailsOut)
+async def withdraw_mail_send(campaign_id: UUID, send_id: UUID, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
+    """Take back an email that hasn't gone out."""
+    return StatusMailsOut(**await svc.withdraw_send(ctx, campaign_id, send_id))
+
+
+@router.post("/studio/gift-campaigns/{campaign_id}/mail-sends/{send_id}/review", response_model=StatusMailsOut)
+async def review_mail_send(campaign_id: UUID, send_id: UUID, body: ReviewIn, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
+    """Staff approve the words and the people together, or send them back with a note."""
+    return StatusMailsOut(**await svc.review_send(ctx, campaign_id, send_id, approve=body.action == "approve", note=body.note))
+
+
+@router.post("/studio/gift-campaigns/{campaign_id}/mail-sends/{send_id}/send", response_model=StatusMailsOut)
+async def deliver_mail_send(campaign_id: UUID, send_id: UUID, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
+    """Send an approved email now."""
+    return StatusMailsOut(**await svc.deliver_send(ctx, campaign_id, send_id))
 
 
 @router.post("/studio/gift-campaigns/{campaign_id}/status-emails/{status}/test", response_model=StatusMailTestOut)
@@ -417,9 +487,10 @@ async def test_status_email(campaign_id: UUID, status: MailStatus, body: StatusM
 @router.post("/studio/gift-campaigns/{campaign_id}/status-emails/{status}/submit", response_model=StatusMailsOut)
 async def submit_status_email(campaign_id: UUID, status: MailStatus, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
     out = await svc.submit(ctx, campaign_id, status)
-    # Approved at once when the sender may approve it (D-REVIEW-SOLO-01).
+    # Approved at once when staff send it; the act's own team waits (D-REVIEW-ARTIST-01).
     if await approve_at_once(
-        svc.session, lambda: svc.review(ctx, campaign_id, status, approve=True, note=None), settings=svc.settings
+        svc.session, lambda: svc.review(ctx, campaign_id, status, approve=True, note=None),
+        ctx=ctx, act_id=await svc.gifts.act_of(campaign_id), settings=svc.settings,
     ):
         out = await svc.view(ctx, campaign_id)
     return StatusMailsOut(**out)

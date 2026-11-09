@@ -1,78 +1,46 @@
 "use client";
 
-/* Gift status emails for one gift campaign (owner, 2026-11-07, D-CAMPAIGN-05 and D-CAMPAIGN-06;
- * made plain 2026-11-08). One tab per status that emails the buyer (Dispatched, Returned, Missing).
- * Each tab reads top to bottom as the workflow really is:
- *   - what buyers get now (the email in use) and whether newer words are waiting;
- *   - three steps: write, approval, buyers get it;
- *   - Part 1, write the email (templates, preview as a real buyer, button, files): none of its
- *     buttons emails a buyer;
- *   - Part 2, email buyers now: the email in use, to the buyers picked, after a confirm, with each
- *     buyer's own line saying On its way, Sent or Couldn't send.
- * Results show in one loud banner. Every state comes from the API; the server writes and sends. */
+/* The automatic gift emails of one campaign (owner, 2026-11-07, D-CAMPAIGN-05 and D-CAMPAIGN-06;
+ * made plain 2026-11-08; 2026-11-09, D-CAMPAIGN-07). One editor per status that emails the buyer by
+ * itself (Dispatched, Returned, Missing): what buyers get now, three steps (write, approval, buyers
+ * get it), then the words (templates, preview as a real buyer, button, files). None of its buttons
+ * emails a buyer: they are emailed when their gift moves to that status. Emails to buyers picked by
+ * hand are written in GiftSendComposer and go to Corner Room as one request with their people.
+ * Every state comes from the API; the server writes and sends. */
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Check,
-  CircleAlert,
-  CircleCheck,
-  Hourglass,
-  Info,
-  MailCheck,
-  MousePointerClick,
-  RotateCcw,
-  Send,
-  SendHorizontal,
-  Sparkles,
-  Undo2,
-  Users,
-  X,
-} from "lucide-react";
+import { Check, CircleAlert, CircleCheck, Hourglass, Info, MousePointerClick, RotateCcw, Send, SendHorizontal, Sparkles, Undo2, X } from "lucide-react";
 
-import { Segmented } from "@/components/artist-mail/audience-builder";
 import { FilesPicker } from "@/components/artist-mail/files-picker";
 import { MailPreview } from "@/components/artist-mail/mail-preview";
 import { RichEditor } from "@/components/artist-mail/rich-editor";
-import { Badge, Button, Card, ErrorState, Input, Skeleton } from "@/components/ds";
+import { Badge, Button, Card, Input } from "@/components/ds";
 import { Textarea } from "@/components/ds/input";
-import { RetryButton } from "@/components/shell/staff-panel";
-import { loadErrorMessage, useAsync } from "@/components/use-async";
+import { useAsync } from "@/components/use-async";
 import { fetchMailOverview, type MailFile } from "@/features/artist-mail/api";
 import {
-  fetchStatusMails,
   resetStatusMail,
   reviewStatusMail,
   saveStatusMail,
-  sendStatusMail,
   submitStatusMail,
   testStatusMail,
   type StatusMail,
   type StatusMailInput,
   type StatusMailPerson,
   type StatusMails,
-  type StatusMailSent,
-  type StatusMailStatus,
 } from "@/features/gifts/api";
 import { ALL_FILL_KEYS, GIFT_UPDATE_FILL_INS, unfilledMarks, unknownFillIns } from "@/lib/artist-mail-view";
 import { friendlyError } from "@/lib/error-copy";
-import { formatDateTime } from "@/lib/format/date";
 import { giftTemplates } from "@/lib/gift-status-mail-templates";
 import {
-  DELIVERY_WORD,
   STATUS_MAIL_TAB,
-  STATUS_MAIL_TITLE,
-  anyOnItsWay,
   buttonProblem,
   changed,
   inUseLabel,
-  lastEmail,
-  namesLine,
   notInUseLine,
   peopleIn,
   previewValues,
   sendingVersion,
-  sentNowLine,
   startingVersion,
   subjectForAll,
   submitDoneLine,
@@ -81,75 +49,7 @@ import {
   type StepTone,
 } from "@/lib/gift-status-mail-view";
 
-const STATUSES: StatusMailStatus[] = ["DISPATCHED", "RETURNED", "MISSING"];
-/** While an email is on its way, ask again this often, this many times. */
-const POLL_MS = 4000;
-const POLL_TIMES = 15;
-
 export type Notice = { tone: "success" | "info" | "problem"; text: string };
-
-export function StatusEmails({ campaignId }: { campaignId: string }) {
-  const data = useAsync(() => fetchStatusMails(campaignId), [campaignId]);
-  const [override, setOverride] = useState<StatusMails | null>(null);
-  const [notice, setNotice] = useState<Notice | null>(null);
-  const [tab, setTab] = useState<StatusMailStatus>("DISPATCHED");
-  const polls = useRef(0);
-  const mails = override && override.campaign.id === campaignId ? override : data.status === "ok" ? data.data : null;
-
-  // Emails just queued show On its way; ask again until they are Sent (or a minute has passed).
-  useEffect(() => {
-    if (!mails || !anyOnItsWay(mails.history) || polls.current >= POLL_TIMES) return;
-    const timer = window.setTimeout(() => {
-      polls.current += 1;
-      fetchStatusMails(campaignId)
-        .then((next) => setOverride(next))
-        .catch(() => undefined);
-    }, POLL_MS);
-    return () => window.clearTimeout(timer);
-  }, [mails, campaignId]);
-
-  if (data.status === "loading" && !mails) return <Skeleton className="h-64 w-full" />;
-  if (data.status === "error" && !mails) {
-    return <ErrorState title="Emails unavailable" message={loadErrorMessage(data.error, "these emails")} action={<RetryButton onClick={data.reload} />} />;
-  }
-  if (!mails) return null;
-  const item = mails.items.find((i) => i.status === tab) ?? mails.items[0];
-  return (
-    <div className="grid gap-5">
-      <p className="text-sm text-fg-muted">
-        Buyers get these from &quot;{mails.artist} via Corner Room&quot;, greeted by their own name, when their gift moves. They always send, even to
-        buyers who stopped your other emails, because they&apos;re about a gift the buyer is owed.
-      </p>
-      <Segmented<StatusMailStatus>
-        label="Gift status"
-        value={tab}
-        options={Object.fromEntries(
-          STATUSES.map((s) => {
-            const it = mails.items.find((i) => i.status === s);
-            return [s, `${STATUS_MAIL_TAB[s]}${it?.state === "IN_REVIEW" ? " · waiting" : it?.state === "RETURNED" ? " · sent back" : it?.live ? " · yours" : ""}`];
-          }),
-        ) as Record<StatusMailStatus, string>}
-        onChange={(s) => {
-          setTab(s);
-          setNotice(null);
-        }}
-      />
-      <Banner notice={notice} onClose={() => setNotice(null)} />
-      <StatusMailComposer
-        key={`${item.status}-${item.state}-${item.subject}-${item.live_subject}`}
-        campaignId={campaignId}
-        mails={mails}
-        item={item}
-        onChanged={(next, n) => {
-          polls.current = 0;
-          setOverride(next);
-          setNotice(n ? { ...n, text: `${STATUS_MAIL_TITLE[item.status]}: ${n.text}` } : null);
-        }}
-        onNotice={setNotice}
-      />
-    </div>
-  );
-}
 
 /** One loud line for whatever just happened, moved into view so it can't be missed. */
 export function Banner({ notice, onClose }: { notice: Notice | null; onClose: () => void }) {
@@ -191,7 +91,7 @@ function StepMark({ tone, n }: { tone: StepTone; n: number }) {
 
 const TONE_WORD: Record<StepTone, string> = { done: "Done", now: "To do", waiting: "Waiting", problem: "Needs a change", skip: "" };
 
-function StatusMailComposer({
+export function AutomaticEmailEditor({
   campaignId,
   mails,
   item,
@@ -291,12 +191,9 @@ function StatusMailComposer({
       {/* Part 1: write. Nothing here emails a buyer. */}
       <section className="gm-part" aria-labelledby={`write-${item.status}`}>
         <h4 id={`write-${item.status}`} className="gm-part-title">
-          <span className="gm-part-num" aria-hidden="true">
-            1
-          </span>
           Write the email
         </h4>
-        <p className="mt-1 text-sm text-fg-muted">Writing, saving and approving never emails a buyer. Buyers are emailed only by step 2 or when a gift moves.</p>
+        <p className="mt-1 text-sm text-fg-muted">Writing, saving and approving never emails a buyer. They get it when their gift is marked {status}.</p>
 
         {editing ? (
           <fieldset className="mt-4">
@@ -331,8 +228,8 @@ function StatusMailComposer({
         ) : (
           <p className="mt-4 flex items-start gap-2 text-sm text-fg">
             <Hourglass aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
-            Your changes are waiting for Corner Room, so they can&apos;t be edited now. They&apos;re in the preview. Buyers still get the email in use
-            above, and you can still email them in step 2.
+            Your changes are waiting for Corner Room, so they can&apos;t be edited now. They&apos;re in the preview. Until they&apos;re approved,
+            buyers get the email in use above.
           </p>
         )}
 
@@ -497,7 +394,6 @@ function StatusMailComposer({
         {item.can_review ? <StaffReview campaignId={campaignId} item={item} note={note} setNote={setNote} busy={busy} run={run} /> : null}
       </section>
 
-      <SendToChosen campaignId={campaignId} mails={mails} item={item} onChanged={onChanged} onNotice={onNotice} />
     </Card>
   );
 }
@@ -547,206 +443,5 @@ function StaffReview({
         </Button>
       </div>
     </div>
-  );
-}
-
-function Delivery({ last }: { last: StatusMailSent | null }) {
-  if (!last) return <Badge tone="neutral">Not emailed yet</Badge>;
-  const when = formatDateTime(last.sent_at ?? last.queued_at);
-  const tone = last.state === "SENT" ? "positive" : last.state === "PENDING" ? "info" : "negative";
-  return (
-    <Badge tone={tone}>
-      {DELIVERY_WORD[last.state]}
-      {when ? ` · ${when}` : ""}
-    </Badge>
-  );
-}
-
-/** Part 2: the email in use, to chosen buyers whose gift is in this status, now. */
-function SendToChosen({
-  campaignId,
-  mails,
-  item,
-  onChanged,
-  onNotice,
-}: {
-  campaignId: string;
-  mails: StatusMails;
-  item: StatusMail;
-  onChanged: (next: StatusMails, notice: Notice | null) => void;
-  onNotice: (notice: Notice | null) => void;
-}) {
-  const people = peopleIn(mails.people, item.status);
-  const history = mails.history ?? [];
-  const [chosen, setChosen] = useState<Set<string>>(new Set());
-  const [confirming, setConfirming] = useState(false);
-  const [showEmail, setShowEmail] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const version = sendingVersion(item);
-  const subject = subjectForAll(version.subject, mails.artist, mails.music, mails.campaign.gift_items);
-  const status = STATUS_MAIL_TAB[item.status].toLowerCase();
-  const others = mails.people.filter((p) => p.status !== item.status).length;
-  const picked = people.filter((p) => chosen.has(p.id));
-  const all = people.length > 0 && people.every((p) => chosen.has(p.id));
-  const sentHere = history.filter((h) => h.gift_status === item.status);
-  const nameOf = (id: string) => mails.people.find((p) => p.id === id)?.name ?? null;
-  const flip = (id: string) =>
-    setChosen((c) => {
-      const next = new Set(c);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  async function send() {
-    setBusy(true);
-    onNotice(null);
-    try {
-      const names = picked.map((p) => p.name ?? "");
-      const next = await sendStatusMail(campaignId, item.status, picked.map((p) => p.id));
-      setChosen(new Set());
-      setConfirming(false);
-      const sent = next.sent ?? 0;
-      onChanged(next, { tone: sent ? "success" : "problem", text: sentNowLine(sent, next.skipped ?? 0, sent === names.length ? names : []) });
-    } catch (err) {
-      onNotice({ tone: "problem", text: friendlyError(err, "That didn't go through. Nobody was emailed. Please try again.") });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="gm-part" aria-labelledby={`send-${item.status}`}>
-      <h4 id={`send-${item.status}`} className="gm-part-title">
-        <span className="gm-part-num" aria-hidden="true">
-          2
-        </span>
-        Email buyers now
-        <span className="sr-only">: optional</span>
-      </h4>
-      <p className="mt-1 text-sm text-fg">
-        Sends the email in use (&ldquo;{subject}&rdquo;, {inUseLabel(item).toLowerCase()}) to the buyers you tick. It&apos;s already approved, so it goes
-        straight out. Use it to email again, or to email buyers whose gift moved before you wrote your own words.
-      </p>
-      {notInUseLine(item) ? (
-        <p className="mt-2 flex items-start gap-2 text-sm text-fg">
-          <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
-          Your newer changes are not in this email. They&apos;re used once {item.state === "IN_REVIEW" ? "Corner Room approves them" : "you use them in step 1"}.
-        </p>
-      ) : null}
-      <button
-        type="button"
-        className="cr-focus mt-3 text-sm font-semibold text-link underline"
-        aria-expanded={showEmail}
-        onClick={() => setShowEmail((v) => !v)}
-      >
-        {showEmail ? "Hide the email" : "See the email they'll get"}
-      </button>
-      {showEmail ? (
-        <div className="mt-3">
-          <MailPreview
-            artist={mails.artist}
-            subject={version.subject}
-            body={version.body}
-            values={previewValues(people[0] ?? null, mails.artist, mails.music, mails.campaign.gift_items)}
-            kind="GIFT_UPDATE"
-            button={version.button_label && version.button_url ? { label: version.button_label, url: version.button_url } : null}
-            files={[]}
-          />
-        </div>
-      ) : null}
-
-      {people.length === 0 ? (
-        <p className="mt-4 text-sm text-fg">
-          No gift is {status} right now, so there&apos;s nobody to email.{" "}
-          {others ? (
-            <>
-              Move a gift to {status} in{" "}
-              <Link href={`/studio/gifts/${campaignId}`} className="cr-focus font-semibold text-link underline">
-                Collectible tracking
-              </Link>{" "}
-              and its buyer is emailed by itself.
-            </>
-          ) : null}
-        </p>
-      ) : (
-        <>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-            <label className="flex items-center gap-2 text-sm font-semibold text-fg">
-              <input
-                type="checkbox"
-                checked={all}
-                onChange={() => {
-                  setConfirming(false);
-                  setChosen(all ? new Set() : new Set(people.map((p) => p.id)));
-                }}
-              />
-              Everyone whose gift is {status} ({people.length})
-            </label>
-            <span className="text-sm text-fg-muted">
-              {chosen.size ? `${picked.length} picked` : "Nobody picked yet"}
-            </span>
-          </div>
-          <ul className="mt-2 grid max-h-80 gap-1 overflow-auto">
-            {people.map((p) => (
-              <li key={p.id}>
-                <label className="gm-person" data-chosen={chosen.has(p.id)}>
-                  <span className="flex min-w-0 items-center gap-2 text-sm text-fg">
-                    <input
-                      type="checkbox"
-                      checked={chosen.has(p.id)}
-                      onChange={() => {
-                        setConfirming(false);
-                        flip(p.id);
-                      }}
-                    />
-                    <span className="truncate">{p.name || "A buyer with no name on file"}</span>
-                  </span>
-                  <Delivery last={lastEmail(history, p.id, item.status)} />
-                </label>
-              </li>
-            ))}
-          </ul>
-          {confirming ? (
-            <div className="mt-3 border border-accent p-4" role="group" aria-label="Check before sending">
-              <p className="text-sm font-semibold text-fg">
-                Email &ldquo;{subject}&rdquo; to {namesLine(picked.map((p) => p.name ?? ""))} now?
-              </p>
-              <p className="mt-1 text-sm text-fg-muted">It goes out straight away and can&apos;t be taken back.</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button busy={busy} onClick={() => void send()}>
-                  <Send aria-hidden="true" /> Yes, email {picked.length === 1 ? "them" : `these ${picked.length}`} now
-                </Button>
-                <Button variant="ghost" disabled={busy} onClick={() => setConfirming(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Button className="mt-3" disabled={picked.length === 0} onClick={() => setConfirming(true)}>
-              <Users aria-hidden="true" /> {picked.length ? `Email ${picked.length} ${picked.length === 1 ? "buyer" : "buyers"} now` : "Tick buyers to email them"}
-            </Button>
-          )}
-        </>
-      )}
-
-      <details className="mt-5" open={sentHere.length > 0 && sentHere.length <= 10}>
-        <summary className="cr-focus flex cursor-pointer items-center gap-2 text-sm font-semibold text-fg">
-          <MailCheck aria-hidden="true" className="size-4 text-highlight" /> {`${STATUS_MAIL_TAB[item.status]} emails sent so far (${sentHere.length})`}
-        </summary>
-        {sentHere.length ? (
-          <ul className="mt-2 grid gap-1">
-            {sentHere.slice(0, 100).map((h, i) => (
-              <li key={`${h.recipient_id}-${h.queued_at}-${i}`} className="flex flex-wrap items-center justify-between gap-2 text-sm text-fg">
-                <span>{nameOf(h.recipient_id) || "A buyer with no name on file"}</span>
-                <Delivery last={h} />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-2 text-sm text-fg-muted">None yet.</p>
-        )}
-      </details>
-    </section>
   );
 }

@@ -97,10 +97,10 @@ async def save_profile_change(
         bio=body.bio if "bio" in fields else ...,
         remove_portrait=body.remove_portrait,
     )
-    # Approved at once when the sender may approve profile changes (D-REVIEW-SOLO-01).
+    # Approved at once when staff change it; the act's own team waits (D-REVIEW-ARTIST-01).
     waiting = await svc._open(kind, profile_id)
     if waiting is not None and await approve_at_once(
-        svc.session, lambda: svc.transition(ctx, waiting.id, "APPROVED"), settings=svc.settings
+        svc.session, lambda: svc.transition(ctx, waiting.id, "APPROVED"), ctx=ctx, act_id=profile_id, settings=svc.settings
     ):
         out = await svc.view(ctx, kind, profile_id)
     return StudioProfileOut(**out)

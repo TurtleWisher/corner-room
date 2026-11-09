@@ -105,3 +105,28 @@ export function giftTemplates(status: StatusMailStatus, voice: Voice, web: strin
     },
   ];
 }
+
+/** Templates for other gift news, wherever the buyer's gift is (D-CAMPAIGN-07). Nothing made up:
+ * the news itself is "[add ...]" for the act to write. */
+export function otherTemplates(voice: Voice, web: string): GiftTemplate[] {
+  const w = v(voice);
+  const account = `${web.replace(/\/$/, "")}/account`;
+  return [
+    {
+      id: "news",
+      label: "A quick update",
+      subject: "News about your {gift}",
+      body: `Hi {first_name},\n\nA quick update about your {gift} for buying {music}: [add the news].\n\nThank you for being here,\n{artist}`,
+      button: null,
+    },
+    {
+      id: "confirm-address",
+      label: "Confirm your address",
+      subject: "Before your {gift} leaves: is your address right?",
+      body:
+        `Hi {first_name},\n\n${w.Im} getting your {gift} ready. Please check that the delivery address on your Corner Room ` +
+        `account is right, so it reaches you the first time.\n\n{artist}`,
+      button: { label: "Check my address", url: account },
+    },
+  ];
+}

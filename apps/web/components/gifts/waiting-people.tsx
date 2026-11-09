@@ -10,15 +10,19 @@ import { useState } from "react";
 import { Check, CircleAlert, Hourglass, X } from "lucide-react";
 
 import { Button, Card } from "@/components/ds";
+import { NoMatch, SearchField } from "@/components/studio-kit";
 import { removeGiftPerson, reviewGiftPeople, type GiftCampaignDetail } from "@/features/gifts/api";
 import { ApiError } from "@/lib/api/client";
+import { searchList } from "@/lib/list-search-view";
 
 export function WaitingPeople({ c, onChange }: { c: GiftCampaignDetail; onChange: (next: GiftCampaignDetail) => void }) {
   const waiting = c.waiting ?? [];
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   if (!waiting.length) return null;
+  const listed = searchList(waiting, query, (w) => [w.name, w.email, w.phone, w.address]);
   const staff = Boolean(c.can_review);
   const ids = [...chosen].filter((id) => waiting.some((w) => w.id === id));
 
@@ -48,6 +52,8 @@ export function WaitingPeople({ c, onChange }: { c: GiftCampaignDetail; onChange
             : "They count once Corner Room approves them. You can take back anyone added by mistake."}
         </p>
       </div>
+      {waiting.length > 4 ? <SearchField value={query} onChange={setQuery} label="Search people waiting" placeholder="Search by name, email, phone or address" /> : null}
+      {query && !listed.length ? <NoMatch query={query} onClear={() => setQuery("")} /> : null}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[36rem] table-fixed text-left text-sm">
           <thead className="text-xs text-fg-muted">
@@ -74,7 +80,7 @@ export function WaitingPeople({ c, onChange }: { c: GiftCampaignDetail; onChange
             </tr>
           </thead>
           <tbody>
-            {waiting.map((w) => (
+            {listed.map((w) => (
               <tr key={w.id} className="border-b border-line align-top">
                 {staff ? (
                   <td className="py-2">

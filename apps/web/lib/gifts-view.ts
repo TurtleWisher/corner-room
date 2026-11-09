@@ -100,17 +100,21 @@ export function reviewKind(c: Pick<GiftCampaign, "status" | "pending">): "new" |
   return null;
 }
 
-/** The act's own status emails waiting for staff (D-CAMPAIGN-05), as staff read it in the queue. */
-export function emailsLine(c: Pick<GiftCampaign, "emails_waiting">): string | null {
-  const n = c.emails_waiting ?? 0;
-  if (!n) return null;
-  return `${n} gift ${n === 1 ? "email" : "emails"} written by the artist ${n === 1 ? "waits" : "wait"} for approval`;
+/** The act's emails waiting for staff, as staff read it in the queue: its own automatic wording
+ * (D-CAMPAIGN-05) and emails to buyers it picked, words and people together (D-CAMPAIGN-07). */
+export function emailsLine(c: Pick<GiftCampaign, "emails_waiting" | "sends_waiting">): string | null {
+  const words = c.emails_waiting ?? 0;
+  const sends = c.sends_waiting ?? 0;
+  const parts: string[] = [];
+  if (words) parts.push(`${words} gift ${words === 1 ? "email" : "emails"} written by the artist ${words === 1 ? "waits" : "wait"} for approval`);
+  if (sends) parts.push(`${sends} ${sends === 1 ? "email" : "emails"} to buyers the artist picked ${sends === 1 ? "waits" : "wait"} for approval`);
+  return parts.length ? parts.join("; ") : null;
 }
 
 /** What a campaign waits for in the staff queue when it isn't a new campaign or a change. */
-export function waitingKindLabel(c: Pick<GiftCampaign, "counts" | "emails_waiting">): string {
+export function waitingKindLabel(c: Pick<GiftCampaign, "counts" | "emails_waiting" | "sends_waiting">): string {
   const people = (c.counts.WAITING ?? 0) > 0;
-  const emails = (c.emails_waiting ?? 0) > 0;
+  const emails = (c.emails_waiting ?? 0) + (c.sends_waiting ?? 0) > 0;
   if (people && emails) return "People and emails waiting";
   return emails ? "Emails waiting" : "People waiting";
 }

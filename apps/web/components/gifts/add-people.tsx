@@ -18,8 +18,21 @@ import { addedMessage, parsePeopleSheet, rowProblem, sendable, type PersonRow } 
 
 const EMPTY = { name: "", email: "", phone: "", address: "" };
 
-export function AddPeople({ c, onChange }: { c: GiftCampaignDetail; onChange: (next: GiftCampaignDetail) => void }) {
-  const [open, setOpen] = useState(false);
+export function AddPeople({
+  c,
+  onChange,
+  startOpen = false,
+  onClose,
+}: {
+  c: GiftCampaignDetail;
+  onChange: (next: GiftCampaignDetail) => void;
+  /** Opened from a toolbar button: show the form at once, and close through `onClose`. */
+  startOpen?: boolean;
+  onClose?: () => void;
+}) {
+  const [openState, setOpenState] = useState(startOpen);
+  const open = onClose ? true : openState;
+  const setOpen = (v: boolean) => (onClose && !v ? onClose() : setOpenState(v));
   const [one, setOne] = useState(EMPTY);
   const [paste, setPaste] = useState("");
   const [rows, setRows] = useState<PersonRow[]>([]);

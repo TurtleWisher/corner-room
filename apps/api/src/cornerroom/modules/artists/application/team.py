@@ -274,8 +274,8 @@ class TeamService:
         self.session.add(row)
         await self.session.flush()
         await self._record(ctx, artist, row, "artist.team_manager_picked", None)
-        # Approved at once when the owner may approve managers too (D-REVIEW-SOLO-01).
-        await approve_at_once(self.session, lambda: self.review(ctx, row.id, "approve", None), settings=self.settings)
+        # The act's owner picked them, so staff approve the manager (D-REVIEW-ARTIST-01).
+        await approve_at_once(self.session, lambda: self.review(ctx, row.id, "approve", None), ctx=ctx, act_id=artist.id, settings=self.settings)
         return await self._team_view(artist, ctx)
 
     async def take_off(self, ctx: AuthContext, kind: str, pid: UUID, member_id: UUID) -> dict[str, Any]:

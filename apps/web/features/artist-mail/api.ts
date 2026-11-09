@@ -356,3 +356,74 @@ export function stopEmailsByLink(token: string): Promise<{ artist: string; stopp
     retry: false,
   });
 }
+
+// --- the act's mailbox history (owner, 2026-11-09, D-MAILBOX-01) --------------------------------
+
+export type MailboxKind = "THANK_YOU" | "MANUAL" | "GIFT" | "GIFT_UPDATE" | "TEST";
+/** PENDING: on its way. SUPPRESSED: not sent, they had stopped the act's emails. */
+export type MailboxState = "PENDING" | "SENT" | "SUPPRESSED" | "FAILED";
+
+export type MailboxWhy = {
+  kind: MailboxKind;
+  campaign?: string | null;
+  gift_status?: string | null;
+  /** A gift update the act wrote to buyers it picked (else the automatic one). */
+  picked?: boolean | null;
+  send_id?: string | null;
+  mail_id?: string | null;
+  mail_subject?: string | null;
+  music_gift_id?: string | null;
+  gift_title?: string | null;
+  thank_you_id?: string | null;
+};
+
+/** One email to one person: never their address. */
+export type MailboxItem = {
+  id: string;
+  kind: MailboxKind;
+  subject: string;
+  to_name: string | null;
+  state: MailboxState;
+  queued_at: string;
+  sent_at: string | null;
+  clicks: number;
+  why: MailboxWhy;
+};
+
+export type Mailbox = { items: MailboxItem[]; next_before: string | null; totals: Record<MailboxKind, number> };
+
+export type MailboxMessage = {
+  id: string;
+  kind: MailboxKind;
+  subject: string;
+  from_name: string;
+  to_name: string | null;
+  /** The words as the person got them, every web address taken out. */
+  body: string;
+  state: MailboxState;
+  queued_at: string;
+  sent_at: string | null;
+  clicks: number;
+  links: { label: string | null; kind: string | null }[];
+  campaign_id: string | null;
+  gift_status: string | null;
+  mail_id: string | null;
+  music_gift_id: string | null;
+};
+
+export type MailboxQuery = { q?: string; kinds?: MailboxKind[]; states?: MailboxState[]; before?: string | null; limit?: number };
+
+export function fetchMailbox(profile: MailProfile, query: MailboxQuery = {}): Promise<Mailbox> {
+  const params = new URLSearchParams();
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  for (const k of query.kinds ?? []) params.append("kinds", k);
+  for (const s of query.states ?? []) params.append("states", s);
+  if (query.before) params.set("before", query.before);
+  if (query.limit) params.set("limit", String(query.limit));
+  const qs = params.toString();
+  return apiFetch<Mailbox>(`/api/v1/studio/profiles/${profile.kind}/${profile.id}/mailbox${qs ? `?${qs}` : ""}`, { retry: false });
+}
+
+export function fetchMailboxMessage(id: string): Promise<MailboxMessage> {
+  return apiFetch<MailboxMessage>(`/api/v1/studio/mail-messages/${id}`, { retry: false });
+}

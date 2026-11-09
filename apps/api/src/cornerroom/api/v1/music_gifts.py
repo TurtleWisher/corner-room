@@ -195,8 +195,15 @@ async def copy_gift(gift_id: UUID, ctx: Ctx, svc: Svc) -> GiftDetailOut:
 
 @router.post("/studio/music-gifts/{gift_id}/submit", response_model=GiftDetailOut)
 async def submit_gift(gift_id: UUID, ctx: Ctx, svc: Svc) -> GiftDetailOut:
+    from cornerroom.modules.commerce.domain.music_gifts import MusicGift
+
     out = await svc.submit(ctx, gift_id)
-    if await approve_at_once(svc.session, lambda: svc.review(ctx, gift_id, approve=True, note=None), settings=svc.settings):
+    gift = await svc.session.get(MusicGift, gift_id)
+    # D-REVIEW-ARTIST-01: the act's own team waits for staff; staff are approved at once.
+    if await approve_at_once(
+        svc.session, lambda: svc.review(ctx, gift_id, approve=True, note=None),
+        ctx=ctx, act_id=gift.profile_id if gift else None, settings=svc.settings,
+    ):
         out = await svc.detail(ctx, gift_id)
     return GiftDetailOut(**out)
 

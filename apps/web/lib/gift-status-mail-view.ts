@@ -135,7 +135,7 @@ export function workflowSteps(item: StatusMail, approvesAtOnce: boolean): Step[]
   const sent = item.sent_count;
   const deliver: Step = {
     title: "Buyers get it",
-    line: `By itself when you mark a gift ${status}, or now to the buyers you pick below.${sent ? ` ${sentCountLine(sent)} so far.` : ""}`,
+    line: `By itself when you mark a gift ${status}.${sent ? ` ${sentCountLine(sent)} so far.` : ""}`,
     tone: sent ? "done" : "skip",
   };
   return [write, approval, deliver];

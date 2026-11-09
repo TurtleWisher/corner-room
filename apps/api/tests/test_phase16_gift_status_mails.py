@@ -162,13 +162,97 @@ async def test_act_writes_status_email_staff_approve_and_it_sends(client: AsyncC
     # With the second review on, nobody here approves their own words at once.
     assert after["approves_at_once"] is False
 
-    # The dispatched email again to chosen buyers: only those whose gift is dispatched get it.
-    again = await client.post(f"{base}/DISPATCHED/send", headers=bearer(token), json={"recipient_ids": [rid]})
-    assert again.status_code == 200 and again.json()["sent"] == 1
-    # Queued at once and shown as on its way until the worker sends it.
-    assert [h["state"] for h in again.json()["history"]] == ["PENDING", "SENT"]
-    wrong = await client.post(f"{base}/MISSING/send", headers=bearer(token), json={"recipient_ids": [rid]})
-    assert wrong.json()["sent"] == 0 and wrong.json()["skipped"] == 1
+    # An email to buyers the act picked (D-CAMPAIGN-07): the words and the people go to staff
+    # together, and nobody is emailed until staff approve it and the act presses Send.
+    sends = f"/api/v1/studio/gift-campaigns/{cid}/mail-sends"
+    request = {
+        "purpose": "DISPATCHED", "subject": "On its way, {first_name}", "body": "Hi {first_name}, your {gift} left today.",
+        "recipient_ids": [rid],
+    }
+    unfinished_words = await client.post(sends, headers=bearer(token), json={**request, "body": "Hi [add name]"})
+    assert unfinished_words.status_code == 422
+    outsider = await client.post(sends, headers=bearer(token), json={**request, "recipient_ids": [cid]})
+    assert outsider.status_code == 422
+    sender.sent.clear()
+    asked = await client.post(sends, headers=bearer(token), json=request)
+    assert asked.status_code == 201, asked.text
+    waiting = asked.json()["sends"][0]
+    assert waiting["state"] == "IN_REVIEW" and waiting["recipient_ids"] == [rid] and not waiting["can_review"]
+    sid = waiting["id"]
+    # Not approved yet: Send is refused and nothing is queued.
+    assert (await client.post(f"{sends}/{sid}/send", headers=bearer(token))).status_code == 409
+    while await drain_outbox({}):
+        pass
+    assert not [m for m in sender.sent if m["to"] == "smail-fan@example.com"]
+    # Staff see it waiting in their queue; the act can't approve it.
+    queue = (await client.get("/api/v1/catalog-intake/gift-campaigns", headers=bearer(reviewer))).json()
+    assert next(c for c in queue if c["id"] == cid)["sends_waiting"] == 1
+    assert (await client.post(f"{sends}/{sid}/review", headers=bearer(token), json={"action": "approve"})).status_code == 404
+    # Sent back with a note, changed, sent again, then approved.
+    back = await client.post(f"{sends}/{sid}/review", headers=bearer(reviewer), json={"action": "reject", "note": "Name the courier"})
+    assert back.json()["sends"][0]["state"] == "RETURNED" and back.json()["sends"][0]["review_note"] == "Name the courier"
+    changed = await client.put(f"{sends}/{sid}", headers=bearer(token), json={**request, "body": "Hi {first_name}, your {gift} left with Pathao."})
+    assert changed.json()["sends"][0]["state"] == "IN_REVIEW"
+    staff_view = (await client.get(base, headers=bearer(reviewer))).json()
+    assert staff_view["sends"][0]["can_review"]
+    ok = await client.post(f"{sends}/{sid}/review", headers=bearer(reviewer), json={"action": "approve"})
+    assert ok.json()["sends"][0]["state"] == "APPROVED"
+    # Now the act presses Send: only buyers whose gift is still dispatched get it.
+    out = await client.post(f"{sends}/{sid}/send", headers=bearer(token))
+    assert out.status_code == 200, out.text
+    assert out.json()["sent"] == 1 and out.json()["sends"][0]["state"] == "SENT"
+    assert [h["state"] for h in out.json()["history"]] == ["PENDING", "SENT"]
+    assert out.json()["history"][0]["send_id"] == sid
+    assert (await client.post(f"{sends}/{sid}/send", headers=bearer(token))).status_code == 409
+    while await drain_outbox({}):
+        pass
+    picked = [m for m in sender.sent if m["to"] == "smail-fan@example.com"]
+    assert len(picked) == 1 and "left with Pathao" in picked[0]["body"]
+    # A status purpose skips buyers whose gift isn't in that status.
+    missing = await client.post(sends, headers=bearer(token), json={**request, "purpose": "MISSING"})
+    mid = missing.json()["sends"][0]["id"]
+    await client.post(f"{sends}/{mid}/review", headers=bearer(reviewer), json={"action": "approve"})
+    skipped = await client.post(f"{sends}/{mid}/send", headers=bearer(token))
+    assert skipped.json()["sent"] == 0 and skipped.json()["skipped"] == 1
+    # Staff's own request (not on the act's team) is approved and sent at once (D-REVIEW-ARTIST-01,
+    # with the second review off as in production).
+    from cornerroom.infra.settings import get_settings
+
+    monkeypatch.setenv("STAFF_SECOND_REVIEW", "false")
+    get_settings.cache_clear()
+    assert (await client.get(base, headers=bearer(reviewer))).json()["approves_at_once"]
+    assert not (await client.get(base, headers=bearer(token))).json()["approves_at_once"]
+    direct = await client.post(sends, headers=bearer(reviewer), json={**request, "purpose": "OTHER", "subject": "A note"})
+    assert direct.status_code == 201 and direct.json()["sent"] == 1 and direct.json()["sends"][0]["state"] == "SENT"
+    # A request that hasn't gone out can be taken back.
+    extra = await client.post(sends, headers=bearer(token), json=request)
+    xid = extra.json()["sends"][0]["id"]
+    gone = await client.delete(f"{sends}/{xid}", headers=bearer(token))
+    assert all(x["id"] != xid for x in gone.json()["sends"])
+    assert (await client.delete(f"{sends}/{sid}", headers=bearer(token))).status_code == 409
+
+    # The act's mailbox lists every email it sent: to whom by name, why, and whether it went.
+    box = await client.get(f"/api/v1/studio/profiles/artist/{artist_id}/mailbox", headers=bearer(token))
+    assert box.status_code == 200, box.text
+    items = box.json()["items"]
+    assert items and all("email" not in i for i in items)
+    gifted = [i for i in items if i["kind"] == "GIFT_UPDATE"]
+    assert gifted and all(i["to_name"] == "Samiul Islam" for i in gifted)
+    assert any(i["why"]["picked"] and i["why"]["send_id"] == sid for i in gifted)
+    assert any(not i["why"]["picked"] and i["why"]["gift_status"] == "DISPATCHED" for i in gifted)
+    assert all(i["why"]["campaign"] == "Poster" for i in gifted)
+    assert box.json()["totals"]["GIFT_UPDATE"] == len(gifted)
+    found = await client.get(f"/api/v1/studio/profiles/artist/{artist_id}/mailbox", headers=bearer(token), params={"q": "Pathao"})
+    assert found.status_code == 200
+    only = await client.get(f"/api/v1/studio/profiles/artist/{artist_id}/mailbox", headers=bearer(token), params={"q": "samiul"})
+    assert {i["id"] for i in only.json()["items"]} >= {i["id"] for i in gifted}
+    none = await client.get(f"/api/v1/studio/profiles/artist/{artist_id}/mailbox", headers=bearer(token), params={"q": "nobody-like-this"})
+    assert none.json()["items"] == []
+    read = await client.get(f"/api/v1/studio/mail-messages/{gifted[0]['id']}", headers=bearer(token))
+    assert read.status_code == 200 and "http" not in read.json()["body"] and read.json()["campaign_id"] == cid
+    assert (await client.get(f"/api/v1/studio/profiles/artist/{artist_id}/mailbox", headers=bearer(stranger["access_token"]))).status_code == 404
+    assert (await client.get(f"/api/v1/studio/mail-messages/{gifted[0]['id']}", headers=bearer(stranger["access_token"]))).status_code == 404
+
     # A test of the words being written, to the act's own email, written as the chosen buyer.
     test = await client.post(
         f"{base}/RETURNED/test", headers=bearer(token),
@@ -178,7 +262,6 @@ async def test_act_writes_status_email_staff_approve_and_it_sends(client: AsyncC
     sender.sent.clear()
     while await drain_outbox({}):
         pass
-    assert [m["to"] for m in sender.sent].count("smail-fan@example.com") == 1
     tests = [m for m in sender.sent if m["to"] == "smail-owner@example.com"]
     assert tests and tests[0]["subject"] == "[Test] Back with us" and tests[0]["body"].startswith("Hi Samiul,")
 

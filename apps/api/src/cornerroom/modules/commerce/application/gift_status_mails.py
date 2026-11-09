@@ -12,8 +12,10 @@ something the buyer is owed, so they always send: a stop from the act's emails d
 and they carry no stop link or cover picture (a plain, personal message, the kind mail apps file
 with the person's own mail). Account holders' in-app note stays and sends no second email.
 
-The act can also send the email for one status to chosen buyers in that status (for example the
-dispatched email again), and send itself a test written as one buyer will read it.
+Emails to buyers the act picks by hand (owner, 2026-11-09, D-CAMPAIGN-07) are one request: the
+words and the people go to staff together, staff approve or send it back with a note, and only then
+can the act press Send. Staff's own requests are approved and sent at once (D-REVIEW-ARTIST-01).
+The act can also send itself a test written as one buyer will read it.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ import re
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.infra.errors import AppError, NotFoundError
@@ -34,6 +36,10 @@ from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import (
     ARTIST_MAIL_QUEUED,
     GIFT_DISPATCHED,
+    GIFT_MAIL_SEND_APPROVED,
+    GIFT_MAIL_SEND_RETURNED,
+    GIFT_MAIL_SEND_SENT,
+    GIFT_MAIL_SEND_SUBMITTED,
     GIFT_MARKED_MISSING,
     GIFT_RETURNED,
     GIFT_STATUS_MAIL_APPROVED,
@@ -42,7 +48,14 @@ from cornerroom.kernel.events import (
     DomainEvent,
 )
 from cornerroom.modules.commerce.domain.artist_mail import ArtistMailFile, ArtistMailMessage
-from cornerroom.modules.commerce.domain.gifts import STATUS_MAIL_STATUSES, GiftCampaign, GiftRecipient, GiftStatusMail
+from cornerroom.modules.commerce.domain.gifts import (
+    SEND_PURPOSES,
+    STATUS_MAIL_STATUSES,
+    GiftCampaign,
+    GiftMailSend,
+    GiftRecipient,
+    GiftStatusMail,
+)
 
 SUBJECT_MAX = 200
 BODY_MAX = 5000
@@ -181,7 +194,8 @@ class GiftStatusMailService:
         rows = await self.session.execute(
             select(
                 ArtistMailMessage.gift_recipient_id, ArtistMailMessage.gift_status, ArtistMailMessage.status,
-                ArtistMailMessage.created_at, ArtistMailMessage.sent_at,
+                ArtistMailMessage.created_at, ArtistMailMessage.sent_at, ArtistMailMessage.gift_send_id,
+                ArtistMailMessage.subject,
             )
             .join(GiftRecipient, GiftRecipient.id == ArtistMailMessage.gift_recipient_id)
             .where(GiftRecipient.campaign_id == campaign_id, ArtistMailMessage.kind == "GIFT_UPDATE")
@@ -189,8 +203,8 @@ class GiftStatusMailService:
             .limit(HISTORY_LIMIT)
         )
         return [
-            {"recipient_id": rid, "gift_status": gs, "state": st, "queued_at": at, "sent_at": sent}
-            for rid, gs, st, at, sent in rows.all()
+            {"recipient_id": rid, "gift_status": gs, "state": st, "queued_at": at, "sent_at": sent, "send_id": sid, "subject": subj}
+            for rid, gs, st, at, sent, sid, subj in rows.all()
             if rid and gs
         ]
 
@@ -256,9 +270,10 @@ class GiftStatusMailService:
             "items": [self._item(s, rows.get(s), reviewer, sent.get(s, 0)) for s in STATUS_MAIL_STATUSES],
             "people": await self._people(campaign),
             "history": await self._history(campaign.id),
-            # D-REVIEW-SOLO-01: whoever may approve these and has no second reviewer to wait for
-            # gets their words approved the moment they send them, so the page says "Use this email".
-            "approves_at_once": may_approve and not second_review_on(self.settings),
+            "sends": await self._sends(campaign.id, reviewer),
+            # D-REVIEW-ARTIST-01: staff (not on the act's team) have their words approved the moment
+            # they send them, so the page says "Use this email"; the act's own team always waits.
+            "approves_at_once": reviewer and not second_review_on(self.settings),
         }
 
     async def waiting_count(self, campaign_id: UUID) -> int:
@@ -428,7 +443,7 @@ class GiftStatusMailService:
     async def _queue(
         self, ctx: AuthContext | None, campaign: GiftCampaign, recipient: GiftRecipient, status: str, version: dict[str, Any], *,
         artist: str, music: str, name: str | None, kind: str = "GIFT_UPDATE", to: str | None = None, user_id: UUID | None = None,
-        subject_prefix: str = "",
+        subject_prefix: str = "", send_id: UUID | None = None,
     ) -> bool:
         from cornerroom.modules.commerce.application.artist_mail import ArtistMailService
 
@@ -453,6 +468,7 @@ class GiftStatusMailService:
             written, token, kind=kind, profile_type=campaign.profile_type, profile_id=campaign.profile_id,
             user_id=user_id, email=to, from_name=f"{artist} via Corner Room",
             gift_recipient_id=recipient.id if kind == "GIFT_UPDATE" else None, gift_status=status if kind == "GIFT_UPDATE" else None,
+            gift_send_id=send_id,
         )
         await mail._event(ctx, ARTIST_MAIL_QUEUED, "ArtistMailMessage", message.id, {"kind": kind}, campaign.organization_id)
         return True
@@ -470,42 +486,206 @@ class GiftStatusMailService:
         version = self._sending(status, (await self._rows(campaign.id)).get(status))
         return await self._queue(None, campaign, recipient, status, version, artist=artist, music=await self.gifts._music_line(campaign), name=name)
 
-    async def send_to(self, ctx: AuthContext, campaign_id: UUID, status: str, recipient_ids: list[UUID]) -> dict[str, Any]:
-        """Send the email for one status now to chosen buyers whose gift is in that status. It is
-        the version that sends anyway (the act's approved one, else Corner Room's), so it needs no
-        new review."""
-        campaign, _role, artist = await self.gifts._campaign(ctx, campaign_id)
-        status = self._status(status)
-        if campaign.status not in ("ACTIVE", "PAUSED", "ENDED"):
-            raise AppError("INVALID_TRANSITION", "Gifts can be emailed once the campaign has been live", 409)
-        ids = list(dict.fromkeys(recipient_ids))[:MAX_SEND]
-        if not ids:
-            raise AppError("VALIDATION_ERROR", "Choose who to email", 422)
+    # --- emails to buyers the act picks (D-CAMPAIGN-07) -------------------------------------------
+
+    async def _sends(self, campaign_id: UUID, reviewer: bool) -> list[dict[str, Any]]:
         rows = (
             await self.session.execute(
+                select(GiftMailSend).where(GiftMailSend.campaign_id == campaign_id).order_by(GiftMailSend.created_at.desc()).limit(200)
+            )
+        ).scalars().all()
+        return [
+            {
+                "id": r.id, "purpose": r.purpose, "subject": r.subject, "body": r.body,
+                "button_label": r.button_label, "button_url": r.button_url, "file_ids": [str(f) for f in (r.file_ids or [])],
+                "recipient_ids": [str(x) for x in (r.recipient_ids or [])], "state": r.state, "review_note": r.review_note,
+                "submitted_at": r.submitted_at, "approved_at": r.approved_at, "sent_at": r.sent_at,
+                "sent_count": r.sent_count, "skipped_count": r.skipped_count,
+                "can_review": bool(reviewer and r.state == "IN_REVIEW"),
+            }
+            for r in rows
+        ]
+
+    async def _send_row(self, campaign: GiftCampaign, send_id: UUID) -> GiftMailSend:
+        row = await self.session.get(GiftMailSend, send_id)
+        if row is None or row.campaign_id != campaign.id:
+            raise NotFoundError("Email not found")
+        return row
+
+    async def _clean_send(self, campaign: GiftCampaign, data: dict[str, Any]) -> dict[str, Any]:
+        """The words, button, files and people of a request, or the reason they can't go to staff."""
+        if campaign.status not in ("ACTIVE", "PAUSED", "ENDED"):
+            raise AppError("INVALID_TRANSITION", "Gifts can be emailed once the campaign has been live", 409)
+        purpose = str(data.get("purpose") or "").upper()
+        if purpose not in SEND_PURPOSES:
+            raise AppError("VALIDATION_ERROR", "Choose what the email is about", 422)
+        subject, body = check_words(data.get("subject") or "", data.get("body") or "")
+        label, url = check_button(data.get("button_label"), data.get("button_url"))
+        if unfinished(subject, body, label):
+            raise AppError("UNFINISHED_EMAIL", "Write the parts marked [add ...] first", 422)
+        files = await self._clean_files(campaign, data.get("file_ids"))
+        wanted: list[str] = []
+        for raw in data.get("recipient_ids") or []:
+            try:
+                rid = str(UUID(str(raw)))
+            except ValueError as exc:
+                raise AppError("VALIDATION_ERROR", "Someone on the list isn't on this campaign", 422) from exc
+            if rid not in wanted:
+                wanted.append(rid)
+        if not wanted:
+            raise AppError("VALIDATION_ERROR", "Choose who to email", 422)
+        if len(wanted) > MAX_SEND:
+            raise AppError("VALIDATION_ERROR", f"Email at most {MAX_SEND} people at once", 422)
+        known = set(
+            str(x)
+            for x in (
+                await self.session.execute(
+                    select(GiftRecipient.id).where(
+                        GiftRecipient.campaign_id == campaign.id, GiftRecipient.id.in_([UUID(w) for w in wanted]),
+                        GiftRecipient.waiting.is_(False),
+                    )
+                )
+            ).scalars()
+        )
+        if set(wanted) - known:
+            raise AppError("VALIDATION_ERROR", "Someone on the list isn't on this campaign", 422)
+        return {
+            "purpose": purpose, "subject": subject, "body": body, "button_label": label, "button_url": url,
+            "file_ids": files, "recipient_ids": wanted,
+        }
+
+    async def _send_event(self, ctx: AuthContext, event_type: str, campaign: GiftCampaign, row: GiftMailSend, extra: dict[str, Any]) -> None:
+        await enqueue_outbox(
+            self.session,
+            DomainEvent(
+                event_type=event_type, producer="commerce", aggregate_type="GiftMailSend", aggregate_id=row.id,
+                payload={"campaign_id": str(campaign.id), "purpose": row.purpose, "people": len(row.recipient_ids or []), **extra},
+                occurred_at=self.clock.now(), actor_id=ctx.user_id, organization_id=campaign.organization_id,
+                correlation_id=ctx.request_id,
+            ),
+        )
+
+    async def create_send(self, ctx: AuthContext, campaign_id: UUID, data: dict[str, Any]) -> UUID:
+        """The words and the people, sent to staff as one request. Nobody is emailed yet."""
+        campaign, _role, _name = await self.gifts._campaign(ctx, campaign_id)
+        clean = await self._clean_send(campaign, data)
+        row = GiftMailSend(
+            campaign_id=campaign.id, state="IN_REVIEW", created_by=ctx.user_id, updated_by=ctx.user_id,
+            submitted_at=self.clock.now(), **clean,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        await self._send_event(ctx, GIFT_MAIL_SEND_SUBMITTED, campaign, row, {})
+        await self.audit.record_from_auth(
+            ctx, action="gift_mail_send.submitted", entity_type="GiftMailSend", entity_id=row.id,
+            new_state={"campaign_id": str(campaign.id), "purpose": row.purpose, "people": len(row.recipient_ids)},
+            organization_id=campaign.organization_id,
+        )
+        return row.id
+
+    async def update_send(self, ctx: AuthContext, campaign_id: UUID, send_id: UUID, data: dict[str, Any]) -> dict[str, Any]:
+        """Change a request that is waiting or was sent back; it goes to staff again."""
+        campaign, _role, _name = await self.gifts._campaign(ctx, campaign_id)
+        row = await self._send_row(campaign, send_id)
+        if row.state not in ("IN_REVIEW", "RETURNED"):
+            raise AppError("INVALID_TRANSITION", "This email can't be changed now", 409)
+        for key, value in (await self._clean_send(campaign, data)).items():
+            setattr(row, key, value)
+        row.state, row.review_note, row.updated_by, row.submitted_at = "IN_REVIEW", None, ctx.user_id, self.clock.now()
+        await self.session.flush()
+        await self._send_event(ctx, GIFT_MAIL_SEND_SUBMITTED, campaign, row, {})
+        await self.audit.record_from_auth(
+            ctx, action="gift_mail_send.changed", entity_type="GiftMailSend", entity_id=row.id,
+            new_state={"campaign_id": str(campaign.id), "purpose": row.purpose, "people": len(row.recipient_ids)},
+            organization_id=campaign.organization_id,
+        )
+        return await self.view(ctx, campaign.id)
+
+    async def withdraw_send(self, ctx: AuthContext, campaign_id: UUID, send_id: UUID) -> dict[str, Any]:
+        """Take back a request that hasn't gone out."""
+        campaign, _role, _name = await self.gifts._campaign(ctx, campaign_id)
+        row = await self._send_row(campaign, send_id)
+        if row.state == "SENT":
+            raise AppError("INVALID_TRANSITION", "This email has already gone out", 409)
+        await self.audit.record_from_auth(
+            ctx, action="gift_mail_send.withdrawn", entity_type="GiftMailSend", entity_id=row.id,
+            previous_state={"state": row.state}, new_state={"campaign_id": str(campaign.id)}, organization_id=campaign.organization_id,
+        )
+        await self.session.delete(row)
+        await self.session.flush()
+        return await self.view(ctx, campaign.id)
+
+    async def review_send(self, ctx: AuthContext, campaign_id: UUID, send_id: UUID, *, approve: bool, note: str | None) -> dict[str, Any]:
+        """Staff approve the words and the people together, or send them back with a note."""
+        campaign = await self.session.get(GiftCampaign, campaign_id)
+        if campaign is None:
+            raise NotFoundError("Campaign not found")
+        await self.gifts._reviewer(ctx, campaign)
+        row = await self._send_row(campaign, send_id)
+        if row.state != "IN_REVIEW":
+            raise AppError("INVALID_TRANSITION", "This email isn't waiting for review", 409)
+        text = " ".join((note or "").split())[:2000] or None
+        if approve:
+            if second_review_on(self.settings) and ctx.user_id in {row.created_by, row.updated_by}:
+                raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You wrote this email")
+            row.state, row.approved_by, row.approved_at, row.review_note = "APPROVED", ctx.user_id, self.clock.now(), None
+        else:
+            if not text:
+                raise AppError("VALIDATION_ERROR", "Tell the artist what to change", 422)
+            row.state, row.review_note = "RETURNED", text
+        await self.session.flush()
+        await self._send_event(ctx, GIFT_MAIL_SEND_APPROVED if approve else GIFT_MAIL_SEND_RETURNED, campaign, row, {"note": text})
+        await self.audit.record_from_auth(
+            ctx, action="gift_mail_send.approved" if approve else "gift_mail_send.returned", entity_type="GiftMailSend",
+            entity_id=row.id, new_state={"campaign_id": str(campaign.id), "note": text}, organization_id=campaign.organization_id,
+        )
+        return await self.view(ctx, campaign.id)
+
+    async def deliver_send(self, ctx: AuthContext, campaign_id: UUID, send_id: UUID) -> dict[str, Any]:
+        """Send an approved request now. For a status purpose, only buyers whose gift is still in
+        that status get it: nobody is told it left when it hasn't."""
+        campaign, _role, artist = await self.gifts._campaign(ctx, campaign_id)
+        row = await self._send_row(campaign, send_id)
+        if row.state != "APPROVED":
+            raise AppError(
+                "NOT_APPROVED" if row.state != "SENT" else "INVALID_TRANSITION",
+                "Corner Room hasn't approved this email yet" if row.state != "SENT" else "This email has already gone out",
+                409,
+            )
+        ids = [UUID(x) for x in (row.recipient_ids or [])]
+        people = (
+            await self.session.execute(
                 select(GiftRecipient).where(
-                    and_(GiftRecipient.campaign_id == campaign.id, GiftRecipient.id.in_(ids), GiftRecipient.waiting.is_(False))
+                    GiftRecipient.campaign_id == campaign.id, GiftRecipient.id.in_(ids), GiftRecipient.waiting.is_(False)
                 )
             )
         ).scalars().all()
-        version = self._sending(status, (await self._rows(campaign.id)).get(status))
+        version = {
+            "subject": row.subject, "body": row.body,
+            "button": (row.button_label, row.button_url) if row.button_label and row.button_url else None,
+            "file_ids": [str(f) for f in (row.file_ids or [])],
+        }
         music = await self.gifts._music_line(campaign)
-        names = await self.gifts._contact(list(rows))
+        names = await self.gifts._contact(list(people))
         sent = 0
-        for r in rows:
-            # Only buyers whose gift is in this status: nobody is told it left when it hasn't.
-            if r.status != status:
+        for r in people:
+            if row.purpose != "OTHER" and r.status != row.purpose:
                 continue
-            if await self._queue(ctx, campaign, r, status, version, artist=artist, music=music, name=names.get(r.id, {}).get("name")):
+            if await self._queue(
+                ctx, campaign, r, row.purpose, version, artist=artist, music=music, name=names.get(r.id, {}).get("name"), send_id=row.id,
+            ):
                 sent += 1
+        row.state, row.sent_by, row.sent_at = "SENT", ctx.user_id, self.clock.now()
+        row.sent_count, row.skipped_count = sent, len(ids) - sent
         await self.session.flush()
+        await self._send_event(ctx, GIFT_MAIL_SEND_SENT, campaign, row, {"sent": sent})
         await self.audit.record_from_auth(
-            ctx, action="gift_status_mail.sent_to_chosen", entity_type="GiftCampaign", entity_id=campaign.id,
-            new_state={"status": status, "sent": sent, "chosen": len(ids)}, organization_id=campaign.organization_id,
+            ctx, action="gift_mail_send.sent", entity_type="GiftMailSend", entity_id=row.id,
+            new_state={"campaign_id": str(campaign.id), "sent": sent, "skipped": len(ids) - sent},
+            organization_id=campaign.organization_id,
         )
         out = await self.view(ctx, campaign.id)
-        out["sent"] = sent
-        out["skipped"] = len(ids) - sent
+        out["sent"], out["skipped"] = sent, len(ids) - sent
         return out
 
     async def send_test(self, ctx: AuthContext, campaign_id: UUID, status: str, data: dict[str, Any]) -> dict[str, Any]:
