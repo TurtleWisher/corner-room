@@ -59,7 +59,7 @@ import { useRoomFullscreen } from "@/components/music/room-fullscreen";
 import { RoomLyricsSwitch } from "@/components/music/room-lyrics-switch";
 import { StoryShareButton } from "@/components/music/story-share";
 import { clock, durationLabel } from "@/lib/player-model";
-import { titleWithVersion } from "@/lib/track-title-view";
+import { titleFit, titleParts, titleWithVersion } from "@/lib/track-title-view";
 import { cn } from "@/lib/utils";
 
 /*
@@ -320,15 +320,19 @@ function ArtistLink({ track }: { track: PlayerTrack }) {
  * that scatter a little and settle back, then hum while the pointer stays (app/styles/modules/
  * listen.css). The pieces are decoration: the link's name is the whole title.
  */
-export function RoomTitle({ track, className }: { track: PlayerTrack; className: string }) {
-  // The song's version in brackets after the title (D-VERSION-01), from the same cached read as the lyrics.
-  const version = useAsync(() => loadLyrics(track.id).then((l) => l.version), [track.id]).data ?? null;
-  const label = titleWithVersion(titleOf(track), version);
-  const atoms = useMemo(() => titleAtoms(label), [label]);
+export function RoomTitle({ track, className, version: given }: { track: PlayerTrack; className: string; version?: string | null }) {
+  // The song's version after the title (D-VERSION-01), from the same cached read as the lyrics
+  // (`version` given directly only on the developer board).
+  const loaded = useAsync(() => (given === undefined ? loadLyrics(track.id).then((l) => l.version) : Promise.resolve(given)), [track.id, given]);
+  const version = given === undefined ? (loaded.data ?? null) : given;
+  const parts = titleParts(titleOf(track), version);
+  const label = titleWithVersion(parts.title, parts.version);
+  const atoms = useMemo(() => titleAtoms(parts.title), [parts.title]);
+  const fit = useOneLineFit(label);
   return (
-    <h1 id="room-title" className={`lr-title cr-display text-fg ${className}`}>
+    <h1 ref={fit.box} id="room-title" className={`lr-title cr-display text-fg ${className}`} style={{ "--lr-fit": fit.scale } as React.CSSProperties}>
       <Link href={`/tracks/${track.id}`} className="lr-title-link cr-focus" aria-label={label}>
-        <span aria-hidden="true">
+        <span ref={fit.line} aria-hidden="true" className="lr-title-line">
           {atoms.map((atom, i) =>
             atom.space ? (
               " "
@@ -342,10 +346,45 @@ export function RoomTitle({ track, className }: { track: PlayerTrack; className:
               </span>
             ),
           )}
+          {parts.version ? <span className="lr-title-version">({parts.version})</span> : null}
         </span>
       </Link>
     </h1>
   );
+}
+
+/**
+ * The room title on one line at any length (owner, 2026-11-14): the line never wraps, and shrinks
+ * just enough to fit its box. Every size inside is in em, so the line's width scales with --lr-fit;
+ * the width at full size is read once per change and the scale follows the box as it resizes.
+ */
+function useOneLineFit(text: string) {
+  const box = useRef<HTMLHeadingElement>(null);
+  const line = useRef<HTMLSpanElement>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const b = box.current;
+    const l = line.current;
+    if (!b || !l) return;
+    const measure = () => {
+      // The scale on screen now, read from the sizes themselves, so a measure that runs before
+      // React has drawn the last scale is still right.
+      const full = parseFloat(getComputedStyle(b).fontSize);
+      const shown = parseFloat(getComputedStyle(l).fontSize);
+      if (!(full > 0) || !(shown > 0)) return;
+      const natural = l.getBoundingClientRect().width * (full / shown);
+      const next = titleFit(b.clientWidth, natural);
+      setScale((prev) => (Math.abs(next - prev) > 0.002 ? next : prev));
+    };
+    measure();
+    // The box resizes with the window; the line changes width when the display face arrives.
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    ro?.observe(b);
+    ro?.observe(l);
+    void document.fonts?.ready.then(measure);
+    return () => ro?.disconnect();
+  }, [text]);
+  return { box, line, scale };
 }
 
 /**
