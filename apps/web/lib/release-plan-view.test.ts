@@ -85,6 +85,21 @@ describe("release plan words (D-RELEASE-PLAN-01)", () => {
     expect(staffHeadline(approved).title).toContain("date has passed");
   });
 
+  it("tells staff a draft past its date is waiting on the artist, never that it goes out by itself", () => {
+    const draft = (missing: string[]) =>
+      make({
+        presale: { status: "APPROVED", release_at: DAY, listed: true, open: false, can_request: false },
+        plan: { release_day: DAY, release_day_kind: "SET", date_passed: true, staff_actions: ["presale_move_date", "cancel_presale"] },
+        missing,
+      });
+    const head = staffHeadline(draft([]));
+    expect(head.tone).toBe("problem");
+    expect(head.text).toContain("hasn't sent it for review");
+    expect(head.text).toContain("managed mode");
+    expect(head.text).not.toContain("goes out by itself");
+    expect(staffHeadline(draft(["COVER"])).text).toContain("1 thing to finish");
+  });
+
   it("shows a sent-back release and pre-sale as problems", () => {
     const back = make({ history: [{ action: "request_changes", note: "Fix the cover", from_status: "METADATA_REVIEW", to_status: "IN_PRODUCTION", created_at: DAY }] });
     expect(musicSentBack(back)).toBe("Fix the cover");

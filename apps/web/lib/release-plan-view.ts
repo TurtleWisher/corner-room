@@ -331,6 +331,18 @@ export function staffHeadline(d: PlanInput): { tone: NextStep["tone"]; title: st
     case "ARCHIVED":
       return { tone: "wait", title: "Taken down", text: "Nothing is needed." };
     default:
+      if (plan.date_passed && plan.release_day_kind === "SET") {
+        const n = missingTotal(d);
+        return {
+          tone: "problem",
+          title: "Its date has passed, and the music hasn't been sent in",
+          text:
+            (n > 0
+              ? `Buyers are waiting, and the artist still has ${n} ${n === 1 ? "thing" : "things"} to finish. `
+              : "Buyers are waiting. Everything is in, but the artist hasn't sent it for review, so there is nothing to approve yet. ") +
+            "Ask them to press Send for review in Studio. If they asked Corner Room to release it for them, turn on managed mode under More actions, then send it in from the Review part.",
+        };
+      }
       if (d.presale?.status === "APPROVED") {
         return { tone: "wait", title: "Pre-sale approved; the artist is finishing the music", text: `Once they send it in and you approve it, it goes out by itself on ${dhaka(plan.release_day)}.` };
       }

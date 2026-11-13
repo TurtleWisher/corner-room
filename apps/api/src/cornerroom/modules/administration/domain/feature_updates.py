@@ -145,6 +145,7 @@ FEATURES: Final[list[dict]] = [
             "their music when their email is verified."
         ),
         "updates": [
+            {"date": "2026-11-14", "kind": "FIXED", "title": "A draft past its date says who's next", "details": "When a pre-sale's date has passed but the artist hasn't sent the music in, the staff release page now says so and how to go on, instead of saying it goes out by itself."},
             {"date": "2026-11-13", "kind": "FIXED", "title": "Pre-sales go out on their date", "details": "Approving the finished music of a release on pre-sale now schedules it for the pre-sale date, so it goes out by itself. Before, it stayed waiting after the date."},
             {"date": "2026-11-13", "kind": "IMPROVED", "title": "One release plan", "details": "Studio and the staff release page show the pre-sale, the music and release day as three steps with the next thing to do. Staff see only the buttons that apply now; rare ones sit under More actions."},
             {"date": "2026-11-13", "kind": "IMPROVED", "title": "Pre-sale has its own part", "details": "In Studio the pre-sale is its own part of the release page: numbered steps with what fans see beside them."},
