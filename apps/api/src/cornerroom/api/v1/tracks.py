@@ -35,6 +35,9 @@ class TrackOut(BaseModel):
     lyrics: str | None = None
     # D-LYRICS-03: when each sung line starts (ms), with the lyrics; null when not timed.
     lyrics_timings_ms: list[int] | None = None
+    # D-VERSION-01: the song's version ("Acoustic Demo"), single-track reads only; the song page and
+    # the listening room show it in brackets after the title.
+    version_title: str | None = None
     # D-LISTEN-02 (editors and staff only): plays before counting started, included in `listens`.
     listens_before_counting: int = 0
 
@@ -55,6 +58,8 @@ class PublicTrackOut(BaseModel):
     lyrics: str | None = None
     # D-LYRICS-03: when each sung line starts (ms), with the lyrics; null when not timed.
     lyrics_timings_ms: list[int] | None = None
+    # D-VERSION-01: the song's version, single-track reads only (see TrackOut).
+    version_title: str | None = None
 
 
 class TrackPage(BaseModel):
@@ -243,6 +248,7 @@ async def get_track(
     out.listens = await _listen_count(svc, row.id)
     out.lyrics = row.lyrics if row.status == "RELEASED" else None
     out.lyrics_timings_ms = timings_for(row.lyrics, row.lyrics_timings) if out.lyrics else None
+    out.version_title = (row.version_title or "").strip() or None
     return out
 
 

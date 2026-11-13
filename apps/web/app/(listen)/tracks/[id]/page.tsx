@@ -39,6 +39,7 @@ import { humanizeStatus } from "@/lib/format/status";
 import { canModerateMusic, creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
 import { releaseIdsFor, trackBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
+import { titleWithVersion } from "@/lib/track-title-view";
 
 /** Entrance order for the song page (D-MOTION-02, app/styles/modules/music.css). */
 const rise = (i: number) => ({ "--i": i }) as React.CSSProperties;
@@ -238,7 +239,7 @@ export default function TrackPage() {
           <div className="md:pt-6">
             <Eyebrow className="music-rise" style={rise(1)}>{["Track", artist, duration].filter(Boolean).join(" · ")}</Eyebrow>
             <Display as="h1" id="track-title" size="lg" className="music-rise mt-4" style={rise(2)}>
-              {track.title}
+              {titleWithVersion(track.title, track.version_title)}
             </Display>
             <p className="music-rise mt-4 text-lg text-fg" style={rise(3)}>
               <CreditFace record={track} people={people} />

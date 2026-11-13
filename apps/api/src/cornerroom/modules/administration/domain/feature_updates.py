@@ -281,6 +281,8 @@ FEATURES: Final[list[dict]] = [
             "made on their own phone or computer. Artists can turn story sharing off for a release."
         ),
         "updates": [
+            {"date": "2026-11-14", "kind": "IMPROVED", "title": "Version after the title", "details": "When the artist gives a song a version, such as Acoustic Demo, the room's big title shows it in brackets after the song's name."},
+            {"date": "2026-11-14", "kind": "FIXED", "title": "Bar fits the song", "details": "The song box in the room's bar keeps room for the title, Playing and the scrubber; on smaller screens the tools move to their own row."},
             {
                 "date": "2026-11-08",
                 "kind": "NEW",
@@ -320,6 +322,7 @@ FEATURES: Final[list[dict]] = [
             "as an exact fraction of a million, with the exact count beside the cover."
         ),
         "updates": [
+            {"date": "2026-11-14", "kind": "IMPROVED", "title": "Version after the title", "details": "A song's version, such as Acoustic Demo, shows in brackets after its name on the song page."},
             {"date": "2026-11-02", "kind": "NEW", "title": "Listens in millions", "details": "Very large behind the cover, digits rolling into place."},
             {"date": "2026-10-31", "kind": "IMPROVED", "title": "Song page motion", "details": "Calmer movement on the song page."},
             {"date": "2026-10-30", "kind": "FIXED", "title": "Staff and artist plays", "details": "They no longer count as listens."},

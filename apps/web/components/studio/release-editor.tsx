@@ -724,7 +724,7 @@ function TrackCard({
                   >
                     <fieldset disabled={!trackEditable && !changing} className="contents">
                       <Field label="Song title">{(c) => <Input {...c} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} maxLength={300} required />}</Field>
-                      <Field label="Version" hint='Optional, e.g. "Live" or "Acoustic"'>
+                      <Field label="Version" hint='Optional, e.g. "Live" or "Acoustic". Fans see it in brackets after the title on the song page and in the listening room.'>
                         {(c) => <Input {...c} value={form.version_title} onChange={(e) => setForm({ ...form, version_title: e.target.value })} maxLength={100} />}
                       </Field>
                       <Field label="Song language" hint="Leave empty to use the release language">
