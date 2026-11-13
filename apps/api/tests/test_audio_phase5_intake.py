@@ -76,6 +76,11 @@ async def test_staff_prepare_catalog_only_and_cannot_submit(client: AsyncClient)
         "cover_reveal",
         # Early pre-sale and its release-day email (D-PRESALE-03, 2026-11-03).
         "presale",
+        # The release plan (D-RELEASE-PLAN-01, 2026-11-13): stage, release day, and staff's next steps.
+        "plan",
+    }
+    assert set(detail["plan"]) == {
+        "stage", "release_day", "release_day_kind", "date_passed", "goes_out_by_itself", "approve_schedules_for", "staff_actions",
     }
     assert set(detail["cover_reveal"]) == {"revealed", "revealed_at", "can_switch", "preview_url"}
     assert set(detail["profile"]) == {"kind", "id", "display_name"}

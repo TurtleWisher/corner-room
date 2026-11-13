@@ -1,6 +1,7 @@
 /*
  * The Studio release page in parts (owner, 2026-11-08, D-RELEASE-TABS-01): one part on screen at a
- * time (Details, Songs, Preview Studio, Price, Review) so an artist goes straight to what they came
+ * time (Details, Songs, Preview Studio, Price, Pre-sale, Review; Pre-sale got its own part on
+ * 2026-11-13, D-RELEASE-PLAN-01) so an artist goes straight to what they came
  * for instead of scrolling past everything else. The part on show sits in the address's #hash, so the
  * old section links (#tracks, #presale, #submit) still open the right part. Words only: what is ready
  * comes from the server's readiness list, never decided here.
@@ -8,13 +9,14 @@
 
 import type { ReadinessItem, StudioTrack } from "@/features/studio/api";
 
-export type ReleasePart = "details" | "songs" | "preview" | "price" | "review";
+export type ReleasePart = "details" | "songs" | "preview" | "price" | "presale" | "review";
 
 export const RELEASE_PARTS: readonly { id: ReleasePart; label: string }[] = [
   { id: "details", label: "Details" },
   { id: "songs", label: "Songs" },
   { id: "preview", label: "Preview Studio" },
   { id: "price", label: "Price" },
+  { id: "presale", label: "Pre-sale" },
   { id: "review", label: "Review" },
 ];
 
@@ -27,7 +29,8 @@ const HASHES: Record<string, ReleasePart> = {
   preview: "preview",
   teasers: "preview",
   price: "price",
-  presale: "price",
+  presale: "presale",
+  "pre-sale": "presale",
   review: "review",
   submit: "review",
   history: "review",

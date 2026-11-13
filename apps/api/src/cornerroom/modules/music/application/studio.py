@@ -341,6 +341,8 @@ class StudioService:
             "cover_reveal": self._cover_reveal_view(release),
             # D-PRESALE-03: the early pre-sale and its release-day email.
             "presale": await self._presale_view(release, proposals),
+            # D-RELEASE-PLAN-01: the pre-sale and the music as one plan, with the steps staff can take.
+            "plan": await self._plan_view(release, tracks, staff=role == "staff"),
             # D-CHANGES-01: changes to approved or released music waiting for staff, and the last decision.
             **(await self._change_request_view(release)),
             "profile": {"kind": _kind, "id": _pid, "display_name": profile_name},
@@ -1095,6 +1097,39 @@ class StudioService:
             "can_withdraw": release.presale_status == "REQUESTED",
             "email": await self._presale_email_view(release),
         }
+
+    async def _plan_view(self, release: Release, tracks: list[tuple[int, Track]], *, staff: bool) -> dict[str, Any]:
+        from cornerroom.modules.commerce.application.onsite_presale import PresaleService, presale_listed
+        from cornerroom.modules.commerce.domain.models import Offer, Product
+        from cornerroom.modules.music.domain.release_plan import release_plan
+
+        offers = await PresaleService(self.session, self.settings, self.clock).presale_offers(release.id)
+        had_presale = bool(offers) or (
+            await self.session.scalar(
+                select(func.count()).select_from(Offer).join(Product, Product.id == Offer.product_id).where(
+                    Product.subject_id == release.id, Product.product_type == "RELEASE",
+                    Offer.audience == "PRESALE", Offer.deleted_at.is_(None),
+                )
+            )
+        ) > 0
+        ready = bool(tracks)
+        for _pos, t in tracks:
+            if await self.music._current_ready_version(t.id) is None:
+                ready = False
+                break
+        plan = release_plan(
+            status=release.status,
+            release_at=release.release_at,
+            presale_status=release.presale_status,
+            presale_requested_at=release.presale_requested_release_at,
+            presale_listed=presale_listed(release) and (bool(offers) or release.presale_status == "APPROVED"),
+            had_presale=had_presale,
+            music_ready=ready,
+            now=self.clock.now(),
+        )
+        if not staff:
+            plan["staff_actions"] = []
+        return plan
 
     async def request_presale(self, ctx: AuthContext, release_id: UUID, release_at: Any) -> Release:
         """Send an early pre-sale for review: fans would see the title, artist, this date and the

@@ -2,19 +2,18 @@
 
 /* Staff: early pre-sales (owner, 2026-11-03, D-PRESALE-03). An artist opened a pre-sale before the
  * music is finished; staff approve just its title, artist, date and price going public, send it
- * back with a note, or later move its date (buyers are emailed). The API checks who may decide. */
+ * back with a note, or later move its date (buyers are emailed). Deciding happens in the release
+ * workspace (components/staff/release-decision.tsx, D-RELEASE-PLAN-01). The API checks who may decide. */
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CircleAlert } from "lucide-react";
 
 import { DateTime, Money } from "@/components/ds";
-import { Button, Card, ErrorState, LoadingState } from "@/components/staff/kit";
+import { Card, ErrorState, LoadingState } from "@/components/staff/kit";
 import { useWorkspace } from "@/components/workspace-provider";
-import { backToPresale, fetchPresaleQueue, reviewPresale, type PresaleQueueItem, type StudioReleaseDetail } from "@/features/studio/api";
+import { fetchPresaleQueue, type PresaleQueueItem } from "@/features/studio/api";
 import { ApiError } from "@/lib/api/client";
 import { friendlyError } from "@/lib/error-copy";
-import { fromLocalInput, toLocalInput } from "@/lib/artist-mail-view";
 import { RELEASE_TYPE_LABEL } from "@/lib/studio-view";
 
 /** The queue on Catalog releases: early pre-sales waiting for a decision in this workspace. */
@@ -59,7 +58,7 @@ export function PresaleQueue() {
                   {item.requested_release_at ? (
                     <>
                       {" "}
-                      · out <DateTime value={item.requested_release_at} format="datetime" />
+                      · out <DateTime value={item.requested_release_at} format="datetime" showZone />
                     </>
                   ) : null}
                   {item.price ? (
@@ -78,159 +77,6 @@ export function PresaleQueue() {
           ))}
         </ul>
       )}
-    </Card>
-  );
-}
-
-/**
- * Released by mistake before its pre-sale date (owner, 2026-11-03): put it back on pre-sale for the
- * date. The API refuses when someone has bought it at the normal price since it came out.
- */
-export function BackToPresale({ detail, onDone }: { detail: StudioReleaseDetail | null; onDone: () => void }) {
-  const [when, setWhen] = useState(toLocalInput(detail?.release.release_at ?? null));
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  if (!detail || detail.release.status !== "RELEASED") return null;
-
-  async function go() {
-    if (!window.confirm("Take this release off the shelves and put it back on pre-sale until its date?")) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await backToPresale(detail!.release.id, { release_at: fromLocalInput(when) });
-      setResult("Back on pre-sale. Fans can pre-book it again until its date.");
-      onDone();
-    } catch (err) {
-      setError(friendlyError(err, "That didn't go through."));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Card className="p-5">
-      <h2 className="font-semibold">Released too early? Back to pre-sale</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        For music that went out before its pre-sale date. It goes back to scheduled for the date below, its songs stop playing until then,
-        and pre-orders open again at the agreed pre-sale price. Not possible once someone has bought it at the normal price. Anyone who
-        pre-ordered was already emailed that it&apos;s out and isn&apos;t emailed again.
-      </p>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <label className="text-sm" htmlFor="back-to-presale-at">
-          Release date (Bangladesh time)
-        </label>
-        <input id="back-to-presale-at" type="datetime-local" className="rounded border px-2 py-1 text-sm" value={when} onChange={(e) => setWhen(e.target.value)} />
-        <Button variant="outline" disabled={busy || !when} onClick={() => void go()}>
-          Back to pre-sale
-        </Button>
-      </div>
-      {result ? <p className="mt-2 text-sm">{result}</p> : null}
-      {error ? (
-        <p role="alert" className="mt-2 flex items-center gap-2 text-sm text-red-600">
-          <CircleAlert aria-hidden="true" className="size-4" /> {error}
-        </p>
-      ) : null}
-    </Card>
-  );
-}
-
-/** In the release workspace: decide an early pre-sale, or move an approved one's date. */
-export function PresaleDecision({ detail, onDone }: { detail: StudioReleaseDetail | null; onDone: () => void }) {
-  const p = detail?.presale;
-  const [note, setNote] = useState("");
-  const [when, setWhen] = useState(toLocalInput(p?.release_at ?? p?.requested_release_at ?? null));
-  const [busy, setBusy] = useState<string | null>(null);
-  const [result, setResult] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  if (!detail || !p || (p.status !== "REQUESTED" && p.status !== "APPROVED") || detail.release.status === "SCHEDULED") return null;
-
-  async function decide(decision: "approve" | "return" | "move_date") {
-    if (decision === "return" && !note.trim()) {
-      setError("Write a note the artist will see.");
-      return;
-    }
-    setBusy(decision);
-    setError(null);
-    try {
-      await reviewPresale(detail!.release.id, { decision, release_at: fromLocalInput(when), note: note.trim() || undefined });
-      setResult(decision === "approve" ? "Pre-sale approved." : decision === "return" ? "Sent back to the artist." : "Date moved; buyers are being emailed.");
-      setNote("");
-      onDone();
-    } catch (err) {
-      setError(friendlyError(err, "That didn't go through."));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  return (
-    <Card className="p-5" id="presale-review">
-      <h2 className="font-semibold">{p.status === "REQUESTED" ? "Pre-sale waiting for review" : "Approved pre-sale"}</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {p.status === "REQUESTED"
-          ? "Fans would see only the title, the artist, the date and the pre-sale price, and pay now. The music unlocks on release day once the release is finished and approved. Whoever prepared or owns it can't approve it."
-          : "Moving the date emails everyone who pre-ordered. To end the pre-sale and refund everyone, use Cancel pre-sale below."}
-      </p>
-      <dl className="mt-3 grid gap-1 text-sm">
-        <div>
-          <dt className="inline font-semibold">Title: </dt>
-          <dd className="inline">{detail.release.title}</dd>
-        </div>
-        <div>
-          <dt className="inline font-semibold">Artist: </dt>
-          <dd className="inline">{detail.profile.display_name}</dd>
-        </div>
-        <div>
-          <dt className="inline font-semibold">Pre-sale price: </dt>
-          <dd className="inline">
-            {p.price ? (
-              <>
-                <Money value={{ amount_minor: p.price.amount_minor, currency_code: p.price.currency_code }} />{" "}
-                {p.price.status === "ACCEPTED" ? "(agreed)" : "(waiting for commerce to agree it in Price proposals)"}
-              </>
-            ) : (
-              "none"
-            )}
-          </dd>
-        </div>
-      </dl>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <label className="text-sm" htmlFor="presale-at">
-          Release date (Bangladesh time)
-        </label>
-        <input id="presale-at" type="datetime-local" className="rounded border px-2 py-1 text-sm" value={when} onChange={(e) => setWhen(e.target.value)} />
-      </div>
-      <textarea
-        className="mt-3 min-h-16 w-full rounded border p-2 text-sm"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="Note for the artist (needed to send it back)"
-        aria-label="Pre-sale note"
-        maxLength={2000}
-      />
-      <div className="mt-2 flex flex-wrap gap-2">
-        {p.status === "REQUESTED" ? (
-          <>
-            <Button disabled={busy !== null || !when} onClick={() => void decide("approve")}>
-              Approve pre-sale
-            </Button>
-            <Button variant="outline" disabled={busy !== null} onClick={() => void decide("return")}>
-              Send back
-            </Button>
-          </>
-        ) : (
-          <Button variant="outline" disabled={busy !== null || !when} onClick={() => void decide("move_date")}>
-            Move the date and email buyers
-          </Button>
-        )}
-      </div>
-      {result ? <p className="mt-2 text-sm">{result}</p> : null}
-      {error ? (
-        <p role="alert" className="mt-2 flex items-center gap-2 text-sm text-red-600">
-          <CircleAlert aria-hidden="true" className="size-4" /> {error}
-        </p>
-      ) : null}
     </Card>
   );
 }

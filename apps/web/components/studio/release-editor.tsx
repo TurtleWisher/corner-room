@@ -4,7 +4,7 @@
  * re-renders from the server's answer; nothing here decides permission, readiness or state. */
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, ChartLine, ChevronDown, CircleAlert, CircleCheck, GripVertical, Plus, Save, Send, Trash2, Undo2, UserRound } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, ChartLine, ChevronDown, CircleAlert, CircleCheck, GripVertical, Plus, Save, Send, Trash2, Undo2, UserRound } from "lucide-react";
 
 import { Button, ButtonLink, Card, DateTime, ErrorState, Field, Input, Money, Select, Skeleton } from "@/components/ds";
 import { Tabs } from "@/components/ds/tabs";
@@ -13,6 +13,7 @@ import { useCredits } from "@/components/music/credits";
 import { MediaReport } from "@/components/music/media-report";
 import { DeleteRelease } from "@/components/studio/delete-release";
 import { PresalePanel } from "@/components/studio/presale-panel";
+import { ReleasePlanView } from "@/components/release-plan/release-plan";
 import { PreviewStudioList } from "@/components/teasers/preview-studio-list";
 import { campaignHref } from "@/lib/presale-campaign-view";
 import { CreditsNote, CreditsPreview, PartOfField, PersonField } from "@/components/studio/credit-parts";
@@ -918,6 +919,15 @@ function SubmitPanel({ detail, reload }: { detail: StudioReleaseDetail; reload: 
             <input type="checkbox" className="mt-1" checked={rights} onChange={(e) => setRights(e.target.checked)} />
             <span>I confirm I own or have permission to release this music, its artwork and every credit listed, and that nothing in it copies anyone else&apos;s work without permission.</span>
           </label>
+          {detail.plan?.release_day && detail.plan.release_day_kind === "SET" && !detail.plan.date_passed ? (
+            <p className="mt-4 flex items-start gap-2 text-sm text-fg">
+              <CalendarClock aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-fg-muted" />
+              <span>
+                Once Corner Room approves it, it goes out by itself on <DateTime value={detail.plan.release_day} format="datetime" showZone />, your
+                pre-sale date. Send it in with time to spare.
+              </span>
+            </p>
+          ) : null}
           <Button size="lg" className="mt-4" disabled={missing > 0 || !rights} busy={busy === "submit"} onClick={() => void run("submit", () => submitStudioRelease(detail.release.id, rights))}>
             <Send aria-hidden="true" /> Submit for review
           </Button>
@@ -1093,7 +1103,11 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
     setSongParts((all) => ({ ...all, [id]: songPart }));
   };
   // The Preview Studio is the artist's tool; staff review teasers in Catalog, never in Studio (owner, 2026-11-08).
-  const shownParts = RELEASE_PARTS.filter((p) => p.id !== "preview" || detail.viewer_role !== "staff");
+  // D-RELEASE-PLAN-01: the pre-sale has its own part while the music isn't out yet.
+  const showPresale = canProposePresale(detail.release.status) && Boolean(detail.presale);
+  const shownParts = RELEASE_PARTS.filter(
+    (p) => (p.id !== "preview" || detail.viewer_role !== "staff") && (p.id !== "presale" || showPresale),
+  );
   const shownPart: ReleasePart = shownParts.some((p) => p.id === part) ? part : "details";
   const firstWithoutAudio = detail.tracks.find((t) => songLine(t).tone === "attention")?.id ?? detail.tracks[0]?.id;
 
@@ -1109,6 +1123,10 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
           </span>
         ) : null}
         {p === "review" && submitMode !== "submit" ? <CircleCheck aria-hidden="true" className="size-4 text-success" /> : null}
+        {p === "presale" && detail.presale?.listed ? <CircleCheck aria-hidden="true" className="size-4 text-success" /> : null}
+        {p === "presale" && detail.presale?.status === "RETURNED" ? (
+          <CircleAlert aria-label="Sent back" className="size-4 text-danger" />
+        ) : null}
       </>
     );
   };
@@ -1247,9 +1265,13 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
             {detail.release.release_type !== "SINGLE" ? (
               <PriceRow detail={detail} subjectType="RELEASE" subjectId={detail.release.id} label="For fans who already own some songs (optional)" audience="OWNS_PART_OF_RELEASE" reload={reload} />
             ) : null}
-            {canProposePresale(detail.release.status) ? (
+            {showPresale ? (
               <p className="pt-3 text-sm text-fg-muted">
-                A pre-sale price is set in the Pre-sale section below.
+                The pre-sale price is set in the{" "}
+                <button type="button" className="cr-focus font-semibold text-link underline" onClick={() => choose("presale")}>
+                  Pre-sale
+                </button>{" "}
+                part.
               </p>
             ) : null}
             {sellsTracks
@@ -1257,37 +1279,35 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
               : null}
           </Card>
         </Section>
-        {canProposePresale(detail.release.status) && detail.presale ? (
-          // D-PRESALE-03: open a pre-sale before the music is finished, preview it, write the release-day email.
-          <Section id="presale" title="Pre-sale" done={!!detail.presale.listed}>
-            {/* D-PRESALE-04: the pre-sale's own pages, with live numbers and share links (the artist's Studio; not for staff). */}
-            {detail.viewer_role !== "staff" ? (
-              <p className="mb-4">
-                <ButtonLink href={campaignHref(detail.release.id)} variant="secondary" size="sm">
-                  <ChartLine aria-hidden="true" /> Pre-sale campaign: live numbers and sharing
-                </ButtonLink>
-              </p>
-            ) : null}
-          <PresalePanel
-            key={`${detail.release.id}-${detail.release.version}`}
-            detail={detail}
-            reload={reload}
-            priceRow={
-              <PriceRow
-                detail={detail}
-                subjectType="RELEASE"
-                subjectId={detail.release.id}
-                label="What fans pay to pre-book"
-                hint={presaleHint(detail.release.status, detail.release.release_at)}
-                audience="PRESALE"
-                reload={reload}
-              />
-            }
-          />
-          </Section>
-        ) : null}
       </>
     ),
+    presale: showPresale ? (
+      // D-PRESALE-03, D-RELEASE-PLAN-01: the pre-sale in its own part, as numbered steps beside what fans see.
+      <PresalePanel
+        key={`${detail.release.id}-${detail.release.version}`}
+        detail={detail}
+        reload={reload}
+        campaignLink={
+          // D-PRESALE-04: the pre-sale's own pages, with live numbers and share links (the artist's Studio; not for staff).
+          detail.viewer_role !== "staff" ? (
+            <ButtonLink href={campaignHref(detail.release.id)} variant="secondary" size="sm" block>
+              <ChartLine aria-hidden="true" /> Live numbers and share links
+            </ButtonLink>
+          ) : null
+        }
+        priceRow={
+          <PriceRow
+            detail={detail}
+            subjectType="RELEASE"
+            subjectId={detail.release.id}
+            label="What fans pay to pre-book"
+            hint={presaleHint(detail.release.status, detail.release.release_at)}
+            audience="PRESALE"
+            reload={reload}
+          />
+        }
+      />
+    ) : null,
     review: (
       <>
         <Section id="submit" title="Review and submit" done={submitMode !== "submit"}>
@@ -1333,6 +1353,10 @@ export function ReleaseEditor({ releaseId }: { releaseId: string }) {
           <span className="basis-full text-fg-muted">Corner Room staff are helping prepare this release.</span>
         ) : null}
       </div>
+
+      {/* D-RELEASE-PLAN-01: where the pre-sale, the music and release day stand, and what to do next.
+          Staff see the same plan at the top of their release workspace instead. */}
+      {detail.viewer_role !== "staff" ? <ReleasePlanView detail={detail} viewer="artist" onGo={choose} className="mt-5" /> : null}
 
       <ChangesPanel detail={detail} mode={mode} reload={reload} />
 

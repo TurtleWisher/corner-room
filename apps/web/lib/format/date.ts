@@ -1,8 +1,11 @@
 /**
  * Date and time display. Event times are always shown in the event's own IANA timezone (Q-P4-09),
- * never the viewer's. If the API gives no valid timezone, UTC is used and labelled, so the time
- * is never silently shifted.
+ * never the viewer's. Everything else (release days, pre-sales, emails, history) is Dhaka time
+ * (owner, 2026-11-13, D-TIME-01): Corner Room runs on Bangladesh time. A zone the API names but
+ * the browser can't read also falls back to Dhaka, and is labelled, so it is never silently shifted.
  */
+
+export const HOUSE_TIME_ZONE = "Asia/Dhaka";
 import { intlDateLocale, type DisplayLocale } from "./locale";
 
 export interface DateTimeOptions {
@@ -12,22 +15,21 @@ export interface DateTimeOptions {
 
 export interface ResolvedZone {
   timeZone: string;
-  /** "Dhaka time", or "UTC" when the API gave no usable zone. */
+  /** "Dhaka time", "London time", ... */
   label: string;
+  /** True when the API named a zone that couldn't be used (the label is then always shown). */
   fallback: boolean;
 }
 
 export function resolveTimeZone(timeZone: string | null | undefined): ResolvedZone {
-  if (timeZone) {
-    try {
-      new Intl.DateTimeFormat("en", { timeZone }).format(0);
-      const city = timeZone.split("/").pop()?.replace(/_/g, " ") ?? timeZone;
-      return { timeZone, label: timeZone === "UTC" ? "UTC" : `${city} time`, fallback: false };
-    } catch {
-      /* fall through */
-    }
+  if (!timeZone) return { timeZone: HOUSE_TIME_ZONE, label: "Dhaka time", fallback: false };
+  try {
+    new Intl.DateTimeFormat("en", { timeZone }).format(0);
+    const city = timeZone.split("/").pop()?.replace(/_/g, " ") ?? timeZone;
+    return { timeZone, label: timeZone === "UTC" ? "UTC" : `${city} time`, fallback: false };
+  } catch {
+    return { timeZone: HOUSE_TIME_ZONE, label: "Dhaka time", fallback: true };
   }
-  return { timeZone: "UTC", label: "UTC", fallback: true };
 }
 
 /** Three-letter months in house style: ICU's en-GB gives "Sept"; Corner Room uses "Sep". */

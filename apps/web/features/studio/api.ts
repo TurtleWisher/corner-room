@@ -131,8 +131,22 @@ export type PriceProposal = {
   created_at: string;
 };
 
+/** D-RELEASE-PLAN-01: the pre-sale and the music as one plan (the API decides every field). */
+export type ReleasePlan = {
+  stage: "MAKING" | "IN_REVIEW" | "APPROVED" | "APPROVED_DATE_PASSED" | "SCHEDULED" | "OVERDUE" | "RELEASED" | "TAKEN_DOWN" | "ARCHIVED" | string;
+  release_day?: string | null;
+  release_day_kind?: "SET" | "REQUESTED" | null;
+  date_passed: boolean;
+  goes_out_by_itself: boolean;
+  /** Approving the music now schedules it for this date (the approved pre-sale's). */
+  approve_schedules_for?: string | null;
+  /** Staff only: the steps the API allows now; empty for the act's own people. */
+  staff_actions: string[];
+};
+
 export type StudioReleaseDetail = {
   release: StudioRelease;
+  plan?: ReleasePlan;
   /** Signed link to the accepted cover at 1200 px (OD-05); null without one. */
   cover_url?: string | null;
   /** D-COVER-01: a new cover waiting for staff (approved or released releases), and the last note. */

@@ -48,13 +48,13 @@ describe("Pre-sale panel (DOM)", () => {
 
   it("asks for a pre-sale price first", () => {
     render(<PresalePanel detail={detail({ price: null })} reload={vi.fn()} priceRow={<p>price row</p>} />);
-    expect(screen.getByText("Propose a pre-sale price above first.")).toBeTruthy();
+    expect(screen.getByText("Propose a pre-sale price in step 1 first.")).toBeTruthy();
     expect((screen.getByRole("button", { name: /Send pre-sale for review/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("shows the fan preview with only title, artist, date and price", () => {
     render(<PresalePanel detail={detail({ status: "REQUESTED", requested_release_at: "2026-11-20T14:00:00Z", can_request: false, can_withdraw: true })} reload={vi.fn()} priceRow={null} />);
-    expect(screen.getByText("Fan preview")).toBeTruthy();
+    expect(screen.getByText("What fans see")).toBeTruthy();
     expect(screen.getAllByText("Night Signal").length).toBeGreaterThan(0);
     expect(screen.getByText("Pre-book the single", { exact: false })).toBeTruthy();
     expect(screen.getByText(/Waiting for Corner Room/)).toBeTruthy();

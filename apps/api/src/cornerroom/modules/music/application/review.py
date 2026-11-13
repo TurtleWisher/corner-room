@@ -32,6 +32,7 @@ from cornerroom.kernel.events import (
 from cornerroom.modules.audit.application.service import AuditService
 from cornerroom.modules.music.application.service import MusicService
 from cornerroom.modules.music.domain.models import Release, ReleaseReview, ReleaseTrack, Track
+from cornerroom.modules.music.domain.release_plan import schedule_on_approval
 
 REVIEW_ACTIONS = frozenset({"start_review", "approve", "request_changes", "schedule", "release", "takedown"})
 
@@ -101,6 +102,7 @@ class ReviewService:
         tracks = await self._tracks(release.id)
         previous = release.status
         org = release.primary_org_id
+        moved_from: datetime | None = None
 
         def move(track: Track, frm: set[str], to: str) -> bool:
             if track.status in frm:
@@ -123,15 +125,27 @@ class ReviewService:
         elif action == "approve":
             if release.status != "METADATA_REVIEW":
                 raise AppError("INVALID_TRANSITION", "Only a release in review can be approved", 409)
-            if any(t.status not in {"IN_REVIEW", "APPROVED"} for t in tracks) or not tracks:
-                raise AppError("INVALID_TRANSITION", "Start the review of every track first", 409)
+            # D-RELEASE-PLAN-01: approving starts the review of songs sent in with it; no separate step.
+            if any(t.status not in {"SUBMITTED", "IN_REVIEW", "APPROVED"} for t in tracks) or not tracks:
+                raise AppError("INVALID_TRANSITION", "Every song must be sent in with the release", 409)
             for t in tracks:
                 if await self.music._current_ready_version(t.id) is None:
                     raise AppError("VERSION_NOT_READY", f"“{t.title}” has no verified audio", 409)
+            if release_at is not None and release_at <= self.clock.now():
+                raise AppError("VALIDATION_ERROR", "Choose a release date in the future", 422)
             release.status = "APPROVED"
             for t in tracks:
-                if move(t, {"IN_REVIEW"}, "APPROVED"):
-                    await self._event(ctx, TRACK_APPROVED, "Track", t.id, {"status": "APPROVED", "previous_status": "IN_REVIEW"}, org)
+                prev = t.status
+                if move(t, {"SUBMITTED", "IN_REVIEW"}, "APPROVED"):
+                    await self._event(ctx, TRACK_APPROVED, "Track", t.id, {"status": "APPROVED", "previous_status": prev}, org)
+            # The approved pre-sale already told fans a date: the music goes out by itself on it.
+            when = schedule_on_approval(chosen=release_at, presale_status=release.presale_status, release_at=release.release_at, now=self.clock.now())
+            if when is not None:
+                moved_from = release.release_at if release.presale_status == "APPROVED" else None
+                release.status = "SCHEDULED"
+                release.release_at = when
+                for t in tracks:
+                    move(t, {"APPROVED"}, "SCHEDULED")
         elif action == "schedule":
             # A scheduled release can move to a new date (D-PRESALE-02: pre-order buyers are told).
             if release.status not in {"APPROVED", "SCHEDULED"}:
@@ -176,7 +190,7 @@ class ReviewService:
             ReleaseReview(release_id=release.id, reviewer_id=ctx.user_id, action=action, note=text, from_status=previous, to_status=release.status)
         )
         await self.session.flush()
-        if action == "schedule" and moved_from is not None and moved_from != release.release_at:
+        if action in {"schedule", "approve"} and moved_from is not None and moved_from != release.release_at:
             from cornerroom.kernel.events import PRESALE_DATE_CHANGED
             from cornerroom.modules.commerce.application.onsite_presale import PresaleService
 
