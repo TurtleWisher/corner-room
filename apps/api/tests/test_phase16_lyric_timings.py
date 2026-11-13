@@ -65,6 +65,8 @@ async def test_staff_time_a_released_songs_lyrics(client: AsyncClient) -> None:
     assert saved.json()["lyrics_timings_ms"] == [12000, 15500, 21000]
     public = (await client.get(f"/api/v1/tracks/{track_id}")).json()
     assert public["lyrics_timings_ms"] == [12000, 15500, 21000]
+    # D-VERSION-01: the single-track read carries the song's version (none set here).
+    assert "version_title" in public and public["version_title"] is None
 
     # A spelling fix keeps them; a new line count drops them.
     await _review_lyrics(client, token, reviewer, track_id, "First line\nSecond line, fixed\n\nThird line")

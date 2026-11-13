@@ -23,6 +23,8 @@ export type TrackRecord = {
   lyrics?: string | null;
   /** D-LYRICS-03: when each sung line starts (ms), with the lyrics; null when not timed. */
   lyrics_timings_ms?: number[] | null;
+  /** D-VERSION-01: the song's version ("Acoustic Demo"), single-track reads only. */
+  version_title?: string | null;
   /** D-LISTEN-02 (editors and staff): plays before counting started, already included in `listens`. */
   listens_before_counting?: number;
 };

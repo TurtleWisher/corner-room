@@ -579,11 +579,29 @@ html:has([data-module="music"] .lr) {
   margin-top: 1.5rem;
   padding: 0.75rem;
 }
+/* Tablets: transport and what is playing share a row; the tools take their own row, so the song's
+ * title, status and scrubber never get squeezed (owner, 2026-11-14: "Playing" spilled out of the box
+ * and the scrubber shrank to its thumb). */
 @media (min-width: 768px) {
   [data-module="music"] .lr-bar {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
     justify-items: stretch;
     padding: 0.65rem 0.9rem;
+  }
+  [data-module="music"] .lr-tools {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+}
+/* Wide screens: one row, with the song box never narrower than 15rem. */
+@media (min-width: 1024px) {
+  [data-module="music"] .lr-bar {
+    width: min(100%, 66rem);
+    grid-template-columns: auto minmax(15rem, 1fr) auto;
+  }
+  [data-module="music"] .lr-tools {
+    grid-column: auto;
+    justify-self: end;
   }
 }
 [data-module="music"] .lr-now {

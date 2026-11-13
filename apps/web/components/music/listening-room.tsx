@@ -59,6 +59,7 @@ import { useRoomFullscreen } from "@/components/music/room-fullscreen";
 import { RoomLyricsSwitch } from "@/components/music/room-lyrics-switch";
 import { StoryShareButton } from "@/components/music/story-share";
 import { clock, durationLabel } from "@/lib/player-model";
+import { titleWithVersion } from "@/lib/track-title-view";
 import { cn } from "@/lib/utils";
 
 /*
@@ -320,7 +321,9 @@ function ArtistLink({ track }: { track: PlayerTrack }) {
  * listen.css). The pieces are decoration: the link's name is the whole title.
  */
 export function RoomTitle({ track, className }: { track: PlayerTrack; className: string }) {
-  const label = titleOf(track);
+  // The song's version in brackets after the title (D-VERSION-01), from the same cached read as the lyrics.
+  const version = useAsync(() => loadLyrics(track.id).then((l) => l.version), [track.id]).data ?? null;
+  const label = titleWithVersion(titleOf(track), version);
   const atoms = useMemo(() => titleAtoms(label), [label]);
   return (
     <h1 id="room-title" className={`lr-title cr-display text-fg ${className}`}>
@@ -354,16 +357,16 @@ export function RoomTitle({ track, className }: { track: PlayerTrack; className:
  */
 type RoomLyrics = { trackId: string | null; loaded: boolean; lines: string[]; times: number[] | null; on: boolean; toggle: () => void };
 const LyricsContext = createContext<RoomLyrics>({ trackId: null, loaded: false, lines: [], times: null, on: false, toggle: () => {} });
-type LoadedLyrics = { text: string | null; timingsMs: number[] | null };
+type LoadedLyrics = { text: string | null; timingsMs: number[] | null; version: string | null };
 const lyricsCache = new Map<string, Promise<LoadedLyrics>>();
 
-/** A released song's lyrics, once per song per page view (public read, no sign-in needed). */
+/** A released song's lyrics and version, once per song per page view (public read, no sign-in needed). */
 function loadLyrics(trackId: string): Promise<LoadedLyrics> {
   let hit = lyricsCache.get(trackId);
   if (!hit) {
     hit = fetchTrack(trackId, { skipAuth: true })
-      .then((t) => ({ text: t.lyrics ?? null, timingsMs: t.lyrics_timings_ms ?? null }))
-      .catch(() => ({ text: null, timingsMs: null }));
+      .then((t) => ({ text: t.lyrics ?? null, timingsMs: t.lyrics_timings_ms ?? null, version: t.version_title ?? null }))
+      .catch(() => ({ text: null, timingsMs: null, version: null }));
     lyricsCache.set(trackId, hit);
   }
   return hit;
@@ -814,8 +817,9 @@ function ControlBar({ track, onFocus }: { track: PlayerTrack; onFocus: () => voi
           />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="truncate text-sm font-bold text-fg">{label}</p>
+          {/* The status drops under the title rather than spilling out of the box when space is short. */}
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <p className="min-w-0 flex-[1_1_6rem] truncate text-sm font-bold text-fg">{label}</p>
             <span className="flex items-baseline gap-3">
               <Status />
             </span>
