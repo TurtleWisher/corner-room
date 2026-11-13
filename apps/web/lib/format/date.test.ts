@@ -14,9 +14,10 @@ describe("event time zone", () => {
     expect(resolveTimeZone("Asia/Dhaka")).toEqual({ timeZone: "Asia/Dhaka", label: "Dhaka time", fallback: false });
     expect(resolveTimeZone("America/New_York").label).toBe("New York time");
   });
-  it("falls back to labelled UTC for a missing or invalid zone", () => {
-    expect(resolveTimeZone(undefined)).toEqual({ timeZone: "UTC", label: "UTC", fallback: true });
-    expect(resolveTimeZone("Mars/Base").fallback).toBe(true);
+  it("uses Dhaka time when no zone is given (D-TIME-01), labelled when a named zone is unusable", () => {
+    expect(resolveTimeZone(undefined)).toEqual({ timeZone: "Asia/Dhaka", label: "Dhaka time", fallback: false });
+    expect(resolveTimeZone("Mars/Base")).toEqual({ timeZone: "Asia/Dhaka", label: "Dhaka time", fallback: true });
+    expect(formatDateTime("2026-11-12T18:00:00Z")).toBe("Fri 13 Nov 2026, 12:00 AM");
   });
 });
 

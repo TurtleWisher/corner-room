@@ -127,46 +127,43 @@ function PresaleStatus({ detail }: { detail: StudioReleaseDetail }) {
 function FanPreview({ detail, date }: { detail: StudioReleaseDetail; date: string | null }) {
   const p = detail.presale!;
   return (
-    <Card tone="outline" className="p-5" aria-labelledby="fan-preview-title">
+    <Card tone="outline" className="p-4" aria-labelledby="fan-preview-title">
       <p id="fan-preview-title" className="cr-eyebrow text-[0.6875rem] text-fg-muted">
-        Fan preview
+        What fans see
       </p>
-      <div className="mt-3 grid gap-5 border border-line bg-surface-sunken p-5 sm:grid-cols-[9rem_minmax(0,1fr)] sm:items-center">
+      <div className="mt-3 grid gap-4 border border-line bg-surface-sunken p-4">
         {/* The cover as fans see it now (D-COVER-03): a little blurred until the switch is on. */}
         <PresaleCover
           coverUrl={coverUrl({ signed: detail.cover_reveal?.preview_url }, 480)}
           revealed={Boolean(detail.cover_reveal?.revealed)}
           title={detail.release.title}
           artist={detail.profile.display_name}
-          className="w-36"
+          className="w-full max-w-[14rem]"
         />
         <div className="min-w-0">
-        <p className="cr-eyebrow text-[0.6875rem] text-highlight">Pre-sale</p>
-        <p className="mt-2 text-2xl font-bold text-fg">{detail.release.title}</p>
-        <p className="mt-1 text-fg">{detail.profile.display_name}</p>
-        <p className="mt-3 inline-flex items-center gap-2 text-sm text-fg">
-          <CalendarClock aria-hidden="true" className="size-4" />
-          {date ? (
-            <span>
-              Out <DateTime value={date} format="datetime" />
+          <p className="cr-eyebrow text-[0.6875rem] text-highlight">Pre-sale</p>
+          <p className="mt-1 break-words text-xl font-bold text-fg">{detail.release.title}</p>
+          <p className="text-fg">{detail.profile.display_name}</p>
+          <p className="mt-2 inline-flex items-start gap-2 text-sm text-fg">
+            <CalendarClock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            {date ? (
+              <span>
+                Out <DateTime value={date} format="datetime" showZone />
+              </span>
+            ) : (
+              <span className="text-fg-muted">Release date not set yet</span>
+            )}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span aria-disabled="true" className="inline-flex h-10 items-center gap-2 bg-brand px-3 text-sm font-semibold text-on-brand opacity-90">
+              <ShoppingBag aria-hidden="true" className="size-4" /> {preorderLabel(detail.release.release_type)}
+              {p.price ? <Money value={{ amount_minor: p.price.amount_minor, currency_code: p.price.currency_code }} /> : null}
             </span>
-          ) : (
-            <span className="text-fg-muted">Release date not set yet</span>
-          )}
-        </p>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <span aria-disabled="true" className="inline-flex h-10 items-center gap-2 bg-brand px-4 text-sm font-semibold text-on-brand opacity-90">
-            <ShoppingBag aria-hidden="true" className="size-4" /> {preorderLabel(detail.release.release_type)}
-            {p.price ? <Money value={{ amount_minor: p.price.amount_minor, currency_code: p.price.currency_code }} /> : null}
-          </span>
-          {p.price && p.price.status !== "ACCEPTED" ? <span className="text-xs text-fg-muted">Price shown once Corner Room agrees it</span> : null}
-        </div>
+            {p.price && p.price.status !== "ACCEPTED" ? <span className="text-xs text-fg-muted">Price shown once Corner Room agrees it</span> : null}
+          </div>
         </div>
       </div>
-      <p className="mt-3 text-sm text-fg-muted">
-        Fans never see your songs, credits or anything else before release, even when you&apos;ve uploaded them. Your cover (or, without one,
-        your title on a glowing screen) shows a little blurred until you switch it on above.
-      </p>
+      <p className="mt-3 text-xs text-fg-muted">Fans never see your songs, credits or anything else before release, even when you&apos;ve uploaded them.</p>
     </Card>
   );
 }
@@ -181,13 +178,13 @@ function ReleaseDayEmail({ detail, reload }: { detail: StudioReleaseDetail; relo
 
   return (
     <div>
-      <h3 className="flex items-center gap-2 text-base font-bold text-fg">
-        <Mail aria-hidden="true" className="size-4" /> Email on release day
-      </h3>
-      <p className="mt-1 text-sm text-fg-muted">
+      <p className="flex items-start gap-2 text-sm text-fg-muted">
+        <Mail aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        <span>
         Everyone who pre-orders gets this when the music comes out, as well as Corner Room&apos;s own &ldquo;it&apos;s out&rdquo; email. Corner
         Room checks it before it can go, like every email to buyers, and it carries a link to stop emails from you. Fill-ins: {"{first_name}"},{" "}
         {"{buyer_name}"}, {"{artist}"}.
+        </span>
       </p>
       {email ? (
         <p role="status" className="mt-2 text-sm text-fg">
@@ -235,7 +232,76 @@ function ReleaseDayEmail({ detail, reload }: { detail: StudioReleaseDetail; relo
   );
 }
 
-export function PresalePanel({ detail, reload, priceRow }: { detail: StudioReleaseDetail; reload: Reload; priceRow: React.ReactNode }) {
+type StepTone = "done" | "now" | "waiting" | "problem" | "todo";
+
+const TONE_TEXT: Record<StepTone, string> = {
+  done: "text-success",
+  now: "text-highlight",
+  waiting: "text-info",
+  problem: "text-danger",
+  todo: "text-fg-muted",
+};
+
+/** One numbered step of the pre-sale, with where it stands in words (never colour alone). */
+function PresaleStep({ n, title, state, label, children }: { n: number; title: string; state: StepTone; label: string; children: React.ReactNode }) {
+  const Icon = state === "done" ? CircleCheck : state === "problem" ? CircleAlert : state === "waiting" ? Clock : CalendarClock;
+  return (
+    <Card as="section" tone="solid" className="p-5" aria-labelledby={`presale-step-${n}`} data-state={state}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 id={`presale-step-${n}`} className="flex items-center gap-3 text-base font-bold text-fg">
+          <span className="cr-num inline-flex size-7 items-center justify-center border border-line-strong text-sm">{n}</span>
+          {title}
+        </h3>
+        <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${TONE_TEXT[state]}`}>
+          <Icon aria-hidden="true" className="size-4" /> {label}
+        </span>
+      </div>
+      <div className="mt-3">{children}</div>
+    </Card>
+  );
+}
+
+type Presale = NonNullable<StudioReleaseDetail["presale"]>;
+
+function priceStep(p: Presale): [StepTone, string] {
+  if (p.price?.status === "ACCEPTED") return ["done", "Agreed"];
+  if (p.price?.status === "PROPOSED") return ["waiting", "Proposed"];
+  if (p.price?.status === "COUNTERED") return ["problem", "Corner Room replied"];
+  return ["now", "To do"];
+}
+
+function dateStep(p: Presale, stage: string): [StepTone, string] {
+  if (stage === "live") return ["done", "Live"];
+  if (stage === "closed") return ["done", "Date passed"];
+  if (stage === "approved_waiting_price" || p.status === "APPROVED") return ["done", "Approved"];
+  if (stage === "scheduled") return ["done", "Set by Corner Room"];
+  if (stage === "waiting") return ["waiting", "With Corner Room"];
+  if (stage === "returned") return ["problem", "Sent back"];
+  if (stage === "ready_to_send") return ["now", "To do"];
+  return ["todo", "After the price"];
+}
+
+function emailStep(p: Presale): [StepTone, string] {
+  const e = p.email;
+  if (!e) return ["todo", "Optional"];
+  if (e.status === "SENDING" || e.status === "SENT") return ["done", "Sent"];
+  if (e.status === "SCHEDULED") return ["done", "Approved"];
+  if (e.status === "IN_REVIEW") return ["waiting", "With Corner Room"];
+  if (e.review_note) return ["problem", "Sent back"];
+  return ["now", "Draft"];
+}
+
+export function PresalePanel({
+  detail,
+  reload,
+  priceRow,
+  campaignLink,
+}: {
+  detail: StudioReleaseDetail;
+  reload: Reload;
+  priceRow: React.ReactNode;
+  campaignLink?: React.ReactNode;
+}) {
   const p = detail.presale;
   const [when, setWhen] = useState(toLocalInput(p?.requested_release_at ?? p?.release_at ?? null));
   const { busy, error, run } = useRun(reload);
@@ -243,75 +309,95 @@ export function PresalePanel({ detail, reload, priceRow }: { detail: StudioRelea
   const stage = studioPresaleStage(p, detail.release.status);
   const type = RELEASE_TYPE_LABEL[detail.release.release_type]?.toLowerCase() ?? "release";
   const shownDate = p.release_at ?? p.requested_release_at ?? (when ? fromLocalInput(when) : null);
+  const [priceTone, priceLabel] = priceStep(p);
+  const [dateTone, dateLabel] = dateStep(p, stage);
+  const [mailTone, mailLabel] = emailStep(p);
+  const canSwitch = Boolean(detail.cover_reveal?.can_switch);
+  const revealed = Boolean(detail.cover_reveal?.revealed);
 
   return (
-    <div className="grid gap-5">
-      <Card tone="solid" className="p-5">
-        <p className="text-sm text-fg">
-          Open a pre-sale before your {type} is finished. Fans see only its title, your name, the release date and the pre-sale price, and
-          pay now. The music unlocks for them on release day. Keep adding the audio, cover and details here; Corner Room reviews all of it
-          before release day.
-        </p>
-
-        <div role="status" className="mt-4 border-l-2 border-line pl-3 text-sm">
-          <PresaleStatus detail={detail} />
-        </div>
-
-        <h3 className="mt-6 text-base font-bold text-fg">1. Pre-sale price</h3>
-        {priceRow}
-
-        <h3 className="mt-6 text-base font-bold text-fg">2. Release date</h3>
-        {p.can_request ? (
-          <form
-            className="mt-2 flex flex-wrap items-end gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const iso = fromLocalInput(when);
-              if (iso) void run("request", () => requestPresale(detail.release.id, iso));
-            }}
-          >
-            <Field label="When it comes out" hint="Bangladesh time. At least a day from now, so Corner Room can check it.">
-              {(c) => <Input {...c} type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} required />}
-            </Field>
-            <Button type="submit" busy={busy === "request"} disabled={!when || stage === "price_needed"}>
-              <Send aria-hidden="true" /> {p.status === "RETURNED" ? "Send the pre-sale again" : "Send pre-sale for review"}
-            </Button>
-          </form>
-        ) : (
-          <p className="mt-2 text-sm text-fg">
-            {p.release_at ?? p.requested_release_at ? (
-              <>
-                Out <DateTime value={(p.release_at ?? p.requested_release_at)!} format="datetime" />.
-              </>
-            ) : (
-              "Corner Room sets the date when it schedules the release."
-            )}{" "}
-            <span className="text-fg-muted">To change the date or cancel the pre-sale, ask Corner Room. If it&apos;s cancelled, every buyer gets a full refund.</span>
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start">
+      <div className="grid min-w-0 gap-4">
+        <Card tone="solid" className="p-5">
+          <p className="text-sm text-fg">
+            Take pre-orders before your {type} is finished. Fans see only the title, your name, the release date and the pre-sale price, and
+            pay now.
           </p>
-        )}
-        {stage === "price_needed" && p.can_request ? <p className="mt-2 text-sm text-fg-muted">Propose a pre-sale price above first.</p> : null}
-        {p.can_withdraw ? (
-          <Button variant="ghost" size="sm" className="mt-3" busy={busy === "withdraw"} onClick={() => void run("withdraw", () => withdrawPresale(detail.release.id))}>
-            <Undo2 aria-hidden="true" /> Take the pre-sale back
-          </Button>
+          <ol className="mt-3 grid list-decimal gap-1.5 pl-5 text-sm text-fg-muted">
+            <li>
+              <span className="font-semibold text-fg">Pre-sale.</span> Corner Room checks the price and the date below, then it goes live.
+            </li>
+            <li>
+              <span className="font-semibold text-fg">The music.</span> Keep adding songs, audio, cover and details, then send it in from Review.
+              It is checked separately.
+            </li>
+            <li>
+              <span className="font-semibold text-fg">Release day.</span> Once the music is approved, it goes out by itself on the pre-sale date.
+              Nobody has to press anything.
+            </li>
+          </ol>
+          <div role="status" className="mt-4 border-l-2 border-line pl-3 text-sm">
+            <PresaleStatus detail={detail} />
+          </div>
+        </Card>
+
+        <PresaleStep n={1} title="Pre-sale price" state={priceTone} label={priceLabel}>
+          {priceRow}
+        </PresaleStep>
+
+        <PresaleStep n={2} title="Release date" state={dateTone} label={dateLabel}>
+          {p.can_request ? (
+            <form
+              className="flex flex-wrap items-end gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const iso = fromLocalInput(when);
+                if (iso) void run("request", () => requestPresale(detail.release.id, iso));
+              }}
+            >
+              <Field label="When it comes out" hint="Dhaka time. At least a day from now, so Corner Room can check it." className="min-w-56 flex-1">
+                {(c) => <Input {...c} type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} required />}
+              </Field>
+              <Button type="submit" busy={busy === "request"} disabled={!when || stage === "price_needed"}>
+                <Send aria-hidden="true" /> {p.status === "RETURNED" ? "Send the pre-sale again" : "Send pre-sale for review"}
+              </Button>
+            </form>
+          ) : (
+            <p className="text-sm text-fg">
+              {p.release_at ?? p.requested_release_at ? (
+                <>
+                  Out <DateTime value={(p.release_at ?? p.requested_release_at)!} format="datetime" showZone />.
+                </>
+              ) : (
+                "Corner Room sets the date when it approves the music."
+              )}{" "}
+              <span className="text-fg-muted">To change the date or cancel the pre-sale, ask Corner Room. If it&apos;s cancelled, every buyer gets a full refund.</span>
+            </p>
+          )}
+          {stage === "price_needed" && p.can_request ? <p className="mt-2 text-sm text-fg-muted">Propose a pre-sale price in step 1 first.</p> : null}
+          {p.can_withdraw ? (
+            <Button variant="ghost" size="sm" className="mt-3" busy={busy === "withdraw"} onClick={() => void run("withdraw", () => withdrawPresale(detail.release.id))}>
+              <Undo2 aria-hidden="true" /> Take the pre-sale back
+            </Button>
+          ) : null}
+          <Problem message={error} />
+        </PresaleStep>
+
+        {canSwitch ? (
+          <PresaleStep n={3} title="Cover for fans" state={revealed ? "done" : "todo"} label={revealed ? "Showing" : "Blurred for now"}>
+            <CoverSwitch detail={detail} reload={reload} />
+          </PresaleStep>
         ) : null}
-        <Problem message={error} />
 
-        {detail.cover_reveal?.can_switch ? (
-          <>
-            <h3 className="mt-6 text-base font-bold text-fg">3. Cover for fans</h3>
-            <div className="mt-2">
-              <CoverSwitch detail={detail} reload={reload} />
-            </div>
-          </>
-        ) : null}
-      </Card>
+        <PresaleStep n={canSwitch ? 4 : 3} title="Email on release day" state={mailTone} label={mailLabel}>
+          <ReleaseDayEmail key={`${p.email?.id ?? "new"}-${p.email?.status ?? ""}`} detail={detail} reload={reload} />
+        </PresaleStep>
+      </div>
 
-      <FanPreview detail={detail} date={shownDate} />
-
-      <Card tone="solid" className="p-5">
-        <ReleaseDayEmail key={`${p.email?.id ?? "new"}-${p.email?.status ?? ""}`} detail={detail} reload={reload} />
-      </Card>
+      <aside className="grid gap-3 lg:sticky lg:top-24" aria-label="Fan preview">
+        <FanPreview detail={detail} date={shownDate} />
+        {campaignLink}
+      </aside>
     </div>
   );
 }

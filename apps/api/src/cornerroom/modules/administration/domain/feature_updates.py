@@ -136,12 +136,19 @@ FEATURES: Final[list[dict]] = [
             "staff approve the title, artist, date and price. Fans see a Pre-book button, the release "
             "time and what they get, with the cover a little blurred until the artist switches it on. "
             "On release day the music unlocks, buyers are told, and a release-day email from the "
-            "artist goes out. Staff can move the date (buyers are emailed), release early, send music "
+            "artist goes out. When staff approve the finished music of a release whose pre-sale date "
+            "is set, it is scheduled for that date and goes out by itself. Studio and the staff "
+            "release page show one release plan (pre-sale, the music, release day) with the next step, "
+            "and every time is Dhaka time. Staff can move the date (buyers are emailed), release early, send music "
             "back to pre-sale, or cancel with full refunds. Each pre-sale has its own Studio campaign "
             "pages with live numbers and share links. Buyers who paid before Corner Room launched get "
             "their music when their email is verified."
         ),
         "updates": [
+            {"date": "2026-11-13", "kind": "FIXED", "title": "Pre-sales go out on their date", "details": "Approving the finished music of a release on pre-sale now schedules it for the pre-sale date, so it goes out by itself. Before, it stayed waiting after the date."},
+            {"date": "2026-11-13", "kind": "IMPROVED", "title": "One release plan", "details": "Studio and the staff release page show the pre-sale, the music and release day as three steps with the next thing to do. Staff see only the buttons that apply now; rare ones sit under More actions."},
+            {"date": "2026-11-13", "kind": "IMPROVED", "title": "Pre-sale has its own part", "details": "In Studio the pre-sale is its own part of the release page: numbered steps with what fans see beside them."},
+            {"date": "2026-11-13", "kind": "FIXED", "title": "Times in Dhaka time", "details": "Release and pre-sale times show in Dhaka time everywhere, not UTC."},
             {"date": "2026-11-07", "kind": "IMPROVED", "title": "Cover switch", "details": "One on/off switch in the pre-sale: off shows the cover, or the title screen, a little blurred; on shows it clearly."},
             {"date": "2026-11-07", "kind": "FIXED", "title": "Shown covers no longer blurred", "details": "A cover the artist has shown now appears clearly instead of staying blurred."},
             {"date": "2026-11-07", "kind": "IMPROVED", "title": "Glossy Pre-book button", "details": "The Pre-book button over a pre-sale cover is a glossy glass button."},

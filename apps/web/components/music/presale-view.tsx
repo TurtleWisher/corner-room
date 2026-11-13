@@ -74,7 +74,7 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
             <p className="mt-5 flex flex-wrap items-baseline gap-x-2 text-fg">
               <CalendarClock aria-hidden="true" className="size-4 self-center" />
               <span className="text-lg font-semibold">
-                Out <DateTime value={presale.release_at} format="date" /> at <DateTime value={presale.release_at} format="time" />
+                Out <DateTime value={presale.release_at} format="date" /> at <DateTime value={presale.release_at} format="time" showZone />
               </span>
               {open ? <span className="text-sm text-fg-muted">{presaleCountdown(presale.release_at)}</span> : null}
             </p>

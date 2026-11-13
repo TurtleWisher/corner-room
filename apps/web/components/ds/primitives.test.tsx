@@ -64,8 +64,9 @@ describe("DateTime", () => {
     expect(out).toContain("8:00 PM");
     expect(out).toContain("Dhaka time");
   });
-  it("labels a UTC fallback instead of shifting silently", () => {
-    expect(html(<DateTime value="2025-10-17T14:00:00Z" format="time" />)).toContain("UTC");
+  it("shows Dhaka time when no zone is given (D-TIME-01), labelled when a named zone is unusable", () => {
+    expect(html(<DateTime value="2025-10-17T14:00:00Z" format="time" />)).toContain("8:00 PM");
+    expect(html(<DateTime value="2025-10-17T14:00:00Z" format="time" timeZone="Mars/Base" />)).toContain("Dhaka time");
   });
   it("date block uses condensed numerals", () => {
     expect(html(<DateBlock value="2025-10-17T14:00:00Z" timeZone="Asia/Dhaka" />)).toContain('class="cr-num');

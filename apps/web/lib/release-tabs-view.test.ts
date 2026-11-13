@@ -12,13 +12,13 @@ const audio = (over: Partial<{ status: string; is_current: boolean; has_audio: b
 
 describe("release parts", () => {
   it("lists the five parts with Preview Studio third", () => {
-    expect(RELEASE_PARTS.map((p) => p.label)).toEqual(["Details", "Songs", "Preview Studio", "Price", "Review"]);
+    expect(RELEASE_PARTS.map((p) => p.label)).toEqual(["Details", "Songs", "Preview Studio", "Price", "Pre-sale", "Review"]);
   });
 
   it("opens a part from its hash and from the old section links", () => {
     expect(partForHash("#preview")).toBe("preview");
     expect(partForHash("#tracks")).toBe("songs");
-    expect(partForHash("#presale")).toBe("price");
+    expect(partForHash("#presale")).toBe("presale");
     expect(partForHash("#cover")).toBe("details");
     expect(partForHash("submit")).toBe("review");
     expect(partForHash("#presale-review")).toBeNull();

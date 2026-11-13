@@ -279,8 +279,21 @@ class StudioPresaleOut(BaseModel):
     email: PresaleEmailOut | None = None
 
 
+class ReleasePlanOut(BaseModel):
+    """D-RELEASE-PLAN-01: where the pre-sale and the music stand, as one plan."""
+
+    stage: str = "MAKING"
+    release_day: datetime | None = None
+    release_day_kind: Literal["SET", "REQUESTED"] | None = None
+    date_passed: bool = False
+    goes_out_by_itself: bool = False
+    approve_schedules_for: datetime | None = None
+    staff_actions: list[str] = []
+
+
 class ReleaseDetailOut(BaseModel):
     release: ReleaseFieldsOut
+    plan: ReleasePlanOut = ReleasePlanOut()
     cover_url: str | None = None
     # D-COVER-01: a new cover waiting for staff, and the note when one was sent back.
     cover_waiting: bool = False
