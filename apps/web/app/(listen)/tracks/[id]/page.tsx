@@ -39,7 +39,9 @@ import { humanizeStatus } from "@/lib/format/status";
 import { canModerateMusic, creditName, formatDuration, playQueue, playState } from "@/lib/music-view";
 import { releaseIdsFor, trackBuyState } from "@/lib/ownership";
 import { RELEASE_STATUS } from "@/lib/status-maps";
-import { titleWithVersion } from "@/lib/track-title-view";
+import { titleParts } from "@/lib/track-title-view";
+
+const versionOf = (t: { title: string; version_title?: string | null }) => titleParts(t.title, t.version_title).version;
 
 /** Entrance order for the song page (D-MOTION-02, app/styles/modules/music.css). */
 const rise = (i: number) => ({ "--i": i }) as React.CSSProperties;
@@ -239,7 +241,13 @@ export default function TrackPage() {
           <div className="md:pt-6">
             <Eyebrow className="music-rise" style={rise(1)}>{["Track", artist, duration].filter(Boolean).join(" · ")}</Eyebrow>
             <Display as="h1" id="track-title" size="lg" className="music-rise mt-4" style={rise(2)}>
-              {titleWithVersion(track.title, track.version_title)}
+              {track.title}
+              {/* The version is a note, not part of the name (D-VERSION-01): smaller, muted, never split. */}
+              {versionOf(track) ? (
+                <span className="ml-[0.4em] inline-block whitespace-nowrap align-middle font-[family-name:var(--font-ui)] text-[0.3em] font-semibold tracking-[0.06em] text-fg-muted">
+                  ({versionOf(track)})
+                </span>
+              ) : null}
             </Display>
             <p className="music-rise mt-4 text-lg text-fg" style={rise(3)}>
               <CreditFace record={track} people={people} />
