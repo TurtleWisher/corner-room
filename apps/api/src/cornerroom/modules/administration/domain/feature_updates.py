@@ -281,6 +281,7 @@ FEATURES: Final[list[dict]] = [
             "made on their own phone or computer. Artists can turn story sharing off for a release."
         ),
         "updates": [
+            {"date": "2026-11-14", "kind": "IMPROVED", "title": "Title on one line", "details": "The room's big title always fits on one line, however long, getting smaller as needed; no word or bracket is left on a line of its own. The version sits after it, smaller and quieter, as a note on which version it is."},
             {"date": "2026-11-14", "kind": "IMPROVED", "title": "Version after the title", "details": "When the artist gives a song a version, such as Acoustic Demo, the room's big title shows it in brackets after the song's name."},
             {"date": "2026-11-14", "kind": "FIXED", "title": "Bar fits the song", "details": "The song box in the room's bar keeps room for the title, Playing and the scrubber; on smaller screens the tools move to their own row."},
             {
@@ -322,6 +323,7 @@ FEATURES: Final[list[dict]] = [
             "as an exact fraction of a million, with the exact count beside the cover."
         ),
         "updates": [
+            {"date": "2026-11-14", "kind": "IMPROVED", "title": "Version as a note", "details": "On the song page the version after the title is smaller and quieter, and never split across lines."},
             {"date": "2026-11-14", "kind": "IMPROVED", "title": "Version after the title", "details": "A song's version, such as Acoustic Demo, shows in brackets after its name on the song page."},
             {"date": "2026-11-02", "kind": "NEW", "title": "Listens in millions", "details": "Very large behind the cover, digits rolling into place."},
             {"date": "2026-10-31", "kind": "IMPROVED", "title": "Song page motion", "details": "Calmer movement on the song page."},

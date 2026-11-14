@@ -487,6 +487,8 @@ html:has([data-module="music"] .lr) {
 
 /* The playing title, in Sikat, rising in on every change of track. */
 [data-module="music"] .lr-heading {
+  /* A fixed width, never the title's own, so the one-line title can grow back when the window does. */
+  width: 100%;
   max-width: 48rem;
   margin-top: 1.25rem;
   text-align: center;
@@ -517,6 +519,37 @@ html:has([data-module="music"] .lr) {
 }
 [data-module="music"] .lr-atom {
   display: inline-block;
+}
+/* One line at any length (owner, 2026-11-14): the title never wraps, so no word, letter or bracket
+   lands on a line of its own; useOneLineFit shrinks the whole line (--lr-fit) to fit its box. */
+[data-module="music"] .lr-title {
+  white-space: nowrap;
+  /* The box takes its width from the room, never from the unbroken line inside it (which would
+     push the page wider than a phone and leave nothing to fit to). */
+  contain: inline-size;
+}
+[data-module="music"] .lr-title-line {
+  display: inline-block;
+  font-size: calc(1em * var(--lr-fit, 1));
+}
+/* The version is a note on which take this is, not part of the name: the UI face, small, muted,
+   in brackets, sitting on the title's middle. It doesn't break into pieces with the title. */
+[data-module="music"] .lr-title-version {
+  display: inline-block;
+  margin-left: 0.55em;
+  font-family: var(--font-ui);
+  /* Readable even when a long title shrinks a lot; the fit settles around it in a frame or two. */
+  font-size: max(0.3em, 0.625rem);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  vertical-align: middle;
+  color: var(--cr-fg-muted);
+  text-shadow: none;
+}
+[data-module="music"] .lr-title-link:hover .lr-title-version,
+[data-module="music"] .lr-title-link:focus-visible .lr-title-version {
+  color: var(--cr-highlight);
 }
 [data-module="music"] .lr-title-link:hover,
 [data-module="music"] .lr-title-link:focus-visible {
