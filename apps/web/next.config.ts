@@ -56,6 +56,11 @@ const nextConfig: NextConfig = {
       { source: "/events/:id/attendance", destination: "/staff/events/:id/attendance", permanent: true },
       { source: "/venues", destination: "/staff/venues", permanent: true },
       { source: "/venues/:id", destination: "/staff/venues/:id", permanent: true },
+      // Previews (owner, 2026-11-17, URL-13): always called previews, so their addresses say so too.
+      // Shared links to the old addresses keep working.
+      { source: "/teasers/:id", destination: "/previews/:id", permanent: true },
+      { source: "/studio/releases/:id/teasers", destination: "/studio/releases/:id/previews", permanent: true },
+      { source: "/studio/releases/:id/teasers/:previewId", destination: "/studio/releases/:id/previews/:previewId", permanent: true },
     ];
   },
 };

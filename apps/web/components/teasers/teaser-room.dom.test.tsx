@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-/* Teasers (owner, 2026-11-07, D-TEASER-00): a teaser plays through the site's player without a
+/* Teasers (owner, 2026-11-07, D-TEASER-00): a preview plays through the site's player without a
  * listening session or reported plays, as often as the listener likes, and the buy suggestion shows
  * only after a full listen, never on open, pause, a jump to the end or a failed load. */
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const nav = vi.hoisted(() => ({ pathname: "/teasers/tz1" }));
+const nav = vi.hoisted(() => ({ pathname: "/previews/tz1" }));
 vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname, useRouter: () => ({ push: vi.fn(), back: vi.fn() }) }));
 
 const api = vi.hoisted(() => ({
@@ -67,7 +67,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  nav.pathname = "/teasers/tz1";
+  nav.pathname = "/previews/tz1";
   vi.clearAllMocks();
   teasers.fetchPublicTeaser.mockResolvedValue(TEASER);
 });
@@ -104,16 +104,17 @@ async function openRoom() {
 }
 
 describe("Preview Room", () => {
-  it("says it is a teaser and offers nothing before a listen", async () => {
+  it("says it is a preview and offers nothing before a listen", async () => {
     await openRoom();
-    expect(screen.getByText("Preview Room · Teaser · Chorus")).toBeTruthy();
+    expect(screen.getByText("Preview Room")).toBeTruthy();
+    expect(screen.getAllByText("Chorus").length).toBeGreaterThan(0);
     expect(screen.getByText(/not the full song/)).toBeTruthy();
-    expect(screen.queryByText("Enjoying this teaser?")).toBeNull();
+    expect(screen.queryByText("Enjoying this preview?")).toBeNull();
   });
 
-  it("plays the teaser's own audio with no listening session and no reported plays", async () => {
+  it("plays the preview's own audio with no listening session and no reported plays", async () => {
     await openRoom();
-    await act(async () => screen.getByRole("button", { name: "Play the teaser" }).click());
+    await act(async () => screen.getByRole("button", { name: "Play the preview" }).click());
     expect(teasers.fetchTeaserAudio).toHaveBeenCalledWith("tz1", expect.anything());
     expect(audioEl().src).toContain("/api/v1/teasers/media/tok-tz1");
     expect(teasers.countTeaser).toHaveBeenCalledWith("tz1", "start");
@@ -127,37 +128,37 @@ describe("Preview Room", () => {
 
   it("suggests buying after a full listen; dismiss, replay and the next full listen shows it again", async () => {
     await openRoom();
-    await act(async () => screen.getByRole("button", { name: "Play the teaser" }).click());
+    await act(async () => screen.getByRole("button", { name: "Play the preview" }).click());
     await act(async () => listenToEnd());
     expect(teasers.countTeaser).toHaveBeenCalledWith("tz1", "complete");
-    expect(screen.getByText("Enjoying this teaser?")).toBeTruthy();
+    expect(screen.getByText("Enjoying this preview?")).toBeTruthy();
     const buy = screen.getByRole("link", { name: "Buy the song" });
     expect(buy.getAttribute("href")).toBe("/tracks/song1");
     await act(async () => fireEvent.keyDown(window, { key: "Escape" }));
-    expect(screen.queryByText("Enjoying this teaser?")).toBeNull();
-    await act(async () => screen.getByRole("button", { name: "Play the teaser again from the start" }).click());
-    expect(screen.queryByText("Enjoying this teaser?")).toBeNull();
+    expect(screen.queryByText("Enjoying this preview?")).toBeNull();
+    await act(async () => screen.getByRole("button", { name: "Play the preview again from the start" }).click());
+    expect(screen.queryByText("Enjoying this preview?")).toBeNull();
     await act(async () => listenToEnd());
-    expect(screen.getByText("Enjoying this teaser?")).toBeTruthy();
+    expect(screen.getByText("Enjoying this preview?")).toBeTruthy();
     await act(async () => screen.getByRole("button", { name: "Not now" }).click());
-    expect(screen.queryByText("Enjoying this teaser?")).toBeNull();
+    expect(screen.queryByText("Enjoying this preview?")).toBeNull();
   });
 
   it("never suggests on pause or a jump to the end", async () => {
     await openRoom();
-    await act(async () => screen.getByRole("button", { name: "Play the teaser" }).click());
+    await act(async () => screen.getByRole("button", { name: "Play the preview" }).click());
     await act(async () => {
       at(0);
       at(1);
       fireEvent.pause(audioEl());
     });
-    expect(screen.queryByText("Enjoying this teaser?")).toBeNull();
+    expect(screen.queryByText("Enjoying this preview?")).toBeNull();
     await act(async () => {
       fireEvent.seeking(audioEl());
       at(29.5);
       fireEvent.ended(audioEl());
     });
-    expect(screen.queryByText("Enjoying this teaser?")).toBeNull();
+    expect(screen.queryByText("Enjoying this preview?")).toBeNull();
     expect(teasers.countTeaser).not.toHaveBeenCalledWith("tz1", "complete");
   });
 
@@ -165,16 +166,16 @@ describe("Preview Room", () => {
     teasers.fetchPublicTeaser.mockResolvedValue({ ...TEASER, next_step: { kind: "OWNED", track_id: "song1", release_id: "rel1" } });
     await openRoom();
     expect(screen.getByRole("link", { name: "Play the full song" }).getAttribute("href")).toBe("/listen/song1");
-    await act(async () => screen.getByRole("button", { name: "Play the teaser" }).click());
+    await act(async () => screen.getByRole("button", { name: "Play the preview" }).click());
     await act(async () => listenToEnd());
-    expect(screen.queryByText("Enjoying this teaser?")).toBeNull();
+    expect(screen.queryByText("Enjoying this preview?")).toBeNull();
   });
 
   it("shows nothing broken when the audio can't load, and no suggestion", async () => {
     teasers.fetchTeaserAudio.mockRejectedValueOnce(new Error("offline"));
     await openRoom();
-    await act(async () => screen.getByRole("button", { name: "Play the teaser" }).click());
+    await act(async () => screen.getByRole("button", { name: "Play the preview" }).click());
     expect(screen.getByRole("status").textContent).toMatch(/stopped|try again/i);
-    expect(screen.queryByText("Enjoying this teaser?")).toBeNull();
+    expect(screen.queryByText("Enjoying this preview?")).toBeNull();
   });
 });

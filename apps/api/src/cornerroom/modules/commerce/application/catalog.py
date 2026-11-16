@@ -211,6 +211,7 @@ class CatalogCommerceService:
         amount_minor: int,
         currency_code: str,
         audience: str = "EVERYONE",
+        open_price: bool = False,
     ) -> Offer:
         product = await self.session.get(Product, product_id)
         if product is None or product.deleted_at is not None:
@@ -225,6 +226,15 @@ class CatalogCommerceService:
             organization_id=product.organization_id,
         )
         money = Money(amount_minor=amount_minor, currency_code=currency_code)
+        if open_price:
+            from cornerroom.infra.settings import get_settings
+            from cornerroom.modules.commerce.domain.open_price import assert_can_be_open
+
+            settings = get_settings()
+            assert_can_be_open(
+                audience=audience, amount_minor=money.amount_minor,
+                min_minor=int(settings.open_price_min_minor), max_minor=int(settings.open_price_max_minor),
+            )
         row = Offer(
             organization_id=product.organization_id,
             product_id=product.id,
@@ -232,6 +242,7 @@ class CatalogCommerceService:
             currency_code=money.currency_code,
             status="DRAFT",
             audience=audience,
+            open_price=open_price,
             created_by=ctx.user_id,
             updated_by=ctx.user_id,
         )
@@ -398,7 +409,8 @@ class CatalogCommerceService:
                     "id": proposal.id, "release_id": release.id, "release_title": release.title,
                     "release_status": release.status, "subject_type": proposal.subject_type,
                     "subject_id": proposal.subject_id, "subject_title": subject_title, "audience": proposal.audience,
-                    "amount_minor": proposal.amount_minor, "currency_code": proposal.currency_code, "note": proposal.note,
+                    "amount_minor": proposal.amount_minor, "currency_code": proposal.currency_code,
+                    "open_price": bool(proposal.open_price), "note": proposal.note,
                     "status": proposal.status, "decision_note": proposal.decision_note, "created_at": proposal.created_at,
                 }
             )
@@ -466,6 +478,7 @@ class CatalogCommerceService:
             offer = await self.create_offer(
                 ctx, product_id=product.id, amount_minor=proposal.amount_minor,
                 currency_code=proposal.currency_code, audience=proposal.audience,
+                open_price=bool(proposal.open_price),
             )
             offer = await self.transition_offer(ctx, offer.id, action="activate")
             proposal.status = "ACCEPTED"
@@ -482,7 +495,10 @@ class CatalogCommerceService:
         )
         await self.audit.record_from_auth(
             ctx, action=f"price.proposal_{decision}", entity_type="OfferProposal", entity_id=proposal.id,
-            new_state={"status": proposal.status, "amount_minor": proposal.amount_minor, "currency_code": proposal.currency_code},
+            new_state={
+                "status": proposal.status, "amount_minor": proposal.amount_minor,
+                "currency_code": proposal.currency_code, "open_price": bool(proposal.open_price),
+            },
             organization_id=org_id,
         )
         return proposal

@@ -101,6 +101,9 @@ class OrderCreate(BaseModel):
     offer_id: UUID | None = None
     # D-ADDR-01/02: the buyer confirmed their saved delivery address for this order.
     delivery_address_confirmed: bool = False
+    # D-OPEN-PRICE-01: what the buyer chose to pay for an open-price offer (minor units, in the
+    # offer's currency). Refused for a fixed price and below the offer's lowest amount.
+    amount_minor: int | None = Field(default=None, gt=0, le=9_000_000_000_000)
 
 
 class PaymentOut(BaseModel):
@@ -444,6 +447,10 @@ async def create_order(
         "hold_id": str(body.hold_id) if body.hold_id else None,
         "offer_id": str(body.offer_id) if body.offer_id else None,
     }
+    if body.amount_minor is not None:
+        if body.offer_id is None:
+            raise AppError("VALIDATION_ERROR", "Only an open price takes an amount", 422)
+        fingerprint["amount_minor"] = body.amount_minor
     started = await begin_idempotent(
         session,
         key=key,
@@ -467,8 +474,9 @@ async def create_order(
                 offer_id=body.offer_id,
                 idempotency_key=f"{ctx.user_id}:{idempotency_key}",
                 delivery_confirmed=body.delivery_address_confirmed,
+                chosen_amount_minor=body.amount_minor,
             )
-        out = (await _order_full(svc, order, payment)).model_dump(mode="json")
+        out =(await _order_full(svc, order, payment)).model_dump(mode="json")
         await complete_idempotent(session, started, status_code=201, body=json.dumps(out, default=str))
         return OrderOut.model_validate(out)
     except Exception:

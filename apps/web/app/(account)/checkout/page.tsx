@@ -19,6 +19,8 @@ import { useCredits } from "@/components/music/credits";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { fetchPresale } from "@/features/catalog/api";
 import { maybeCoverUrl, offerCoverSource } from "@/lib/cover-view";
+import { amountAsTyped, amountProblemWords, lowestFor, readChosenAmount, type ChosenAmount } from "@/lib/open-price-view";
+import { formatMoney } from "@/lib/format/money";
 import { PRESALE_PROMISE } from "@/lib/presale-view";
 import { friendlyError } from "@/lib/error-copy";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
@@ -62,6 +64,8 @@ type Summary = {
   offer?: { product_type: string | null; subject_id?: string | null };
   /** A pre-order (D-PRESALE-02/03): its release date, shown with the promise before paying. */
   presale?: { releaseAt: string; open: boolean } | null;
+  /** D-OPEN-PRICE-01: the price is the lowest amount and the buyer chooses what to pay. */
+  open?: { amount_minor: number; open_price: true; open_price_max_minor: number | null; open_price_min_minor: number | null; currency_code: string } | null;
 };
 
 function alreadyOwns(entitlements: EntitlementRecord[], offer: NonNullable<Summary["offer"]>): boolean {
@@ -89,6 +93,15 @@ async function loadSummary(item: CheckoutItem): Promise<Summary | null> {
       tone: "sky",
       offer: { product_type: offer.product_type, subject_id: offer.subject_id },
       presale: page ? { releaseAt: page.release_at, open: page.open !== false } : null,
+      open: offer.open_price
+        ? {
+            amount_minor: lowestFor(offer),
+            open_price: true,
+            open_price_max_minor: offer.open_price_max_minor ?? null,
+            open_price_min_minor: offer.open_price_min_minor ?? null,
+            currency_code: offer.currency_code,
+          }
+        : null,
     };
   }
   // Ticket types are read through their event; without the event the order total still comes from the API.
@@ -273,6 +286,52 @@ function ResumeOrder({ orderId }: { orderId: string }) {
 
 /* ---------- Before an order exists: choose, then reserve or continue ---------- */
 
+/** Open price (D-OPEN-PRICE-01): the buyer types what they pay, from the lowest amount up. The
+ * server checks the amount again before the order exists; this field only reads and explains. */
+function OpenPriceField({
+  open,
+  text,
+  chosen,
+  onText,
+}: {
+  open: NonNullable<Summary["open"]>;
+  text: string;
+  chosen: ChosenAmount;
+  onText: (text: string) => void;
+}) {
+  const lowest = formatMoney({ amount_minor: open.amount_minor, currency_code: open.currency_code }) ?? "the lowest amount";
+  const highest = open.open_price_max_minor ? formatMoney({ amount_minor: open.open_price_max_minor, currency_code: open.currency_code }) : null;
+  return (
+    <div className="open-price mt-3">
+      <p className="cr-eyebrow text-[0.6875rem] text-highlight">Open price</p>
+      <p className="mt-1 text-sm text-fg">
+        The artist lets you choose what to pay, from <span className="font-semibold">{lowest}</span>
+        {highest ? <> up to <span className="font-semibold">{highest}</span></> : " up"}.
+      </p>
+      <div className="mt-3 max-w-[16rem]">
+        <Field label="You pay (৳)" error={chosen.problem ? amountProblemWords(chosen.problem, lowest, highest) : undefined}>
+          {(c) => (
+            <Input
+              {...c}
+              inputMode="decimal"
+              autoComplete="off"
+              value={text}
+              onChange={(e) => onText(e.target.value)}
+              className="cr-num text-2xl"
+            />
+          )}
+        </Field>
+      </div>
+      {chosen.minor !== null ? (
+        <p className="mt-2 text-sm text-fg-muted" aria-live="polite">
+          You will pay{" "}
+          <Money value={{ amount_minor: chosen.minor, currency_code: open.currency_code }} minorDigits="always" className="font-semibold text-fg" />.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function NewCheckout() {
   const params = useSearchParams();
   const router = useRouter();
@@ -284,6 +343,9 @@ function NewCheckout() {
   const [error, setError] = useState<string | null>(null);
   // D-ADDR-01/02: the buyer confirms a delivery address (any country) before every payment.
   const [addressConfirmed, setAddressConfirmed] = useState(false);
+  // D-OPEN-PRICE-01: what the buyer types for an open price; empty until they change it, so the
+  // field starts at the lowest amount.
+  const [amountText, setAmountText] = useState<string | null>(null);
   const summary = useAsync(() => (item ? loadSummary(item) : Promise.resolve(null)), [item?.kind, item?.id]);
   const owned = useAsync(
     () =>
@@ -321,13 +383,17 @@ function NewCheckout() {
     );
   }
 
+  const open = summary.status === "ok" ? (summary.data?.open ?? null) : null;
+  const chosen = open ? readChosenAmount(amountText ?? amountAsTyped(open.amount_minor), open) : null;
+
   async function place() {
     if (!item) return;
+    if (chosen && chosen.minor === null) return;
     setError(null);
     setBusy(true);
     try {
       let order: OrderRecord;
-      if (item.kind === "offer") order = await createCatalogOrder(item.id, key, addressConfirmed);
+      if (item.kind === "offer") order = await createCatalogOrder(item.id, key, addressConfirmed, chosen?.minor ?? undefined);
       else {
         const hold = await createHold(item.id, Number.parseInt(quantity, 10));
         order = await createOrder(hold.id, key, addressConfirmed);
@@ -365,10 +431,13 @@ function NewCheckout() {
           <div>
             <p className="text-xs text-fg-muted">{summary.data.kind}</p>
             <h2 className="mt-1 text-xl font-bold text-fg">{summary.data.title}</h2>
-            {summary.data.price ? (
+            {summary.data.price && !open ? (
               <p className="mt-2">
                 <Money value={summary.data.price} minorDigits="always" variant="display" className="text-3xl text-highlight" />
               </p>
+            ) : null}
+            {open && chosen ? (
+              <OpenPriceField open={open} text={amountText ?? amountAsTyped(open.amount_minor)} chosen={chosen} onText={setAmountText} />
             ) : null}
             {summary.data.note ? <p className="mt-1 text-sm text-fg">{summary.data.note}</p> : null}
             {summary.data.presale ? (
@@ -416,7 +485,7 @@ function NewCheckout() {
         <>
           <DeliveryAddressStep confirmed={addressConfirmed} onConfirmedChange={setAddressConfirmed} />
           <div className="flex flex-wrap items-center gap-4">
-            <Button size="lg" busy={busy} disabled={!addressConfirmed} onClick={() => void place()}>
+            <Button size="lg" busy={busy} disabled={!addressConfirmed || Boolean(chosen && chosen.minor === null)} onClick={() => void place()}>
               {item.kind === "tickets" ? "Reserve and pay" : "Continue to payment"}
             </Button>
             <Link href="/store" className="cr-focus text-sm font-semibold text-fg-muted hover:text-fg">

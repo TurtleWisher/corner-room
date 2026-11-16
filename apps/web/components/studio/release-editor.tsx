@@ -3,6 +3,8 @@
 /* The Studio release editor (URL-05, design 3 and 5). Every field saves to the API and the page
  * re-renders from the server's answer; nothing here decides permission, readiness or state. */
 
+import { formatMoney } from "@/lib/format/money";
+import { rangeProblem } from "@/lib/open-price-view";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, CalendarClock, ChartLine, ChevronDown, CircleAlert, CircleCheck, GripVertical, Plus, Save, Send, Trash2, Undo2, UserRound } from "lucide-react";
 
@@ -814,6 +816,17 @@ function TrackCard({
   );
 }
 
+/** "Open prices are between ৳10 and ৳100,000." from the range the server sends. */
+function openRangeWords(range: StudioReleaseDetail["open_price_range"]): string {
+  const money = (minor: number | null | undefined) => (minor ? formatMoney({ amount_minor: minor, currency_code: range?.currency_code ?? "BDT" }) : null);
+  const low = money(range?.min_minor);
+  const high = money(range?.max_minor);
+  if (low && high) return `Open prices are between ${low} and ${high}.`;
+  if (low) return `Open prices start at ${low}.`;
+  if (high) return `Open prices go up to ${high}.`;
+  return "Set a lowest amount above ৳0.";
+}
+
 export function PriceRow({ detail, subjectType, subjectId, label, hint, audience, reload }: { detail: StudioReleaseDetail; subjectType: "TRACK" | "RELEASE"; subjectId: string; label: string; hint?: string; audience: "EVERYONE" | "OWNS_PART_OF_RELEASE" | "PRESALE"; reload: Reload }) {
   const mine = detail.proposals
     .filter((p) => p.subject_type === subjectType && p.subject_id === subjectId && p.audience === audience && p.status !== "WITHDRAWN")
@@ -823,9 +836,12 @@ export function PriceRow({ detail, subjectType, subjectId, label, hint, audience
   const countered = mine[0]?.status === "COUNTERED" ? mine[0] : null;
   const [text, setText] = useState("");
   const [note, setNote] = useState<string | null>(null);
+  // D-OPEN-PRICE-01: only the normal price can be open; it starts as the current proposal has it.
+  const canBeOpen = audience === "EVERYONE";
+  const [open, setOpen] = useState(Boolean(current?.open_price));
   const { busy, error, run } = useAction(reload);
   return (
-    <div className="grid gap-2 border-b border-line py-3 md:grid-cols-[1fr_14rem] md:items-end">
+    <div className="grid gap-2 border-b border-line py-3 md:grid-cols-[1fr_16rem] md:items-end">
       <div>
         <p className="font-semibold text-fg">{label}</p>
         {hint ? <p className="text-sm text-fg-muted">{hint}</p> : null}
@@ -833,7 +849,9 @@ export function PriceRow({ detail, subjectType, subjectId, label, hint, audience
           {current ? (
             <>
               {current.status === "ACCEPTED" ? "Agreed: " : "You proposed "}
+              {current.open_price ? "an open price from " : null}
               <Money value={{ amount_minor: current.amount_minor, currency_code: current.currency_code }} />
+              {current.open_price ? " (buyers choose what to pay, never less)" : null}
               {current.status === "PROPOSED" ? ". Corner Room's team will confirm the final price with you." : null}
             </>
           ) : countered ? null : (
@@ -848,7 +866,7 @@ export function PriceRow({ detail, subjectType, subjectId, label, hint, audience
         ) : null}
       </div>
       <form
-        className="flex items-end gap-2"
+        className="grid gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           const minor = parsePriceToMinor(text);
@@ -856,20 +874,42 @@ export function PriceRow({ detail, subjectType, subjectId, label, hint, audience
             setNote("Enter a price like 120 or 120.50.");
             return;
           }
+          if (open && canBeOpen) {
+            // The owner's range for open prices (৳10 to ৳100,000); the server checks again.
+            const range = detail.open_price_range;
+            if (minor <= 0 || rangeProblem(minor, range)) {
+              setNote(openRangeWords(range));
+              return;
+            }
+          }
           setNote(null);
           void run(`price-${subjectId}-${audience}`, async () => {
-            await proposeStudioPrice(detail.release.id, { subject_type: subjectType, subject_id: subjectId, audience, amount_minor: minor, currency_code: "BDT" });
+            await proposeStudioPrice(detail.release.id, { subject_type: subjectType, subject_id: subjectId, audience, amount_minor: minor, currency_code: "BDT", open_price: canBeOpen && open });
             setText("");
             return fetchStudioRelease(detail.release.id);
           });
         }}
       >
-        <Field label="Price (৳)" className="flex-1">
-          {(c) => <Input {...c} value={text} onChange={(e) => setText(e.target.value)} inputMode="decimal" placeholder={current ? "Propose a new price" : "e.g. 120"} />}
-        </Field>
-        <Button type="submit" size="sm" busy={busy !== null}>
-          Propose
-        </Button>
+        {canBeOpen ? (
+          <label className="open-price-switch cr-focus-within">
+            <input type="checkbox" role="switch" className="sr-only" checked={open} onChange={(e) => setOpen(e.target.checked)} />
+            <span aria-hidden="true" className="open-price-track" data-on={open || undefined} />
+            <span className="text-sm text-fg">
+              <span className="font-semibold">Open price</span>
+              <span className="block text-xs text-fg-muted">
+                {open ? `On: buyers choose what to pay, never less than this. ${openRangeWords(detail.open_price_range)}` : "Off: everyone pays this price"}
+              </span>
+            </span>
+          </label>
+        ) : null}
+        <div className="flex items-end gap-2">
+          <Field label={open && canBeOpen ? "Lowest amount (৳)" : "Price (৳)"} className="flex-1">
+            {(c) => <Input {...c} value={text} onChange={(e) => setText(e.target.value)} inputMode="decimal" placeholder={current ? "Propose a new price" : "e.g. 120"} />}
+          </Field>
+          <Button type="submit" size="sm" busy={busy !== null}>
+            Propose
+          </Button>
+        </div>
       </form>
       <Problem message={note ?? error} />
     </div>

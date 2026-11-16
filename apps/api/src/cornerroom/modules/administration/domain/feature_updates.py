@@ -17,7 +17,7 @@ AREAS: Final = ("Music", "Listening", "Events", "Money", "Artists", "Fans", "Sta
 FEATURES: Final[list[dict]] = [
     {
         "id": "teasers",
-        "name": "Teasers",
+        "name": "Previews",
         "area": "Music",
         "audience": ["Artists", "Fans", "Staff"],
         "summary": "A short part of a song that anyone can hear free, as often as they like, until they buy it.",
@@ -25,23 +25,33 @@ FEATURES: Final[list[dict]] = [
             "In Studio, the Preview Studio (its own part of each release page) lets an artist or band pick a "
             "part of a song on its waveform (at most 60 seconds), add a fade in, a fade out and a volume "
             "change, hear it as they edit, and have Corner Room make it from the song's own master, which "
-            "never changes. Staff approve each teaser on Catalog > Releases. Once approved, anyone can "
+            "never changes. Staff approve each preview on Catalog > Releases. Once approved, anyone can "
             "listen in its Preview Room or from the song page, release page, pre-sale page and player, "
             "without signing in or buying. After each full listen a gentle suggestion offers to buy the "
-            "song or its release (or pre-book it), never stopping a replay. Teasers work before and after "
+            "song or its release (or pre-book it), never stopping a replay. Previews work before and after "
             "release and stay on the same song. A newer version waits for approval while the live one "
-            "keeps playing. Teaser plays are not song plays: they never count as listens or earn "
-            "royalties. Artists see how many times each teaser was started and listened to the end. "
-            "People who own a song find its teasers in the song's Preview Corner."
+            "keeps playing. Preview plays are not song plays: they never count as listens or earn "
+            "royalties. Artists see how many times each preview was started and listened to the end. "
+            "People who own a song find its preview in the song's Preview Corner."
         ),
         "updates": [
+            {
+                "date": "2026-11-16",
+                "kind": "IMPROVED",
+                "title": "Always called a preview, and a fuller Preview Room",
+                "details": (
+                    "Every page, button, email and note now says preview, and the pages' own addresses say previews too (old links still work). The Preview Room has a bigger "
+                    "player that is ready before you press play, a copy-link button, what a preview is "
+                    "in three short lines, and the song's other previews playable from the same page."
+                ),
+            },
             {
                 "date": "2026-11-08",
                 "kind": "IMPROVED",
                 "title": "Preview Studio, Preview Room and Preview Corner",
                 "details": (
-                    "The Teaser Studio is now the Preview Studio and has its own part of the release page. "
-                    "The teaser page is the Preview Room, and a song's teasers section is its Preview "
+                    "The artist's tool is the Preview Studio and has its own part of the release page. "
+                    "The preview page is the Preview Room, and a song's preview section is its Preview "
                     "Corner."
                 ),
             },
@@ -58,7 +68,7 @@ FEATURES: Final[list[dict]] = [
             {
                 "date": "2026-11-07",
                 "kind": "IMPROVED",
-                "title": "Teaser editor on one screen",
+                "title": "Preview editor on one screen",
                 "details": (
                     "The whole editor fits one screen: the play key and loop sit on the waveform's own "
                     "toolbar with undo and zoom, times, fades and volume share one row, and the actions "
@@ -68,16 +78,16 @@ FEATURES: Final[list[dict]] = [
             {
                 "date": "2026-11-07",
                 "kind": "FIXED",
-                "title": "Deleting a teaser deletes its versions",
-                "details": "Deleting a teaser that was never public now removes every version of it too.",
+                "title": "Deleting a preview deletes its versions",
+                "details": "Deleting a preview that was never public now removes every version of it too.",
             },
             {
                 "date": "2026-11-07",
                 "kind": "NEW",
-                "title": "Teaser Studio and teaser listening",
+                "title": "Preview Studio and preview listening",
                 "details": (
                     "Waveform editor with zoom, typed times, fades, volume, undo and live preview; "
-                    "versions with staff review; public teaser page; teasers on song, release and "
+                    "versions with staff review; public preview page; previews on song, release and "
                     "pre-sale pages; buy suggestion after a full listen; start and full-listen counts."
                 ),
             },
@@ -207,7 +217,7 @@ FEATURES: Final[list[dict]] = [
             {"date": "2026-11-09", "kind": "IMPROVED", "title": "Emails on the campaign page", "details": "Each campaign has Collectibles and Emails parts: tick gifts and press Email them, see automatic emails and every gift email sent, with search."},
             {"date": "2026-11-09", "kind": "IMPROVED", "title": "Calmer collectible tracking", "details": "Status chips with counts, search by name, email, phone or address, and a floating bar for the chosen gifts."},
             {"date": "2026-11-08", "kind": "IMPROVED", "title": "Clearer gift emails", "details": "Each status shows the email buyers get now, three steps (write, approval, buyers get it), a check before emailing buyers, and each buyer's own line saying on its way, sent or couldn't send."},
-            {"date": "2026-11-08", "kind": "FIXED", "title": "Staff stay in the staff console", "details": "Staff approve gift emails and added people right in the staff gift list; the staff release page no longer opens the artist's Teaser Studio or pre-sale pages."},
+            {"date": "2026-11-08", "kind": "FIXED", "title": "Staff stay in the staff console", "details": "Staff approve gift emails and added people right in the staff gift list; the staff release page no longer opens the artist's Preview Studio or pre-sale pages."},
             {"date": "2026-11-07", "kind": "IMPROVED", "title": "Gift email composer", "details": "One-click templates, a preview as each buyer by name, a button, files, a test to yourself, and emailing chosen buyers by status."},
             {"date": "2026-11-07", "kind": "NEW", "title": "Your own gift emails", "details": "Artists word the dispatched, returned and missing emails for each gift campaign in Studio's email editor; Corner Room approves them once."},
             {"date": "2026-11-07", "kind": "FIXED", "title": "Waiting people in the staff list", "details": "The staff list says how many people an artist added wait for approval, with a link to approve them."},
@@ -231,6 +241,12 @@ FEATURES: Final[list[dict]] = [
             "been bought."
         ),
         "updates": [
+            {
+                "date": "2026-11-16",
+                "kind": "NEW",
+                "title": "Open price",
+                "details": "An artist can turn on Open price when proposing the price of a song or release. The agreed price is then the lowest amount, and each buyer chooses what to pay from there up at checkout. Wherever the music is listed its price reads From and the amount. Staff see that a proposal is an open price before agreeing to it. Every open price is between ৳10 and ৳100,000.",
+            },
             {"date": "2026-11-03", "kind": "IMPROVED", "title": "Only music that is out", "details": "The Store lists only released music; checkout refuses songs that aren't out."},
             {"date": "2026-11-03", "kind": "NEW", "title": "Delete release", "details": "Remove a release that isn't out yet, with its songs, prices and waiting reviews."},
             {"date": "2026-11-01", "kind": "IMPROVED", "title": "Albums and singles on Listen", "details": "Hover-focus lists and glass artist cards."},
@@ -254,6 +270,12 @@ FEATURES: Final[list[dict]] = [
             "music's own artist listen without buying."
         ),
         "updates": [
+            {
+                "date": "2026-11-16",
+                "kind": "IMPROVED",
+                "title": "A handier player bar",
+                "details": "The bar at the bottom shows how far the song is as a line of light on its top edge, on phones too. It has volume and mute, an Up next list to jump to any coming song, small level bars while playing, and keyboard keys: Space to play or pause, the arrows to move five seconds, M to mute, Shift+N and Shift+P for next and previous.",
+            },
             {"date": "2026-11-01", "kind": "IMPROVED", "title": "Player bar follows the scroll", "details": "Fades away while reading down and comes back on scrolling up."},
             {"date": "2026-10-30", "kind": "IMPROVED", "title": "Listen without buying", "details": "Staff and the music's own artist or band listen without buying."},
             {"date": "2026-10-28", "kind": "IMPROVED", "title": "Music keeps playing", "details": "Music keeps playing on every page; MP3 320 streams; Normalise off by default; glossier buttons."},
@@ -402,6 +424,12 @@ FEATURES: Final[list[dict]] = [
         ),
         "updates": [
             {
+                "date": "2026-11-16",
+                "kind": "IMPROVED",
+                "title": "Studio answers the mouse",
+                "details": "Every Studio card catches a soft mint light where the mouse is and its edge brightens beside it, a line of light follows along the header, the menu marks the page with a sliding marker, and buttons settle when pressed. Nothing moves while the mouse is still.",
+            },
+            {
                 "date": "2026-11-08",
                 "kind": "IMPROVED",
                 "title": "Release page in parts",
@@ -473,8 +501,14 @@ FEATURES: Final[list[dict]] = [
             "the most, as discs turning in a glass carousel, with a small player for the disc in front."
         ),
         "updates": [
+            {
+                "date": "2026-11-16",
+                "kind": "IMPROVED",
+                "title": "A longer home page that explains Corner Room",
+                "details": "New parts say what Corner Room is (the live room, the listening room, your shelf), how listening works in four steps, what artists get, and answer the usual questions, with a way in at the end. Scrolling from events to music now changes the whole window from the red room to the blue one, and cards catch a soft light under the mouse.",
+            },
             {"date": "2026-11-08", "kind": "FIXED", "title": "Singles listed twice in Trending Corner", "details": "Staff saw a single twice (the single and its one song). A single now shows once, as the single, and a song and the release it is on can no longer both be picked."},
-            {"date": "2026-11-08", "kind": "NEW", "title": "Trending Corner", "details": "Staff pick the music selling and being heard the most (Catalog > Trending Corner, with sales and listens beside each). On the home page it turns as discs you can point at, click, drag or swipe; the one in front plays below: the whole song for owners, its teaser for everyone else."},
+            {"date": "2026-11-08", "kind": "NEW", "title": "Trending Corner", "details": "Staff pick the music selling and being heard the most (Catalog > Trending Corner, with sales and listens beside each). On the home page it turns as discs you can point at, click, drag or swipe; the one in front plays below: the whole song for owners, its preview for everyone else."},
             {"date": "2026-11-08", "kind": "IMPROVED", "title": "Less empty space under the hero", "details": "The welcome shortcuts sit closer under the hero."},
             {"date": "2026-11-02", "kind": "FIXED", "title": "Carousel with Reduce Motion", "details": "Keeps turning with Reduce Motion on; phones show song, artist and cover."},
             {"date": "2026-11-01", "kind": "IMPROVED", "title": "Hero fits the first screen", "details": "The landing hero is one composition."},
@@ -494,6 +528,12 @@ FEATURES: Final[list[dict]] = [
             "Lists focus the row under the pointer. The site has an icon, robots rules and a sitemap."
         ),
         "updates": [
+            {
+                "date": "2026-11-16",
+                "kind": "IMPROVED",
+                "title": "Smoother moves between pages",
+                "details": "A thin line of light across the top shows a page is loading from the moment a link is pressed, the arriving page fades in, and the mark under a menu link draws in on hover.",
+            },
             {"date": "2026-11-06", "kind": "FIXED", "title": "Search bar jumping", "details": "The header search bar no longer jumps open and shut."},
             {"date": "2026-11-01", "kind": "FIXED", "title": "Missing results", "details": "Search keeps documents with no profile row; skips only deleted acts."},
             {"date": "2026-11-01", "kind": "IMPROVED", "title": "Each act once", "details": "Each act shows once with its picture; site icon, robots and sitemap."},
@@ -545,6 +585,12 @@ FEATURES: Final[list[dict]] = [
         ),
         "updates": [
             {
+                "date": "2026-11-16",
+                "kind": "IMPROVED",
+                "title": "A tighter staff console",
+                "details": "The staff home shows what is waiting in each review queue. Ctrl+K finds any staff page. Every staff page uses smaller, denser controls and tables, and fields that were named only by grey hint text now have real labels; amounts in the smallest unit explain what to type.",
+            },
+            {
                 "date": "2026-11-09",
                 "kind": "IMPROVED",
                 "title": "Artists always wait, staff never do",
@@ -560,7 +606,7 @@ FEATURES: Final[list[dict]] = [
                 "title": "One staff member approves alone",
                 "details": (
                     "While Corner Room has one staff member, nobody else is needed to approve: what staff "
-                    "send in (releases, pre-sales, changes, lyrics, emails, gifts, teasers, managers, "
+                    "send in (releases, pre-sales, changes, lyrics, emails, gifts, preview, managers, "
                     "profile changes) is approved at once, and staff may approve their own work. Artists "
                     "without staff rights still wait for staff. A setting turns the second approval back on."
                 ),

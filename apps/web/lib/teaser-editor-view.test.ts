@@ -39,7 +39,7 @@ const s = (start: number, end: number, fi = 0, fo = 0, gain = 0): TeaserSettings
 const SONG = 180_000;
 
 describe("fitSettings", () => {
-  it("keeps the teaser inside the song and the limits", () => {
+  it("keeps the preview inside the song and the limits", () => {
     expect(fitSettings(s(0, 90_000), SONG, limits)).toEqual(s(0, 60_000));
     expect(fitSettings(s(178_000, 190_000), SONG, limits)).toEqual(s(175_000, 180_000));
     expect(fitSettings(s(10_000, 11_000), SONG, limits)).toEqual(s(10_000, 15_000));
@@ -49,7 +49,7 @@ describe("fitSettings", () => {
   it("fits a song shorter than the limits", () => {
     expect(fitSettings(s(0, 9_000), 8_000, limits)).toEqual(s(0, 8_000));
   });
-  it("limits fades to half the teaser", () => {
+  it("limits fades to half the preview", () => {
     expect(maxFadeMs(7_000, limits)).toBe(3_500);
     expect(maxFadeMs(60_000, limits)).toBe(10_000);
   });
@@ -114,7 +114,7 @@ describe("times and levels", () => {
     expect(gainMultiplier(0)).toBe(1);
     expect(gainMultiplier(-600)).toBeCloseTo(0.501, 3);
   });
-  it("fades linearly, like the finished teaser", () => {
+  it("fades linearly, like the finished preview", () => {
     const f = s(10_000, 20_000, 2_000, 4_000);
     expect(fadeLevel(10_000, f)).toBe(0);
     expect(fadeLevel(11_000, f)).toBe(0.5);
@@ -151,7 +151,7 @@ describe("words", () => {
     expect(versionLine({ number: 3, status: "READY", review_status: "RETURNED", is_live: false })).toBe("Version 3 · sent back");
   });
   it("turns problem codes into sentences", () => {
-    expect(problemWords("TOO_LONG,FADE_TOO_LONG")).toEqual(["The teaser is too long.", "A fade is longer than allowed."]);
+    expect(problemWords("TOO_LONG,FADE_TOO_LONG")).toEqual(["The preview is too long.", "A fade is longer than allowed."]);
     expect(problemWords("UNKNOWN")).toEqual([]);
     expect(problemWords(null)).toEqual([]);
   });

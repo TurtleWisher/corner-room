@@ -6,7 +6,8 @@ import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
-import { ButtonLink, Card, EmptyState, ErrorState, Money, Skeleton } from "@/components/ds";
+import { ButtonLink, Card, EmptyState, ErrorState, Skeleton } from "@/components/ds";
+import { OfferPrice } from "@/components/music/offer-price";
 import { PageIntro, RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import { type PresalePageRecord } from "@/features/catalog/api";
@@ -46,7 +47,7 @@ function OfferCard({ offer, presale }: { offer: OfferRecord; presale?: PresalePa
       <h3 className="mt-4 truncate text-base font-bold text-fg">{title}</h3>
       {productKind(offer.product_type) !== title ? <p className="text-xs text-fg-muted">{productKind(offer.product_type)}</p> : null}
       <p className="mt-3 flex-1">
-        <Money value={{ amount_minor: offer.amount_minor, currency_code: offer.currency_code }} variant="display" className="text-2xl text-highlight" />
+        <OfferPrice offer={offer} variant="display" className="text-2xl text-highlight" />
       </p>
       <div className="mt-4">
         <BuyLink href={checkoutHref} label={`Buy ${title}`}>Buy</BuyLink>

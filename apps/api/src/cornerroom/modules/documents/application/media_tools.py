@@ -161,7 +161,7 @@ async def transcode(settings: Settings, source: Path, target: Path, profile: Pro
         raise MediaToolError("TRANSCODE_FAILED", tail[0][:200])
 
 
-# --- Teasers (D-TEASER-00): editor peaks and teaser copies, both read the master only ---------
+# --- Teasers (D-TEASER-00): editor peaks and preview copies, both read the master only ---------
 
 WAVEFORM_RATE_HZ = 4000  # enough for drawing peaks; never used for listening
 

@@ -1,0 +1,23 @@
+﻿/* Spotlight (owner, 2026-11-15): a card catches a soft light where the mouse is, and its edge
+   brightens beside it. Drawn inside the cut-corner fill and border (tokens.css .cr-cut), so it
+   follows the cut exactly and never sits above the card's text. components/ds/spotlight.tsx writes
+   --sx / --sy on the card under the pointer; with no pointer (touch, keyboard) nothing is drawn. */
+.cr-spot {
+  --spot-tint: var(--cr-highlight);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cr-glass-card.cr-spot:hover {
+    --cut-fill:
+      radial-gradient(22rem circle at var(--sx, 50%) var(--sy, 0%), color-mix(in srgb, var(--spot-tint) 12%, transparent), transparent 68%),
+      var(--cr-glass-fill);
+    --cut-border:
+      radial-gradient(15rem circle at var(--sx, 50%) var(--sy, 0%), color-mix(in srgb, var(--spot-tint) 85%, transparent), transparent 70%),
+      var(--cr-glass-edge-hover);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cr-glass-card.cr-spot:hover {
+    --cut-fill: var(--cr-glass-fill);
+    --cut-border: var(--cr-glass-edge-hover);
+  }
+}

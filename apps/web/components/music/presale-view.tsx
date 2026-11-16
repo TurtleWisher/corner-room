@@ -121,7 +121,7 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
           </div>
         </div>
       </LitSurface>
-      {/* A song's teaser may be public before release (D-TEASER-04): free to hear here. */}
+      {/* A song's preview may be public before release (D-TEASER-04): free to hear here. */}
       <div className="mx-auto max-w-[90rem] px-4 pb-16 pt-10 empty:hidden md:px-6">
         <ReleaseTeasers releaseId={presale.id} artist={presale.artist} />
       </div>

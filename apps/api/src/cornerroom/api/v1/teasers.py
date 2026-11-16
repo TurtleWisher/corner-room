@@ -1,7 +1,7 @@
-"""Teasers (owner, 2026-11-07, D-TEASER-00 to D-TEASER-04): the Teaser Studio, staff review, and
-the free teaser anyone can hear as often as they like (music/application/teasers.py).
+"""Teasers (owner, 2026-11-07, D-TEASER-00 to D-TEASER-04): the Preview Studio, staff review, and
+the free preview anyone can hear as often as they like (music/application/teasers.py).
 
-Teaser audio and song audio never share a route: song bytes come only from /playback/media (behind
+Preview audio and song audio never share a route: song bytes come only from /playback/media (behind
 entitlement checks), teaser bytes only from /teasers/media, and the artist's editing audio only from
 /studio/audio (the song's playback copy, never the master)."""
 
@@ -253,7 +253,7 @@ class TeaserMapIn(BaseModel):
 
 
 class TeaserMapOut(BaseModel):
-    # track id -> its newest published teaser, for rows of songs a listener can't play.
+    # track id -> its newest published preview, for rows of songs a listener can't play.
     teasers: dict[str, UUID]
 
 
@@ -329,7 +329,7 @@ async def process_teaser(teaser_id: UUID, ctx: Ctx, svc: Svc) -> TeaserDetailOut
 @router.post("/studio/teasers/{teaser_id}/transition", response_model=TeaserDetailOut)
 async def transition_teaser(teaser_id: UUID, body: TransitionIn, ctx: Ctx, svc: Svc) -> TeaserDetailOut:
     out = await svc.transition(ctx, teaser_id, body.action)
-    # A teaser sent for review is approved at once when staff send it (D-REVIEW-ARTIST-01).
+    # A preview sent for review is approved at once when staff send it (D-REVIEW-ARTIST-01).
     if body.action == "submit" and await approve_at_once(
         svc.session, lambda: svc.review(ctx, teaser_id, "approve", None), ctx=ctx, act_id=await svc.act_of(teaser_id), settings=svc.settings
     ):
@@ -393,13 +393,13 @@ async def public_teaser(teaser_id: UUID, svc: Svc, ctx: MaybeCtx) -> PublicTease
 
 @router.get("/tracks/{track_id}/teasers", response_model=TrackTeasersOut)
 async def track_teasers(track_id: UUID, svc: Svc) -> TrackTeasersOut:
-    """Published teasers of a song, newest first. Empty for a song without any."""
+    """Published preview of a song, newest first. Empty for a song without any."""
     return TrackTeasersOut(items=[TeaserSummaryOut(**row) for row in await svc.track_teasers(track_id)])
 
 
 @router.get("/releases/{release_id}/teasers", response_model=ReleaseTeaserListOut)
 async def release_teasers_public(release_id: UUID, svc: Svc) -> ReleaseTeaserListOut:
-    """Published teasers of a release's songs, in track order (also on pre-sale, D-TEASER-04)."""
+    """Published preview of a release's songs, in track order (also on pre-sale, D-TEASER-04)."""
     return ReleaseTeaserListOut(items=[ReleaseTeaserOut(**row) for row in await svc.release_teasers(release_id)])
 
 

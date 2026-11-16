@@ -155,11 +155,13 @@ export async function createOrder(hold_id: string, idempotencyKey: string, deliv
   });
 }
 
-export async function createCatalogOrder(offer_id: string, idempotencyKey: string, deliveryConfirmed = false): Promise<OrderRecord> {
+/** `amountMinor`: what the buyer chose to pay for an open price (D-OPEN-PRICE-01); the server
+ * checks it against the offer and refuses it for a fixed price. */
+export async function createCatalogOrder(offer_id: string, idempotencyKey: string, deliveryConfirmed = false, amountMinor?: number): Promise<OrderRecord> {
   return apiFetch<OrderRecord>("/api/v1/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-    body: JSON.stringify({ offer_id, delivery_address_confirmed: deliveryConfirmed }),
+    body: JSON.stringify({ offer_id, delivery_address_confirmed: deliveryConfirmed, ...(amountMinor === undefined ? {} : { amount_minor: amountMinor }) }),
     retry: false,
   });
 }

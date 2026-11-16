@@ -1,8 +1,8 @@
-"""Worker side of teasers (D-TEASER-00): editor peaks and teaser copies, made from the master.
+"""Worker side of preview (D-TEASER-00): editor peaks and preview copies, made from the master.
 
 Both run as documents.media_jobs (kinds WAVEFORM and TEASER) through the existing worker loop, so
 they share its claim, retry, back-off, DEAD state and operator retry. The master is only read.
-Teaser files are class teaser_audio, so the song media route can never serve them and the teaser
+Preview files are class teaser_audio, so the song media route can never serve them and the preview
 media route can never serve a song.
 """
 

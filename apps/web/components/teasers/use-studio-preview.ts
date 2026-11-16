@@ -3,7 +3,7 @@
 /*
  * Preview Studio preview (owner, 2026-11-07, D-TEASER-00). Plays the song's playback copy (never the
  * master) and applies the chosen fades and gain while it plays, with the same linear curves the
- * server uses, so what the artist hears is what the teaser will sound like. A made version plays
+ * server uses, so what the artist hears is what the preview will sound like. A made version plays
  * as-is. One audio element, separate from the site's player, which is paused while previewing.
  *
  * Gain above 0 dB needs Web Audio, which can only read media fetched in CORS mode; if that fails the

@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     # Bangladesh share one carrier address, hence a roomy number. 0 turns the limit off.
     presale_count_max_per_hour: int = 60
     # Teasers (owner, 2026-11-07): at most 60 s (D-TEASER-03); 0 blocks making any (fail closed).
-    # The 5 s floor only stops an empty file; it is not a product rule (Q-TS-06). Counts of teaser
+    # The 5 s floor only stops an empty file; it is not a product rule (Q-TS-06). Counts of preview
     # starts and full listens use the same per-address hourly cap idea as pre-sale counts.
     teaser_max_ms: int = 60_000
     teaser_min_ms: int = 5_000
@@ -130,6 +130,11 @@ class Settings(BaseSettings):
     # Story cards (owner, 2026-11-08, D-STORY-01): an owner shares a moment of a song they own, at
     # most 30 s, chosen by them. 0 blocks story cards (fail closed).
     story_clip_max_ms: int = 30_000
+    # Open price (owner, 2026-11-15, D-OPEN-PRICE-01): a buyer chooses what to pay, from the agreed
+    # lowest amount up. Owner, 2026-11-17: every open-price amount is between ৳10 and ৳100,000
+    # (minor units: 1000 and 10_000_000). 0 turns that end of the range off.
+    open_price_min_minor: int = 1_000
+    open_price_max_minor: int = 10_000_000
     # Owner, 2026-11-07 (D-REVIEW-SOLO-01): while the owner is the only staff, nobody else can be the
     # second person, so the rule "someone else must approve this" is off and whatever a person with
     # the staff right to approve sends in is approved at once. Turn it on (true) when more staff join.

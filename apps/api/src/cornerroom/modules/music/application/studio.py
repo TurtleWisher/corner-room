@@ -351,6 +351,12 @@ class StudioService:
             "tracks": [await self._track_view(t, pos) for pos, t in tracks],
             "readiness": await self.readiness(release, tracks),
             "proposals": [self._proposal_view(p) for p in proposals],
+            # D-OPEN-PRICE-01: the range every open-price amount must fall in (owner, 2026-11-17).
+            "open_price_range": {
+                "min_minor": int(self.settings.open_price_min_minor) or None,
+                "max_minor": int(self.settings.open_price_max_minor) or None,
+                "currency_code": "BDT",
+            },
             "intake": None if intake is None else {"mode": intake.mode, "status": intake.status, "managed_reason": intake.managed_reason, "artist_confirmed_at": intake.artist_confirmed_at},
             "history": await ReviewService(self.session, self.settings, self.clock).history(release.id),
         }
@@ -894,13 +900,14 @@ class StudioService:
     def _proposal_view(p: OfferProposal) -> dict[str, Any]:
         return {
             "id": p.id, "subject_type": p.subject_type, "subject_id": p.subject_id, "audience": p.audience,
-            "amount_minor": p.amount_minor, "currency_code": p.currency_code, "note": p.note, "status": p.status,
+            "amount_minor": p.amount_minor, "currency_code": p.currency_code, "open_price": bool(p.open_price),
+            "note": p.note, "status": p.status,
             "decision_note": p.decision_note, "created_at": p.created_at,
         }
 
     async def propose_price(
         self, ctx: AuthContext, release_id: UUID, *, subject_type: str, subject_id: UUID, audience: str,
-        amount_minor: int, currency_code: str, note: str | None,
+        amount_minor: int, currency_code: str, note: str | None, open_price: bool = False,
     ) -> OfferProposal:
         release, role = await self._release(ctx, release_id)
         if subject_type == "RELEASE":
@@ -927,6 +934,14 @@ class StudioService:
             raise AppError("VALIDATION_ERROR", "Currency must be a 3-letter code", 422)
         if amount_minor < 0:
             raise AppError("VALIDATION_ERROR", "Price can't be negative", 422)
+        if open_price:
+            # D-OPEN-PRICE-01: the amount is the lowest one; each buyer chooses what to pay from there.
+            from cornerroom.modules.commerce.domain.open_price import assert_can_be_open
+
+            assert_can_be_open(
+                audience=audience, amount_minor=amount_minor,
+                min_minor=int(self.settings.open_price_min_minor), max_minor=int(self.settings.open_price_max_minor),
+            )
         old = (
             await self.session.execute(
                 select(OfferProposal).where(
@@ -939,7 +954,8 @@ class StudioService:
             row.status = "WITHDRAWN"
         proposal = OfferProposal(
             release_id=release.id, subject_type=subject_type, subject_id=subject_id, audience=audience,
-            amount_minor=amount_minor, currency_code=currency, note=_clean(note, 500), proposed_by=ctx.user_id, status="PROPOSED",
+            amount_minor=amount_minor, currency_code=currency, open_price=open_price, note=_clean(note, 500),
+            proposed_by=ctx.user_id, status="PROPOSED",
         )
         self.session.add(proposal)
         await self.session.flush()
@@ -947,7 +963,7 @@ class StudioService:
         await self._event(OFFER_PROPOSED, "Release", release.id, {"proposal_id": str(proposal.id), "subject_type": subject_type}, ctx, release.primary_org_id)
         await self.audit.record_from_auth(
             ctx, action="price.proposed", entity_type="OfferProposal", entity_id=proposal.id,
-            new_state={"subject": f"{subject_type}:{subject_id}", "audience": audience, "amount_minor": amount_minor, "currency_code": currency},
+            new_state={"subject": f"{subject_type}:{subject_id}", "audience": audience, "amount_minor": amount_minor, "currency_code": currency, "open_price": open_price},
             organization_id=release.primary_org_id,
         )
         return proposal

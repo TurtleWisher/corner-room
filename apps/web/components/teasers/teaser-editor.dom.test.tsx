@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/* Teaser Studio editor (owner, 2026-11-07, D-TEASER-00 to D-TEASER-03): typed times and keys move the
+/* Preview Studio editor (owner, 2026-11-07, D-TEASER-00 to D-TEASER-03): typed times and keys move the
  * teaser within the limits, undo and "back to saved" work, and saving sends exactly what is shown. */
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -89,7 +89,7 @@ describe("TeaserEditor", () => {
     });
     expect((screen.getByLabelText("Start") as HTMLInputElement).value).toBe("0:20.000");
     // The handles appear once the waveform has loaded; under a busy full run that can take over 1 s.
-    const handle = await screen.findByRole("slider", { name: "Teaser end" }, { timeout: 5000 });
+    const handle = await screen.findByRole("slider", { name: "Preview end" }, { timeout: 5000 });
     await act(async () => fireEvent.keyDown(handle, { key: "ArrowRight", shiftKey: true }));
     expect((screen.getByLabelText("End") as HTMLInputElement).value).toBe("0:41.000");
     // Never longer than 60 s: the start follows the end.

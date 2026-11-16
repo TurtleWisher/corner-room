@@ -265,6 +265,7 @@ function StaffCampaignDetailBody() {
             value={subjectType}
             onChange={(event) => setSubjectType(event.target.value)}
             placeholder="ARTIST | RELEASE | EVENT"
+            aria-label="What it is about"
           />
           <Input
             value={subjectId}
@@ -287,6 +288,7 @@ function StaffCampaignDetailBody() {
             value={channel}
             onChange={(event) => setChannel(event.target.value)}
             placeholder="IN_APP | EMAIL | SOCIAL | PRESS | OTHER"
+            aria-label="Channel"
           />
           <Button type="submit">Add channel</Button>
         </form>

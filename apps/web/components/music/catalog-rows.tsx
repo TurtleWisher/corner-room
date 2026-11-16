@@ -6,7 +6,7 @@ import { Check, ChevronRight } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
-import { Money } from "@/components/ds";
+import { OfferPrice } from "@/components/music/offer-price";
 import { canPlay, type CustomerCommerce, TrackBuyControl } from "@/components/music/commerce";
 import { useAsync } from "@/components/use-async";
 import { fetchPlayableCatalog, fetchReleases, fetchTracks, type ArtistRecord, type BandRecord, type PlayableTrackRecord, type ReleaseRecord } from "@/lib/api";
@@ -90,7 +90,7 @@ export function CatalogRows({
                       <Check aria-hidden="true" className="size-4 text-highlight" /> Owned
                     </span>
                   ) : buy?.kind === "buy" ? (
-                    <Money value={{ amount_minor: buy.offer.amount_minor, currency_code: buy.offer.currency_code }} />
+                    <OfferPrice offer={buy.offer} />
                   ) : null}
                   <ChevronRight aria-hidden="true" className="size-5 transition-transform group-hover:translate-x-0.5" />
                 </span>

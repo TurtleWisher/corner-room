@@ -171,9 +171,9 @@ export function itemDurationMs(item: Pick<TrendingItem, "tracks">): number | nul
 export type TrendingAccess =
   /** Bought (or may listen): plays the whole song or release in the normal player. */
   | { kind: "play" }
-  /** Not bought: plays the song's published teaser; `buy` is the price beside it, if on sale. */
+  /** Not bought: plays the song's published preview; `buy` is the price beside it, if on sale. */
   | { kind: "teaser"; teaserId: string; trackId: string; buy: TrendingBuy | null; signIn: boolean }
-  /** Not bought and no teaser: only the way to buy it (or sign in to). */
+  /** Not bought and no preview: only the way to buy it (or sign in to). */
   | { kind: "buy"; buy: TrendingBuy | null; signIn: boolean };
 
 export type TrendingBuy = { offer: OfferRecord; label: string };
@@ -183,7 +183,7 @@ export type TrendingCommerce = { entitlements: EntitlementRecord[]; offers: Offe
 
 /**
  * What the mini player can do for this person. The API still checks every play and checkout; this
- * only mirrors what they own. Signed-out visitors can always hear a teaser (no account needed).
+ * only mirrors what they own. Signed-out visitors can always hear a preview (no account needed).
  */
 export function trendingAccess(item: TrendingItem, commerce: TrendingCommerce, signedIn: boolean): TrendingAccess {
   const songs = item.tracks;

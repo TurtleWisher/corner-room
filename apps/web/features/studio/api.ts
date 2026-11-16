@@ -125,6 +125,8 @@ export type PriceProposal = {
   audience: "EVERYONE" | "OWNS_PART_OF_RELEASE" | "PRESALE";
   amount_minor: number;
   currency_code: string;
+  /** D-OPEN-PRICE-01: the amount is the lowest one and each buyer chooses what to pay. */
+  open_price?: boolean;
   note?: string | null;
   status: string;
   decision_note?: string | null;
@@ -166,6 +168,8 @@ export type StudioReleaseDetail = {
   tracks: StudioTrack[];
   readiness: { ready: boolean; items: ReadinessItem[] };
   proposals: PriceProposal[];
+  /** D-OPEN-PRICE-01: the range every open-price amount must fall in (owner, 2026-11-17). */
+  open_price_range?: { min_minor: number | null; max_minor: number | null; currency_code: string } | null;
   intake: { mode: string; status: string; managed_reason?: string | null; artist_confirmed_at?: string | null } | null;
   history: ReviewEvent[];
 };
@@ -513,7 +517,7 @@ export function withdrawStudioRelease(id: string): Promise<StudioReleaseDetail> 
 
 export function proposeStudioPrice(
   releaseId: string,
-  body: { subject_type: "TRACK" | "RELEASE"; subject_id: string; audience?: string; amount_minor: number; currency_code: string; note?: string },
+  body: { subject_type: "TRACK" | "RELEASE"; subject_id: string; audience?: string; amount_minor: number; currency_code: string; note?: string; open_price?: boolean },
 ): Promise<PriceProposal> {
   return apiFetch<PriceProposal>(`/api/v1/studio/releases/${releaseId}/price-proposals`, { method: "POST", headers: json, body: JSON.stringify(body), retry: false });
 }

@@ -4,7 +4,7 @@
  * Preview Studio editor (owner, 2026-11-07, D-TEASER-00 to D-TEASER-03). The artist picks a part of the
  * song on its waveform, adds fades and a volume change, hears it, and has Corner Room make it. Nothing
  * here changes the master: these are only settings, and every version keeps its own. Corner Room
- * approves a version before fans hear it; a live teaser keeps playing while a newer one waits.
+ * approves a version before fans hear it; a live preview keeps playing while a newer one waits.
  * The API decides every action (`actions`); this page only shows what it allows.
  *
  * Layout (owner, 2026-11-07: "fits one page, clean premium minimal, glossy buttons, icon controls by
@@ -298,7 +298,7 @@ function Editor({ initial, releaseId }: { initial: TeaserDetailRecord; releaseId
   const act = (action: TeaserAction) => {
     if (action === "process") return make();
     if (action === "delete") {
-      if (!window.confirm("Delete this teaser and all its versions? This can't be undone.")) return;
+      if (!window.confirm("Delete this preview and all its versions? This can't be undone.")) return;
       return run("delete", async () => {
         await deleteTeaser(detail.id);
         router.push(`/studio/releases/${releaseId}#preview`);
@@ -320,7 +320,7 @@ function Editor({ initial, releaseId }: { initial: TeaserDetailRecord; releaseId
     return (
       <Card tone="outline" className="p-5 text-sm text-fg">
         <p className="font-semibold">The song&apos;s master isn&apos;t ready.</p>
-        <p className="mt-1 text-fg-muted">A teaser is cut from the song&apos;s checked master. Upload it in the release first.</p>
+        <p className="mt-1 text-fg-muted">A preview is cut from the song&apos;s checked master. Upload it in the release first.</p>
         <Link href={`/studio/releases/${releaseId}#songs`} className="cr-focus mt-3 inline-block font-semibold text-link underline">
           Open the songs
         </Link>
@@ -339,7 +339,7 @@ function Editor({ initial, releaseId }: { initial: TeaserDetailRecord; releaseId
         : preview.state === "playing" && preview.mode !== "version"
           ? `Playing at ${formatTime(preview.positionMs)}`
           : "Fades and volume play as you change them. Click the waveform to hear the song from there.";
-  // "Make the teaser" is the main step until a made version can be sent; then sending is.
+  // "Make the preview" is the main step until a made version can be sent; then sending is.
   const makeIsMain = !mainActions.includes("submit");
 
   return (
@@ -393,8 +393,8 @@ function Editor({ initial, releaseId }: { initial: TeaserDetailRecord; releaseId
             <button
               type="button"
               className="ts-key cr-cut cr-cut-sm cr-focus"
-              aria-label={playingSelection ? "Pause the teaser" : "Hear the teaser"}
-              title={playingSelection ? "Pause the teaser" : "Hear the teaser"}
+              aria-label={playingSelection ? "Pause the preview" : "Hear the preview"}
+              title={playingSelection ? "Pause the preview" : "Hear the preview"}
               data-playing={playingSelection || undefined}
               aria-busy={(preview.state === "loading" && preview.mode === "selection") || undefined}
               onClick={() => (playingSelection ? preview.stop() : void preview.playSelection(settings))}
@@ -564,16 +564,16 @@ function Editor({ initial, releaseId }: { initial: TeaserDetailRecord; releaseId
             ) : latest?.status === "FAILED" ? (
               <p role="alert" className="flex items-start gap-2 text-danger">
                 <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> {failureWords(latest.failure_code)} Your settings are kept:
-                press Make the teaser to try again.
+                press Make the preview to try again.
               </p>
             ) : processing ? (
               <p className="text-fg" role="status">
-                Making the teaser from your master. This page updates by itself.
+                Making the preview from your master. This page updates by itself.
               </p>
             ) : waiting ? (
               <p className="text-fg">Corner Room is checking this version. Take it back from review to change it.</p>
             ) : dirty && makesNewVersion && !locked ? (
-              <p className="text-fg-muted">Saving makes a new version.{live ? " The live teaser keeps playing until the new one is approved." : ""}</p>
+              <p className="text-fg-muted">Saving makes a new version.{live ? " The live preview keeps playing until the new one is approved." : ""}</p>
             ) : latest ? (
               <p className="text-fg-muted">{versionLine(latest)}</p>
             ) : null}
@@ -596,7 +596,7 @@ function Editor({ initial, releaseId }: { initial: TeaserDetailRecord; releaseId
                 busy={busy === "process"}
                 disabled={locked}
               >
-                <Wand2 aria-hidden="true" /> Make the teaser
+                <Wand2 aria-hidden="true" /> Make the preview
               </Button>
             ) : null}
             {mainActions.map((action) => (
@@ -700,7 +700,7 @@ export function TeaserEditor({ teaserId, releaseId }: { teaserId: string; releas
       {teaser.status === "loading" ? (
         <Skeleton className="h-96 w-full" />
       ) : teaser.status === "error" ? (
-        <ErrorState title="Teaser unavailable" message={loadErrorMessage(teaser.error, "this teaser")} action={<RetryButton onClick={teaser.reload} />} />
+        <ErrorState title="Preview unavailable" message={loadErrorMessage(teaser.error, "this preview")} action={<RetryButton onClick={teaser.reload} />} />
       ) : (
         <Editor initial={teaser.data} releaseId={releaseId} />
       )}
