@@ -1,21 +1,21 @@
 """Teasers (owner, 2026-11-07, D-TEASER-00 to D-TEASER-04).
 
-The main purpose: everyone who has not bought a song can hear its teaser for free, as often as they
+The main purpose: everyone who has not bought a song can hear its preview for free, as often as they
 like, for as long as the song is on Corner Room, until they decide to buy. Teasing before release is
 a smaller, extra use.
 
 Four things never mix:
 - the master (the track's current `TrackVersion`): never sent to any browser, not even the artist's;
-- the teaser: files of class `teaser_audio` cut from the master by edit settings;
+- the preview: files of class `teaser_audio` cut from the master by edit settings;
 - the released song: the existing `catalog_audio` playback copies behind entitlement checks;
 - the entitlement: made only by the existing checkout.
-A teaser play is never a `PlaybackEvent`, a listen or royalty input.
+A preview play is never a `PlaybackEvent`, a listen or royalty input.
 
 Studio: the music's own people (claimed artist, band owner and managers) or catalog staff in the
 active workspace, through `StudioService._track` (404 for anyone else). Staff with `music.approve`
 review each version (D-TEASER-01); whoever submitted it cannot approve it. Anyone may listen to a
-published teaser without an account (D-TEASER-02). At most `teaser_max_ms` long (D-TEASER-03).
-Before release the teaser names the song; the cover follows the cover reveal (D-TEASER-04).
+published preview without an account (D-TEASER-02). At most `teaser_max_ms` long (D-TEASER-03).
+Before release the preview names the song; the cover follows the cover reveal (D-TEASER-04).
 """
 
 from __future__ import annotations
@@ -133,7 +133,7 @@ class TeaserService:
     async def _teaser(self, ctx: AuthContext, teaser_id: UUID) -> tuple[Teaser, Track, Release, str]:
         teaser = await self.session.get(Teaser, teaser_id)
         if teaser is None or teaser.deleted_at is not None:
-            raise NotFoundError("Teaser not found")
+            raise NotFoundError("Preview not found")
         track, release, role = await self._track(ctx, teaser.track_id)
         return teaser, track, release, role
 
@@ -156,10 +156,10 @@ class TeaserService:
     async def _reviewable(self, ctx: AuthContext, teaser_id: UUID) -> tuple[Teaser, Track]:
         teaser = await self.session.get(Teaser, teaser_id)
         if teaser is None or teaser.deleted_at is not None:
-            raise NotFoundError("Teaser not found")
+            raise NotFoundError("Preview not found")
         track = await self.session.get(Track, teaser.track_id)
         if track is None or not await self._is_reviewer(ctx, track):
-            raise NotFoundError("Teaser not found")
+            raise NotFoundError("Preview not found")
         return teaser, track
 
     # --- facts ---------------------------------------------------------------------------------
@@ -180,7 +180,7 @@ class TeaserService:
         if master is None or master.status != "READY" or master.media_asset_id is None or not master.duration_ms:
             raise AppError(
                 "MASTER_NOT_READY", "Upload the song's master first", 409,
-                "A teaser is cut from the song's checked master; upload it in the release editor",
+                "A preview is cut from the song's checked master; upload it in the release editor",
             )
         return master
 
@@ -211,7 +211,7 @@ class TeaserService:
             settings, master_ms=master_ms, min_ms=self.settings.teaser_min_ms, max_ms=self.settings.teaser_max_ms
         )
         if found:
-            raise AppError("TEASER_SETTINGS_INVALID", "These teaser settings can't be used", 422, ",".join(found))
+            raise AppError("TEASER_SETTINGS_INVALID", "These preview settings can't be used", 422, ",".join(found))
 
     def _actions(self, teaser: Teaser, latest: TeaserVersion | None) -> list[str]:
         facts = None
@@ -409,7 +409,7 @@ class TeaserService:
         self._check(settings, master.duration_ms or 0)
         latest = await self._latest(teaser.id)
         if latest is not None and latest.review_status == rules.WAITING:
-            raise AppError("TEASER_IN_REVIEW", "Take this teaser back from review to change it", 409)
+            raise AppError("TEASER_IN_REVIEW", "Take this preview back from review to change it", 409)
         if latest is not None and latest.status == rules.V_DRAFT and latest.id != teaser.live_version_id:
             version = latest
             previous = {"start_ms": version.start_ms, "end_ms": version.end_ms}
@@ -443,7 +443,7 @@ class TeaserService:
         return await self._detail(teaser, track, release)
 
     async def process(self, ctx: AuthContext, teaser_id: UUID) -> dict[str, Any]:
-        """Queue the teaser copies of the open version. Asking twice queues nothing new; a failed
+        """Queue the preview copies of the open version. Asking twice queues nothing new; a failed
         version is retried with the same jobs (reset, never duplicated)."""
         from cornerroom.modules.documents.application.media_jobs import MediaJobService
         from cornerroom.modules.music.application.teaser_jobs import playback_profiles, teaser_key
@@ -464,7 +464,7 @@ class TeaserService:
         jobs = MediaJobService(self.session, self.settings, clock=self.clock)
         profiles = await playback_profiles(jobs)
         if not profiles:
-            raise AppError("NO_PLAYBACK_PROFILE", "Teasers can't be made right now", 409)
+            raise AppError("NO_PLAYBACK_PROFILE", "Previews can't be made right now", 409)
         latest.status = rules.V_PROCESSING
         latest.failure_code = None
         made = {
@@ -498,7 +498,7 @@ class TeaserService:
         latest = await self._latest(teaser.id)
         action = (action or "").strip().lower()
         if action not in self._actions(teaser, latest) or action in ("process", "delete"):
-            raise AppError("INVALID_TRANSITION", "That can't be done to this teaser now", 409)
+            raise AppError("INVALID_TRANSITION", "That can't be done to this preview now", 409)
         before = teaser.status
         now = self.clock.now()
         if action == "submit":
@@ -526,8 +526,8 @@ class TeaserService:
     async def delete(self, ctx: AuthContext, teaser_id: UUID) -> None:
         teaser, track, _release, _role = await self._teaser(ctx, teaser_id)
         if "delete" not in self._actions(teaser, await self._latest(teaser.id)):
-            raise AppError("TEASER_WAS_PUBLIC", "A teaser that was public can be unpublished, not deleted", 409)
-        # Owner, 2026-11-07: deleting a teaser removes it with every version, not only the teaser.
+            raise AppError("TEASER_WAS_PUBLIC", "A preview that was public can be unpublished, not deleted", 409)
+        # Owner, 2026-11-07: deleting a preview removes it with every version, not only the teaser.
         # It was never public, so nobody heard it: its versions, made files' records, counts and
         # waiting jobs go too. The audit entry below keeps the trace.
         from sqlalchemy import delete, update
@@ -625,7 +625,7 @@ class TeaserService:
         now = self.clock.now()
         if action == "unpublish":
             if teaser.status != rules.PUBLISHED:
-                raise AppError("INVALID_TRANSITION", "This teaser is not public", 409)
+                raise AppError("INVALID_TRANSITION", "This preview is not public", 409)
             teaser.status = rules.UNPUBLISHED
             audit_action = "teaser.unpublished_by_staff"
         elif action in ("approve", "return"):
@@ -637,7 +637,7 @@ class TeaserService:
                 )
             ).scalars().first()
             if version is None:
-                raise AppError("INVALID_TRANSITION", "Nothing is waiting for review on this teaser", 409)
+                raise AppError("INVALID_TRANSITION", "Nothing is waiting for review on this preview", 409)
             if action == "return":
                 if not text:
                     raise AppError("VALIDATION_ERROR", "Tell the artist what to change", 422)
@@ -654,7 +654,7 @@ class TeaserService:
                 ).scalars().all()
                 await self.music.assert_independent_reviewer(ctx, list(links))
                 if second_review_on(self.settings) and ctx.user_id in {version.submitted_by, version.created_by}:
-                    raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You made or sent this teaser")
+                    raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You made or sent this preview")
                 if teaser.live_version_id is not None:
                     old = await self.session.get(TeaserVersion, teaser.live_version_id)
                     if old is not None:
@@ -784,7 +784,7 @@ class TeaserService:
         """The team or a reviewer hears a made version exactly as fans would."""
         teaser = await self.session.get(Teaser, teaser_id)
         if teaser is None or teaser.deleted_at is not None:
-            raise NotFoundError("Teaser not found")
+            raise NotFoundError("Preview not found")
         try:
             await self._track(ctx, teaser.track_id)
         except NotFoundError:
@@ -812,7 +812,7 @@ class TeaserService:
             teaser_id = UUID(str(payload["ref"]))
             teaser = await self.session.get(Teaser, teaser_id)
             if teaser is None or teaser.deleted_at is not None:
-                raise NotFoundError("Teaser not found")
+                raise NotFoundError("Preview not found")
             try:
                 await self._track(ctx, teaser.track_id)
             except NotFoundError:
@@ -833,7 +833,7 @@ class TeaserService:
     async def _public_parts(self, teaser_id: UUID) -> tuple[Teaser, TeaserVersion, Track]:
         teaser = await self.session.get(Teaser, teaser_id)
         if teaser is None or teaser.live_version_id is None:
-            raise NotFoundError("Teaser not found")
+            raise NotFoundError("Preview not found")
         version = await self.session.get(TeaserVersion, teaser.live_version_id)
         track = await self.session.get(Track, teaser.track_id)
         live_ready = version is not None and version.status == rules.V_READY
@@ -842,9 +842,9 @@ class TeaserService:
             track_status=track.status if track else None, track_deleted=track is None or track.deleted_at is not None,
         )
         if not ok or version is None or track is None:
-            raise NotFoundError("Teaser not found")
+            raise NotFoundError("Preview not found")
         if not await self._release_of(track):
-            raise NotFoundError("Teaser not found")
+            raise NotFoundError("Preview not found")
         return teaser, version, track
 
     async def _release_of(self, track: Track) -> Release | None:
@@ -936,7 +936,7 @@ class TeaserService:
         }
 
     async def track_teasers(self, track_id: UUID) -> list[dict[str, Any]]:
-        """Published teasers of a song, newest first (Q-TS-08), for the song page."""
+        """Published preview of a song, newest first (Q-TS-08), for the song page."""
         rows = (
             await self.session.execute(
                 select(Teaser, TeaserVersion)
@@ -953,8 +953,8 @@ class TeaserService:
         return [{"id": t.id, "title": t.title, "duration_ms": v.duration_ms} for t, v in rows]
 
     async def release_teasers(self, release_id: UUID) -> list[dict[str, Any]]:
-        """Published teasers of a release's songs, in track order, for the release page (also while
-        it is on pre-sale: publishing a teaser names its song, D-TEASER-04). Empty for anything else."""
+        """Published preview of a release's songs, in track order, for the release page (also while
+        it is on pre-sale: publishing a preview names its song, D-TEASER-04). Empty for anything else."""
         release = await self.session.get(Release, release_id)
         if release is None or release.deleted_at is not None or release.status == "TAKEN_DOWN":
             return []
@@ -973,7 +973,7 @@ class TeaserService:
         return out
 
     async def teasers_for_tracks(self, track_ids: list[UUID]) -> dict[UUID, UUID]:
-        """The newest published teaser per song, for rows of songs (release pages)."""
+        """The newest published preview per song, for rows of songs (release pages)."""
         if not track_ids:
             return {}
         rows = (
@@ -992,7 +992,7 @@ class TeaserService:
         return {track_id: teaser_id for track_id, teaser_id in rows}
 
     async def public_audio(self, teaser_id: UUID, accept: list[str] | None) -> MintedAudio:
-        """Anyone may listen (D-TEASER-02): the token names the teaser, its live version and one
+        """Anyone may listen (D-TEASER-02): the token names the preview, its live version and one
         teaser copy; no account, no listening session, no PlaybackEvent."""
         from cornerroom.modules.documents.domain.qc import playback_gain_db
 
@@ -1010,7 +1010,7 @@ class TeaserService:
         payload = self._parse(token, TEASER_TOKEN_USE)
         teaser, version, _track = await self._public_parts(UUID(str(payload["tz"])))
         if str(version.id) != str(payload.get("vid")):
-            raise AppError("AUDIO_NOT_READY", "This teaser changed: start it again", 409)
+            raise AppError("AUDIO_NOT_READY", "This preview changed: start it again", 409)
         asset_id = UUID(str(payload["aid"]))
         for _r, asset in await self._teaser_copies(version.id):
             if asset.id == asset_id:

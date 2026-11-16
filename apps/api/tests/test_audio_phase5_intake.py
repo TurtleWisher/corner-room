@@ -78,6 +78,8 @@ async def test_staff_prepare_catalog_only_and_cannot_submit(client: AsyncClient)
         "presale",
         # The release plan (D-RELEASE-PLAN-01, 2026-11-13): stage, release day, and staff's next steps.
         "plan",
+        # The open price range (D-OPEN-PRICE-01, 2026-11-17): two amounts from settings, no catalog data.
+        "open_price_range",
     }
     assert set(detail["plan"]) == {
         "stage", "release_day", "release_day_kind", "date_passed", "goes_out_by_itself", "approve_schedules_for", "staff_actions",

@@ -2,7 +2,7 @@
  * what is public, what a listener can do next. The web app only sends what the artist chose and
  * what happened (a start, a full listen), and shows what comes back.
  *
- * Teaser audio never comes from the song's playback routes, and listening to a teaser never opens a
+ * Teaser audio never comes from the song's playback routes, and listening to a preview never opens a
  * listening session or reports a play. */
 
 import { apiFetch, getAccessToken, getApiBaseUrl } from "@/lib/api/client";
@@ -249,7 +249,7 @@ export async function fetchTrackTeasers(trackId: string): Promise<TeaserSummary[
 
 export type ReleaseTeaser = TeaserSummary & { track_id: string; track_title: string };
 
-/** Published teasers of a release's songs, in track order (also while it is on pre-sale). */
+/** Published preview of a release's songs, in track order (also while it is on pre-sale). */
 export async function fetchPublicReleaseTeasers(releaseId: string): Promise<ReleaseTeaser[]> {
   const page = await apiFetch<{ items: ReleaseTeaser[] }>(`/api/v1/releases/${releaseId}/teasers`, {
     retry: false,
@@ -259,7 +259,7 @@ export async function fetchPublicReleaseTeasers(releaseId: string): Promise<Rele
   return page.items;
 }
 
-/** The newest published teaser per song, for rows of songs a listener can't play yet. */
+/** The newest published preview per song, for rows of songs a listener can't play yet. */
 export async function fetchTeasersForTracks(trackIds: readonly string[]): Promise<Record<string, string>> {
   if (trackIds.length === 0) return {};
   const out = await apiFetch<{ teasers: Record<string, string> }>("/api/v1/teasers/for-tracks", {

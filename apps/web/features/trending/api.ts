@@ -11,7 +11,7 @@ export type TrendingSong = {
   duration_ms: number | null;
   /** Released releases the song is on: buying one of them owns the song. */
   release_ids: string[];
-  /** Its newest published teaser, for anyone who hasn't bought it. */
+  /** Its newest published preview, for anyone who hasn't bought it. */
   teaser_id: string | null;
   listens: number;
 };

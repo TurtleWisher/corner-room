@@ -1,6 +1,6 @@
-"""Teaser rules (owner, 2026-11-07, D-TEASER-00 to D-TEASER-04). Pure: no database, no clock.
+"""Preview rules (owner, 2026-11-07, D-TEASER-00 to D-TEASER-04). Pure: no database, no clock.
 
-A teaser is the free, permanent way to hear a song for everyone who has not bought it. It is cut from
+A preview is the free, permanent way to hear a song for everyone who has not bought it. It is cut from
 the song's own master by edit settings (start, end, fades, gain) and never changes the master. Each set
 of settings is a version; staff approve a version before the public hears it (D-TEASER-01), and a
 newer version waits while the approved one stays live.
@@ -89,7 +89,7 @@ class VersionFacts:
 
 
 def status_after(*, has_live: bool, live_shown: bool, waiting: bool) -> str:
-    """The teaser's status from its versions: public if a live version is shown, otherwise in review
+    """The preview's status from its versions: public if a live version is shown, otherwise in review
     if the first version waits, otherwise a draft (never public) or unpublished (was public)."""
     if has_live:
         return PUBLISHED if live_shown else UNPUBLISHED
@@ -117,7 +117,7 @@ def artist_actions(status: str, latest: VersionFacts | None, *, ever_published: 
 
 def public(*, teaser_status: str, teaser_deleted: bool, live_ready: bool, track_status: str | None,
            track_deleted: bool) -> bool:
-    """A teaser is public only when it is published, its live copy is made, and its song still
+    """A preview is public only when it is published, its live copy is made, and its song still
     exists and isn't taken down (Q-TS-10, fail closed)."""
     return (
         teaser_status == PUBLISHED

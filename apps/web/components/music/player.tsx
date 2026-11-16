@@ -12,7 +12,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { LogIn, Maximize2, Pause, Play, Repeat, Repeat1, ShoppingBag, Shuffle, SkipBack, SkipForward } from "lucide-react";
+import { ListMusic, LogIn, Maximize2, Pause, Play, Repeat, Repeat1, ShoppingBag, Shuffle, SkipBack, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 
 import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
@@ -57,11 +57,12 @@ import { countTeaser, fetchTeaserAudio, fetchTrackTeasers, type TeaserSummary } 
 import { coverUrl } from "@/lib/cover-view";
 import { mediaSessionInfo } from "@/lib/media-session-view";
 import { DOCK_IDLE_MS, atPageEdge, dockLook, dockTravel, pointerWantsDock, settleDock, stepDock } from "@/lib/player-dock-view";
+import { KEY_SEEK_SECONDS, barKeyAction, playedShare, upNext } from "@/lib/player-keys-view";
 import { isCompletion, teaserKey, teaserPath } from "@/lib/teaser-room-view";
 import { cn } from "@/lib/utils";
 
 /**
- * A song, or a teaser of one (D-TEASER-00). A teaser is keyed `teaser:<id>` so the song's own Play
+ * A song, or a preview of one (D-TEASER-00). A preview is keyed `teaser:<id>` so the song's own Play
  * buttons never light up for it; it opens no listening session and reports no plays.
  */
 export type PlayerTrack = {
@@ -151,9 +152,9 @@ type PlayerApi = PlayerState & {
   /** Whether levelling can work here: element volume is ignored on some devices (iOS). */
   levellingAvailable: boolean;
   isCurrent: (trackId: string) => boolean;
-  /** Play a teaser (D-TEASER-00): no session, no reported plays, no Up next. */
+  /** Play a preview (D-TEASER-00): no session, no reported plays, no Up next. */
   playTeaser: (teaser: TeaserPlay) => Promise<void>;
-  /** Called after each full listen of a teaser (about 90 % really heard); returns an unsubscribe. */
+  /** Called after each full listen of a preview (about 90 % really heard); returns an unsubscribe. */
   onTeaserComplete: (listener: (teaserId: string) => void) => () => void;
   /** The audio's own clock, read now (progress reports come only a few times a second). */
   exactPosition: () => number;
@@ -329,7 +330,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       progress.set({ position: 0, duration: 0 });
       setState((s) => ({ ...s, track: meta, status: "loading", problem: null, queue, index, source, needsGesture: false, buffering: false, gainDb: null, format: null }));
       if (meta.teaser) {
-        // A teaser plays from its own route: no listening session, nothing reported (D-TEASER-00).
+        // A preview plays from its own route: no listening session, nothing reported (D-TEASER-00).
         teaserStarted.current = null;
         try {
           const delivery = await fetchTeaserAudio(meta.teaser.id, accept.current);
@@ -448,7 +449,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       original.current = null;
-      await load(meta, [meta], 0, t.label ?? "Teaser");
+      await load(meta, [meta], 0, t.label ?? "Preview");
     },
     [load, wakeAudio],
   );
@@ -694,7 +695,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const ms = typeof navigator !== "undefined" ? navigator.mediaSession : undefined;
     if (!ms || typeof MediaMetadata === "undefined") return;
     const { track, source } = stateRef.current;
-    // A teaser shows its song's cover: the player keys it `teaser:<id>`, which is not a song id.
+    // A preview shows its song's cover: the player keys it `teaser:<id>`, which is not a song id.
     const shown = track?.teaser ? { ...track, id: track.teaser.trackId } : track;
     ms.metadata = shown ? new MediaMetadata(mediaSessionInfo(shown, source, window.location.origin)) : null;
   }, []);
@@ -921,6 +922,159 @@ function BarProgress({ label }: { label: string }) {
   );
 }
 
+/** The line along the bar's top edge: how far the song is, on every screen size (decorative; the
+ * scrubber and the clocks carry the same thing in words). Transform only. */
+function BarLine() {
+  const { position, duration } = usePlayerProgress();
+  return (
+    <div aria-hidden="true" className="cr-pline">
+      <div className="cr-pline-fill" style={{ transform: `scaleX(${playedShare(position, duration).toFixed(4)})` }} />
+    </div>
+  );
+}
+
+/** Mute, and a volume line where the device lets a page set volume. */
+function BarVolume() {
+  const p = usePlayer();
+  const level = p.muted ? 0 : p.volume;
+  return (
+    <div className="hidden shrink-0 items-center xl:flex">
+      <button
+        type="button"
+        onClick={p.toggleMute}
+        aria-pressed={p.muted}
+        aria-label={p.muted ? "Unmute" : "Mute"}
+        title={p.muted ? "Unmute (M)" : "Mute (M)"}
+        className="cr-focus cr-pctl inline-flex size-10 items-center justify-center"
+      >
+        {level === 0 ? <VolumeX aria-hidden="true" className="size-4" /> : <Volume2 aria-hidden="true" className="size-4" />}
+      </button>
+      {p.volumeSettable ? (
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={level}
+          style={{ "--pct": `${level * 100}%` } as React.CSSProperties}
+          onChange={(e) => p.setVolume(Number(e.target.value))}
+          aria-label="Volume"
+          aria-valuetext={`${Math.round(level * 100)}%`}
+          className="cr-focus cr-prange w-20"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** Up next: the list the current song was played from. Opens above the bar; Escape or a click
+ * outside closes it. Hidden when nothing follows. */
+function BarQueue() {
+  const p = usePlayer();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const rest = upNext(p.queue, p.index);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onDown = (e: PointerEvent) => {
+      if (box.current && e.target instanceof Node && !box.current.contains(e.target)) setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onDown);
+    };
+  }, [open]);
+  if (rest.length === 0) return null;
+  return (
+    <div ref={box} className="relative hidden shrink-0 md:block">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={`Up next, ${rest.length} ${rest.length === 1 ? "song" : "songs"}`}
+        title="Up next"
+        data-on={open ? "" : undefined}
+        className="cr-focus cr-pctl inline-flex size-10 items-center justify-center"
+      >
+        <ListMusic aria-hidden="true" className="size-4" />
+      </button>
+      {open ? (
+        <div role="dialog" aria-label="Up next" className="cr-cut cr-pmenu cr-pqueue">
+          <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-3">
+            <p className="cr-eyebrow text-[0.6875rem]">
+              Up next{p.source ? <span className="normal-case tracking-normal text-fg-muted"> · {p.source}</span> : null}
+            </p>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close Up next" className="cr-focus inline-flex size-8 items-center justify-center text-fg-muted hover:text-fg">
+              <X aria-hidden="true" className="size-4" />
+            </button>
+          </div>
+          <ol className="cr-pqueue-list">
+            {rest.map(({ item, at }, i) => (
+              <li key={`${item.id}-${at}`}>
+                <button
+                  type="button"
+                  className="cr-focus cr-pqueue-row"
+                  onClick={() => {
+                    setOpen(false);
+                    void p.play(item, { queue: p.queue, source: p.source });
+                  }}
+                >
+                  <span aria-hidden="true" className="cr-num w-5 text-right text-xs text-fg-muted">
+                    {i + 1}
+                  </span>
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block truncate text-sm font-semibold text-fg">{item.title || "Track"}</span>
+                    {item.artist ? <span className="block truncate text-xs text-fg-muted">{item.artist}</span> : null}
+                  </span>
+                  <Play aria-hidden="true" className="cr-pqueue-play size-3.5" />
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Space or K plays and pauses, the arrows move five seconds, M mutes, Shift+N and Shift+P step
+ * through Up next: only while the bar is on show and never while typing (lib/player-keys-view.ts). */
+function useBarKeys(enabled: boolean, pathname: string | null) {
+  const p = usePlayer();
+  const api = useRef(p);
+  api.current = p;
+  useEffect(() => {
+    if (!enabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.repeat) return;
+      const t = e.target instanceof HTMLElement ? e.target : null;
+      const action = barKeyAction(
+        e.key,
+        { ctrl: e.ctrlKey, meta: e.metaKey, alt: e.altKey, shift: e.shiftKey },
+        t ? { tag: t.tagName, role: t.getAttribute("role"), editable: t.isContentEditable } : null,
+        pathname,
+      );
+      if (!action) return;
+      const now = api.current;
+      if (now.status === "problem" || now.status === "loading") return;
+      e.preventDefault();
+      if (action === "toggle") now.toggle();
+      else if (action === "mute") now.toggleMute();
+      else if (action === "next") now.next();
+      else if (action === "previous") now.previous();
+      else now.seek(Math.max(0, now.exactPosition() + (action === "forward" ? KEY_SEEK_SECONDS : -KEY_SEEK_SECONDS)));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enabled, pathname]);
+}
+
 /**
  * Fixed player bar: glass over the Sky world, front-only cube, title and artist, previous, play
  * or pause, next, a labelled scrubber with 5 s keyboard steps, elapsed and total, and the way into
@@ -1008,7 +1162,7 @@ function useScrollDock(ref: React.RefObject<HTMLElement | null>, enabled: boolea
   }, [ref, enabled]);
 }
 
-/** A song the listener can't play yet: its newest teaser, if it has one (D-TEASER-00). */
+/** A song the listener can't play yet: its newest preview, if it has one (D-TEASER-00). */
 function useBlockedSongTeaser(trackId: string | null): TeaserSummary | null {
   const [teaser, setTeaser] = useState<TeaserSummary | null>(null);
   useEffect(() => {
@@ -1031,10 +1185,11 @@ export function PlayerBar() {
   const dock = useRef<HTMLElement>(null);
   const blockedTeaser = useBlockedSongTeaser(p.status === "problem" && p.problem?.kind === "needs_access" && p.track && !p.track.teaser ? p.track.id : null);
   const teaser = p.track?.teaser ?? null;
-  // The Preview Room draws its own controls for the teaser it shows.
+  // The Preview Room draws its own controls for the preview it shows.
   const inOwnRoom = Boolean(teaser && pathname === teaserPath(teaser.id));
   const shown = Boolean(p.track) && !isRoomPath(pathname) && !inOwnRoom;
   useScrollDock(dock, shown);
+  useBarKeys(shown, pathname);
   if (!p.track || isRoomPath(pathname) || inOwnRoom) return null;
   const playing = p.status === "playing";
   const label = p.track.title || "Track";
@@ -1046,14 +1201,16 @@ export function PlayerBar() {
         ref={dock}
         aria-label="Player"
         data-theme="sky"
-        className="cr-scope cr-player-dock fixed inset-x-0 z-40 border-t border-cr-sky/60"
+        data-playing={playing ? "" : undefined}
+        className="cr-scope cr-player-dock fixed inset-x-0 z-40"
       >
+        <BarLine />
         <div className="cr-glass mx-auto flex h-20 max-w-[90rem] items-center gap-3 px-3 md:gap-5 md:px-6">
           {/* cr-now-cover: grows into the room's front card on the way in (room-transition.tsx). */}
           <Link
             href={teaser ? teaserPath(teaser.id) : `/listen/${p.track.id}`}
             aria-label={teaser ? `Open the Preview Room for ${label}` : `Open the listening room for ${label}`}
-            className="cr-focus size-12 shrink-0 bg-cr-sky [view-transition-name:cr-now-cover]"
+            className="cr-focus cr-pcover size-12 shrink-0 bg-cr-sky [view-transition-name:cr-now-cover]"
           >
             <CoverArt
               src={coverUrl({ track: teaser ? teaser.trackId : p.track.id }, 160)}
@@ -1069,8 +1226,15 @@ export function PlayerBar() {
             >
               {label}
             </Link>
-            <p className="truncate text-xs text-fg-muted">
-              {teaser ? "Teaser · " : ""}
+            <p className="flex items-center gap-2 truncate text-xs text-fg-muted">
+              {playing && !p.buffering ? (
+                <span aria-hidden="true" className="cr-plevel">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              ) : null}
+              {teaser ? "Preview · " : ""}
               {p.status === "playing" && !p.buffering ? (p.track.artist ?? "") : status}
             </p>
           </div>
@@ -1092,12 +1256,12 @@ export function PlayerBar() {
                           trackId: p.track.id,
                           title: p.track.title,
                           artist: p.track.artist,
-                          label: blockedTeaser.title ?? "Teaser",
+                          label: blockedTeaser.title ?? "Preview",
                         })
                       }
                       className="cr-focus inline-flex items-center gap-1.5 text-xs font-semibold text-link hover:underline"
                     >
-                      <Play aria-hidden="true" className="size-3.5" /> Play the teaser
+                      <Play aria-hidden="true" className="size-3.5" /> Play the preview
                     </button>
                   ) : null}
                   <ButtonLink href={`/tracks/${p.track.id}`} size="sm">
@@ -1123,6 +1287,7 @@ export function PlayerBar() {
                   onClick={p.toggle}
                   disabled={p.status === "loading"}
                   aria-label={playing ? `Pause ${label}` : `Play ${label}`}
+                  title={playing ? "Pause (Space)" : "Play (Space)"}
                   data-playing={playing ? "" : undefined}
                   className="cr-focus cr-cut cr-cut-sm cr-pkey inline-flex size-11 shrink-0 items-center justify-center"
                 >
@@ -1141,9 +1306,11 @@ export function PlayerBar() {
                 <RepeatButton className="hidden lg:inline-flex" />
               </div>
               <BarProgress label={label} />
+              <BarVolume />
+              <BarQueue />
               <Link
                 href={teaser ? teaserPath(teaser.id) : `/listen/${p.track.id}`}
-                className="cr-focus hidden items-center gap-1.5 text-xs font-semibold text-link hover:underline md:inline-flex"
+                className="cr-focus cr-cut cr-cut-sm cr-proom hidden items-center gap-1.5 text-xs font-semibold md:inline-flex"
               >
                 <Maximize2 aria-hidden="true" className="size-3.5" /> {teaser ? "Preview Room" : "Listening room"}
               </Link>

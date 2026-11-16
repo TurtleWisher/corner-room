@@ -200,7 +200,7 @@ class MediaJobService:
         elif job.kind == "TRANSCODE":
             await self._transcode(job, asset)
         elif job.kind in ("WAVEFORM", "TEASER"):
-            # Teaser Studio (D-TEASER-00): editor peaks and teaser copies, both read the master only.
+            # Preview Studio (D-TEASER-00): editor peaks and preview copies, both read the master only.
             from cornerroom.modules.music.application import teaser_jobs
 
             if job.kind == "WAVEFORM":
@@ -586,7 +586,7 @@ class MediaJobService:
             for version in await music.versions_for_master(job.media_asset_id):
                 await music.system_reject_version(version, "PROCESSING_FAILED")
         elif job.kind == "TEASER":
-            # A teaser job never touches the song's master: only its teaser version fails.
+            # A preview job never touches the song's master: only its preview version fails.
             from cornerroom.modules.music.application import teaser_jobs
 
             job.last_error_code = job.last_error_code or "CANCELLED"

@@ -2,7 +2,7 @@
  * The Preview Studio editor, as pure maths and words (owner, 2026-11-07, D-TEASER-00 to D-TEASER-03).
  *
  * The editor never changes the master: it only chooses edit settings (start, end, fades, gain), and
- * the server cuts the teaser from the master with exactly those numbers. Every value here is a whole
+ * the server cuts the preview from the master with exactly those numbers. Every value here is a whole
  * number of milliseconds or hundredths of a dB, so what the artist sees is what gets saved. The
  * server checks everything again; these limits only keep the controls honest.
  */
@@ -30,7 +30,7 @@ export const GAIN_STEP_CDB = 10;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const whole = (v: number) => Math.round(Number.isFinite(v) ? v : 0);
 
-/** Fades fit the teaser: never past the tool limit, never more than half its length. */
+/** Fades fit the preview: never past the tool limit, never more than half its length. */
 export function maxFadeMs(lengthMs: number, limits: Pick<TeaserLimits, "fade_max_ms">): number {
   const half = Math.floor(Math.max(0, lengthMs) / 2 / FADE_STEP_MS) * FADE_STEP_MS;
   return Math.max(0, Math.min(limits.fade_max_ms, half));
@@ -58,8 +58,8 @@ export function fitSettings(s: TeaserSettings, masterMs: number, limits: TeaserL
 }
 
 /**
- * Move one handle. It stops where the teaser would get shorter than allowed; the other handle stays
- * put unless the teaser would get longer than allowed, and then it follows.
+ * Move one handle. It stops where the preview would get shorter than allowed; the other handle stays
+ * put unless the preview would get longer than allowed, and then it follows.
  */
 export function moveHandle(s: TeaserSettings, handle: Handle, toMs: number, masterMs: number, limits: TeaserLimits): TeaserSettings {
   const max = limits.max_ms > 0 ? Math.min(limits.max_ms, masterMs) : masterMs;
@@ -199,7 +199,7 @@ export function gainMultiplier(cdb: number): number {
 }
 
 /**
- * The volume at a moment of the teaser, 0 to 1 before gain: linear fades, as FFmpeg's default
+ * The volume at a moment of the preview, 0 to 1 before gain: linear fades, as FFmpeg's default
  * `afade` curve, so the preview sounds like the finished teaser.
  */
 export function fadeLevel(atMs: number, s: TeaserSettings): number {
@@ -284,7 +284,7 @@ export const REVIEW_STATUS_LABEL: Record<TeaserReviewStatus, string> = {
 };
 
 export const ACTION_LABEL: Record<TeaserAction, string> = {
-  process: "Make the teaser",
+  process: "Make the preview",
   submit: "Send for review",
   withdraw: "Take back from review",
   unpublish: "Take off",
@@ -305,8 +305,8 @@ const PROBLEM_WORDS: Record<string, string> = {
   START_BEFORE_SONG: "The start is before the song begins.",
   END_AFTER_SONG: "The end is after the song finishes.",
   END_BEFORE_START: "The end must come after the start.",
-  TOO_SHORT: "The teaser is too short.",
-  TOO_LONG: "The teaser is too long.",
+  TOO_SHORT: "The preview is too short.",
+  TOO_LONG: "The preview is too long.",
   FADE_TOO_LONG: "A fade is longer than allowed.",
   GAIN_OUT_OF_RANGE: "The volume change is out of range.",
 };
@@ -321,8 +321,8 @@ export function problemWords(detail: string | null | undefined): string[] {
 }
 
 export const FAILURE_WORDS: Record<string, string> = {
-  TEASER_FAILED: "The teaser couldn't be cut from the master.",
-  TEASER_VERIFY_FAILED: "The made teaser didn't match its settings.",
+  TEASER_FAILED: "The preview couldn't be cut from the master.",
+  TEASER_VERIFY_FAILED: "The made preview didn't match its settings.",
   TOOL_TIMEOUT: "Making it took too long.",
   TOOL_MISSING: "The audio tool isn't available right now.",
   CANCELLED: "Corner Room stopped making it.",

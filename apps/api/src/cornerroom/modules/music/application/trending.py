@@ -379,7 +379,7 @@ class TrendingService:
         return {tid: ms for tid, ms in rows.all()}
 
     async def _teasers(self, track_ids: list[UUID]) -> dict[UUID, UUID]:
-        """The newest published teaser per song (the same rule as release pages, D-TEASER-02)."""
+        """The newest published preview per song (the same rule as release pages, D-TEASER-02)."""
         if not track_ids:
             return {}
         rows = await self.session.execute(

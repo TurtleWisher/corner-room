@@ -17,6 +17,7 @@ import {
   controlClasses,
 } from "@/components/ds";
 import { resolveProtectedView } from "@/lib/auth-view";
+import { choiceLabel, choicesFrom, fieldWords } from "@/lib/staff-console-view";
 import { cn } from "@/lib/utils";
 
 /*
@@ -42,7 +43,62 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
   return <DsCard className={cn("space-y-0", className)} {...props} />;
 }
 
-export const Input = DsInput;
+/**
+ * The staff text field. A field that a page named only with grey placeholder text gets a real,
+ * visible label from those words (owner, 2026-11-15); a placeholder that lists codes
+ * ("ARTIST | RELEASE | EVENT") becomes a list to pick from. Pages keep their props and their logic.
+ */
+export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(function StaffInput(
+  { placeholder, className, id, ...props },
+  ref,
+) {
+  const auto = React.useId();
+  const labelled = Boolean(props["aria-label"] || props["aria-labelledby"]);
+  const words = labelled ? null : fieldWords(placeholder);
+  const choices = choicesFrom(placeholder);
+  if (choices) {
+    const controlId = id ?? auto;
+    const value = typeof props.value === "string" ? props.value : "";
+    return (
+      <div className={cn("st-field", className)}>
+        <label htmlFor={controlId} className="st-label">
+          {props["aria-label"] ?? "Choose one"}
+        </label>
+        <select
+          id={controlId}
+          className={cn(controlClasses, "st-control")}
+          value={value}
+          required={props.required}
+          disabled={props.disabled}
+          onChange={(e) => props.onChange?.(e as unknown as React.ChangeEvent<HTMLInputElement>)}
+        >
+          <option value="">Choose…</option>
+          {choices.map((c) => (
+            <option key={c} value={c}>
+              {choiceLabel(c)}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+  if (!words) return <DsInput ref={ref} id={id} placeholder={placeholder} className={className} {...props} />;
+  const controlId = id ?? auto;
+  return (
+    <div className={cn("st-field", className)}>
+      <label htmlFor={controlId} className="st-label">
+        {words.label}
+        {props.required ? <span aria-hidden="true" className="text-danger"> *</span> : null}
+      </label>
+      <DsInput ref={ref} id={controlId} aria-describedby={words.hint ? `${controlId}-hint` : undefined} {...props} />
+      {words.hint ? (
+        <p id={`${controlId}-hint`} className="st-hint">
+          {words.hint}
+        </p>
+      ) : null}
+    </div>
+  );
+});
 
 /** Class string for native selects in staff forms. */
 export const selectClasses = cn(controlClasses, "h-11");
@@ -119,8 +175,8 @@ export function Protected({ children, permission }: { children: React.ReactNode;
  */
 export function StaffMain({ children }: { children: React.ReactNode }) {
   return (
-    <main id="main" data-theme="staff" className="cr-scope min-h-[calc(100dvh-3.5rem)]">
-      <div className="mx-auto max-w-6xl px-4 py-8 md:px-8 md:py-10">{children}</div>
+    <main id="main" data-theme="staff" className="cr-scope min-h-[calc(100dvh-3rem)]">
+      <div className="st-page mx-auto max-w-[88rem] px-4 py-6 md:px-8 md:py-8">{children}</div>
     </main>
   );
 }

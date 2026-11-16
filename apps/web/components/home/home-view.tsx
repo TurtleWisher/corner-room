@@ -12,6 +12,7 @@ import { ButtonLink, Card, DateTime, Skeleton } from "@/components/ds";
 import { EventMedia } from "@/components/events/event-media";
 import { EventRow } from "@/components/events/event-row";
 import { FeaturedCarousel } from "@/components/home/featured-carousel";
+import { ClosingCall, ForArtists, HowListeningWorks, Questions, RoomFaces, WorldShift } from "@/components/home/home-sections";
 import { MissionBand } from "@/components/home/mission-band";
 import { PosterTilt } from "@/components/home/poster-tilt";
 import { TrendingCorner } from "@/components/home/trending-corner";
@@ -295,11 +296,11 @@ function NewReleases() {
 /** Ember hands over to Sky as you scroll (owner decision D1, brand v1.3): Night in between, never purple. */
 function WorldHandover() {
   return (
-    <div aria-hidden="true" className="home-handover">
+    <WorldShift>
       <div className="home-handover-ember" />
       <div className="home-handover-sky" />
       <div className="home-handover-beam" />
-    </div>
+    </WorldShift>
   );
 }
 
@@ -307,7 +308,11 @@ function SkyWorld() {
   return (
     <LitSurface as="div" theme="sky" className="home-sky border-b border-cr-sky/60">
       <NewReleases />
+      <HowListeningWorks />
       <MissionBand />
+      <ForArtists />
+      <Questions />
+      <ClosingCall />
     </LitSurface>
   );
 }
@@ -394,6 +399,11 @@ export function HomeView() {
               ))}
             </nav>
           </div>
+          {/* A quiet cue that the page goes on (decorative; the sections below are in the page outline). */}
+          <a href="#welcome" className="home-cue cr-focus" aria-label="Scroll to the rest of the page">
+            <span aria-hidden="true" className="home-cue-line" />
+            <span aria-hidden="true">Scroll</span>
+          </a>
           <div className="home-depth-far relative isolate flex justify-center lg:justify-start">
             <div aria-hidden="true" className="home-feature-glow" />
             <Featured events={events} releases={releases} />
@@ -401,11 +411,12 @@ export function HomeView() {
         </div>
       </LitSurface>
 
-      <div className="home-below mx-auto max-w-[90rem] space-y-14 px-4 pb-14 pt-4 md:px-6">
+      <div className="home-below mx-auto max-w-[90rem] px-4 pb-14 pt-4 md:px-6">
         {/* Sign-in lands here ("/#welcome", HOME_WELCOME). The wrapper exists while the panel loads. */}
         <div id="welcome" className="scroll-mt-24">
           <YouPanel />
         </div>
+        <RoomFaces />
         <Trending />
         <Upcoming state={events} />
       </div>

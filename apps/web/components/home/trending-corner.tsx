@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Lock, LogIn, Pause, Play } from "lucide-reac
 import { useAuth } from "@/components/auth-provider";
 import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
-import { Money } from "@/components/ds";
+import { OfferPrice } from "@/components/music/offer-price";
 import { useCustomerCommerce } from "@/components/music/commerce";
 import { useCredits } from "@/components/music/credits";
 import { useOptionalPlayer, usePlayerProgress, type PlayerTrack } from "@/components/music/player";
@@ -540,11 +540,11 @@ function MiniRoom({
       void player.play(queue[0], { queue, source: item.title });
     } else if (access.kind === "teaser") {
       const song = item.tracks.find((t) => t.id === access.trackId);
-      void player.playTeaser({ teaserId: access.teaserId, trackId: access.trackId, title: song?.title ?? item.title, artist, label: "Teaser" });
+      void player.playTeaser({ teaserId: access.teaserId, trackId: access.trackId, title: song?.title ?? item.title, artist, label: "Preview" });
     }
   };
   const canStart = !!player && !!access && access.kind !== "buy";
-  const playLabel = !access ? "Loading" : access.kind === "teaser" ? (playing ? "Pause the teaser" : "Play the teaser") : playing ? "Pause" : "Play";
+  const playLabel = !access ? "Loading" : access.kind === "teaser" ? (playing ? "Pause the preview" : "Play the preview") : playing ? "Pause" : "Play";
 
   return (
     <div className="tc-room cr-cut cr-glass-card">
@@ -602,7 +602,7 @@ function MiniRoom({
           </div>
 
           <p className="tc-room-status">
-            {loading ? "Loading" : access?.kind === "teaser" ? (here ? "Playing the teaser" : "Free teaser") : access?.kind === "play" ? (here && playing ? "Playing" : "In your library") : null}
+            {loading ? "Loading" : access?.kind === "teaser" ? (here ? "Playing the preview" : "Free preview") : access?.kind === "play" ? (here && playing ? "Playing" : "In your library") : null}
           </p>
 
           <RoomBuy access={access} />
@@ -638,7 +638,7 @@ function RoomBuy({ access }: { access: TrendingAccess | null }) {
       <span className="tc-buy-row">
         {access.buy ? (
           <span className="tc-room-note">
-            {access.buy.label} <Money value={{ amount_minor: access.buy.offer.amount_minor, currency_code: access.buy.offer.currency_code }} />
+            {access.buy.label} <OfferPrice offer={access.buy.offer} />
           </span>
         ) : null}
         <Link href="/login?next=%2F%23trending" className="tc-buy cr-cut cr-cut-sm cr-focus">
@@ -657,7 +657,7 @@ function RoomBuy({ access }: { access: TrendingAccess | null }) {
   return (
     <Link href={`/checkout?offer=${access.buy.offer.id}`} className={cn("tc-buy cr-cut cr-cut-sm cr-focus")}>
       <Lock aria-hidden="true" className="size-4" /> {access.buy.label}{" "}
-      <Money value={{ amount_minor: access.buy.offer.amount_minor, currency_code: access.buy.offer.currency_code }} />
+      <OfferPrice offer={access.buy.offer} />
     </Link>
   );
 }

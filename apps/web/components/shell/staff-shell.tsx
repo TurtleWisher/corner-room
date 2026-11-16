@@ -15,6 +15,7 @@ import { FanViewButton, FanViewLink, useLeaveFanView } from "@/components/shell/
 import { NavIcon } from "@/components/shell/nav-icons";
 import { SkipLink } from "@/components/shell/site-header";
 import { ShellBell } from "@/components/shell/shell-bell";
+import { StaffFinder } from "@/components/shell/staff-finder";
 import { WorkspaceChip, WorkspacePrompt } from "@/components/shell/workspace-chip";
 import { activeHref, staffBreadcrumb, staffNavSections, type NavSection } from "@/lib/nav-view";
 import { cn } from "@/lib/utils";
@@ -25,8 +26,8 @@ function StaffNav({ sections, onNavigate }: { sections: NavSection[]; onNavigate
   return (
     <nav aria-label="Staff">
       {sections.map((section) => (
-        <div key={section.label} className="mb-4">
-          <p className="cr-eyebrow mb-1 px-5 text-[0.6875rem] text-fg-muted">{section.label}</p>
+        <div key={section.label} className="mb-3">
+          <p className="st-nav-head">{section.label}</p>
           <ul>
             {section.items.map((item) => {
               const current = item.href === active;
@@ -37,8 +38,8 @@ function StaffNav({ sections, onNavigate }: { sections: NavSection[]; onNavigate
                     onClick={onNavigate}
                     aria-current={current ? "page" : undefined}
                     className={cn(
-                      "cr-focus flex h-10 items-center gap-3 border-l-[3px] px-5 text-sm font-semibold",
-                      current ? "border-highlight bg-surface-overlay text-fg" : "border-transparent text-fg-muted hover:text-fg",
+                      "cr-focus st-nav-item",
+                      current ? "st-nav-on" : "",
                     )}
                   >
                     <NavIcon href={item.href} />
@@ -83,7 +84,7 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
   const crumb = staffBreadcrumb(pathname, sections);
 
   return (
-    <div className="lg:grid lg:min-h-dvh lg:grid-cols-[16rem_minmax(0,1fr)]">
+    <div className="st-console lg:grid lg:min-h-dvh lg:grid-cols-[15rem_minmax(0,1fr)]">
       <SkipLink />
       <aside data-theme="staff" className="cr-scope hidden border-r border-line lg:block">
         <div className="sticky top-0 flex h-dvh flex-col">
@@ -103,7 +104,7 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
       </aside>
       <div className="min-w-0">
         <header data-theme="staff" className="cr-scope cr-bar sticky top-0 z-30 border-b border-line">
-          <div className="flex h-14 items-center gap-3 px-3 md:px-6">
+          <div className="flex h-12 items-center gap-3 px-3 md:px-6">
             <button
               type="button"
               aria-label="Staff menu"
@@ -120,10 +121,11 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
               <BetaTag className="pb-0.5" />
             </div>
             {crumb ? (
-              <p className="hidden text-sm text-fg-muted lg:block">
-                {crumb[0]} / <span className="font-semibold text-fg">{crumb[1]}</span>
+              <p className="hidden text-[0.8125rem] text-fg-muted lg:block">
+                {crumb[0]} <span aria-hidden="true" className="mx-1 opacity-50">/</span> <span className="font-semibold text-fg">{crumb[1]}</span>
               </p>
             ) : null}
+            {status === "authenticated" ? <StaffFinder sections={sections} /> : null}
             <div className="ml-auto flex items-center gap-1">
               {status === "authenticated" ? (
                 <>

@@ -175,16 +175,16 @@ describe("the mini player", () => {
     expect(access).toEqual({ kind: "play" });
   });
 
-  it("plays the teaser for everyone else, with the price beside it", () => {
+  it("plays the preview for everyone else, with the price beside it", () => {
     const teased = item({ tracks: [{ ...item().tracks[0], teaser_id: "tz-1" }] });
     const access = trendingAccess(teased, { entitlements: [], offers: [offer({})] }, true);
     expect(access).toMatchObject({ kind: "teaser", teaserId: "tz-1", trackId: "trk-1", signIn: false });
     expect(access.kind === "teaser" && access.buy?.label).toBe("Buy the single");
-    // Visitors hear the teaser too; owning is never assumed without signing in.
+    // Visitors hear the preview too; owning is never assumed without signing in.
     expect(trendingAccess(teased, { entitlements: [owns("RELEASE", "rel-1")], offers: [] }, false)).toMatchObject({ kind: "teaser", signIn: true });
   });
 
-  it("offers only the way to buy when there is no teaser", () => {
+  it("offers only the way to buy when there is no preview", () => {
     const access = trendingAccess(item(), { entitlements: [], offers: [] }, true);
     expect(access).toEqual({ kind: "buy", buy: null, signIn: false });
     const song = item({ kind: "TRACK", track_id: "trk-1" });

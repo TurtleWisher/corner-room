@@ -174,6 +174,7 @@ class ProposalOut(BaseModel):
     audience: str
     amount_minor: int
     currency_code: str
+    open_price: bool = False
     note: str | None
     status: str
     decision_note: str | None
@@ -310,6 +311,8 @@ class ReleaseDetailOut(BaseModel):
     tracks: list[StudioTrackOut]
     readiness: ReadinessOut
     proposals: list[ProposalOut]
+    # D-OPEN-PRICE-01: the range every open-price amount must fall in; None = that end is open.
+    open_price_range: dict[str, Any] | None = None
     intake: IntakeOut | None
     history: list[ReviewEventOut]
 
@@ -384,6 +387,8 @@ class ProposalIn(BaseModel):
     audience: Literal["EVERYONE", "OWNS_PART_OF_RELEASE", "PRESALE"] = "EVERYONE"
     amount_minor: int = Field(ge=0)
     currency_code: str = Field(default="BDT", min_length=3, max_length=3)
+    # D-OPEN-PRICE-01: the amount is the lowest one and each buyer chooses what to pay.
+    open_price: bool = False
     note: str | None = Field(default=None, max_length=500)
 
 
@@ -541,6 +546,7 @@ async def propose(release_id: UUID, body: ProposalIn, ctx: Ctx, svc: StudioDep) 
     p = await svc.propose_price(
         ctx, release_id, subject_type=body.subject_type, subject_id=body.subject_id, audience=body.audience,
         amount_minor=body.amount_minor, currency_code=body.currency_code, note=body.note,
+        open_price=body.open_price,
     )
     return ProposalOut(**svc._proposal_view(p))
 

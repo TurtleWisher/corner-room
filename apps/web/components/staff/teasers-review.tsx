@@ -1,7 +1,7 @@
 "use client";
 
 /*
- * Staff: teasers waiting for review (owner, 2026-11-07, D-TEASER-01). Listen to the made teaser as fans
+ * Staff: teasers waiting for review (owner, 2026-11-07, D-TEASER-01). Listen to the made preview as fans
  * will hear it, then approve (it goes live at once, replacing any live version) or send it back with a
  * note the artist sees. Whoever made or sent it, and the music's own people, can't approve (the API
  * checks). Once approved, anyone can listen to it free, as often as they like.
@@ -44,7 +44,7 @@ function Item({ t, onDone }: { t: TeaserQueueItem; onDone: () => void }) {
       await a.play();
       setPlaying(true);
     } catch (err) {
-      setError(friendlyError(err, "The teaser couldn't play."));
+      setError(friendlyError(err, "The preview couldn't play."));
     }
   }
 
@@ -74,7 +74,7 @@ function Item({ t, onDone }: { t: TeaserQueueItem; onDone: () => void }) {
       <p className="mt-1 text-sm text-muted-foreground">
         Version {t.number} · {formatTime(t.start_ms)} to {formatTime(t.end_ms)}
         {t.duration_ms ? ` · ${formatLength(t.duration_ms)}` : ""} · song is {t.track_status === "RELEASED" ? "out" : "not out yet"}
-        {t.replaces_live ? " · replaces the live teaser" : ""}
+        {t.replaces_live ? " · replaces the live preview" : ""}
       </p>
       <div className="mt-2">
         <Button variant="outline" onClick={() => void listen()}>
@@ -87,7 +87,7 @@ function Item({ t, onDone }: { t: TeaserQueueItem; onDone: () => void }) {
         value={note}
         onChange={(e) => setNote(e.target.value)}
         placeholder="Note for the artist (required to send back)"
-        aria-label={`Review note for the teaser of ${t.track_title}`}
+        aria-label={`Review note for the preview of ${t.track_title}`}
         maxLength={2000}
       />
       <div className="mt-2 flex gap-2">
@@ -117,13 +117,13 @@ export function TeasersReview() {
     if (!currentOrg) return;
     fetchTeaserQueue()
       .then(setItems)
-      .catch((err) => (err instanceof ApiError && err.status === 403 ? setItems([]) : setError(friendlyError(err, "Teasers couldn't be loaded."))));
+      .catch((err) => (err instanceof ApiError && err.status === 403 ? setItems([]) : setError(friendlyError(err, "Previews couldn't be loaded."))));
   }, [currentOrg, round]);
 
   if (!currentOrg || (items !== null && items.length === 0 && !error)) return null;
   return (
     <Card className="p-5">
-      <h2 className="text-lg font-semibold">Teasers waiting for review</h2>
+      <h2 className="text-lg font-semibold">Previews waiting for review</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Short parts of songs that anyone will be able to hear free, as often as they like. Nothing is public until it is approved.
       </p>

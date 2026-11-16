@@ -32,7 +32,7 @@ class TrendingSongOut(BaseModel):
     duration_ms: int | None
     # Released releases the song is on, so a bought release counts as owning it.
     release_ids: list[UUID]
-    # Its newest published teaser, for anyone who hasn't bought it (D-TEASER-02).
+    # Its newest published preview, for anyone who hasn't bought it (D-TEASER-02).
     teaser_id: UUID | None
     listens: int
 

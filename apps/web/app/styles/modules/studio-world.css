@@ -1,0 +1,131 @@
+/*
+ * Artist Studio, pointer-led (owner, 2026-11-15: "very visually cool tech style with mouse
+ * movement subtle animation interaction effects on every page").
+ *
+ * Everything here answers the pointer and rests when it rests (ARTIST_STUDIO_DESIGN_GUIDE section
+ * 8: no looping glows, no moving gradients, no parallax on forms or tables). The mint world only:
+ * Signal Mint and Pale Mint light, never Ember or Sky. components/ds/spotlight.tsx writes --sx/--sy
+ * on the card under the pointer and --hx on the header; touch, pens and reduced motion get none.
+ */
+
+/* ---------- A line of light along the header, brightest under the pointer ---------- */
+[data-module="artist-studio"] .as-header::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -1px 0;
+  height: 1px;
+  pointer-events: none;
+  background: radial-gradient(14rem 1px at var(--hx, -20rem) 50%, #d3ecc9, rgb(44 187 118 / 0.55) 40%, transparent 100%);
+}
+
+/* ---------- Every card catches the pointer: a mint pool inside, a lit edge beside it ---------- */
+@media (hover: hover) and (pointer: fine) {
+  [data-module="artist-studio"] .cr-glass-card:hover {
+    --cut-fill:
+      radial-gradient(20rem circle at var(--sx, 50%) var(--sy, 0%), rgb(44 187 118 / 0.13), transparent 66%),
+      var(--cr-glass-fill);
+    --cut-border:
+      radial-gradient(14rem circle at var(--sx, 50%) var(--sy, 0%), rgb(211 236 201 / 0.9), rgb(44 187 118 / 0.5) 45%, transparent 72%),
+      var(--cr-glass-edge-hover);
+  }
+  [data-module="artist-studio"] .as-spot:hover {
+    background-image: radial-gradient(12rem circle at var(--sx, 50%) var(--sy, 0%), rgb(44 187 118 / 0.14), transparent 70%);
+    border-color: rgb(211 236 201 / 0.4);
+  }
+}
+
+/* ---------- Corner ticks: a card reads as an instrument panel, drawn in hairlines ---------- */
+[data-module="artist-studio"] main .cr-glass-card {
+  background-image:
+    linear-gradient(var(--as-tick, rgb(211 236 201 / 0.34)), var(--as-tick, rgb(211 236 201 / 0.34))),
+    linear-gradient(var(--as-tick, rgb(211 236 201 / 0.34)), var(--as-tick, rgb(211 236 201 / 0.34)));
+  background-repeat: no-repeat;
+  background-size: 10px 1px, 1px 10px;
+  background-position: right 6px bottom 6px, right 6px bottom 6px;
+}
+[data-module="artist-studio"] main .cr-glass-card:hover {
+  --as-tick: #2cbb76;
+}
+
+/* ---------- Side navigation: compact, with a mint marker that slides in ---------- */
+[data-module="artist-studio"] .as-nav-item {
+  position: relative;
+  display: flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1px 0.625rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cr-fg-muted);
+  transition: color var(--cr-dur-micro) ease, background-color var(--cr-dur-interaction) ease, padding-left var(--cr-dur-interaction) var(--ease-corner);
+}
+[data-module="artist-studio"] .as-nav-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.375rem;
+  bottom: 0.375rem;
+  width: 2px;
+  background: var(--cr-accent);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform var(--cr-dur-component) var(--ease-corner);
+}
+[data-module="artist-studio"] .as-nav-item:hover {
+  color: var(--cr-fg);
+  background: var(--cr-surface-overlay);
+  padding-left: 1rem;
+}
+[data-module="artist-studio"] .as-nav-item:hover::before,
+[data-module="artist-studio"] .as-nav-on::before {
+  transform: scaleY(1);
+}
+[data-module="artist-studio"] .as-nav-on {
+  color: var(--cr-fg);
+  background: linear-gradient(90deg, rgb(44 187 118 / 0.16), transparent 85%);
+}
+[data-module="artist-studio"] .as-nav-on svg {
+  color: var(--cr-accent);
+}
+
+/* ---------- Controls answer the hand: a press settles, links and rows light on the lit side ---------- */
+[data-module="artist-studio"] main :where(button, a[class*="inline-flex"]):not(:disabled) {
+  transition:
+    transform var(--cr-dur-micro) var(--ease-corner),
+    color var(--cr-dur-interaction) ease,
+    background-color var(--cr-dur-interaction) ease,
+    border-color var(--cr-dur-interaction) ease;
+}
+[data-module="artist-studio"] main :where(button, a[class*="inline-flex"]):not(:disabled):active {
+  transform: translateY(1px) scale(0.985);
+}
+[data-module="artist-studio"] main :where(tbody tr, .cr-row) {
+  transition: background-color var(--cr-dur-interaction) ease, box-shadow var(--cr-dur-interaction) ease;
+}
+[data-module="artist-studio"] main :where(tbody tr):hover {
+  background: linear-gradient(90deg, rgb(44 187 118 / 0.1), transparent 70%);
+  box-shadow: inset 2px 0 0 var(--cr-accent);
+}
+[data-module="artist-studio"] main :where(input:not([type="checkbox"], [type="radio"], [type="range"]), textarea, select):focus-visible {
+  box-shadow: 0 0 0 3px rgb(44 187 118 / 0.18), 0 0 22px -6px rgb(44 187 118 / 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-module="artist-studio"] .as-header::after {
+    display: none;
+  }
+  [data-module="artist-studio"] .as-nav-item,
+  [data-module="artist-studio"] .as-nav-item::before,
+  [data-module="artist-studio"] main .cr-glass-card,
+  [data-module="artist-studio"] main :where(button, a[class*="inline-flex"]):not(:disabled) {
+    transition: none;
+  }
+  [data-module="artist-studio"] .as-nav-item:hover {
+    padding-left: 0.75rem;
+  }
+  [data-module="artist-studio"] main :where(button, a[class*="inline-flex"]):not(:disabled):active {
+    transform: none;
+  }
+}

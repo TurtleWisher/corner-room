@@ -73,7 +73,7 @@ async def resolve_recipient(session: AsyncSession, event: DomainEvent) -> UUID |
     if event_type in {PRESALE_RELEASED, PRESALE_DATE_CHANGED, PRESALE_CANCELLED}:
         return _uuid(payload.get("user_id"))
     if event_type == TEASER_PUBLISHED:
-        # The person who sent the teaser for review (D-TEASER-01).
+        # The person who sent the preview for review (D-TEASER-01).
         return _uuid(payload.get("submitted_by"))
     if event_type == TEASER_PROCESSING_FAILED:
         return _uuid(payload.get("requested_by"))

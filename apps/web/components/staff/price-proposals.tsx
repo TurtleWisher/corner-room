@@ -46,6 +46,11 @@ function ProposalRow({ proposal, onDecided }: { proposal: OfferProposalRecord; o
       <p className="mt-1 text-sm text-fg">
         {words.subject} · {words.audience}
       </p>
+      {proposal.open_price ? (
+        <p className="mt-2 border-l-2 border-highlight pl-3 text-sm text-fg">
+          <span className="font-semibold">Open price.</span> This amount is the lowest a buyer can pay; each buyer chooses their own amount from there up.
+        </p>
+      ) : null}
       {proposal.note ? <p className="mt-2 text-sm text-fg-muted">Artist&apos;s note: {proposal.note}</p> : null}
       <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
         <label className="grid gap-1 text-sm text-fg-muted">
@@ -53,7 +58,7 @@ function ProposalRow({ proposal, onDecided }: { proposal: OfferProposalRecord; o
           <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} />
         </label>
         <Button type="button" size="sm" disabled={busy !== null} onClick={() => void decide("accept")}>
-          {busy === "accept" ? "Accepting" : "Accept and put on sale"}
+          {busy === "accept" ? "Accepting" : proposal.open_price ? "Accept as an open price" : "Accept and put on sale"}
         </Button>
         <Button type="button" size="sm" variant="outline" disabled={busy !== null || !note.trim()} onClick={() => void decide("counter")}>
           {busy === "counter" ? "Sending" : "Counter"}

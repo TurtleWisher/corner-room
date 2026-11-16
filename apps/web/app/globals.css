@@ -7,6 +7,7 @@
 @import "./styles/modules/account.css";
 @import "./styles/modules/home.css";
 @import "./styles/modules/home-trending.css";
+@import "./styles/modules/home-sections.css";
 @import "./styles/modules/listen.css";
 @import "./styles/modules/music.css";
 @import "./styles/modules/artists.css";
@@ -15,6 +16,9 @@
 @import "./styles/modules/teaser-studio.css";
 @import "./styles/modules/story-card.css";
 @import "./styles/modules/studio-kit.css";
+@import "./styles/modules/staff-console.css";
+@import "./styles/modules/studio-world.css";
+@import "./styles/spotlight.css";
 @import "./styles/browse.css";
 @import "./styles/player-controls.css";
 @import "./styles/purchase.css";
