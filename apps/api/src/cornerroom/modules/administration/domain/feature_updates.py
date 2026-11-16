@@ -250,10 +250,11 @@ FEATURES: Final[list[dict]] = [
         "description": (
             "Uploaded masters are processed into Opus 160 and MP3 320 playback copies. The player lives "
             "above every page, so music never stops on a page change, and its bar steps aside while you "
-            "read. Bought songs can be saved in the browser and played with no connection. Staff and the "
-            "music's own artist listen without buying."
+            "read. Bought songs can be saved in the browser and played with no connection. Catalog staff, "
+            "administrators and the music's own artist or band listen without buying."
         ),
         "updates": [
+            {"date": "2026-11-16", "kind": "FIXED", "title": "Administrators listen without buying", "details": "Administrators had to buy songs unless they were also catalog staff. They now play every song of their workspace without buying, like catalog staff and the music's own artist or band."},
             {"date": "2026-11-01", "kind": "IMPROVED", "title": "Player bar follows the scroll", "details": "Fades away while reading down and comes back on scrolling up."},
             {"date": "2026-10-30", "kind": "IMPROVED", "title": "Listen without buying", "details": "Staff and the music's own artist or band listen without buying."},
             {"date": "2026-10-28", "kind": "IMPROVED", "title": "Music keeps playing", "details": "Music keeps playing on every page; MP3 320 streams; Normalise off by default; glossier buttons."},
@@ -470,9 +471,12 @@ FEATURES: Final[list[dict]] = [
             "The home hero is one composition that fits the first screen, featuring events and releases "
             "in a turning 3D carousel. It keeps turning gently with Reduce Motion on, and phones show the "
             "song, artist and cover. Trending Corner shows the music staff pick as selling and being heard "
-            "the most, as discs turning in a glass carousel, with a small player for the disc in front."
+            "the most, as real 3D picture CDs turning in a glass carousel over a gloss floor, with a small "
+            "player for the disc in front. The hero and the New releases row show the five newest releases."
         ),
         "updates": [
+            {"date": "2026-11-15", "kind": "IMPROVED", "title": "Trending Corner in real 3D", "details": "The discs are now real 3D picture CDs: the cover under a clear gloss, a clear centre with its raised ring, a silver band that throws a CD's rainbow as it turns, a gloss floor that reflects them and soft shadows. Point at a disc and it lifts and tilts toward the pointer under a lamp that follows it; the discs lean as the ring spins and settle with a little wobble. Browsers without 3D keep the earlier discs."},
+            {"date": "2026-11-15", "kind": "IMPROVED", "title": "Five newest releases", "details": "The hero carousel and the New releases row now show the five newest releases (was three in the hero and four in the row)."},
             {"date": "2026-11-08", "kind": "FIXED", "title": "Singles listed twice in Trending Corner", "details": "Staff saw a single twice (the single and its one song). A single now shows once, as the single, and a song and the release it is on can no longer both be picked."},
             {"date": "2026-11-08", "kind": "NEW", "title": "Trending Corner", "details": "Staff pick the music selling and being heard the most (Catalog > Trending Corner, with sales and listens beside each). On the home page it turns as discs you can point at, click, drag or swipe; the one in front plays below: the whole song for owners, its teaser for everyone else."},
             {"date": "2026-11-08", "kind": "IMPROVED", "title": "Less empty space under the hero", "details": "The welcome shortcuts sit closer under the hero."},

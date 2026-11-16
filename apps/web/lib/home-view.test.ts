@@ -116,13 +116,18 @@ describe("featuredSlides (owner, 2026-10-31: releases and events take turns in t
     expect(slides.map((s) => s.label)).toEqual(["Live now", "Coming up", "New release", "Coming up", "New release"]);
   });
 
-  it("calls the first upcoming event Next up when nothing is live, and keeps at most three of each", () => {
+  it("calls the first upcoming event Next up when nothing is live, and keeps at most three events and five releases", () => {
     const events = ["a", "b", "c", "d"].map((id, i) => ev(id, `2026-11-0${i + 1}T14:00:00Z`));
-    const releases = ["r1", "r2", "r3", "r4"].map((id, i) => rel(id, `2026-10-2${i}T00:00:00Z`));
+    const releases = ["r1", "r2", "r3", "r4", "r5", "r6"].map((id, i) => rel(id, `2026-10-2${i}T00:00:00Z`));
     const slides = featuredSlides(events, releases, now);
-    expect(slides).toHaveLength(6);
+    expect(slides).toHaveLength(8);
     expect(slides[0]).toMatchObject({ kind: "event", label: "Next up", event: { id: "a" } });
-    expect(ids(slides)).toEqual(["a", "r4", "b", "r3", "c", "r2"]);
+    expect(ids(slides)).toEqual(["a", "r6", "b", "r5", "c", "r4", "r3", "r2"]);
+  });
+
+  it("features the five newest releases when there are no events (owner, 2026-11-15)", () => {
+    const releases = ["r1", "r2", "r3", "r4", "r5", "r6", "r7"].map((id, i) => rel(id, `2026-10-1${i}T00:00:00Z`));
+    expect(ids(featuredSlides([], releases, now))).toEqual(["r7", "r6", "r5", "r4", "r3"]);
   });
 
   it("features only releases when there are no events, and nothing when there is nothing", () => {

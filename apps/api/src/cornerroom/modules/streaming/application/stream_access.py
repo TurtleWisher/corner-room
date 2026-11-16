@@ -1,7 +1,9 @@
 """Who may stream music without buying it (owner, 2026-10-30, D-STREAM-02).
 
-- Catalog staff: anyone holding `music.approve` in the organization that owns the song may stream
-  every song of that organization (the owner and admins review and manage all of it).
+- Catalog staff and admins: anyone holding `music.approve` or `org.admin` in the organization that
+  owns the song may stream every song of that organization (the owner and admins review and manage
+  all of it). Admins were added on 2026-11-16 (owner: "for admin, all songs can be played ... without
+  any buying restriction"); the Administrator role holds `org.admin` but not `music.approve`.
 - The music's own people: the artist who claimed the profile, or the admins of the band, may stream
   their own songs, including songs on their releases.
 
@@ -18,7 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.modules.authorization.application.service import AuthorizationService
 
-STAFF_PERMISSION = "music.approve"
+# Holding any one of these in the song's organization is enough.
+STAFF_PERMISSIONS = frozenset({"music.approve", "org.admin"})
 
 
 class StreamAccess:
@@ -33,7 +36,7 @@ class StreamAccess:
             if membership.status != "ACTIVE":
                 continue
             keys = await self.authz.permission_keys(user_id, organization_id=membership.organization_id)
-            if STAFF_PERMISSION in keys:
+            if STAFF_PERMISSIONS & set(keys):
                 out.add(membership.organization_id)
         return out
 
@@ -60,7 +63,7 @@ class StreamAccess:
             return False
         if track.primary_org_id is not None:
             keys = await self.authz.permission_keys(user_id, organization_id=track.primary_org_id)
-            if STAFF_PERMISSION in keys:
+            if STAFF_PERMISSIONS & set(keys):
                 return True
         artists, bands = await self.owned_profiles(user_id)
         if not artists and not bands:

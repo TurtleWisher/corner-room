@@ -17,7 +17,8 @@
     "next": "^15.3.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "tailwind-merge": "^3.3.0"
+    "tailwind-merge": "^3.3.0",
+    "three": "0.187.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
@@ -29,6 +30,7 @@
     "@types/node": "^22.15.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "@types/three": "0.187.0",
     "axe-core": "4.13.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.4",
