@@ -263,9 +263,12 @@ function Upcoming({ state }: { state: ReturnType<typeof useAsync<EventRecord[]>>
 
 /* ---------- The Sky world: new releases, then the mission and the Store ---------- */
 
+/** How many of the newest releases the home page's New releases row shows (owner, 2026-11-15: five, for now). */
+const NEW_RELEASES_SHOWN = 5;
+
 function NewReleases() {
   const credits = useCredits();
-  const state = useAsync(() => fetchReleases({ skipAuth: true }).then((p) => sortReleases(p.items).slice(0, 4)), []);
+  const state = useAsync(() => fetchReleases({ skipAuth: true }).then((p) => sortReleases(p.items).slice(0, NEW_RELEASES_SHOWN)), []);
   if (state.status === "ok" && state.data.length === 0) return null;
   return (
     <section aria-labelledby="home-releases" className="mx-auto max-w-[90rem] px-4 pb-10 pt-14 md:px-6">
@@ -273,17 +276,18 @@ function NewReleases() {
         <SectionHead id="home-releases" index="03" title="New releases" href="/releases" link="All releases" />
       </Reveal>
       {state.status === "loading" ? (
-        <div className="grid grid-cols-2 gap-6 pt-6 md:grid-cols-4">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="aspect-square w-full" />
+        <div className="grid grid-cols-2 gap-6 pt-6 md:grid-cols-5">
+          {Array.from({ length: NEW_RELEASES_SHOWN }, (_, i) => (
+            <Skeleton key={i} className={i === 0 ? "col-span-2 aspect-square w-full md:col-span-1" : "aspect-square w-full"} />
           ))}
         </div>
       ) : state.status === "error" ? (
         <p className="py-8 text-sm text-fg">Releases could not be loaded. Please try again later.</p>
       ) : (
-        <ul className="grid grid-cols-2 gap-6 pt-6 md:grid-cols-4">
+        <ul className="grid grid-cols-2 gap-6 pt-6 md:grid-cols-5">
           {state.data.map((release, i) => (
-            <Reveal as="li" key={release.id} index={i} className="home-tile">
+            // On phones the newest one takes the whole row, so five fill the two columns evenly.
+            <Reveal as="li" key={release.id} index={i} className={i === 0 && state.data.length % 2 === 1 ? "home-tile col-span-2 md:col-span-1" : "home-tile"}>
               <ReleaseCard release={release} artist={creditName(release, credits.artists, credits.bands)} />
             </Reveal>
           ))}

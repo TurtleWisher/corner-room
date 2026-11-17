@@ -69,6 +69,24 @@ async def test_staff_and_the_artist_stream_without_buying(client: AsyncClient) -
 
 @pytest.mark.postgres
 @pytest.mark.asyncio
+async def test_an_administrator_streams_without_buying(client: AsyncClient) -> None:
+    """Owner, 2026-11-16: "for admin, all songs can be played ... without any buying restriction".
+    The Administrator role holds org.admin, not music.approve; it streams every song of its org."""
+    admin, orgs = await _orgs(client)
+    label = orgs["LABEL"]
+    _release_id, track_id, _owner, _artist = await _released(client, admin, label, "admin-stream-owner@example.com", "Admin Act")
+    org_admin = await _staff_with(client, admin, "admin-stream@example.com", "admin", label)
+
+    res = await client.get(f"/api/v1/playback/tracks/{track_id}/availability", headers=bearer(org_admin))
+    assert res.status_code == 200, res.text
+    assert res.json()["entitled"] is True
+    res = await client.get("/api/v1/me/stream-access", headers=bearer(org_admin))
+    assert res.status_code == 200, res.text
+    assert track_id in res.json()["track_ids"]
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
 async def test_staff_and_artist_plays_are_not_counted_as_listens(client: AsyncClient, monkeypatch) -> None:
     """D-LISTEN-03 (owner, 2026-10-30): "Staff and artist plays ... shouldn't" count as listens."""
     from cornerroom.infra.db import get_session_factory

@@ -12,11 +12,13 @@ import { useCustomerCommerce } from "@/components/music/commerce";
 import { useCredits } from "@/components/music/credits";
 import { useOptionalPlayer, usePlayerProgress, type PlayerTrack } from "@/components/music/player";
 import type { TrendingItem } from "@/features/trending/api";
+import type { SceneEngine, TrendingScene } from "@/components/home/trending-gl";
 import { coverUrl } from "@/lib/cover-view";
 import { formatCount } from "@/lib/format/count";
 import { creditName } from "@/lib/music-view";
 import { clock } from "@/lib/player-model";
 import { teaserKey } from "@/lib/teaser-room-view";
+import { SPIN_PLAYING_RATE, SPIN_REST_MS, coverSizeFor } from "@/lib/trending-scene-view";
 import {
   AUTO_TURN_MS,
   DRAG_THRESHOLD_PX,
@@ -41,17 +43,13 @@ import {
 } from "@/lib/trending-view";
 import { cn } from "@/lib/utils";
 
-/** One full turn of a disc at rest, and while its music plays in the mini player. */
-const SPIN_REST_MS = 16000;
-const SPIN_PLAYING_RATE = 3.2;
-
 type Credits = ReturnType<typeof useCredits>;
 
 function artistOf(item: TrendingItem, credits: Credits): string | null {
   return creditName(item, credits.artists, credits.bands);
 }
 
-function cover(item: TrendingItem, size: 160 | 480 = 480): string | null {
+function cover(item: TrendingItem, size: 160 | 480 | 1200 = 480): string | null {
   return item.release_id ? coverUrl({ release: item.release_id, hasCover: item.has_cover }, size) : null;
 }
 
@@ -60,6 +58,22 @@ function isPlayingFrom(player: ReturnType<typeof useOptionalPlayer>, item: Trend
   if (!player?.track) return false;
   const id = player.track.id;
   return item.tracks.some((t) => t.id === id || (t.teaser_id !== null && id === teaserKey(t.teaser_id)));
+}
+
+/**
+ * Can this browser draw the 3D discs (WebGL 2)? Checked before the three.js chunk is fetched; the
+ * DOM discs stay otherwise (and in tests).
+ */
+function webglLikely(): boolean {
+  if (typeof window === "undefined" || typeof document === "undefined") return false;
+  if (/jsdom/i.test(navigator.userAgent)) return false;
+  try {
+    const gl = document.createElement("canvas").getContext("webgl2");
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    return !!gl;
+  } catch {
+    return false;
+  }
 }
 
 /* ---------- The disc ---------- */
@@ -126,6 +140,12 @@ export function TrendingCorner({ items }: { items: TrendingItem[] }) {
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const parts = React.useRef<Record<DiscPart, (HTMLElement | null)[]>>({ item: [], face: [], light: [], shade: [], label: [] });
   const engine = React.useRef<Engine | null>(null);
+  const scene = React.useRef<TrendingScene | null>(null);
+  const labels = React.useRef<(HTMLElement | null)[]>([]);
+  // The 3D discs (D-TRENDING-02) once their first frame is drawn; until then, and without WebGL,
+  // the DOM discs show.
+  const [gl, setGl] = React.useState(false);
+  const coversKey = items.map((it) => `${it.id}:${it.release_id ?? ""}:${it.has_cover ? 1 : 0}:${it.title}`).join("|");
 
   const register = React.useCallback((i: number, part: DiscPart, el: HTMLElement | null) => {
     parts.current[part][i] = el;
@@ -145,6 +165,63 @@ export function TrendingCorner({ items }: { items: TrendingItem[] }) {
       engine.current = null;
     };
   }, [n]);
+
+  // The 3D discs: three.js is its own chunk, fetched only where WebGL works.
+  React.useEffect(() => {
+    const viewport = viewportRef.current;
+    const e = engine.current;
+    if (!viewport || !e || n === 0 || !webglLikely()) return;
+    let cancelled = false;
+    let made: TrendingScene | null = null;
+    const reduced = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const measure = () => {
+      const first = parts.current.item.find(Boolean);
+      const disc = first?.querySelector<HTMLElement>(".tc-disc");
+      const discPx = disc?.offsetWidth || 220;
+      return { discPx, discCenterPx: (first?.offsetTop ?? 24) + discPx / 2 };
+    };
+    import("@/components/home/trending-gl")
+      .then((m) => {
+        if (cancelled) return;
+        const size = coverSizeFor(measure().discPx, window.devicePixelRatio || 1);
+        made = m.createTrendingScene({
+          host: viewport,
+          discs: items.map((it) => ({ title: it.title, cover: cover(it, size) })),
+          engine: e.scene,
+          labels: labels.current,
+          measure,
+          reduced,
+          onReady: () => {
+            if (cancelled) return;
+            e.setDomSpin(false);
+            setGl(true);
+          },
+          onLost: () => {
+            made?.destroy();
+            made = null;
+            scene.current = null;
+            e.setDomSpin(true);
+            setGl(false);
+          },
+        });
+        scene.current = made;
+      })
+      .catch((err: unknown) => {
+        // No 3D: the DOM discs stay, and a half-made canvas goes.
+        viewport.querySelector("canvas.tc-gl")?.remove();
+        e.setDomSpin(true);
+        if (process.env.NODE_ENV !== "production") console.warn("Trending Corner: 3D discs unavailable", err);
+      });
+    return () => {
+      cancelled = true;
+      made?.destroy();
+      scene.current = null;
+      e.setDomSpin(true);
+      setGl(false);
+    };
+    // items are read through coversKey: a new scene only when the discs or their covers change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [n, coversKey]);
 
   React.useEffect(() => {
     engine.current?.setHold("playing", playingHere);
@@ -188,8 +265,8 @@ export function TrendingCorner({ items }: { items: TrendingItem[] }) {
           }
         }}
       >
-        <div aria-hidden="true" className="tc-floor" />
-        <div ref={viewportRef} className="tc-viewport" data-count={n}>
+        <div aria-hidden="true" className="tc-floor" data-gl={gl || undefined} />
+        <div ref={viewportRef} className="tc-viewport" data-count={n} data-gl={gl || undefined}>
           <div className="tc-ring">
             {items.map((it, i) => {
               const artist = artistOf(it, credits);
@@ -204,9 +281,32 @@ export function TrendingCorner({ items }: { items: TrendingItem[] }) {
                   aria-current={isFront || undefined}
                   aria-label={isFront ? `${it.title}${artist ? ` by ${artist}` : ""}, in front` : `Bring ${it.title}${artist ? ` by ${artist}` : ""} to the front`}
                   onClick={() => engine.current?.pick(i)}
+                  // With the 3D discs these buttons never take the pointer, so their focus is the
+                  // keyboard's: the scene rings and lifts the disc.
+                  onFocus={() => scene.current?.setFocus(i, true)}
+                  onBlur={() => scene.current?.setFocus(i, false)}
                 >
                   <Disc item={it} artist={artist} index={i} register={register} />
                 </button>
+              );
+            })}
+          </div>
+          {/* The 3D discs' names: the scene places them under each disc as it moves. */}
+          <div className="tc-gl-labels" aria-hidden="true">
+            {items.map((it, i) => {
+              const artist = artistOf(it, credits);
+              return (
+                <span
+                  key={it.id}
+                  ref={(el) => {
+                    labels.current[i] = el;
+                  }}
+                  className="tc-gl-label"
+                  data-front={i === front || undefined}
+                >
+                  <span className="tc-label-title">{it.title}</span>
+                  {artist ? <span className="tc-label-artist">{artist}</span> : null}
+                </span>
               );
             })}
           </div>
@@ -240,6 +340,10 @@ type Engine = {
   step: (delta: number) => void;
   setHold: (reason: Hold, on: boolean) => void;
   setPlayingFront: (i: number | null) => void;
+  /** The DOM discs' own spin; off while the 3D discs draw. */
+  setDomSpin: (on: boolean) => void;
+  /** What the 3D scene reads every frame. */
+  scene: SceneEngine;
   destroy: () => void;
 };
 
@@ -265,7 +369,10 @@ function createEngine({
   let speed = 0;
   let playingFront: number | null = null;
   let boosted = false;
+  let domSpin = true;
   const holds = new Set<Hold>();
+  const listeners = new Set<() => void>();
+  const notify = () => listeners.forEach((fn) => fn());
   if (typeof document !== "undefined" && document.hidden) holds.add("hidden");
 
   // The discs' own spin: one infinite animation per face, sped up while the ring travels.
@@ -311,7 +418,7 @@ function createEngine({
       if (!a) return;
       const rate = boosted ? spinBoost(speed) : i === playingFront ? SPIN_PLAYING_RATE : 1;
       if (Math.abs((a.playbackRate || 1) - rate) > 0.15) a.updatePlaybackRate(rate);
-      if (holds.has("offscreen") || holds.has("hidden")) a.pause();
+      if (!domSpin || holds.has("offscreen") || holds.has("hidden")) a.pause();
       else if (a.playState === "paused") a.play();
     });
   }
@@ -341,6 +448,7 @@ function createEngine({
       lastFrame = { t: 0, pos };
       raf = requestAnimationFrame(frame);
     }
+    notify();
   }
 
   function settle() {
@@ -446,6 +554,7 @@ function createEngine({
     else holds.delete("hidden");
     setSpinRates();
     schedule();
+    notify();
   };
   viewport.addEventListener("pointerdown", onDown);
   viewport.addEventListener("pointermove", onMove);
@@ -457,7 +566,7 @@ function createEngine({
   render();
   schedule();
 
-  return {
+  const api: Engine = {
     pick(i) {
       if (n === 0) return;
       if (i === frontIndex(pos, n) && !tween) return;
@@ -476,11 +585,35 @@ function createEngine({
       if (had !== on) {
         if (reason === "offscreen" || reason === "hidden") setSpinRates();
         if (!tween) schedule();
+        notify();
       }
     },
     setPlayingFront(i) {
       playingFront = i;
       setSpinRates();
+      notify();
+    },
+    setDomSpin(on) {
+      domSpin = on;
+      setSpinRates();
+    },
+    scene: {
+      snapshot: () => ({
+        pos,
+        speed: raf ? speed : 0,
+        moving: raf !== 0 || !!tween,
+        dragging: !!drag?.moved,
+        boosted,
+        playingFront,
+        paused: holds.has("offscreen") || holds.has("hidden"),
+      }),
+      subscribe(fn) {
+        listeners.add(fn);
+        return () => {
+          listeners.delete(fn);
+        };
+      },
+      pick: (i) => api.pick(i),
     },
     destroy() {
       clear();
@@ -493,8 +626,10 @@ function createEngine({
       viewport.removeEventListener("pointercancel", onUp);
       viewport.removeEventListener("click", onClickCapture, true);
       document.removeEventListener("visibilitychange", onVisibility);
+      listeners.clear();
     },
   };
+  return api;
 }
 
 /** Pulling past the end moves less and less. */

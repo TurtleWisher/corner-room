@@ -54,27 +54,30 @@ export type HomeFeature =
   | { kind: "event"; event: EventRecord; label: "Live now" | "Next up" | "Coming up" }
   | { kind: "release"; release: ReleaseRecord; label: "New release" };
 
-/** How many of each kind the hero carousel features at most. */
-export const FEATURED_PER_KIND = 3;
+/** How many events the hero carousel features at most. */
+export const FEATURED_EVENTS = 3;
+/** How many of the newest releases the hero carousel features at most (owner, 2026-11-15: five, for now). */
+export const FEATURED_RELEASES = 5;
 
 /**
  * The hero carousel's slides (owner, 2026-10-31): events that are LIVE now first, then the next
- * upcoming events and the newest released music, taking turns, at most FEATURED_PER_KIND of each.
+ * upcoming events and the newest released music, taking turns: at most FEATURED_EVENTS events and
+ * FEATURED_RELEASES releases (once the events run out, the remaining releases follow one another).
  * Display selection only; the API's public lists already decided what is public.
  */
-export function featuredSlides(events: EventRecord[], releases: ReleaseRecord[], now: Date = new Date(), perKind = FEATURED_PER_KIND): HomeFeature[] {
-  const live = events.filter((e) => e.status === "LIVE").slice(0, perKind);
+export function featuredSlides(events: EventRecord[], releases: ReleaseRecord[], now: Date = new Date(), maxEvents = FEATURED_EVENTS, maxReleases = FEATURED_RELEASES): HomeFeature[] {
+  const live = events.filter((e) => e.status === "LIVE").slice(0, maxEvents);
   const upcoming = upcomingEvents(
     events.filter((e) => e.status !== "LIVE"),
     now,
-    perKind - live.length,
+    maxEvents - live.length,
   );
   const eventSlides: HomeFeature[] = [
     ...live.map((event) => ({ kind: "event" as const, event, label: "Live now" as const })),
     ...upcoming.map((event, i) => ({ kind: "event" as const, event, label: i === 0 && live.length === 0 ? ("Next up" as const) : ("Coming up" as const) })),
   ];
   const releaseSlides: HomeFeature[] = sortReleases(releases.filter((r) => r.status === "RELEASED"))
-    .slice(0, perKind)
+    .slice(0, maxReleases)
     .map((release) => ({ kind: "release" as const, release, label: "New release" as const }));
   const liveFirst = eventSlides.slice(0, live.length);
   const rest = eventSlides.slice(live.length);

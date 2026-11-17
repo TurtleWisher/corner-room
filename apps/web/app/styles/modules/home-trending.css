@@ -226,6 +226,64 @@
   pointer-events: none;
   background: radial-gradient(closest-side, rgb(252 244 117 / 0.13), rgb(255 90 78 / 0.1) 45%, transparent 75%);
 }
+/* ---------- The 3D discs (components/home/trending-gl.ts, owner 2026-11-15, D-TRENDING-02) ----------
+   Drawn with WebGL on one canvas once its first frame is ready (`data-gl`). The DOM discs then stay
+   in place for keyboards and screen readers only: invisible, never under the pointer, and their
+   focus shows as the lamp-yellow ring the scene draws round the disc. */
+[data-module="home"] .tc-gl {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 700ms var(--ease-corner);
+  /* The room fades into the card at both sides. */
+  -webkit-mask: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+  mask: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+}
+[data-module="home"] .tc-viewport[data-gl] .tc-gl {
+  opacity: 1;
+}
+[data-module="home"] .tc-viewport[data-gl] .tc-ring {
+  opacity: 0;
+}
+[data-module="home"] .tc-viewport[data-gl] .tc-item {
+  pointer-events: none !important;
+}
+[data-module="home"] .tc-floor[data-gl] {
+  opacity: 0;
+}
+[data-module="home"] .tc-gl-labels {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+}
+[data-module="home"] .tc-viewport[data-gl] .tc-gl-labels {
+  display: block;
+}
+[data-module="home"] .tc-gl-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  gap: 0.1rem;
+  width: var(--tc-disc);
+  padding-top: 0.35rem;
+  text-align: center;
+  opacity: 0;
+  transform-origin: 50% 0;
+  will-change: transform, opacity;
+}
+[data-module="home"] .tc-gl-label[data-front] .tc-label-title {
+  color: var(--cr-highlight);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-module="home"] .tc-gl {
+    transition: none;
+  }
+}
 [data-module="home"] .tc-dots {
   display: flex;
   justify-content: center;
