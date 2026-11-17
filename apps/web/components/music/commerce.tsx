@@ -4,7 +4,8 @@ import { usePathname } from "next/navigation";
 import { Check, Lock, LogIn, Play } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
-import { Button, ButtonLink, Money } from "@/components/ds";
+import { Button, ButtonLink } from "@/components/ds";
+import { OfferPrice } from "@/components/music/offer-price";
 import { SaveOfflineButton } from "@/components/music/save-offline-button";
 import { useOptionalPlayer, type PlayOptions, type PlayerTrack } from "@/components/music/player";
 import { useAsync } from "@/components/use-async";
@@ -93,11 +94,11 @@ export function TrackBuyControl({
     return (
       <span className="inline-flex items-center gap-3">
         {guest?.kind === "buy" ? (
-          <Money value={{ amount_minor: guest.offer.amount_minor, currency_code: guest.offer.currency_code }} className="text-sm text-fg-muted" />
+          <OfferPrice offer={guest.offer} className="text-sm text-fg-muted" />
         ) : guestRelease ? (
           <span className="whitespace-nowrap text-sm text-fg-muted">
             {releaseBuyLabel(guestRelease.release_type, guestRelease)}{" "}
-            <Money value={{ amount_minor: guestRelease.amount_minor, currency_code: guestRelease.currency_code }} />
+            <OfferPrice offer={guestRelease} />
           </span>
         ) : null}
         <ButtonLink href={`/login?next=${encodeURIComponent(pathname || `/tracks/${track.id}`)}`} variant="secondary" size={size} aria-label={`Sign in to play ${track.title}`}>
@@ -147,7 +148,7 @@ export function TrackBuyControl({
   if (state.kind === "buy") {
     return (
       <ButtonLink href={`/checkout?offer=${state.offer.id}`} size={size} aria-label={`Locked. Buy ${track.title} to play it`} title="Buy to play">
-        <Lock aria-hidden="true" /> <Money value={{ amount_minor: state.offer.amount_minor, currency_code: state.offer.currency_code }} />
+        <Lock aria-hidden="true" /> <OfferPrice offer={state.offer} />
       </ButtonLink>
     );
   }
@@ -171,7 +172,7 @@ export function TrackBuyControl({
         title={`${track.title} is sold as part of ${release.name ?? "a release"}`}
       >
         <Lock aria-hidden="true" /> {releaseBuyLabel(release.release_type, release)}{" "}
-        <Money value={{ amount_minor: release.amount_minor, currency_code: release.currency_code }} />
+        <OfferPrice offer={release} />
       </ButtonLink>
     );
   }

@@ -19,6 +19,12 @@ export type OfferRecord = {
   /** EVERYONE, OWNS_PART_OF_RELEASE for the price fans who already own some songs pay (D-AUDIO-11),
    * or PRESALE for pre-orders before release day (D-PRESALE-02). */
   audience?: string;
+  /** D-OPEN-PRICE-01: `amount_minor` is the lowest amount and the buyer chooses what to pay. */
+  open_price?: boolean;
+  /** The most one payment can be for an open price, when a limit is set. */
+  open_price_max_minor?: number | null;
+  /** The least a buyer can pay for an open price (the artist's lowest, or the range's floor). */
+  open_price_min_minor?: number | null;
   /** SINGLE, EP, ALBUM ... when the price is for a whole release, so buttons can say "Buy the album". */
   release_type?: string | null;
 };
@@ -94,6 +100,8 @@ export type OfferProposalRecord = {
   audience: "EVERYONE" | "OWNS_PART_OF_RELEASE" | "PRESALE";
   amount_minor: number;
   currency_code: string;
+  /** D-OPEN-PRICE-01: the artist asked for an open price; the amount is the lowest one. */
+  open_price?: boolean;
   note: string | null;
   status: string;
   decision_note: string | null;

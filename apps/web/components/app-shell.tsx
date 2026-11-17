@@ -6,6 +6,7 @@ import { ErrorReporter } from "@/components/error-reporter";
 import { PlayerBar, PlayerProvider } from "@/components/music/player";
 import { NotificationsProvider } from "@/components/notifications-provider";
 import { OfflineSync } from "@/components/offline-sync";
+import { NavProgress } from "@/components/shell/nav-progress";
 import { RoomTransition } from "@/components/shell/room-transition";
 import { WorkspaceProvider } from "@/components/workspace-provider";
 
@@ -29,6 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <PagePointerLight />
             <OfflineSync />
             <RoomTransition />
+            <NavProgress />
             <ErrorReporter />
           </PlayerProvider>
         </NotificationsProvider>

@@ -108,10 +108,10 @@ describe("TrendingCorner (owner, 2026-11-08, D-TRENDING-01)", () => {
     expect(within(room()).getByText("Song 2", { selector: "a" })).toBeTruthy();
   });
 
-  it("plays the teaser for visitors, with no sign of owning it", () => {
+  it("plays the preview for visitors, with no sign of owning it", () => {
     render(<TrendingCorner items={[item(1)]} />);
     expect((screen.getByRole("button", { name: "Previous" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Play the teaser: Song 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Play the preview: Song 1" }));
     expect(player.playTeaser).toHaveBeenCalledWith(expect.objectContaining({ teaserId: "tz-1", trackId: "trk-1" }));
     expect(player.play).not.toHaveBeenCalled();
     expect(screen.getByRole("link", { name: /Sign in to buy/ })).toBeTruthy();

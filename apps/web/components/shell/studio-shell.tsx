@@ -18,6 +18,7 @@ import { ShellBell } from "@/components/shell/shell-bell";
 import { useAsync } from "@/components/use-async";
 import { fetchMyProfiles, type CatalogProfile } from "@/features/studio/api";
 import { activeHref, isStudioAuthPath, staffBreadcrumb, studioNavSections, type NavSection } from "@/lib/nav-view";
+import { useSpotlight } from "@/components/ds/spotlight";
 import { cn } from "@/lib/utils";
 
 const WORLD = "artist-studio";
@@ -40,7 +41,7 @@ function StudioMark({ compact = false }: { compact?: boolean }) {
 /** Who this account publishes as. Real profiles from the API; nothing shown is invented. */
 function PublishingAs({ profiles }: { profiles: CatalogProfile[] | null }) {
   return (
-    <div className="border border-line bg-surface-sunken px-4 py-3">
+    <div className="as-who as-spot border border-line bg-surface-sunken px-4 py-3">
       <p className="text-[0.6875rem] font-semibold uppercase tracking-wide text-fg-muted">Publishing as</p>
       {profiles === null ? (
         <Skeleton className="mt-2 h-5 w-32" />
@@ -78,8 +79,8 @@ function StudioNav({ sections, onNavigate }: { sections: NavSection[]; onNavigat
                     onClick={onNavigate}
                     aria-current={current ? "page" : undefined}
                     className={cn(
-                      "cr-focus flex min-h-10 items-center gap-3 border-l-[3px] px-5 py-2 text-sm font-semibold",
-                      current ? "border-accent bg-surface-overlay text-fg" : "border-transparent text-fg-muted hover:text-fg",
+                      "cr-focus as-nav-item",
+                      current ? "as-nav-on" : "",
                     )}
                   >
                     <NavIcon href={item.href} />
@@ -113,9 +114,12 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
   const sections = studioNavSections(profiles ?? []);
   const crumb = isStudioAuthPath(pathname) ? null : staffBreadcrumb(pathname, sections);
   const who = profiles && profiles.length > 0 ? profiles.map((p) => p.display_name).join(" · ") : null;
+  // Every card in the Studio catches the pointer's light, and a line of it runs along the header
+  // (owner, 2026-11-15). Nothing moves while the pointer is still (guide section 8).
+  const world = useSpotlight<HTMLDivElement>(".cr-glass-card, .as-spot", ".as-header");
 
   return (
-    <div data-module="artist-studio" className="lg:grid lg:min-h-dvh lg:grid-cols-[16rem_minmax(0,1fr)]">
+    <div ref={world} data-module="artist-studio" className="lg:grid lg:min-h-dvh lg:grid-cols-[16rem_minmax(0,1fr)]">
       <SkipLink />
       <aside data-theme={WORLD} className="cr-scope hidden border-r border-line lg:block">
         <div className="sticky top-0 flex h-dvh flex-col">
@@ -136,7 +140,7 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <div className="flex min-h-dvh min-w-0 flex-col [&>main]:flex-1">
-        <header data-theme={WORLD} className="cr-scope cr-bar sticky top-0 z-30 border-b border-line">
+        <header data-theme={WORLD} className="cr-scope cr-bar as-header sticky top-0 z-30 border-b border-line">
           <div className="flex h-16 items-center gap-3 px-3 md:px-6">
             <button
               type="button"

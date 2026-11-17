@@ -274,7 +274,7 @@ export function TeaserWaveform({ points, bucketMs, masterMs, view, settings, lim
             ref={startRef}
             type="button"
             role="slider"
-            aria-label="Teaser start"
+            aria-label="Preview start"
             aria-valuemin={0}
             aria-valuemax={masterMs}
             aria-valuenow={settings.start_ms}
@@ -292,7 +292,7 @@ export function TeaserWaveform({ points, bucketMs, masterMs, view, settings, lim
             ref={endRef}
             type="button"
             role="slider"
-            aria-label="Teaser end"
+            aria-label="Preview end"
             aria-valuemin={0}
             aria-valuemax={masterMs}
             aria-valuenow={settings.end_ms}

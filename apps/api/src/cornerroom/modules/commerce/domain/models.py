@@ -139,6 +139,8 @@ class Offer(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ve
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="DRAFT")
     # Who this price is for (D-AUDIO-11): everyone, or fans who already own part of the release.
     audience: Mapped[str] = mapped_column(String(24), nullable=False, default="EVERYONE", server_default="EVERYONE")
+    # D-OPEN-PRICE-01: amount_minor is the lowest amount and the buyer chooses what to pay.
+    open_price: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     # The version column comes from VersionMixin, so reference the Column, not its name.
     @declared_attr.directive
     def __mapper_args__(cls) -> dict[str, object]:
@@ -185,6 +187,8 @@ class OfferProposal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     audience: Mapped[str] = mapped_column(String(24), nullable=False, default="EVERYONE")
     amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
+    # D-OPEN-PRICE-01: the artist asks for an open price; amount_minor is then the lowest amount.
+    open_price: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     proposed_by: Mapped[UUID] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="PROPOSED")

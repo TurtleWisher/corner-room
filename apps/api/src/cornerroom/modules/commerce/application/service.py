@@ -232,6 +232,7 @@ class CheckoutService:
         offer_id: UUID,
         idempotency_key: str,
         delivery_confirmed: bool = False,
+        chosen_amount_minor: int | None = None,
     ) -> tuple[Order, Payment]:
         found = await self._existing_order(ctx, idempotency_key)
         if found is not None:
@@ -246,7 +247,20 @@ class CheckoutService:
         # D-COMMERCE-01: old plan and whole-catalog offers can't be bought any more.
         assert_sellable_type(product.product_type)
         await self._check_music_offer(ctx, offer, product)
-        money = Money(amount_minor=offer.amount_minor, currency_code=offer.currency_code)
+        # D-OPEN-PRICE-01: with an open price the buyer chooses the amount, never below the agreed
+        # lowest one; a fixed price takes no amount from the buyer at all.
+        from cornerroom.modules.commerce.domain.open_price import amount_to_charge
+
+        money = Money(
+            amount_minor=amount_to_charge(
+                lowest_minor=offer.amount_minor,
+                open_price=bool(offer.open_price),
+                chosen_minor=chosen_amount_minor,
+                min_minor=int(self.settings.open_price_min_minor),
+                max_minor=int(self.settings.open_price_max_minor),
+            ),
+            currency_code=offer.currency_code,
+        )
         if product.product_type == "RELEASE":
             item_type, purpose = "RELEASE", "RELEASE"
         else:

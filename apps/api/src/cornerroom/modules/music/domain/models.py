@@ -447,9 +447,9 @@ class ReleaseReview(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 # --- Teasers (owner, 2026-11-07, D-TEASER-00 to D-TEASER-04, migration 0052) -------------------
-# A teaser is a short excerpt cut from a track's own master that anyone may hear for free, as often
+# A preview is a short excerpt cut from a track's own master that anyone may hear for free, as often
 # as they like. It is never the released song: its files are class teaser_audio, never
-# catalog_audio, and a teaser play is never a PlaybackEvent, a listen or royalty input.
+# catalog_audio, and a preview play is never a PlaybackEvent, a listen or royalty input.
 
 
 class Teaser(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Base):
@@ -536,7 +536,7 @@ class TeaserRendition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 class TrackWaveform(Base):
-    """Peaks of one master for the Teaser Studio editor, made once by the worker."""
+    """Peaks of one master for the Preview Studio editor, made once by the worker."""
 
     __tablename__ = "track_waveforms"
     __table_args__ = {"schema": "music"}

@@ -7,6 +7,7 @@ import { Display } from "@/components/brand/display";
 import { ButtonLink, DateTime, Money } from "@/components/ds";
 import { Reveal } from "@/components/ds/reveal";
 import { useAsync } from "@/components/use-async";
+import { OfferPrice } from "@/components/music/offer-price";
 import { PresaleCover } from "@/components/music/presale-cover";
 import type { PresalePageRecord } from "@/features/catalog/api";
 import { fetchPresales } from "@/features/presales/api";
@@ -67,7 +68,7 @@ export function MissionBand() {
                     <span className="block text-xs text-fg-muted">{productKind(pick.product_type)}</span>
                     <span className="block font-semibold text-fg">{offerTitle(pick)}</span>
                   </span>
-                  <Money value={{ amount_minor: pick.amount_minor, currency_code: pick.currency_code }} variant="display" className="text-2xl text-highlight" />
+                  <OfferPrice offer={pick} variant="display" className="text-2xl text-highlight" />
                 </Link>
               </li>
             ))}

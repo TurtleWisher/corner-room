@@ -2,8 +2,8 @@
 
 /*
  * Preview Studio for one release (owner, 2026-11-07, D-TEASER-00, URL-11; named and moved into the
- * release page 2026-11-08, D-RELEASE-TABS-01): every song on it, the teasers cut from each, and a way
- * to start a new one. A teaser is the free, permanent way to hear a song for anyone who hasn't bought
+ * release page 2026-11-08, D-RELEASE-TABS-01): every song on it, the preview cut from each, and a way
+ * to start a new one. A preview is the free, permanent way to hear a song for anyone who hasn't bought
  * it; Corner Room approves each one before fans hear it. Shown as the release page's Preview Studio
  * part and on its own page.
  */
@@ -31,7 +31,7 @@ export function PreviewStudioList({ releaseId, onUploadMaster }: { releaseId: st
     setError(null);
     try {
       const made = await createTeaser(trackId);
-      router.push(`/studio/releases/${releaseId}/teasers/${made.id}`);
+      router.push(`/studio/releases/${releaseId}/previews/${made.id}`);
     } catch (err) {
       setError(friendlyError(err));
       setBusy(null);
@@ -48,7 +48,7 @@ export function PreviewStudioList({ releaseId, onUploadMaster }: { releaseId: st
         <details className="mt-1 text-fg-muted">
           <summary className="cr-focus w-fit cursor-pointer font-semibold text-link">How it works</summary>
           <p className="mt-2">
-            You cut it from the song&apos;s own master, which never changes. Corner Room checks each teaser before fans hear it. Fans find it
+            You cut it from the song&apos;s own master, which never changes. Corner Room checks each preview before fans hear it. Fans find it
             in the song&apos;s Preview Corner and play it in the Preview Room; after each full listen they get a gentle suggestion to buy. It
             works before and after the release.
           </p>
@@ -58,7 +58,7 @@ export function PreviewStudioList({ releaseId, onUploadMaster }: { releaseId: st
       {data.status === "loading" ? (
         <Skeleton className="h-40 w-full" />
       ) : data.status === "error" ? (
-        <ErrorState title="Preview Studio unavailable" message={loadErrorMessage(data.error, "this release's teasers")} action={<RetryButton onClick={data.reload} />} />
+        <ErrorState title="Preview Studio unavailable" message={loadErrorMessage(data.error, "this release's previews")} action={<RetryButton onClick={data.reload} />} />
       ) : data.data.songs.length === 0 ? (
         <EmptyState title="No songs yet" body="Add a song and upload its master first." />
       ) : (
@@ -85,7 +85,7 @@ export function PreviewStudioList({ releaseId, onUploadMaster }: { releaseId: st
                       </div>
                       {ready ? (
                         <Button size="sm" className="ts-gloss" onClick={() => void start(song.track_id)} busy={busy === song.track_id}>
-                          <Plus aria-hidden="true" /> New teaser
+                          <Plus aria-hidden="true" /> New preview
                         </Button>
                       ) : onUploadMaster ? (
                         <button type="button" onClick={onUploadMaster} className="cr-focus text-sm font-semibold text-link underline">
@@ -98,24 +98,24 @@ export function PreviewStudioList({ releaseId, onUploadMaster }: { releaseId: st
                       )}
                     </div>
                     {song.teasers.length === 0 ? (
-                      <p className="mt-2 text-sm text-fg-muted">No teasers for this song yet.</p>
+                      <p className="mt-2 text-sm text-fg-muted">No preview for this song yet.</p>
                     ) : (
                       <ul className="mt-3 grid gap-1.5">
                         {song.teasers.map((t) => (
                           <li key={t.id}>
                             <Link
-                              href={`/studio/releases/${releaseId}/teasers/${t.id}`}
+                              href={`/studio/releases/${releaseId}/previews/${t.id}`}
                               className="cr-focus group flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border border-line px-3 py-2.5 transition-colors hover:border-highlight"
                             >
                               <span className="min-w-0">
-                                <span className="block truncate text-sm font-semibold text-fg">{t.title ?? "Teaser"}</span>
+                                <span className="block truncate text-sm font-semibold text-fg">{t.title ?? "Preview"}</span>
                                 <span className="block text-xs text-fg-muted">
                                   {t.latest_review_status
                                     ? REVIEW_STATUS_LABEL[t.latest_review_status]
                                     : t.latest_status
                                       ? VERSION_STATUS_LABEL[t.latest_status]
                                       : ""}
-                                  {t.live_duration_ms ? ` · live teaser ${formatLength(t.live_duration_ms)}` : ""}
+                                  {t.live_duration_ms ? ` · live preview ${formatLength(t.live_duration_ms)}` : ""}
                                 </span>
                               </span>
                               <span className="flex items-center gap-3 text-xs text-fg-muted">

@@ -19,6 +19,7 @@ from cornerroom.api.deps import (
     presale_service,
 )
 from cornerroom.infra.errors import AppError
+from cornerroom.infra.settings import get_settings
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.commerce.application.catalog import CatalogCommerceService
 from cornerroom.modules.commerce.application.customers import CustomerService
@@ -81,6 +82,12 @@ class OfferOut(BaseModel):
     # SINGLE, EP, ALBUM ... for a release's price, so every page can say "Buy the album" (owner,
     # 2026-10-30: a song page said "Release ৳115", which read as the price of that one song).
     release_type: str | None = None
+    # D-OPEN-PRICE-01: amount_minor is the lowest amount and the buyer chooses what to pay.
+    open_price: bool = False
+    # The most one payment can be for an open price, when a limit is set (else None).
+    open_price_max_minor: int | None = None
+    # The least a buyer can pay for an open price: the artist's lowest or the range's floor.
+    open_price_min_minor: int | None = None
 
 
 class OfferPage(BaseModel):
@@ -196,6 +203,14 @@ def _offer_out(row: Offer, product: Product | None = None, *, staff: bool, relea
         version=row.version if staff else None,
         audience=getattr(row, "audience", None) or "EVERYONE",
         release_type=release_type,
+        open_price=bool(getattr(row, "open_price", False)),
+        open_price_max_minor=(
+            (int(get_settings().open_price_max_minor) or None) if getattr(row, "open_price", False) else None
+        ),
+        open_price_min_minor=(
+            max(row.amount_minor, int(get_settings().open_price_min_minor))
+            if getattr(row, "open_price", False) else None
+        ),
     )
 
 
@@ -564,6 +579,7 @@ class ProposalQueueOut(BaseModel):
     audience: str
     amount_minor: int
     currency_code: str
+    open_price: bool = False
     note: str | None
     status: str
     decision_note: str | None

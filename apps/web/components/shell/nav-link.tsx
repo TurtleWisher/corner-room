@@ -31,7 +31,7 @@ export function NavLinks({
                 href={item.href}
                 aria-current={current ? "page" : undefined}
                 className={cn(
-                  "cr-focus relative inline-flex h-10 items-center px-3 text-sm font-semibold transition-colors duration-[var(--cr-dur-interaction)]",
+                  "cr-focus cr-navlink relative inline-flex h-10 items-center px-3 text-sm font-semibold transition-colors duration-[var(--cr-dur-interaction)]",
                   current ? "text-fg" : "text-fg-muted hover:text-fg",
                   linkClassName,
                 )}
@@ -40,8 +40,8 @@ export function NavLinks({
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "absolute inset-x-3 bottom-1 h-0.5 bg-highlight transition-opacity duration-[var(--cr-dur-interaction)]",
-                    current ? "opacity-100" : "opacity-0",
+                    "cr-navmark absolute inset-x-3 bottom-1 h-0.5 bg-highlight",
+                    current ? "cr-navmark-on" : "",
                   )}
                 />
               </Link>

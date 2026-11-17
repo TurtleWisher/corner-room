@@ -759,3 +759,133 @@
     clip-path: inset(0 0 0 0);
   }
 }
+
+/* ---- Preview Room (owner, 2026-11-16) --------------------------------------------------------
+   Sky world. The cover's colour washes softly behind the room (one stretched, still image under the
+   light, never over text); the player deck is there before the first play; nothing moves by itself
+   except the four level bars while the preview is playing. */
+.pr-room { position: relative; overflow: clip; min-height: 78dvh; }
+.pr-wash {
+  position: absolute;
+  inset: -12% -6% auto -6%;
+  height: 34rem;
+  background-size: cover;
+  background-position: center;
+  filter: blur(72px) saturate(1.25);
+  opacity: 0.28;
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, #000 30%, transparent 100%);
+}
+.pr-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem 0.375rem 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cr-fg-muted);
+  border: 1px solid transparent;
+  transition: color var(--cr-dur-interaction) var(--ease-corner), border-color var(--cr-dur-interaction) var(--ease-corner);
+}
+.pr-back:hover { color: var(--cr-fg); border-color: var(--cr-line); }
+.pr-back svg { transition: transform var(--cr-dur-interaction) var(--ease-corner); }
+.pr-back:hover svg { transform: translateX(-3px); }
+
+.pr-cover { position: relative; isolation: isolate; }
+@media (min-width: 1024px) { .pr-cover { position: sticky; top: 6.5rem; } }
+.pr-cover-art { position: relative; box-shadow: 0 30px 60px -28px rgb(0 0 0 / 0.7); transition: transform var(--cr-dur-hero) var(--ease-corner); }
+.pr-cover[data-playing] .pr-cover-art { transform: translateY(-4px); }
+.pr-cover-glow {
+  position: absolute;
+  inset: 8% 8% -6% 8%;
+  z-index: -1;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--color-cr-sky) 55%, transparent), transparent);
+  filter: blur(36px);
+  opacity: 0.25;
+  transition: opacity var(--cr-dur-hero) var(--ease-corner);
+}
+.pr-cover[data-playing] .pr-cover-glow { opacity: 0.6; }
+
+.pr-eq {
+  position: absolute;
+  left: 0.875rem;
+  bottom: 0.875rem;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 1.75rem;
+  padding: 0.375rem 0.5rem;
+  background: color-mix(in srgb, var(--color-cr-deep) 78%, transparent);
+  opacity: 0;
+  transition: opacity var(--cr-dur-component) var(--ease-corner);
+}
+.pr-eq[data-on] { opacity: 1; }
+.pr-eq i { width: 3px; height: 30%; background: var(--color-cr-ice); transform-origin: bottom; }
+.pr-eq[data-on] i { animation: pr-level 0.9s ease-in-out infinite alternate; }
+.pr-eq i:nth-child(2) { animation-delay: -0.35s; }
+.pr-eq i:nth-child(3) { animation-delay: -0.6s; }
+.pr-eq i:nth-child(4) { animation-delay: -0.15s; }
+@keyframes pr-level { from { height: 22%; } to { height: 100%; } }
+
+.pr-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 1.5rem;
+  padding: 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cr-fg);
+  border: 1px solid var(--cr-line-strong);
+  background: color-mix(in srgb, var(--cr-surface-raised) 50%, transparent);
+}
+.pr-chip-free { color: var(--color-cr-deep); background: var(--color-cr-ice); border-color: var(--color-cr-ice); }
+
+.pr-deck { padding: 1.125rem 1.25rem 1.25rem; transition: box-shadow var(--cr-dur-hero) var(--ease-corner); }
+.pr-deck[data-playing] { box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-cr-sky) 55%, transparent), 0 24px 60px -30px color-mix(in srgb, var(--color-cr-sky) 70%, transparent); }
+.pr-key { flex: none; }
+@media (max-width: 520px) { .pr-deck > div:first-child { flex-wrap: wrap; } }
+
+.pr-suggest { animation: pr-arrive var(--cr-dur-hero) var(--ease-corner) both; }
+@keyframes pr-arrive { from { opacity: 0; transform: translateY(10px); } }
+
+.pr-facts { display: grid; gap: 1px; background: var(--cr-line); border: 1px solid var(--cr-line); }
+@media (min-width: 640px) { .pr-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.pr-fact { padding: 0.875rem 1rem 1rem; background: color-mix(in srgb, var(--color-cr-deep) 82%, transparent); }
+.pr-fact dt { display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.875rem; font-weight: 700; color: var(--cr-fg); }
+.pr-fact-n { font-size: 0.75rem; color: var(--cr-highlight); }
+.pr-fact dd { margin-top: 0.375rem; font-size: 0.8125rem; line-height: 1.5; color: var(--cr-fg-muted); }
+
+.pr-other {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.875rem 0.5rem 0.5rem;
+  border: 1px solid var(--cr-line);
+  background: color-mix(in srgb, var(--cr-surface-raised) 40%, transparent);
+  transition: border-color var(--cr-dur-interaction) var(--ease-corner), background-color var(--cr-dur-interaction) var(--ease-corner);
+}
+.pr-other:hover, .pr-other[data-current] { border-color: var(--cr-highlight); background: color-mix(in srgb, var(--cr-surface-raised) 70%, transparent); }
+.pr-other-play {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--color-cr-deep);
+  background: var(--color-cr-ice);
+  transition: transform var(--cr-dur-micro) var(--ease-corner);
+}
+.pr-other-play:active { transform: scale(0.94); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pr-eq[data-on] i, .pr-suggest { animation: none; }
+  .pr-eq i { height: 60%; }
+  .pr-cover-art, .pr-cover-glow, .pr-back svg { transition: none; }
+  .pr-cover[data-playing] .pr-cover-art { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .pr-wash { display: none; }
+}

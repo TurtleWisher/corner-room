@@ -6,6 +6,7 @@ import {
   ownedLink,
   suggestionFor,
   teaserKey,
+  shareLink,
   teaserLabel,
   teaserLength,
 } from "./teaser-room-view";
@@ -18,7 +19,7 @@ const base = {
 };
 
 describe("teaser keys", () => {
-  it("keeps a teaser apart from its song in the player", () => {
+  it("keeps a preview apart from its song in the player", () => {
     expect(teaserKey("t1")).toBe("teaser:t1");
     expect(isTeaserKey("teaser:t1")).toBe(true);
     expect(isTeaserKey("t1")).toBe(false);
@@ -27,7 +28,7 @@ describe("teaser keys", () => {
 });
 
 describe("isCompletion", () => {
-  it("needs most of the teaser actually heard", () => {
+  it("needs most of the preview actually heard", () => {
     expect(isCompletion(27_000, 30)).toBe(true);
     expect(isCompletion(26_999, 30)).toBe(false);
     expect(isCompletion(500, 30)).toBe(false); // dragged to the end
@@ -65,9 +66,11 @@ describe("suggestionFor", () => {
 });
 
 describe("words", () => {
-  it("says it is a teaser, and before release", () => {
-    expect(teaserLabel({ title: null, track_released: true })).toBe("Teaser");
-    expect(teaserLabel({ title: "Chorus", track_released: false })).toBe("Teaser · Chorus · before release");
+  it("says it is a preview, and before release", () => {
+    expect(teaserLabel({ title: null, track_released: true })).toBe("Preview");
+    expect(teaserLabel({ title: "Chorus", track_released: false })).toBe("Chorus · before release");
+    expect(teaserLabel({ title: "  ", track_released: false })).toBe("Preview · before release");
+    expect(shareLink("https://example.com/", "abc")).toBe("https://example.com/previews/abc");
   });
   it("formats lengths", () => {
     expect(teaserLength(45_400)).toBe("0:45");

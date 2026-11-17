@@ -1,9 +1,9 @@
 "use client";
 
 /*
- * Teasers on fan pages (owner, 2026-11-07, D-TEASER-00). A teaser is the free, permanent way to hear a
+ * Teasers on fan pages (owner, 2026-11-07, D-TEASER-00). A preview is the free, permanent way to hear a
  * song for anyone who hasn't bought it, so wherever someone meets a song they can't play yet, its
- * teaser is the thing they can play, in its Preview Room. People who own the song find its teasers in
+ * teaser is the thing they can play, in its Preview Room. People who own the song find its preview in
  * the song's "Preview Corner" instead (owner, 2026-11-08, D-TEASER-06); their main play stays the full
  * song.
  */
@@ -18,7 +18,7 @@ import { fetchPublicReleaseTeasers, fetchTrackTeasers, type ReleaseTeaser, type 
 import { teaserKey, teaserLength, teaserPath } from "@/lib/teaser-room-view";
 import { cn } from "@/lib/utils";
 
-/** Published teasers of a song, newest first; empty while loading or when there are none. */
+/** Published preview of a song, newest first; empty while loading or when there are none. */
 export function useSongTeasers(trackId: string | null | undefined): TeaserSummary[] {
   const [items, setItems] = useState<TeaserSummary[]>([]);
   useEffect(() => {
@@ -34,7 +34,7 @@ export function useSongTeasers(trackId: string | null | undefined): TeaserSummar
   return items;
 }
 
-/** Play or pause a teaser in the site's player (no account needed, nothing reported as a song play). */
+/** Play or pause a preview in the site's player (no account needed, nothing reported as a song play). */
 export function TeaserPlayButton({
   teaser,
   trackId,
@@ -57,7 +57,7 @@ export function TeaserPlayButton({
   const player = usePlayer();
   const current = player.isCurrent(teaserKey(teaser.id));
   const playing = current && player.status === "playing";
-  const text = label ?? (playing ? "Pause the teaser" : "Play the teaser");
+  const text = label ?? (playing ? "Pause the preview" : "Play the preview");
   return (
     <Button
       size={size}
@@ -67,9 +67,9 @@ export function TeaserPlayButton({
       onClick={() =>
         current && player.status !== "problem"
           ? player.toggle()
-          : void player.playTeaser({ teaserId: teaser.id, trackId, title: songTitle, artist, label: teaser.title ?? "Teaser" })
+          : void player.playTeaser({ teaserId: teaser.id, trackId, title: songTitle, artist, label: teaser.title ?? "Preview" })
       }
-      aria-label={`${playing ? "Pause" : "Play"} the teaser of ${songTitle}`}
+      aria-label={`${playing ? "Pause" : "Play"} the preview of ${songTitle}`}
     >
       {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />} {text}
     </Button>
@@ -77,7 +77,7 @@ export function TeaserPlayButton({
 }
 
 /**
- * On the song page beside Buy, for someone who can't play the song: the newest teaser, playable here,
+ * On the song page beside Buy, for someone who can't play the song: the newest preview, playable here,
  * with the way into its room. Nothing when the song has no published teaser.
  */
 export function SongTeaserMain({
@@ -101,12 +101,12 @@ export function SongTeaserMain({
       <Link href={teaserPath(first.id)} className="cr-focus inline-flex items-center gap-1.5 text-sm font-semibold text-link hover:underline">
         <AudioLines aria-hidden="true" className="size-4" /> Preview Room
       </Link>
-      <p className="w-full text-sm text-fg-muted">Listen to the teaser free, as often as you like.</p>
+      <p className="w-full text-sm text-fg-muted">Listen to the preview free, as often as you like.</p>
     </div>
   );
 }
 
-/** "Preview Corner": every published teaser of the song. */
+/** "Preview Corner": every published preview of the song. */
 export function SongTeasersSection({
   teasers,
   trackId,
@@ -130,7 +130,7 @@ export function SongTeasersSection({
         {teasers.map((t) => (
           <li key={t.id} className="flex items-center justify-between gap-3 border border-line p-3">
             <Link href={teaserPath(t.id)} className="cr-focus min-w-0 truncate text-sm font-semibold text-fg hover:underline">
-              {t.title ?? "Teaser"}
+              {t.title ?? "Preview"}
               {teaserLength(t.duration_ms) ? <span className="cr-num ml-2 font-normal text-fg-muted">{teaserLength(t.duration_ms)}</span> : null}
             </Link>
             <TeaserPlayButton teaser={t} trackId={trackId} songTitle={songTitle} artist={artist} size="sm" variant="ghost" label="Play" />
@@ -169,7 +169,7 @@ export function ReleaseTeasers({ releaseId, artist, className }: { releaseId: st
             <Link href={teaserPath(t.id)} className="cr-focus min-w-0 text-sm font-semibold text-fg hover:underline">
               {t.track_title}
               <span className="ml-2 font-normal text-fg-muted">
-                {t.title ?? "Teaser"}
+                {t.title ?? "Preview"}
                 {teaserLength(t.duration_ms) ? ` · ${teaserLength(t.duration_ms)}` : ""}
               </span>
             </Link>

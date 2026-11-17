@@ -207,3 +207,76 @@
 .cr-player-dock[data-tucked] {
   pointer-events: none;
 }
+
+/* ---- Moving between pages (owner, 2026-11-15; components/shell/nav-progress.tsx) -------------
+   A line of light across the top while the next page loads, and the arriving page fades in once.
+   Opacity and transform only. */
+.cr-navline {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 70;
+  height: 2px;
+  pointer-events: none;
+  transform: scaleX(0);
+  transform-origin: left;
+  opacity: 0;
+  background: linear-gradient(90deg, #fcf475, #f6ece6 70%, #ffffff);
+  box-shadow: 0 0 14px rgb(252 244 117 / 0.75);
+}
+body:has(#main.cr-scope[data-theme="sky"]) .cr-navline {
+  background: linear-gradient(90deg, #53c8ea, #bbedfe 70%, #ffffff);
+  box-shadow: 0 0 14px rgb(83 200 234 / 0.8);
+}
+body:has(#main.cr-scope[data-theme="artist-studio"]) .cr-navline {
+  background: linear-gradient(90deg, #2cbb76, #d3ecc9 70%, #ffffff);
+  box-shadow: 0 0 14px rgb(44 187 118 / 0.8);
+}
+body:has(#main.cr-scope[data-theme="staff"]) .cr-navline {
+  background: linear-gradient(90deg, #cdb9b3, #ffffff);
+  box-shadow: none;
+}
+.cr-navline[data-state="loading"] {
+  opacity: 1;
+}
+.cr-navline[data-state="done"] {
+  opacity: 0;
+  transition: transform 180ms var(--ease-corner), opacity 320ms ease 160ms;
+}
+@media (prefers-reduced-motion: no-preference) {
+  #main[data-arrive] {
+    animation: cr-arrive 360ms var(--ease-corner) both;
+  }
+}
+@keyframes cr-arrive {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Header and section links: the mark under a link draws in from the lit side on hover, and stays
+   for the current page (aria-current carries the meaning; the mark is decoration). */
+.cr-navmark {
+  transform: scaleX(0);
+  transform-origin: left;
+  opacity: 0.55;
+  transition: transform var(--cr-dur-component) var(--ease-corner), opacity var(--cr-dur-interaction) var(--ease-corner);
+}
+.cr-navlink:hover .cr-navmark,
+.cr-navlink:focus-visible .cr-navmark {
+  transform: scaleX(1);
+}
+.cr-navmark-on {
+  transform: scaleX(1);
+  opacity: 1;
+}
+.cr-navlink:active {
+  transform: translateY(1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cr-navmark {
+    transition: none;
+  }
+  .cr-navline[data-state="done"] {
+    transition: none;
+  }
+}
