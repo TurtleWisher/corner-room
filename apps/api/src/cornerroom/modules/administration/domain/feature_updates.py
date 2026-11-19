@@ -504,6 +504,12 @@ FEATURES: Final[list[dict]] = [
         ),
         "updates": [
             {
+                "date": "2026-11-18",
+                "kind": "IMPROVED",
+                "title": "Trending Corner as one card, with listens in millions",
+                "details": "The discs and the player below them are now one card instead of two. Behind the discs, the front one's listens stand very large in millions, as on the song page (an album's or EP's listens are all its songs together). The figure rolls on like a counter when the front changes, turns a little toward the pointer and shows in the gloss floor.",
+            },
+            {
                 "date": "2026-11-16",
                 "kind": "IMPROVED",
                 "title": "A longer home page that explains Corner Room",

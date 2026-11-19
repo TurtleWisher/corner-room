@@ -4,17 +4,22 @@
  * disc's transform and opacity; everything here is the look and the hover. Nothing lays out or
  * paints per frame: the discs glide and spin on the compositor.
  */
+/* One card (owner, 2026-11-18): the ring, its floor and the mini player below are one room, never
+   two boxes. Headroom above the discs lets the listens figure stand behind them. */
 [data-module="home"] .tc {
   --tc-disc: clamp(9.5rem, 21vw, 17.5rem);
+  --tc-head: max(3.5rem, calc(var(--tc-disc) * 0.3));
   display: grid;
-  gap: 1rem;
 }
 [data-module="home"] .tc-stage {
-  padding: 0.5rem 0 1.25rem;
+  position: relative;
+  padding: 0.5rem 0 0.5rem;
+  /* The floor's light pool is wider than a phone; it never scrolls the page sideways. */
+  overflow-x: clip;
 }
 [data-module="home"] .tc-viewport {
   position: relative;
-  height: calc(var(--tc-disc) * 1.36 + 3.75rem);
+  height: calc(var(--tc-disc) * 1.36 + 3.75rem + var(--tc-head));
   overflow: hidden;
   perspective: 1300px;
   perspective-origin: 50% 38%;
@@ -36,7 +41,7 @@
 }
 [data-module="home"] .tc-item {
   position: absolute;
-  top: 1.5rem;
+  top: calc(1.5rem + var(--tc-head));
   left: 50%;
   width: var(--tc-disc);
   margin-left: calc(var(--tc-disc) / -2);
@@ -219,7 +224,7 @@
 [data-module="home"] .tc-floor {
   position: absolute;
   left: 50%;
-  top: calc(var(--tc-disc) * 0.86 + 2rem);
+  top: calc(var(--tc-disc) * 0.86 + 2rem + var(--tc-head));
   width: calc(var(--tc-disc) * 2.6);
   height: calc(var(--tc-disc) * 0.6);
   translate: -50% 0;
@@ -362,13 +367,103 @@
   }
 }
 
-/* ---------- The mini listening room under the carousel ---------- */
+/* ---------- The listens figure without WebGL (the 3D one is in trending-gl-figure.ts) ----------
+   The song page's figure (`.lm-*` in music.css) in Ember light, standing behind the discs. */
+[data-module="home"] .tc-lm {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  perspective: 1100px;
+  perspective-origin: 50% 30%;
+}
+[data-module="home"] .tc-lm .lm-frame {
+  position: relative;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+[data-module="home"] .tc-lm .lm-figure {
+  --lm-size: clamp(4.5rem, 15vw, 15rem);
+  position: absolute;
+  left: 50%;
+  top: 0.5rem;
+  font-size: var(--lm-size);
+  translate: -50% 0;
+  transform: rotateY(-8deg) rotateX(4deg);
+  -webkit-mask-image: linear-gradient(to bottom, #000 30%, rgb(0 0 0 / 0.25) 92%);
+  mask-image: linear-gradient(to bottom, #000 30%, rgb(0 0 0 / 0.25) 92%);
+}
+[data-module="home"] .tc-lm .lm-number {
+  display: flex;
+  font-family: var(--font-archivo), sans-serif;
+  font-weight: 700;
+  font-stretch: 78%;
+  font-variant-numeric: tabular-nums lining-nums;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: rgb(246 236 230 / 0.05);
+  -webkit-text-stroke: 1.5px rgb(246 236 230 / 0.3);
+  text-shadow: 0.04em 0.05em 0 rgb(178 31 36 / 0.5), 0 0 0.4em rgb(255 90 78 / 0.16);
+}
+[data-module="home"] .tc-lm .lm-place {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+}
+[data-module="home"] .tc-lm .lm-strip {
+  display: flex;
+  flex-direction: column;
+  transform: translateY(0);
+  transition: transform calc(1100ms + var(--turns, 0) * 380ms) cubic-bezier(0.12, 0.8, 0.16, 1);
+  transition-delay: calc(240ms + var(--order, 0) * 70ms);
+}
+[data-module="home"] .tc-lm .lm-strip > span {
+  display: block;
+  height: 1em;
+}
+[data-module="home"] .tc-lm .lm-figure[data-rolled] .lm-strip {
+  transform: translateY(calc(var(--stop, 0) * -1em));
+}
+[data-module="home"] .tc-lm .lm-point {
+  display: inline-block;
+  width: 0.26em;
+  text-align: center;
+}
+[data-module="home"] .tc-lm .lm-unit {
+  display: block;
+  margin-top: 0.4rem;
+  text-align: right;
+  font-family: var(--font-archivo), sans-serif;
+  font-size: clamp(0.65rem, calc(0.07 * var(--lm-size)), 0.95rem);
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgb(252 244 117 / 0.55);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-module="home"] .tc-lm .lm-strip {
+    transition: none;
+  }
+}
+
+/* ---------- The mini listening room: the lower half of the same card ---------- */
 [data-module="home"] .tc-room {
-  padding: 1.25rem;
+  position: relative;
+  isolation: isolate;
+  padding: 0.25rem 1.25rem 1.5rem;
+}
+/* The lamp's pool on the floor spills onto the player, so the two halves read as one room. */
+[data-module="home"] .tc-room::before {
+  content: "";
+  position: absolute;
+  inset: -2.5rem 8% 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(55% 60% at 50% 0%, rgb(252 244 117 / 0.06), rgb(255 90 78 / 0.04) 45%, transparent 80%);
 }
 @media (min-width: 768px) {
   [data-module="home"] .tc-room {
-    padding: 1.5rem 1.75rem;
+    padding: 0.25rem 1.75rem 1.75rem;
   }
 }
 [data-module="home"] .tc-room-in {
