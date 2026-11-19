@@ -9,9 +9,10 @@ import { counterPlaces, inMillions } from "@/lib/millions-view";
  * listens reads 0.000753. Each digit is a strip of 0 to 9 that rolls up into place once, places
  * to the right turning more, like a counter running up; transform only, so nothing re-lays out.
  * Under reduced motion it simply shows the number. Decoration only: the exact count stays in the
- * words beside the cover. Styles: `.lm-*` in `app/styles/modules/music.css`.
+ * words beside the cover. Styles: `.lm-*` in `app/styles/modules/music.css`. Trending Corner shows it
+ * too where it can't draw its 3D figure (`className="tc-lm"`, styled in `home-trending.css`).
  */
-export function ListensInMillions({ listens }: { listens: number }) {
+export function ListensInMillions({ listens, className }: { listens: number; className?: string }) {
   const text = inMillions(listens);
   const [rolled, setRolled] = React.useState(false);
 
@@ -30,7 +31,7 @@ export function ListensInMillions({ listens }: { listens: number }) {
 
   let digit = 0;
   return (
-    <div aria-hidden="true" className="lm-backdrop">
+    <div aria-hidden="true" className={className ? `lm-backdrop ${className}` : "lm-backdrop"}>
       <div className="lm-frame">
         <div className="lm-figure" data-rolled={rolled || undefined}>
           <span className="lm-number">

@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Lock, LogIn, Pause, Play } from "lucide-reac
 
 import { useAuth } from "@/components/auth-provider";
 import { CoverArt } from "@/components/brand/cover-art";
+import { ListensInMillions } from "@/components/music/listens-in-millions";
 import { RoomCube } from "@/components/brand/room-cube";
 import { OfferPrice } from "@/components/music/offer-price";
 import { useCustomerCommerce } from "@/components/music/commerce";
@@ -145,6 +146,8 @@ export function TrendingCorner({ items }: { items: TrendingItem[] }) {
   // The 3D discs (D-TRENDING-02) once their first frame is drawn; until then, and without WebGL,
   // the DOM discs show.
   const [gl, setGl] = React.useState(false);
+  // No 3D here (no WebGL, it failed or was lost): the listens figure is drawn in CSS instead.
+  const [noGl, setNoGl] = React.useState(false);
   const coversKey = items.map((it) => `${it.id}:${it.release_id ?? ""}:${it.has_cover ? 1 : 0}:${it.title}`).join("|");
 
   const register = React.useCallback((i: number, part: DiscPart, el: HTMLElement | null) => {
@@ -170,7 +173,11 @@ export function TrendingCorner({ items }: { items: TrendingItem[] }) {
   React.useEffect(() => {
     const viewport = viewportRef.current;
     const e = engine.current;
-    if (!viewport || !e || n === 0 || !webglLikely()) return;
+    if (!viewport || !e || n === 0) return;
+    if (!webglLikely()) {
+      setNoGl(true);
+      return;
+    }
     let cancelled = false;
     let made: TrendingScene | null = null;
     const reduced = !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -202,6 +209,7 @@ export function TrendingCorner({ items }: { items: TrendingItem[] }) {
             scene.current = null;
             e.setDomSpin(true);
             setGl(false);
+            setNoGl(true);
           },
         });
         scene.current = made;
@@ -210,6 +218,7 @@ export function TrendingCorner({ items }: { items: TrendingItem[] }) {
         // No 3D: the DOM discs stay, and a half-made canvas goes.
         viewport.querySelector("canvas.tc-gl")?.remove();
         e.setDomSpin(true);
+        setNoGl(true);
         if (process.env.NODE_ENV !== "production") console.warn("Trending Corner: 3D discs unavailable", err);
       });
     return () => {
@@ -222,6 +231,12 @@ export function TrendingCorner({ items }: { items: TrendingItem[] }) {
     // items are read through coversKey: a new scene only when the discs or their covers change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [n, coversKey]);
+
+  // The front disc's listens stand far back in the 3D room, rolling on as the front changes.
+  const frontListens = items[front]?.listens ?? 0;
+  React.useEffect(() => {
+    if (gl) scene.current?.setListens(frontListens);
+  }, [gl, frontListens]);
 
   React.useEffect(() => {
     engine.current?.setHold("playing", playingHere);
@@ -245,7 +260,7 @@ export function TrendingCorner({ items }: { items: TrendingItem[] }) {
   return (
     <div
       ref={sectionRef}
-      className="tc"
+      className="tc cr-cut cr-glass-card"
       onPointerEnter={(e) => e.pointerType !== "touch" && engine.current?.setHold("hover", true)}
       onPointerLeave={() => engine.current?.setHold("hover", false)}
       onFocus={() => engine.current?.setHold("focus", true)}
@@ -254,7 +269,7 @@ export function TrendingCorner({ items }: { items: TrendingItem[] }) {
       }}
     >
       <div
-        className="tc-stage cr-cut cr-glass-card"
+        className="tc-stage"
         role="group"
         aria-roledescription="carousel"
         aria-label="Trending Corner"
@@ -265,6 +280,7 @@ export function TrendingCorner({ items }: { items: TrendingItem[] }) {
           }
         }}
       >
+        {noGl ? <ListensInMillions listens={item.listens} className="tc-lm" /> : null}
         <div aria-hidden="true" className="tc-floor" data-gl={gl || undefined} />
         <div ref={viewportRef} className="tc-viewport" data-count={n} data-gl={gl || undefined}>
           <div className="tc-ring">
@@ -682,7 +698,7 @@ function MiniRoom({
   const playLabel = !access ? "Loading" : access.kind === "teaser" ? (playing ? "Pause the preview" : "Play the preview") : playing ? "Pause" : "Play";
 
   return (
-    <div className="tc-room cr-cut cr-glass-card">
+    <div className="tc-room">
       <div key={item.id} className="tc-room-in">
         <Link href={href} className="tc-box cr-focus" aria-label={`Open ${item.title}`}>
           <span className="tc-box-case">

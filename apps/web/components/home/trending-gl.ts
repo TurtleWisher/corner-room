@@ -22,6 +22,8 @@
 import * as THREE from "three";
 import { Reflector } from "three/addons/objects/Reflector.js";
 
+import { createListensFigure } from "@/components/home/trending-gl-figure";
+
 import {
   DISC,
   FLOAT_GAP,
@@ -50,6 +52,8 @@ export type SceneDisc = { title: string; cover: string | null };
 export type TrendingScene = {
   /** A disc's DOM button took or lost keyboard focus (a blur only clears its own disc). */
   setFocus(i: number, on: boolean): void;
+  /** The front disc's listens (an album's or EP's total), shown far back in millions. */
+  setListens(listens: number): void;
   destroy(): void;
 };
 
@@ -634,6 +638,10 @@ export function createTrendingScene({
   pool.renderOrder = -1;
   scene.add(pool);
 
+  // The front disc's listens in millions, far back in the room (owner, 2026-11-18).
+  const figure = createListensFigure({ host, reduced, onReady: () => wake() });
+  scene.add(figure.object);
+
   /* ---------- covers ---------- */
 
   // The draw loop's state (the loop itself is below); covers can arrive before it starts.
@@ -826,6 +834,8 @@ export function createTrendingScene({
     lampView.copy(lamp.position).applyMatrix4(camera.matrixWorldInverse);
     grating.uLampPos.value.copy(lampView);
 
+    busy = figure.update({ now, dt, pointer: pointerIn ? pointer : null, camera, floorY }) || busy;
+
     for (let i = 0; i < n; i++) {
       const p = parts[i];
       const d = offsetOf(i, snap.pos, n);
@@ -924,6 +934,10 @@ export function createTrendingScene({
       else if (focused === i) focused = null;
       wake();
     },
+    setListens(listens) {
+      figure.setListens(listens);
+      wake();
+    },
     destroy() {
       destroyed = true;
       if (raf) cancelAnimationFrame(raf);
@@ -935,6 +949,7 @@ export function createTrendingScene({
       host.removeEventListener("click", onClick);
       canvas.removeEventListener("webglcontextlost", onLostContext);
       host.style.cursor = "";
+      figure.dispose();
       scene.traverse((o) => {
         if (o instanceof THREE.Mesh || o instanceof THREE.Sprite) {
           const m = o.material as THREE.Material | THREE.Material[];
