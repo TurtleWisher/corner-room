@@ -629,6 +629,8 @@ export type SaleLine = {
   currency_code: string;
   order_status: string;
   ordered_at: string;
+  /** D-GIFT-FAN-01: bought as a gift for other people, or paid with gift credit. */
+  how?: "GIFT" | "CREDIT" | null;
 };
 
 export function fetchProfileSales(kind: ProfileKind, id: string): Promise<ProfileSales> {

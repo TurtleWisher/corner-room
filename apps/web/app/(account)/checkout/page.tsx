@@ -366,7 +366,8 @@ function NewCheckout() {
   // field starts at the lowest amount.
   const [amountText, setAmountText] = useState<string | null>(null);
   // D-GIFT-FAN-01: buy it for other people, or pay with gift credit for the artist's music.
-  const [gift, setGift] = useState<GiftDraft>(NO_GIFT);
+  // "Give as a gift" on song and release pages opens checkout with it ticked (?gift=1).
+  const [gift, setGift] = useState<GiftDraft>(() => (params.get("gift") === "1" ? { ...NO_GIFT, on: true } : NO_GIFT));
   const [useCredit, setUseCredit] = useState(false);
   const { user } = useAuth();
   const summary = useAsync(() => (item ? loadSummary(item) : Promise.resolve(null)), [item?.kind, item?.id]);
@@ -409,14 +410,15 @@ function NewCheckout() {
   const open = summary.status === "ok" ? (summary.data?.open ?? null) : null;
   const chosen = open ? readChosenAmount(amountText ?? amountAsTyped(open.amount_minor), open) : null;
   const music = summary.status === "ok" ? summary.data?.offer : null;
-  // Only music that is out, at its normal price, can be a gift or be paid with credit.
+  // Music can be a gift, pre-orders too while the pre-sale is open (owner, 2026-11-20); gift
+  // credit pays only for music that is out.
+  const presale = summary.status === "ok" ? (summary.data?.presale ?? null) : null;
   const giftable =
-    item.kind === "offer" &&
-    Boolean(music && (music.product_type === "TRACK" || music.product_type === "RELEASE")) &&
-    !(summary.status === "ok" && summary.data?.presale);
+    item.kind === "offer" && Boolean(music && (music.product_type === "TRACK" || music.product_type === "RELEASE")) && (!presale || presale.open);
+  const creditable = giftable && !presale;
   const giving = giftable && gift.on;
   const gifted = giving ? readGift(gift, user?.email) : null;
-  const paying = giftable && !giving && useCredit;
+  const paying = creditable && !giving && useCredit;
 
   async function place() {
     if (!item) return;
@@ -527,7 +529,7 @@ function NewCheckout() {
         </Card>
       ) : summary.status === "ok" && summary.data ? (
         <>
-          {giftable && !giving ? <CreditStep offerId={item.id} on={useCredit} onChange={setUseCredit} /> : null}
+          {creditable && !giving ? <CreditStep offerId={item.id} on={useCredit} onChange={setUseCredit} /> : null}
           {/* A gift's giver gets no collectible from it, so a gift needs no delivery address. */}
           {giving ? null : <DeliveryAddressStep confirmed={addressConfirmed} onConfirmedChange={setAddressConfirmed} />}
           <div className="flex flex-wrap items-center gap-4">

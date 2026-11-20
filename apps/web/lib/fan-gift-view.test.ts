@@ -7,6 +7,8 @@ import {
   giftStatusLine,
   noteProblem,
   giftPaidLine,
+  giftHref,
+  giftOffer,
   parsePeople,
   peopleProblem,
   recipientLine,
@@ -51,6 +53,21 @@ describe("fan gifts (owner, 2026-11-20, D-GIFT-FAN-01)", () => {
     expect(giftHeadline({ ...page, giver_name: null, passed_on_by: "Rumi" })).toBe("Rumi sent you Chhaya Pore by MIZULS");
     expect(recipientLine({ status: "CHOOSING", title: "Chhaya Pore", act_name: "MIZULS" })).toMatch(/already own Chhaya Pore/);
     expect(recipientLine({ status: "KEPT_CREDIT", title: "T", act_name: "MIZULS" })).toMatch(/MIZULS's music/);
+    expect(recipientLine({ status: "GIVEN", title: "T", act_name: "A", preorder: true })).toMatch(/unlocks/);
     expect(signInHref("abc", "register")).toBe("/register?next=%2Fgift%2Fabc");
+  });
+
+  it("finds the gift price whether or not the giver owns the music", () => {
+    const offer = (id: string, product_type: string, subject_id: string, audience = "EVERYONE") =>
+      ({ id, product_type, subject_id, audience, status: "ACTIVE", amount_minor: 3000, currency_code: "BDT", name: "x" }) as never;
+    const offers = [offer("o1", "TRACK", "t1"), offer("o2", "RELEASE", "r1"), offer("o3", "RELEASE", "r2", "PRESALE"), offer("o4", "RELEASE", "r1", "OWNS_PART_OF_RELEASE")];
+    expect(giftOffer(offers, "TRACK", "t1")?.id).toBe("o1");
+    // A song sold only with its release is given as that release.
+    expect(giftOffer(offers, "TRACK", "t2", ["r1"])?.id).toBe("o2");
+    expect(giftOffer(offers, "RELEASE", "r1")?.id).toBe("o2");
+    // Owner, 2026-11-20: pre-orders can be gifts the same way.
+    expect(giftOffer(offers, "RELEASE", "r2")?.id).toBe("o3");
+    expect(giftOffer(offers, "RELEASE", "r3")).toBeNull();
+    expect(giftHref("o2")).toBe("/checkout?offer=o2&gift=1");
   });
 });

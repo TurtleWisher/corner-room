@@ -25,7 +25,7 @@ import {
 } from "@/features/studio/api";
 import { friendlyError } from "@/lib/error-copy";
 import { ORDER_STATUS } from "@/lib/status-maps";
-import { buyersSummary, money, namesToShow, saleKindLabel, salesCountText } from "@/lib/studio-sales-view";
+import { buyersSummary, money, namesToShow, saleHowLabel, saleKindLabel, salesCountText } from "@/lib/studio-sales-view";
 
 function Totals({ total }: { total: SalesTotal }) {
   return (
@@ -164,6 +164,7 @@ function RecentSales({ profile }: { profile: CatalogProfile }) {
               <TD>
                 <span className="block min-w-40 font-semibold text-fg">{l.title}</span>
                 <span className="block text-sm text-fg-muted">{saleKindLabel(l)}</span>
+                {l.how ? <span className="mt-1 inline-block text-xs font-semibold text-highlight">{saleHowLabel(l.how)}</span> : null}
               </TD>
               <TD>
                 <StatusChip value={l.order_status} map={ORDER_STATUS} />

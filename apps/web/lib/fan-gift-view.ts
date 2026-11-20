@@ -4,6 +4,7 @@
  * never told why a gift was declined, or whether someone already owned the music.
  */
 
+import type { OfferRecord } from "@/features/commerce/api";
 import type { GiftPage, GiftPerson, GiverState, MyGift } from "@/features/fan-gifts/api";
 
 /** The most people one gift order can go to (server setting `fan_gift_max_people`, 10). */
@@ -87,10 +88,10 @@ export function giftHeadline(page: Pick<GiftPage, "giver_name" | "passed_on_by" 
 }
 
 /** The recipient's state in words. */
-export function recipientLine(page: Pick<GiftPage, "status" | "title" | "act_name">): string {
+export function recipientLine(page: Pick<GiftPage, "status" | "title" | "act_name"> & { preorder?: boolean }): string {
   switch (page.status) {
     case "GIVEN":
-      return `${page.title} is in your library.`;
+      return page.preorder ? `${page.title} is yours. It unlocks in your library the day it comes out.` : `${page.title} is in your library.`;
     case "CHOOSING":
       return `You already own ${page.title}, so choose what to do with this gift.`;
     case "KEPT_CREDIT":
@@ -117,4 +118,31 @@ export const CHOICE_WORDS = {
 /** Where a signed-out viewer goes: sign in, or join with the address the gift is for. */
 export function signInHref(token: string, kind: "login" | "register"): string {
   return `/${kind}?next=${encodeURIComponent(`/gift/${token}`)}`;
+}
+
+/**
+ * The price a gift of this music is bought at: its normal everyone price, whether or not the giver
+ * owns it (owner, 2026-11-20: owning a song must not stop you giving it), or the pre-sale price
+ * while a release is on pre-sale. A song sold only as part of a release is given as that release.
+ * Never the owners' price.
+ */
+export function giftOffer(
+  offers: readonly OfferRecord[],
+  kind: "TRACK" | "RELEASE",
+  id: string,
+  releaseIds: readonly string[] = [],
+): OfferRecord | null {
+  const everyone = (o: OfferRecord) => o.status === "ACTIVE" && (o.audience ?? "EVERYONE") === "EVERYONE";
+  // Owner, 2026-11-20: a pre-order can be a gift the same way, at the pre-sale price.
+  const presale = (o: OfferRecord) => o.status === "ACTIVE" && o.audience === "PRESALE";
+  const own =
+    offers.find((o) => everyone(o) && o.product_type === kind && o.subject_id === id) ??
+    (kind === "RELEASE" ? offers.find((o) => presale(o) && o.product_type === "RELEASE" && o.subject_id === id) : undefined);
+  if (own || kind === "RELEASE") return own ?? null;
+  return offers.find((o) => everyone(o) && o.product_type === "RELEASE" && releaseIds.includes(o.subject_id ?? "")) ?? null;
+}
+
+/** Checkout with Give it as a gift already ticked. */
+export function giftHref(offerId: string): string {
+  return `/checkout?offer=${offerId}&gift=1`;
 }

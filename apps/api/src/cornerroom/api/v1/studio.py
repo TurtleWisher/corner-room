@@ -678,6 +678,8 @@ class SalesItemOut(SalesTotalOut):
     title: str
     release_type: str | None
     last_sold_at: datetime
+    # D-GIFT-FAN-01: how many of these sales were bought as gifts.
+    gift_count: int = 0
 
 
 class SalesOut(BaseModel):
@@ -698,6 +700,8 @@ class SaleLineOut(BaseModel):
     currency_code: str
     order_status: str
     ordered_at: datetime
+    # D-GIFT-FAN-01: "GIFT" (bought for other people) or "CREDIT" (paid with gift credit).
+    how: Literal["GIFT", "CREDIT"] | None = None
 
 
 class SaleLinePage(BaseModel):

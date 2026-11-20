@@ -12,6 +12,7 @@ import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ErrorState, Field, Input, Skeleton, StatusChip } from "@/components/ds";
 import { canPlay, TrackBuyControl, useCustomerCommerce, usePlayableCatalog } from "@/components/music/commerce";
+import { GiveGiftLink } from "@/components/music/give-gift-link";
 import { CoverTilt } from "@/components/music/cover-tilt";
 import { CreditFace } from "@/components/music/credit-face";
 import { GiftNote } from "@/components/music/gift-note";
@@ -269,6 +270,8 @@ export default function TrackPage() {
                   opensRoom
                 />
               )}
+              {/* D-GIFT-FAN-01: owners too (their Buy turns into Play), so owning it never stops a gift. */}
+              <GiveGiftLink commerce={commerce} kind="TRACK" id={track.id} title={track.title} releaseIds={track.release_ids ?? []} />
             </div>
             {buy.kind !== "owned" ? (
               <SongTeaserMain teasers={teasers} trackId={track.id} songTitle={track.title} artist={artist} className="music-rise mt-4" />

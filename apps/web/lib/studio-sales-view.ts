@@ -34,3 +34,8 @@ export function namesToShow(names: string[], expanded: boolean, limit = NAMES_SH
   if (expanded || names.length <= limit) return { shown: names, hidden: 0 };
   return { shown: names.slice(0, limit), hidden: names.length - limit };
 }
+
+/** D-GIFT-FAN-01 (owner, 2026-11-20): gift sales are marked in Studio Sales. */
+export function saleHowLabel(how: "GIFT" | "CREDIT"): string {
+  return how === "GIFT" ? "Bought as a gift" : "Paid with gift credit";
+}

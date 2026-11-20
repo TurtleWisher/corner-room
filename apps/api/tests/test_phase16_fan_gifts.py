@@ -151,7 +151,7 @@ async def test_a_fan_gift_from_payment_to_credit(client: AsyncClient) -> None:
 
     admin, orgs = await _orgs(client)
     label = orgs["LABEL"]
-    release_id, _track, _owner, _artist = await _released(client, admin, label, "fg-owner@example.com", "Gift Act")
+    release_id, _track, owner, artist_id = await _released(client, admin, label, "fg-owner@example.com", "Gift Act")
     ops = await _staff_with(client, admin, "fg-ops@example.com", "finance_manager", label)
     reviewer = await _staff_with(client, admin, "fg-reviewer@example.com", "content_manager", label)
     proposal = next(p for p in (await client.get("/api/v1/offer-proposals", headers=bearer(ops))).json() if p["release_id"] == release_id)
@@ -268,3 +268,8 @@ async def test_a_fan_gift_from_payment_to_credit(client: AsyncClient) -> None:
         json={"offer_id": offer["id"], "use_credit": True, "delivery_address_confirmed": True},
     )
     assert none.status_code == 409
+
+    # Studio Sales marks gift sales and credit sales (owner, 2026-11-20).
+    lines = (await client.get(f"/api/v1/studio/profiles/artist/{artist_id}/sales/lines", headers=bearer(owner["access_token"]))).json()["items"]
+    hows = [line.get("how") for line in lines]
+    assert hows.count("GIFT") == 5 and hows.count("CREDIT") == 1 and None in hows

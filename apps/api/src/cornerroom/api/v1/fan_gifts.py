@@ -53,6 +53,8 @@ class GiftPageOut(BaseModel):
     title: str
     act_name: str
     note: str | None = None
+    # A pre-order: it unlocks on release day.
+    preorder: bool = False
     for_email: str
     # RECIPIENT: signed in as the person it is for. SIGNED_IN: someone else. SIGNED_OUT.
     viewer: str
