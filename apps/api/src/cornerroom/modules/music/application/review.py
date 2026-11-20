@@ -311,6 +311,7 @@ class ReviewService:
                 Order.is_presale.is_(False),
                 Order.status.in_(PRESALE_ORDER_STATUSES),
                 Order.deleted_at.is_(None),
+                Order.is_test.is_(False),
             )
             .limit(1)
         )

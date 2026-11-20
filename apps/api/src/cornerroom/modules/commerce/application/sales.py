@@ -75,7 +75,8 @@ class CatalogSales:
             .join(Order, Order.id == OrderItem.order_id)
             .outerjoin(refunded, refunded.c.order_id == Order.id)
             .outerjoin(FanGift, FanGift.order_id == Order.id)
-            .where(subjects, Order.status.in_(SOLD_ORDER_STATUSES), Order.deleted_at.is_(None))
+            # Staff test buys are never sales (D-TEST-BUY-01).
+            .where(subjects, Order.status.in_(SOLD_ORDER_STATUSES), Order.deleted_at.is_(None), Order.is_test.is_(False))
         )
         return stmt
 
@@ -182,7 +183,7 @@ class CatalogSales:
                     CustomerProfile,
                     and_(CustomerProfile.user_id == Order.user_id, CustomerProfile.deleted_at.is_(None)),
                 )
-                .where(subjects, Order.status.in_(KEPT_ORDER_STATUSES), Order.deleted_at.is_(None))
+                .where(subjects, Order.status.in_(KEPT_ORDER_STATUSES), Order.deleted_at.is_(None), Order.is_test.is_(False))
                 # A fan gift's giver doesn't own it: the people it was given to are listed below.
                 .where(Order.id.not_in(select(FanGift.order_id)))
                 .distinct()
@@ -205,6 +206,7 @@ class CatalogSales:
                     FanGiftRecipient.status == "GIVEN",
                     FanGiftRecipient.user_id.is_not(None),
                     Order.status.in_(KEPT_ORDER_STATUSES),
+                    Order.is_test.is_(False),
                     or_(
                         and_(FanGift.work_type == "TRACK", FanGift.work_id.in_(list(track_ids) or [UUID(int=0)])),
                         and_(FanGift.work_type == "RELEASE", FanGift.work_id.in_(list(release_ids) or [UUID(int=0)])),

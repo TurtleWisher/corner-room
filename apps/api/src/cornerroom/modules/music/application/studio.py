@@ -1011,7 +1011,10 @@ class StudioService:
             select(func.count())
             .select_from(Order)
             .join(OrderItem, OrderItem.order_id == Order.id)
-            .where(OrderItem.ref_id.in_(subjects), Order.status.in_(PRESALE_ORDER_STATUSES), Order.deleted_at.is_(None))
+            .where(
+                OrderItem.ref_id.in_(subjects), Order.status.in_(PRESALE_ORDER_STATUSES), Order.deleted_at.is_(None),
+                Order.is_test.is_(False),
+            )
         )
         products = (
             await self.session.execute(select(Product).where(Product.subject_id.in_(subjects), Product.deleted_at.is_(None)))

@@ -279,12 +279,13 @@ class CustomerService:
         # Orders that count as sales, with what they were for.
         order_rows = (
             await self.session.execute(
-                select(Order).where(Order.status.in_(SOLD_ORDER_STATUSES), Order.deleted_at.is_(None))
+                # Staff test buys aren't customers' orders (D-TEST-BUY-01).
+                select(Order).where(Order.status.in_(SOLD_ORDER_STATUSES), Order.deleted_at.is_(None), Order.is_test.is_(False))
             )
         ).scalars().all()
         attempt_rows = (
             await self.session.execute(
-                select(Order).where(Order.status.in_(ATTEMPT_ORDER_STATUSES), Order.deleted_at.is_(None))
+                select(Order).where(Order.status.in_(ATTEMPT_ORDER_STATUSES), Order.deleted_at.is_(None), Order.is_test.is_(False))
             )
         ).scalars().all()
         all_orders = [*order_rows, *attempt_rows]

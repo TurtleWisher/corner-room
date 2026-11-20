@@ -451,6 +451,8 @@ class StreamAccessOut(BaseModel):
     organization, or the artist or band it belongs to. Listening only, never downloads."""
 
     track_ids: list[UUID]
+    # D-STREAM-03 / D-TEST-BUY-01: a platform admin plays everything, and their buys are tests.
+    platform_staff: bool = False
 
 
 @router.get("/me/stream-access", response_model=StreamAccessOut)
@@ -460,7 +462,8 @@ async def my_stream_access(
 ) -> StreamAccessOut:
     from cornerroom.modules.streaming.application.stream_access import StreamAccess
 
-    return StreamAccessOut(track_ids=await StreamAccess(svc.session, svc.authz).track_ids(ctx.user_id))
+    access = StreamAccess(svc.session, svc.authz)
+    return StreamAccessOut(track_ids=await access.track_ids(ctx.user_id), platform_staff=await access.is_platform_staff(ctx.user_id))
 
 
 class StoryOut(BaseModel):

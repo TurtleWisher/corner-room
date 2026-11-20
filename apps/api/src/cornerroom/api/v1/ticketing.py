@@ -174,6 +174,8 @@ class OrderOut(BaseModel):
     # D-GIFT-FAN-01: paid with gift credit (no payment), and whether it is a gift for other people.
     paid_with_credit_minor: int = 0
     is_gift: bool = False
+    # D-TEST-BUY-01: a platform admin's test buy (no money, never counted); finished by complete-test.
+    is_test: bool = False
     payment: PaymentOut | None = None
     # Present on single-order reads (create, get, confirm); omitted in lists.
     items: list[OrderItemOut] | None = None
@@ -291,6 +293,7 @@ def _order_out(row: Order, payment: Payment | None, details: dict[str, Any] | No
         currency_code=row.currency_code,
         is_presale=bool(getattr(row, "is_presale", False)),
         paid_with_credit_minor=int(getattr(row, "paid_with_credit_minor", 0) or 0),
+        is_test=bool(getattr(row, "is_test", False)),
         payment=_payment_out(payment) if payment else None,
     )
     if details is not None:
@@ -535,6 +538,18 @@ async def create_order(
     except Exception:
         await fail_idempotent(session, started)
         raise
+
+
+@router.post("/orders/{order_id}/complete-test", response_model=OrderOut)
+async def complete_test_order(
+    order_id: UUID,
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[CheckoutService, Depends(checkout_service)],
+) -> OrderOut:
+    """Finish a platform admin's test buy (owner, 2026-11-21, D-TEST-BUY-01): no money moves and
+    nothing reaches sales, royalties, finance, the artist or analytics."""
+    row = await svc.complete_test(ctx, order_id)
+    return await _order_full(svc, row, None)
 
 
 @router.get("/me/orders", response_model=OrderPage)

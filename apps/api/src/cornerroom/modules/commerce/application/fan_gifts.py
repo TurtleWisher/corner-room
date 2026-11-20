@@ -263,6 +263,8 @@ class FanGiftService:
             idempotency_key=idempotency_key,
             purpose="RELEASE" if kind == "RELEASE" else "TRACK",
             is_presale=preorder,
+            # A platform admin's gift is a test buy too (D-TEST-BUY-01): no money, never counted.
+            is_test=await checkout.is_test_buyer(ctx),
             created_by=ctx.user_id,
             updated_by=ctx.user_id,
         )
@@ -294,6 +296,12 @@ class FanGiftService:
             )
         await self.session.flush()
         checkout._add_tax_line(order)
+        if order.is_test:
+            await self.audit.record_from_auth(
+                ctx, action="fan_gift.test_placed", entity_type="FanGift", entity_id=gift.id,
+                new_state={"people": len(people_rows)}, organization_id=product.organization_id,
+            )
+            return order, None
         payment = await checkout.payments.create_intent(ctx, order=order, idempotency_key=f"pay:{idempotency_key}")
         await checkout._emit(
             ctx,

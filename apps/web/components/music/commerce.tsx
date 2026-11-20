@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Check, Lock, LogIn, Play } from "lucide-react";
+import { Check, FlaskConical, Lock, LogIn, Play } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { Button, ButtonLink } from "@/components/ds";
@@ -10,7 +10,9 @@ import { SaveOfflineButton } from "@/components/music/save-offline-button";
 import { useOptionalPlayer, type PlayOptions, type PlayerTrack } from "@/components/music/player";
 import { useAsync } from "@/components/use-async";
 import { fetchMyEntitlements, fetchOffers, fetchPlayableCatalog, type EntitlementRecord, type OfferRecord, type PlayableTrackRecord } from "@/lib/api";
-import { fetchMyStreamAccess } from "@/features/streaming/api";
+import { fetchMyAccess } from "@/features/streaming/api";
+import { giftOffer } from "@/lib/fan-gift-view";
+import { TEST_BUY_WORDS } from "@/lib/test-buy-view";
 import { offerForRelease, ownsTrack, releaseBuyLabel, trackBuyState } from "@/lib/ownership";
 
 export type CustomerCommerce = {
@@ -18,6 +20,8 @@ export type CustomerCommerce = {
   entitlements: EntitlementRecord[];
   /** Songs this person may listen to without buying: catalog staff, or the music's own artist or band (D-STREAM-02). */
   streamable?: ReadonlySet<string>;
+  /** A platform admin: plays every song, and buys as a test (D-STREAM-03, D-TEST-BUY-01). */
+  testBuyer?: boolean;
   ready: boolean;
   reload: () => void;
 };
@@ -36,14 +40,15 @@ export function useCustomerCommerce(): CustomerCommerce {
     const [offers, entitlements, streamable] = await Promise.all([
       fetchOffers().then((p) => p.items).catch(() => [] as OfferRecord[]),
       signedIn ? fetchMyEntitlements().then((p) => p.items).catch(() => [] as EntitlementRecord[]) : Promise.resolve([] as EntitlementRecord[]),
-      signedIn ? fetchMyStreamAccess().catch(() => [] as string[]) : Promise.resolve([] as string[]),
+      signedIn ? fetchMyAccess().catch(() => ({ trackIds: [] as string[], platformStaff: false })) : Promise.resolve({ trackIds: [] as string[], platformStaff: false }),
     ]);
-    return { offers, entitlements, streamable: new Set(streamable) };
+    return { offers, entitlements, streamable: new Set(streamable.trackIds), testBuyer: streamable.platformStaff };
   }, [status]);
   return {
     offers: data.status === "ok" && data.data ? data.data.offers : [],
     entitlements: data.status === "ok" && data.data ? data.data.entitlements : [],
     streamable: data.status === "ok" && data.data ? data.data.streamable : undefined,
+    testBuyer: data.status === "ok" && data.data ? data.data.testBuyer : false,
     ready: data.status === "ok" && data.data !== null,
     reload: data.reload,
   };
@@ -137,6 +142,20 @@ export function TrackBuyControl({
     // Bought songs can be saved for offline listening in the app (D-AUDIO-18, replaces the file
     // download of D-AUDIO-06); older whole-catalog access can't.
     // Offline saving needs a purchase; whole-catalog access and free listening (D-STREAM-02) don't have one.
+    if (state.via === "access" && commerce.testBuyer) {
+      // A platform admin plays everything; their buy is a test (owner, 2026-11-21, D-TEST-BUY-01).
+      const offer = giftOffer(commerce.offers, "TRACK", track.id, releaseIds);
+      if (offer) {
+        return (
+          <span className="inline-flex items-center gap-2">
+            {main}
+            <ButtonLink href={`/checkout?offer=${offer.id}`} variant="secondary" size={size} aria-label={`Test buy ${track.title}`} title={TEST_BUY_WORDS.body}>
+              <FlaskConical aria-hidden="true" /> {TEST_BUY_WORDS.link}
+            </ButtonLink>
+          </span>
+        );
+      }
+    }
     if (state.via === "catalog" || state.via === "access") return main;
     return (
       <span className="inline-flex items-center gap-1">

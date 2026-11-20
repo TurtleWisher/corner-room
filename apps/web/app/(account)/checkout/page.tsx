@@ -11,6 +11,8 @@ import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
 import { DeliveryAddressStep } from "@/components/checkout/delivery-address-step";
 import { CreditStep, GiftStep, NO_GIFT, readGift, type GiftDraft } from "@/components/checkout/gift-step";
+import { TestBuyNotice, TestPanel } from "@/components/checkout/test-panel";
+import { fetchMyAccess } from "@/features/streaming/api";
 import { PaymentPanel } from "@/components/checkout/payment-panel";
 import { PowerTransition } from "@/components/checkout/power-transition";
 import { GenericSummary, MusicReceipt, TicketConfirmation, TicketSummary, TrackSummary } from "@/components/checkout/summaries";
@@ -261,7 +263,12 @@ function OrderCheckout({ initial }: { initial: OrderRecord }) {
         ) : (
           <Skeleton className="h-64 w-full" />
         )}
-        <PaymentPanel order={order} stage={stage} now={status.now} onOrder={status.setOrder} onRefresh={status.refresh} restartHref={restartHref(order, ctx)} />
+        {order.is_test && stage === "awaiting_payment" ? (
+          // A platform admin's test buy: no payment, "Complete as a test" (D-TEST-BUY-01).
+          <TestPanel order={order} onOrder={status.setOrder} />
+        ) : (
+          <PaymentPanel order={order} stage={stage} now={status.now} onOrder={status.setOrder} onRefresh={status.refresh} restartHref={restartHref(order, ctx)} />
+        )}
       </div>
       <PowerTransition
         confirmed={moment === "playing"}
@@ -370,6 +377,12 @@ function NewCheckout() {
   const [gift, setGift] = useState<GiftDraft>(() => (params.get("gift") === "1" ? { ...NO_GIFT, on: true } : NO_GIFT));
   const [useCredit, setUseCredit] = useState(false);
   const { user } = useAuth();
+  // Platform admins buy as a test (owner, 2026-11-21, D-TEST-BUY-01); the server decides.
+  const access = useAsync(
+    () => (status === "authenticated" ? fetchMyAccess().catch(() => null) : Promise.resolve(null)),
+    [status],
+  );
+  const testBuyer = access.status === "ok" && access.data?.platformStaff === true;
   const summary = useAsync(() => (item ? loadSummary(item) : Promise.resolve(null)), [item?.kind, item?.id]);
   const owned = useAsync(
     () =>
@@ -415,7 +428,7 @@ function NewCheckout() {
   const presale = summary.status === "ok" ? (summary.data?.presale ?? null) : null;
   const giftable =
     item.kind === "offer" && Boolean(music && (music.product_type === "TRACK" || music.product_type === "RELEASE")) && (!presale || presale.open);
-  const creditable = giftable && !presale;
+  const creditable = giftable && !presale && !testBuyer;
   const giving = giftable && gift.on;
   const gifted = giving ? readGift(gift, user?.email) : null;
   const paying = creditable && !giving && useCredit;
@@ -517,6 +530,8 @@ function NewCheckout() {
 
       {error ? <ErrorState title="Something went wrong" message={error} /> : null}
 
+      {testBuyer ? <TestBuyNotice /> : null}
+
       {giftable && summary.status === "ok" && summary.data ? (
         <GiftStep
           draft={gift}
@@ -546,12 +561,13 @@ function NewCheckout() {
         <>
           {creditable && !giving ? <CreditStep offerId={item.id} on={useCredit} onChange={setUseCredit} /> : null}
           {/* A gift's giver gets no collectible from it, so a gift needs no delivery address. */}
-          {giving ? null : <DeliveryAddressStep confirmed={addressConfirmed} onConfirmedChange={setAddressConfirmed} />}
+          {/* Test buys earn no collectible either, so no address (D-TEST-BUY-01). */}
+          {giving || testBuyer ? null : <DeliveryAddressStep confirmed={addressConfirmed} onConfirmedChange={setAddressConfirmed} />}
           <div className="flex flex-wrap items-center gap-4">
             <Button
               size="lg"
               busy={busy}
-              disabled={(giving ? Boolean(gifted?.problem) : !addressConfirmed) || Boolean(chosen && chosen.minor === null)}
+              disabled={(giving ? Boolean(gifted?.problem) : !testBuyer && !addressConfirmed) || Boolean(chosen && chosen.minor === null)}
               onClick={() => void place()}
             >
               {item.kind === "tickets" ? "Reserve and pay" : paying ? "Get it with credit" : "Continue to payment"}
@@ -561,7 +577,7 @@ function NewCheckout() {
             </Link>
           </div>
           {giving && gifted?.problem ? <p className="text-sm text-fg-muted">{gifted.problem}</p> : null}
-          {!giving && !addressConfirmed ? <p className="text-sm text-fg-muted">Confirm where we can send gifts to continue.</p> : null}
+          {!giving && !testBuyer && !addressConfirmed ? <p className="text-sm text-fg-muted">Confirm where we can send gifts to continue.</p> : null}
         </>
       ) : null}
     </div>

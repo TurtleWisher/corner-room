@@ -11,6 +11,7 @@ import type { EventRecord, OrderItemRecord, OrderRecord, TrackRecord } from "@/l
 import { orderReference } from "@/lib/checkout-view";
 import { maybeCoverUrl } from "@/lib/cover-view";
 import { cityFromTimeZone } from "@/lib/home-view";
+import { TEST_BUY_WORDS } from "@/lib/test-buy-view";
 
 /*
  * Product-specific halves of checkout. Every amount is the server's line or total, formatted only.
@@ -204,7 +205,13 @@ export function MusicReceipt({
           </h2>
           <p className="mt-1 text-fg">{artist ?? "Artist not available"}</p>
           <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
-            {order.paid_with_credit_minor ? (
+            {order.is_test ? (
+              // A platform admin's test buy: never money (D-TEST-BUY-01).
+              <>
+                <dt className="text-fg-muted">Paid</dt>
+                <dd className="text-fg">{TEST_BUY_WORDS.receipt}</dd>
+              </>
+            ) : order.paid_with_credit_minor ? (
               // D-GIFT-FAN-01: paid with gift credit, so no money changed hands now.
               <>
                 <dt className="text-fg-muted">Paid with</dt>

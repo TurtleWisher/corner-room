@@ -697,6 +697,7 @@ class RoyaltyService:
                 .where(
                     Order.purpose == "TRACK",
                     Order.status == "FULFILLED",
+                    Order.is_test.is_(False),  # staff test buys never earn royalties (D-TEST-BUY-01)
                     OrderItem.item_type == "TRACK",
                     Order.updated_at >= pool.period_start,
                     Order.updated_at < pool.period_end,

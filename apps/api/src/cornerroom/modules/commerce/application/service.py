@@ -183,6 +183,8 @@ class CheckoutService:
         payment = (
             await self.session.execute(select(Payment).where(Payment.order_id == existing.id))
         ).scalar_one_or_none()
+        if payment is None and existing.is_test:
+            return existing, None  # a test buy has no payment (D-TEST-BUY-01)
         if payment is None:
             raise AppError("CONFLICT", "Order exists without payment", 409)
         return existing, payment
@@ -247,7 +249,10 @@ class CheckoutService:
             found = await self._existing_order(ctx, idempotency_key)
             if found is not None:
                 return found
-        address = await self._confirmed_delivery_address(ctx, delivery_confirmed)
+        # D-TEST-BUY-01 (owner, 2026-11-21): a platform admin's buy is a test, never a sale. Tests earn
+        # no collectible, so they need no delivery address.
+        is_test = await self.is_test_buyer(ctx)
+        address = None if is_test else await self._confirmed_delivery_address(ctx, delivery_confirmed)
         offer = await self.session.get(Offer, offer_id)
         if offer is None or offer.deleted_at is not None or offer.status != "ACTIVE":
             raise NotFoundError("Offer not found")
@@ -289,11 +294,14 @@ class CheckoutService:
                 raise AppError("CREDIT_NOT_USABLE", "Gift credit can't pay for this", 409)
         credit_minor = money.amount_minor if use_credit else 0
         charged = 0 if use_credit else money.amount_minor
+        if is_test and use_credit:
+            raise AppError("TEST_BUY", "A test buy doesn't use gift credit", 422)
         order = Order(
             user_id=ctx.user_id,
             status="PENDING_PAYMENT",
             total_amount_minor=charged,
             paid_with_credit_minor=credit_minor,
+            is_test=is_test,
             currency_code=money.currency_code,
             idempotency_key=idempotency_key,
             purpose=purpose,
@@ -303,7 +311,8 @@ class CheckoutService:
         )
         self.session.add(order)
         await self.session.flush()
-        self._copy_delivery_address(order, address)
+        if address is not None:
+            self._copy_delivery_address(order, address)
         self.session.add(
             OrderItem(
                 order_id=order.id,
@@ -320,6 +329,12 @@ class CheckoutService:
         self._add_tax_line(order)
         if credit_act is not None:
             return await self._pay_with_credit(ctx, order, product, credit_act, credit_minor)
+        if is_test:
+            await self.audit.record_from_auth(
+                ctx, action="order.test_placed", entity_type="Order", entity_id=order.id,
+                new_state={"status": order.status, "purpose": order.purpose}, organization_id=product.organization_id,
+            )
+            return order, None
         payment = await self.payments.create_intent(
             ctx, order=order, idempotency_key=f"pay:{idempotency_key}"
         )
@@ -344,6 +359,38 @@ class CheckoutService:
             organization_id=product.organization_id,
         )
         return order, payment
+
+    async def is_test_buyer(self, ctx: AuthContext) -> bool:
+        """Platform admins' buys are tests (owner, 2026-11-21, D-TEST-BUY-01)."""
+        from cornerroom.modules.streaming.application.stream_access import StreamAccess
+
+        return await StreamAccess(self.session).is_platform_staff(ctx.user_id)
+
+    async def complete_test(self, ctx: AuthContext, order_id: UUID) -> Order:
+        """Finish a test buy as if it were paid: the music is the admin's, and nothing reaches sales,
+        royalties, finance, the artist's emails, gift campaigns, pre-sale numbers or analytics (no
+        payment, no OrderPaid, no purchase events)."""
+        order = (await self.session.execute(select(Order).where(Order.id == order_id).with_for_update())).scalar_one_or_none()
+        if order is None or order.user_id != ctx.user_id or not order.is_test or order.deleted_at is not None:
+            raise NotFoundError("Order not found")
+        if order.status == "FULFILLED":
+            return order
+        if order.status != "PENDING_PAYMENT":
+            raise AppError("INVALID_TRANSITION", "This test order can't be completed", 409)
+        if not await self.is_test_buyer(ctx):
+            raise NotFoundError("Order not found")
+        order_transition_action(order.status, "PAID")
+        order.status = "PAID"
+        await self.session.flush()
+        organization_id = await self._fulfill_items(ctx, order)
+        order_transition_action(order.status, "FULFILLED")
+        order.status = "FULFILLED"
+        await self.session.flush()
+        await self.audit.record_from_auth(
+            ctx, action="order.test_completed", entity_type="Order", entity_id=order.id,
+            new_state={"status": order.status, "is_test": True}, organization_id=organization_id,
+        )
+        return order
 
     async def _pay_with_credit(
         self, ctx: AuthContext, order: Order, product: Product, act_id: UUID, amount_minor: int
@@ -645,7 +692,9 @@ class CheckoutService:
                                 created_at=self.clock.now(),
                             )
                         )
-                if ctx is not None:
+                if order.is_test:
+                    pass  # a test buy is never counted (D-TEST-BUY-01)
+                elif ctx is not None:
                     await self._emit(
                         ctx,
                         event_type=TRACK_PURCHASED,
@@ -707,6 +756,8 @@ class CheckoutService:
                     self.session.add(
                         LibraryItem(user_id=order.user_id, item_type="release", item_id=item.ref_id, kind="PURCHASE_REF", created_at=self.clock.now())
                     )
+                if order.is_test:
+                    continue  # a test buy is never counted (D-TEST-BUY-01)
                 await enqueue_outbox(
                     self.session,
                     DomainEvent(

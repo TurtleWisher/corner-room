@@ -290,6 +290,7 @@ class PresaleCampaignService:
                 Order.is_presale.is_(True),
                 Order.status.in_(SOLD_ORDER_STATUSES),
                 Order.deleted_at.is_(None),
+                Order.is_test.is_(False),
             )
             .group_by(OrderItem.ref_id)
         )
@@ -382,7 +383,7 @@ class PresaleCampaignService:
                 )
                 .join(Order, Order.id == OrderItem.order_id)
                 .outerjoin(refunded, refunded.c.order_id == Order.id)
-                .where(or_(*subjects), Order.deleted_at.is_(None))
+                .where(or_(*subjects), Order.deleted_at.is_(None), Order.is_test.is_(False))
             )
         ).all()
         return [
