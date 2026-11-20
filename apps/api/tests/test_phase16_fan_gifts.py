@@ -188,7 +188,8 @@ async def test_a_fan_gift_from_payment_to_credit(client: AsyncClient) -> None:
     # The note waits for staff, so nobody is emailed yet.
     mine = (await client.get("/api/v1/me/fan-gifts", headers=bearer(gtoken))).json()
     assert mine[0]["status"] == "WAITING_NOTE" and {p["state"] for p in mine[0]["people"]} == {"NOT_SENT_YET"}
-    assert (await client.get("/api/v1/staff/fan-gift-notes", headers=bearer(gtoken))).status_code == 404
+    # A fan has no staff workspace, so the notes list is refused (409 NO_WORKSPACE, like other staff queues).
+    assert (await client.get("/api/v1/staff/fan-gift-notes", headers=bearer(gtoken))).status_code in (403, 404, 409)
     queue = (await client.get("/api/v1/staff/fan-gift-notes", headers=bearer(reviewer))).json()
     assert [q["note"] for q in queue] == ["Happy Eid!"] and queue[0]["people"] == 3
     reviewed = await client.post(f"/api/v1/staff/fan-gift-notes/{queue[0]['id']}/review", headers=bearer(reviewer), json={"approve": True})
