@@ -36,3 +36,11 @@ describe("buyers' names (D-BUYERS-01)", () => {
   });
 });
 
+
+describe("gift sales (D-GIFT-FAN-01)", () => {
+  it("names how a sale was paid", async () => {
+    const { saleHowLabel } = await import("./studio-sales-view");
+    expect(saleHowLabel("GIFT")).toBe("Bought as a gift");
+    expect(saleHowLabel("CREDIT")).toBe("Paid with gift credit");
+  });
+});

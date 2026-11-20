@@ -19,6 +19,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.kernel.pagination import clamp_limit, encode_cursor, keyset_before
+from cornerroom.modules.commerce.domain.fan_gifts import FanGift, FanGiftRecipient
 from cornerroom.modules.commerce.domain.models import Order, OrderItem
 from cornerroom.modules.finance.domain.models_payments import Payment, Refund
 
@@ -67,9 +68,13 @@ class CatalogSales:
                 Order.status,
                 Order.created_at,
                 func.coalesce(refunded.c.refunded, 0).label("refunded"),
+                # D-GIFT-FAN-01 (owner, 2026-11-20): gift sales are marked in Studio Sales.
+                FanGift.id.is_not(None).label("is_gift"),
+                (Order.paid_with_credit_minor > 0).label("with_credit"),
             )
             .join(Order, Order.id == OrderItem.order_id)
             .outerjoin(refunded, refunded.c.order_id == Order.id)
+            .outerjoin(FanGift, FanGift.order_id == Order.id)
             .where(subjects, Order.status.in_(SOLD_ORDER_STATUSES), Order.deleted_at.is_(None))
         )
         return stmt
@@ -96,6 +101,7 @@ class CatalogSales:
                     func.sum(sold.c.amount_minor).label("gross"),
                     func.sum(line_refund).label("refunded"),
                     func.max(sold.c.created_at).label("last_sold_at"),
+                    func.count().filter(sold.c.is_gift.is_(True)).label("gift_count"),
                 ).group_by(sold.c.item_type, sold.c.ref_id, sold.c.currency_code)
             )
         ).all()
@@ -110,6 +116,7 @@ class CatalogSales:
                 "refunded_amount_minor": int(r.refunded),
                 "net_amount_minor": int(r.gross) - int(r.refunded),
                 "last_sold_at": r.last_sold_at,
+                "gift_count": int(r.gift_count),
             }
             for r in rows
         ]
@@ -149,6 +156,8 @@ class CatalogSales:
                 "currency_code": r.currency_code,
                 "order_status": r.status,
                 "ordered_at": r.created_at,
+                # GIFT: bought for other people. CREDIT: paid with gift credit (no new money).
+                "how": "GIFT" if r.is_gift else "CREDIT" if r.with_credit else None,
             }
             for r in page
         ], next_cursor
@@ -174,12 +183,37 @@ class CatalogSales:
                     and_(CustomerProfile.user_id == Order.user_id, CustomerProfile.deleted_at.is_(None)),
                 )
                 .where(subjects, Order.status.in_(KEPT_ORDER_STATUSES), Order.deleted_at.is_(None))
+                # A fan gift's giver doesn't own it: the people it was given to are listed below.
+                .where(Order.id.not_in(select(FanGift.order_id)))
                 .distinct()
             )
         ).all()
         groups: dict[tuple[str, UUID], dict[object, str]] = {}
         for r in bought:
             groups.setdefault((r.item_type, r.ref_id), {})[r.user_id] = (r.display_name or "").strip() or NO_NAME
+        # D-GIFT-FAN-01: the people who own the music through a fan gift.
+        given = (
+            await self.session.execute(
+                select(FanGift.work_type, FanGift.work_id, FanGiftRecipient.user_id, CustomerProfile.display_name)
+                .join(FanGiftRecipient, FanGiftRecipient.gift_id == FanGift.id)
+                .join(Order, Order.id == FanGift.order_id)
+                .outerjoin(
+                    CustomerProfile,
+                    and_(CustomerProfile.user_id == FanGiftRecipient.user_id, CustomerProfile.deleted_at.is_(None)),
+                )
+                .where(
+                    FanGiftRecipient.status == "GIVEN",
+                    FanGiftRecipient.user_id.is_not(None),
+                    Order.status.in_(KEPT_ORDER_STATUSES),
+                    or_(
+                        and_(FanGift.work_type == "TRACK", FanGift.work_id.in_(list(track_ids) or [UUID(int=0)])),
+                        and_(FanGift.work_type == "RELEASE", FanGift.work_id.in_(list(release_ids) or [UUID(int=0)])),
+                    ),
+                )
+            )
+        ).all()
+        for r in given:
+            groups.setdefault((r.work_type, r.work_id), {})[r.user_id] = (r.display_name or "").strip() or NO_NAME
         wanted = {("TRACK", t) for t in track_ids} | {("RELEASE", r) for r in release_ids}
         waiting = (
             await self.session.execute(

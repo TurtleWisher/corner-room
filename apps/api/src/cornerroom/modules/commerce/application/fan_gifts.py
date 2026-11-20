@@ -157,13 +157,22 @@ class FanGiftService:
         if product is None or product.deleted_at is not None or product.status != "ACTIVE":
             raise NotFoundError("Offer not found")
         assert_sellable_type(product.product_type)
-        if offer.audience != "EVERYONE":
-            # Pre-orders and owners' prices aren't gifts (owner: pre-order gifts later, if wanted).
+        if offer.audience not in ("EVERYONE", "PRESALE"):
+            # The owners' price is for the person buying, never for a gift.
             raise AppError("GIFT_NOT_POSSIBLE", "This price can't be given as a gift", 409)
         kind, work = await self._work(product)
-        if work is None or work.deleted_at is not None or work.status != "RELEASED":
+        preorder = offer.audience == "PRESALE"
+        if work is None or work.deleted_at is not None:
+            raise AppError("RELEASE_NOT_AVAILABLE", "This music can't be given as a gift", 409)
+        if preorder:
+            # Owner, 2026-11-20: pre-orders can be gifts the same way, while the pre-sale is open.
+            from cornerroom.modules.commerce.application.onsite_presale import presale_open
+
+            if kind != "RELEASE" or not presale_open(work, self.clock.now()):
+                raise AppError("PRESALE_CLOSED", "Pre-orders for this release are closed", 409)
+        elif work.status != "RELEASED":
             raise AppError("RELEASE_NOT_AVAILABLE", "Only music that is out can be given as a gift", 409)
-        if kind == "TRACK":
+        if kind == "TRACK" and not preorder:
             from cornerroom.modules.commerce.application.catalog import CatalogCommerceService
 
             await CatalogCommerceService(self.session).assert_track_sold_separately(work.id)
@@ -195,6 +204,7 @@ class FanGiftService:
             currency_code=offer.currency_code,
             idempotency_key=idempotency_key,
             purpose="RELEASE" if kind == "RELEASE" else "TRACK",
+            is_presale=preorder,
             created_by=ctx.user_id,
             updated_by=ctx.user_id,
         )
@@ -515,6 +525,8 @@ class FanGiftService:
         if mine and person.status == "WAITING_ACCOUNT":
             await self._settle(gift, person, ctx.user_id)  # type: ignore[union-attr]
         giver = await self._person_name(gift.giver_user_id)
+        order = await self.session.get(Order, gift.order_id)
+        preorder = bool(order is not None and order.is_presale)
         passed_from = await self.session.get(FanGiftRecipient, person.passed_from_id) if person.passed_from_id else None
         out: dict[str, Any] = {
             "giver_name": giver,
@@ -524,6 +536,7 @@ class FanGiftService:
             "title": await self._title(gift),
             "act_name": await self._act_name(gift.act_id),
             "note": gift.note if gift.note_state == "APPROVED" else None,
+            "preorder": preorder,
             "for_email": mask_email(person.email),
             "viewer": "RECIPIENT" if mine else ("SIGNED_IN" if ctx is not None and ctx.user_id else "SIGNED_OUT"),
             "status": person.status if mine else None,
@@ -688,7 +701,7 @@ CLAIM_EVENTS = {USER_VERIFIED, USER_REGISTERED, USER_ACTIVATED}
 
 def gift_email(
     *, giver: str | None, passed_by: str | None, title: str, act: str, note: str | None, status: str, link: str,
-    claim_days: int,
+    claim_days: int, preorder: bool = False,
 ) -> tuple[str, str]:
     who = giver or "Someone"
     subject = f"{who} sent you {title} by {act}"
@@ -698,7 +711,9 @@ def gift_email(
     if note:
         lines += ["", f"{who} wrote:", note]
     lines.append("")
-    if status == "GIVEN":
+    if status == "GIVEN" and preorder:
+        lines.append("It's a pre-order: it's yours now and unlocks in your library the day it comes out.")
+    elif status == "GIVEN":
         lines.append("It's in your library now. Open your gift to listen:")
     elif status == "CHOOSING":
         lines.append("Open your gift to see what you can do with it:")
@@ -747,6 +762,7 @@ async def consume_fan_gift_event(event: DomainEvent, session: AsyncSession, sett
             giver=await svc._person_name(gift.giver_user_id), passed_by=payload.get("passed_by"), title=title, act=act,
             note=gift.note if gift.note_state == "APPROVED" else None, status=person.status,
             link=f"{base}/gift/{payload.get('token')}", claim_days=int(settings.fan_gift_claim_days),
+            preorder=bool((order := await session.get(Order, gift.order_id)) is not None and order.is_presale),
         )
     else:
         giver = await session.get(User, gift.giver_user_id)

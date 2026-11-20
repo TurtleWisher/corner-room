@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { CalendarClock, Check, Clock, LogIn, ShoppingBag } from "lucide-react";
+import { CalendarClock, Check, Clock, Gift, LogIn, ShoppingBag } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
@@ -16,6 +16,7 @@ import { useReleaseOpenCount } from "@/components/music/use-release-count";
 import { countPresale } from "@/features/presales/api";
 import type { PresalePageRecord } from "@/features/catalog/api";
 import { coverUrl } from "@/lib/cover-view";
+import { giftHref } from "@/lib/fan-gift-view";
 import { releaseTypeLabel } from "@/lib/music-view";
 import { ownsRelease } from "@/lib/ownership";
 import { PRESALE_PROMISE, preorderLabel, presaleCountdown, rememberPresaleSeen } from "@/lib/presale-view";
@@ -87,7 +88,16 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
                     You&apos;ve pre-ordered this. It unlocks on <DateTime value={presale.release_at} format="date" />.
                   </span>
                 </p>
-              ) : !open ? (
+              ) : null}
+              {preordered && open ? (
+                // Owner, 2026-11-20: having pre-ordered it never stops you giving it.
+                <div className="mt-3">
+                  <ButtonLink href={giftHref(presale.offer.id)} size="lg" variant="secondary" aria-label={`Give ${presale.title} as a gift`}>
+                    <Gift aria-hidden="true" /> Give as a gift
+                  </ButtonLink>
+                </div>
+              ) : null}
+              {preordered ? null : !open ? (
                 <p className="inline-flex max-w-prose items-start gap-2 text-fg">
                   <Clock aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-fg-muted" />
                   The release date has passed and the music is nearly ready. Pre-orders are closed; everyone who pre-ordered gets it the moment
@@ -100,9 +110,15 @@ export function PresaleView({ presale }: { presale: PresalePageRecord }) {
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     {signedIn ? (
-                      <ButtonLink href={checkout} size="lg" onClick={() => countPresale(presale.id, { kind: "prebook", place: "PAGE" })}>
-                        <ShoppingBag aria-hidden="true" /> {preorderLabel(presale.release_type)}
-                      </ButtonLink>
+                      <>
+                        <ButtonLink href={checkout} size="lg" onClick={() => countPresale(presale.id, { kind: "prebook", place: "PAGE" })}>
+                          <ShoppingBag aria-hidden="true" /> {preorderLabel(presale.release_type)}
+                        </ButtonLink>
+                        {/* Owner, 2026-11-20: a pre-order can be a gift too. */}
+                        <ButtonLink href={giftHref(presale.offer.id)} size="lg" variant="secondary" aria-label={`Give ${presale.title} as a gift`}>
+                          <Gift aria-hidden="true" /> Give as a gift
+                        </ButtonLink>
+                      </>
                     ) : (
                       <ButtonLink
                         href={`/login?next=${encodeURIComponent(checkout)}`}

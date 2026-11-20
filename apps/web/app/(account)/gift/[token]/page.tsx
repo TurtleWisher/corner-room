@@ -161,7 +161,7 @@ function GiftBody({ token }: { token: string }) {
             ) : null}
             {g.status === "GIVEN" ? (
               <ButtonLink href={listenHref(g)} className="mt-4">
-                <Headphones aria-hidden="true" /> Listen now
+                <Headphones aria-hidden="true" /> {g.preorder ? "See the release" : "Listen now"}
               </ButtonLink>
             ) : null}
             {g.status === "CHOOSING" ? <Choices token={token} page={g} onPage={setPage} /> : null}

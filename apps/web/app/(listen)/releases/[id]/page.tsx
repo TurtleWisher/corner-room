@@ -12,6 +12,7 @@ import { Display, Eyebrow } from "@/components/brand/display";
 import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ButtonLink, DateTime, EmptyState, ErrorState, Field, Input, Money, Skeleton, StatusChip } from "@/components/ds";
 import { canPlay, type CustomerCommerce, TrackBuyControl, useCustomerCommerce } from "@/components/music/commerce";
+import { GiveGiftLink } from "@/components/music/give-gift-link";
 import { BandLineup } from "@/components/artists/band-lineup";
 import { CreditFace } from "@/components/music/credit-face";
 import { GiftNote } from "@/components/music/gift-note";
@@ -411,6 +412,8 @@ export default function ReleasePage() {
                   )
                 ) : null}
                 {hero.notOnSale ? <p className="self-center text-sm text-fg-muted">Not on sale yet.</p> : null}
+                {/* D-GIFT-FAN-01: owners too (their Buy turns into Play), so owning it never stops a gift. */}
+                {release.status === "RELEASED" ? <GiveGiftLink commerce={commerce} kind="RELEASE" id={release.id} title={release.title} /> : null}
               </div>
             ) : null}
             {hero.credits && onlySong ? (

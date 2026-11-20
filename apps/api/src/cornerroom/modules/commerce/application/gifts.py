@@ -61,7 +61,7 @@ from cornerroom.modules.commerce.domain.gifts import (
     phone_key,
     update_waiting,
 )
-from cornerroom.modules.commerce.domain.fan_gifts import FanGift
+from cornerroom.modules.commerce.domain.fan_gifts import FanGift, FanGiftRecipient
 from cornerroom.modules.commerce.domain.models import Order, OrderDeliveryAddress, OrderItem, PresaleClaim, Product
 
 # Paid orders that still count (a fully refunded order no longer earns the gift).
@@ -483,10 +483,10 @@ class GiftCampaignService:
                     Order.deleted_at.is_(None),
                     # Music an artist gave away (D-GIFT-MUSIC-01) wasn't bought: it earns no campaign gift.
                     Order.music_gift_id.is_(None),
-                    # Fan gifts and orders paid with gift credit (D-GIFT-FAN-01): who earns a
-                    # collectible from them is still the owner's call (OPEN), so neither does yet.
+                    # A fan gift's order is the giver's: the people it was for earn the gift
+                    # instead (below). An order paid with gift credit is its buyer's, as any order
+                    # (owner, 2026-11-20, D-GIFT-FAN-01: whoever has been gifted to earns it).
                     Order.id.not_in(select(FanGift.order_id)),
-                    Order.paid_with_credit_minor == 0,
                     (OrderItem.product_id.in_(products or {UUID(int=0)})) | (OrderItem.ref_id.in_(subjects)),
                 )
                 .distinct()
@@ -514,6 +514,29 @@ class GiftCampaignService:
             if order.id not in claimed_orders and not in_periods(order.created_at, periods, now):
                 continue
             wanted.setdefault(user.email.lower(), {"user_id": user.id, "email": user.email, "order_id": order.id})
+        # Fan gifts (D-GIFT-FAN-01): the person who now owns the gifted music earns the collectible,
+        # never the giver. Their own saved address is used (the giver's order has none).
+        gifted = (
+            await self.session.execute(
+                select(FanGiftRecipient, FanGift, Order.is_presale)
+                .join(FanGift, FanGift.id == FanGiftRecipient.gift_id)
+                .join(Order, Order.id == FanGift.order_id)
+                .where(
+                    FanGiftRecipient.status == "GIVEN",
+                    FanGiftRecipient.user_id.is_not(None),
+                    FanGift.status == "DELIVERED",
+                    Order.status.in_(GIFT_ORDER_STATUSES),
+                    (FanGift.product_id.in_(products or {UUID(int=0)})) | (FanGift.work_id.in_(subjects)),
+                )
+            )
+        ).all()
+        for person, gift, presale in gifted:
+            user = await self.session.get(User, person.user_id)
+            if user is None or user.deleted_at is not None:
+                continue
+            if not (campaign.include_presale and presale) and not in_periods(gift.paid_at or gift.created_at, periods, now):
+                continue
+            wanted.setdefault(user.email.lower(), {"user_id": user.id, "email": user.email, "order_id": None})
         for claim in claims:
             email = claim.email.lower()
             if claim.claimed_user_id:

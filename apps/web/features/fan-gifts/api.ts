@@ -31,6 +31,8 @@ export type GiftPage = {
   title: string;
   act_name: string;
   note: string | null;
+  /** A pre-order gift: it unlocks on release day. */
+  preorder?: boolean;
   for_email: string;
   viewer: "RECIPIENT" | "SIGNED_IN" | "SIGNED_OUT";
   status: GiftStatus | null;
