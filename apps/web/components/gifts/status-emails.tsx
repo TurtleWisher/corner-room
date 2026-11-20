@@ -36,7 +36,10 @@ import {
   STATUS_MAIL_TAB,
   buttonProblem,
   changed,
+  firstNameInstead,
   inUseLabel,
+  namesLine,
+  namesWrittenOut,
   notInUseLine,
   peopleIn,
   previewValues,
@@ -50,6 +53,24 @@ import {
 } from "@/lib/gift-status-mail-view";
 
 export type Notice = { tone: "success" | "info" | "problem"; text: string };
+
+/** A buyer's name typed in as words (owner, 2026-11-20: "Dear Ishmamul" went to everyone), with the fix. */
+export function TypedNames({ names, onFix }: { names: string[]; onFix: () => void }) {
+  return (
+    <div role="alert" className="grid gap-2 text-sm text-danger">
+      <p className="flex items-start gap-2">
+        <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        <span>
+          {namesLine(names)} {names.length === 1 ? "is" : "are"} typed in as words, so every buyer would read {names.length === 1 ? "that name" : "those names"}.
+          Use the First name fill-in so each buyer reads their own.
+        </span>
+      </p>
+      <Button size="sm" variant="secondary" className="justify-self-start" onClick={onFix}>
+        Use the First name fill-in instead
+      </Button>
+    </div>
+  );
+}
 
 /** One loud line for whatever just happened, moved into view so it can't be missed. */
 export function Banner({ notice, onClose }: { notice: Notice | null; onClose: () => void }) {
@@ -127,6 +148,8 @@ export function AutomaticEmailEditor({
   const marks = unfilledMarks(`${draft.subject}\n${draft.body}\n${draft.button_label ?? ""}`);
   const typos = unknownFillIns(`${draft.subject}\n${draft.body}`, ALL_FILL_KEYS);
   const buttonIssue = buttonProblem(draft.button_label, draft.button_url);
+  // Owner, 2026-11-20: a buyer's name typed out reaches every buyer; the server refuses it too.
+  const typedNames = namesWrittenOut(draft.subject, draft.body, mails.people.map((p) => p.name), [mails.artist, mails.campaign.gift_items, mails.music]);
   const canSave = Boolean(draft.subject.trim() && draft.body.trim()) && !typos.length && !buttonIssue;
   const shown = editing ? draft : startingVersion(item);
   const inUse = sendingVersion(item);
@@ -284,6 +307,7 @@ export function AutomaticEmailEditor({
                   </p>
                 ) : null}
                 {typos.length ? <p className="text-sm text-danger">{typos.join(", ")} won&apos;t be filled in. Use the buttons above the message.</p> : null}
+                {typedNames.length ? <TypedNames names={typedNames} onFix={() => set(firstNameInstead(draft.subject, draft.body, typedNames))} /> : null}
               </>
             ) : null}
           </div>

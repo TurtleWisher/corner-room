@@ -7,17 +7,19 @@ No product clock (no invented 22:00–08:00 delay). SMS/push are not sent.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import time
 
 from cornerroom.kernel.events import (
     ACCOUNT_LOCKED,
     CAMPAIGN_TASK_ASSIGNED,
     CAMPAIGN_TASK_COMPLETED,
+    DomainEvent,
     ENTITLEMENT_GRANTED,
     GIFT_DISPATCHED,
     GIFT_MARKED_MISSING,
     GIFT_RETURNED,
+    GIFT_UPDATE_SENT,
     PRESALE_CANCELLED,
     PRESALE_DATE_CHANGED,
     PRESALE_RELEASED,
@@ -208,6 +210,24 @@ class ChannelDecision:
 
 def category_for_event(event_type: str) -> str | None:
     return EVENT_CATEGORY.get(event_type)
+
+
+# D-CAMPAIGN-08: Send update writes one GiftUpdateSent per buyer; its note is the status's own.
+GIFT_UPDATE_NOTICE: dict[str, str] = {
+    "DISPATCHED": GIFT_DISPATCHED,
+    "RETURNED": GIFT_RETURNED,
+    "MISSING": GIFT_MARKED_MISSING,
+}
+
+
+def as_notice(event: DomainEvent) -> DomainEvent:
+    """The event a note is made from: a gift update sent reads as its status's event (same id, so
+    a note is still made once), every other event as itself."""
+    if event.event_type == GIFT_UPDATE_SENT:
+        status = str((event.payload or {}).get("status") or "")
+        if status in GIFT_UPDATE_NOTICE:
+            return replace(event, event_type=GIFT_UPDATE_NOTICE[status])
+    return event
 
 
 def notification_type_for_event(event_type: str) -> str | None:

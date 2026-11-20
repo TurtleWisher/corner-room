@@ -51,6 +51,7 @@ from cornerroom.modules.commerce.domain.gifts import (
     MAX_PEOPLE_PER_ADD,
     RECIPIENT_STATUSES,
     RECIPIENT_TRANSITIONS,
+    STATUS_MAIL_STATUSES,
     GiftCampaign,
     GiftCampaignPeriod,
     GiftRecipient,
@@ -58,6 +59,7 @@ from cornerroom.modules.commerce.domain.gifts import (
     can_move,
     clean_person,
     phone_key,
+    update_waiting,
 )
 from cornerroom.modules.commerce.domain.models import Order, OrderDeliveryAddress, OrderItem, PresaleClaim, Product
 
@@ -67,7 +69,7 @@ EDITABLE_FIELDS = ("title", "gift_items", "description", "sender", "include_pres
 MAX_WORKS = 200
 # Campaign states whose gifts can be tracked (it has been live).
 TRACKABLE = ("ACTIVE", "PAUSED", "ENDED")
-# The event each move writes (dispatching writes GIFT_DISPATCHED with what the buyer email needs).
+# The event each move writes. None of them tells the buyer (D-CAMPAIGN-08).
 MOVE_EVENTS = {
     "PREPARED": GIFT_PREPARED,
     "YET_TO_SEND": GIFT_UNPREPARED,
@@ -681,6 +683,10 @@ class GiftCampaignService:
         out["can_review"] = role == "staff"
         # Where each status may go next; the page offers only these (it never hard-codes them).
         out["transitions"] = {k: list(v) for k, v in RECIPIENT_TRANSITIONS.items()}
+        # D-CAMPAIGN-08: per status that tells the buyer, how many reachable buyers haven't been told.
+        out["updates_waiting"] = {
+            s: sum(1 for r in recipients if update_waiting(r) and r.status == s) for s in STATUS_MAIL_STATUSES
+        }
         out["recipients"] = [
             {
                 "id": r.id,
@@ -691,6 +697,8 @@ class GiftCampaignService:
                 "dispatch_at": r.dispatch_at if r.status == "PREPARED" else None,
                 "dispatched_at": r.dispatched_at,
                 "outcome_at": r.outcome_at,
+                "told_at": r.told_at,
+                "update_waiting": update_waiting(r),
                 **({"email": r.email} if role == "staff" else {}),
                 **(contact.get(r.id, {}) if show_contact else {}),
             }
@@ -856,23 +864,24 @@ class GiftCampaignService:
         return ", ".join(titles[:3]) + (f" and {len(titles) - 3} more" if len(titles) > 3 else "")
 
     def _buyer_payload(self, r: GiftRecipient, campaign: GiftCampaign, name: str, music: str) -> dict[str, Any]:
-        """Who the gift belongs to, for the in-app note. `artist_mail`: the email itself goes out as
-        an artist email (D-CAMPAIGN-06, `gift_status_mails.py`), to every buyer by name; the note
-        sends no second email."""
+        """Who the gift belongs to, for the in-app note sent with Send update (D-CAMPAIGN-08).
+        `artist_mail`: the email itself goes out as an artist email (D-CAMPAIGN-06,
+        `gift_status_mails.py`), to every buyer by name; the note sends no second email."""
         return {
             "user_id": str(r.user_id) if r.user_id else None, "email": None if r.user_id else r.email,
             "artist": name, "gift": campaign.gift_items, "music": music, "campaign_id": str(campaign.id),
             "artist_mail": True,
         }
 
-    async def _dispatch_one(self, ctx: AuthContext | None, campaign: GiftCampaign, r: GiftRecipient, name: str, music: str) -> None:
-        """A prepared gift leaves now: the buyer is told it is on its way (once per dispatch)."""
+    async def _dispatch_one(self, ctx: AuthContext | None, campaign: GiftCampaign, r: GiftRecipient) -> None:
+        """A prepared gift leaves now. Nobody is told yet: the act presses Send update for that
+        (owner, 2026-11-20, D-CAMPAIGN-08)."""
         r.status = "DISPATCHED"
         r.dispatched_at = self.clock.now()
         r.dispatched_by = ctx.user_id if ctx else r.dispatch_set_by
         r.dispatch_at = None
-        payload = self._buyer_payload(r, campaign, name, music)
-        await self._event(ctx, GIFT_DISPATCHED, "GiftRecipient", r.id, payload, campaign.organization_id)
+        r.told_at = None
+        await self._event(ctx, GIFT_DISPATCHED, "GiftRecipient", r.id, {"campaign_id": str(campaign.id)}, campaign.organization_id)
 
     async def transition(
         self,
@@ -898,8 +907,7 @@ class GiftCampaignService:
                 raise AppError("VALIDATION_ERROR", "Give the dispatch time with its time zone", 422)
             if dispatch_at <= now:
                 raise AppError("DISPATCH_TIME_PASSED", "That time has already gone. Dispatch now or choose a later time.", 422)
-        campaign, rows, name = await self._recipients_for_action(ctx, campaign_id, ids, every)
-        music = await self._music_line(campaign) if to in ("DISPATCHED", "RETURNED", "MISSING") else ""
+        campaign, rows, _name = await self._recipients_for_action(ctx, campaign_id, ids, every)
         moved = skipped = 0
         for r in rows:
             unschedule = to == "PREPARED" and r.status == "PREPARED" and r.dispatch_at is not None
@@ -909,7 +917,7 @@ class GiftCampaignService:
             moved += 1
             if to == "DISPATCHED":
                 if dispatch_at is None:
-                    await self._dispatch_one(ctx, campaign, r, name, music)
+                    await self._dispatch_one(ctx, campaign, r)
                 else:
                     r.dispatch_at = dispatch_at
                     r.dispatch_set_by = ctx.user_id
@@ -918,7 +926,10 @@ class GiftCampaignService:
                         {"campaign_id": str(campaign.id), "dispatch_at": dispatch_at.isoformat()}, campaign.organization_id,
                     )
                 continue
+            # A move tells nobody (D-CAMPAIGN-08); the buyer hears when the act presses Send update.
             payload: dict[str, Any] = {"campaign_id": str(campaign.id)}
+            if not unschedule:
+                r.told_at = None
             if unschedule:
                 r.dispatch_at = None
                 r.dispatch_set_by = None
@@ -942,9 +953,6 @@ class GiftCampaignService:
                 if to == "RECEIVED":
                     r.sent_at = r.sent_at or now
                     r.sent_by = r.sent_by or ctx.user_id
-                else:
-                    # Returned and missing tell the buyer (owner, 2026-11-06).
-                    payload = self._buyer_payload(r, campaign, name, music)
             await self._event(ctx, MOVE_EVENTS[to], "GiftRecipient", r.id, payload, campaign.organization_id)
         await self.session.flush()
         await self.audit.record_from_auth(
@@ -980,13 +988,8 @@ class GiftCampaignService:
             campaign = await self.session.get(GiftCampaign, campaign_id)
             if campaign is None or campaign.status not in TRACKABLE:
                 continue
-            try:
-                _row, _org, name = await self.studio._profile(campaign.profile_type, campaign.profile_id)
-            except (NotFoundError, AppError):
-                continue
-            music = await self._music_line(campaign)
             for r in rows:
-                await self._dispatch_one(None, campaign, r, name, music)
+                await self._dispatch_one(None, campaign, r)
                 sent += 1
             await self.audit.record(
                 action="gift_campaign.dispatched_on_time", entity_type="GiftCampaign", entity_id=campaign.id,
@@ -1062,9 +1065,9 @@ def build_gift_email(*, artist: str, gift: str, music: str, web_base_url: str, e
 
 
 async def consume_gift_email_event(event: DomainEvent, session: AsyncSession, settings: Settings | None = None) -> None:
-    """Outbox side consumer: email a pre-sale buyer without an account that their gift is on its
-    way, came back or went missing (account holders get it through notifications, in-app and by
-    email)."""
+    """Outbox side consumer from before D-CAMPAIGN-06: email a pre-sale buyer without an account
+    whose event carried their email. Moves carry no buyer since D-CAMPAIGN-08 (owner, 2026-11-20),
+    so this only finishes events written before then."""
     import structlog
 
     from cornerroom.infra.logging import mask_email
@@ -1076,12 +1079,9 @@ async def consume_gift_email_event(event: DomainEvent, session: AsyncSession, se
     settings = settings or get_settings()
     log = structlog.get_logger("commerce.gifts")
     if payload.get("artist_mail"):
-        # Every gift status email goes out as an artist email (D-CAMPAIGN-06): the act's approved
-        # words or Corner Room's, to every buyer by name.
-        from cornerroom.modules.commerce.application.gift_status_mails import queue_gift_email
-
-        if await queue_gift_email(event, session, settings):
-            log.info("gift_email_queued", recipient_id=str(event.aggregate_id), kind=event.event_type)
+        # Since D-CAMPAIGN-08 a move tells nobody; Send update queues the artist email itself
+        # (`GiftStatusMailService.send_update`). An older event still carrying this is skipped.
+        log.info("gift_email_skipped", reason="sent_by_send_update", recipient_id=str(event.aggregate_id))
         return
     to = str(payload.get("email") or "").strip()
     if not to or payload.get("user_id"):

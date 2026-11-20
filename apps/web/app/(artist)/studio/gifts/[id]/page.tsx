@@ -187,6 +187,7 @@ function Campaign({ id }: { id: string }) {
                       setPick({ ids, at: Date.now() });
                       go("emails");
                     }}
+                    onWording={() => go("emails")}
                   />
                 </div>
               ),

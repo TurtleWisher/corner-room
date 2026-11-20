@@ -207,12 +207,15 @@ FEATURES: Final[list[dict]] = [
             "An artist or band sets up a gift for buyers of chosen music; staff review it and every "
             "change. It can be paused and restarted any time. Each collectible is tracked as not prepared, "
             "prepared, dispatched (now or at a chosen time), received, returned or missing, by the artist "
-            "when they send it and always by staff, with one click to mark everyone prepared. Dispatching "
-            "tells each buyer by email that it is on its way; returned and missing tell them too. A "
+            "when they send it and always by staff, with one click to mark everyone prepared. Marking a "
+            "gift emails nobody: the artist presses Send update for dispatched, returned or missing gifts, "
+            "sees the email first, and only then are those buyers told. A "
             "release's numbers page shows its collectibles. Music given free through a music gift doesn't "
             "earn a campaign gift."
         ),
         "updates": [
+            {"date": "2026-11-20", "kind": "IMPROVED", "title": "Gift updates wait for Send update", "details": "Marking gifts Dispatched, Returned or Missing no longer emails anyone. The artist presses Send update (for the whole status or the chosen gifts), checks the email, then it goes."},
+            {"date": "2026-11-20", "kind": "FIXED", "title": "One buyer's name sent to everyone", "details": "Copying and pasting in the email writer turned the First name fill-in into the previewed buyer's name. It stays a fill-in now, and emails that greet a buyer by a typed name are stopped with a one-click fix."},
             {"date": "2026-11-09", "kind": "NEW", "title": "Emails to buyers you pick need approval", "details": "An email to buyers picked by hand goes to Corner Room with its people as one request; once approved, the artist presses Send. Staff send at once."},
             {"date": "2026-11-09", "kind": "IMPROVED", "title": "Emails on the campaign page", "details": "Each campaign has Collectibles and Emails parts: tick gifts and press Email them, see automatic emails and every gift email sent, with search."},
             {"date": "2026-11-09", "kind": "IMPROVED", "title": "Calmer collectible tracking", "details": "Status chips with counts, search by name, email, phone or address, and a floating bar for the chosen gifts."},

@@ -153,7 +153,7 @@ describe("automatic gift emails (D-CAMPAIGN-05, D-CAMPAIGN-06)", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Use this email" }));
     });
-    expect(screen.getByRole("status").textContent).toMatch(/Approved and in use. From now on every buyer whose gift is marked dispatched gets this email. Nobody was emailed/);
+    expect(screen.getByRole("status").textContent).toMatch(/Approved and in use. Send the Dispatched update sends this email to buyers whose gift is marked dispatched. Nobody was emailed/);
     expect(screen.getAllByText("Your approved email").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/“Off it goes”/).length).toBeGreaterThan(0);
   });

@@ -29,6 +29,7 @@ from cornerroom.modules.notifications.domain.policy import (
     CONSUMER_NOTIFICATIONS,
     DECISION_SEND,
     QuietHours,
+    as_notice,
     category_for_event,
     evaluate_channel,
     notification_type_for_event,
@@ -115,6 +116,7 @@ class NotificationService:
         return row
 
     async def ingest_event(self, event: DomainEvent) -> Notification | None:
+        event = as_notice(event)
         ntype = notification_type_for_event(event.event_type)
         if ntype is None:
             return None

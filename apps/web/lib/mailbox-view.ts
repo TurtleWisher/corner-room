@@ -14,7 +14,7 @@ export const BOXES: { key: MailboxBox; label: string; hint: string }[] = [
   { key: "sent", label: "Sent", hint: "Every email, to whom, when and why" },
   { key: "outbox", label: "Waiting", hint: "Drafts, approvals and scheduled emails" },
   { key: "write", label: "Write", hint: "A new email to your buyers" },
-  { key: "automatic", label: "Automatic", hint: "Thank-yous and gift updates that send by themselves" },
+  { key: "automatic", label: "Automatic", hint: "Thank-yous, and the gift update wording Send update uses" },
   { key: "templates", label: "Templates", hint: "Saved emails to start from" },
   { key: "report", label: "Report", hint: "Reach and link presses" },
 ];
@@ -80,7 +80,7 @@ export function whyLine(why: MailboxWhy): string {
     case "GIFT_UPDATE": {
       const what = GIFT_STATUS_WORD[why.gift_status ?? ""] ?? "update";
       const campaign = why.campaign ? `${why.campaign}: ` : "";
-      return why.picked ? `${campaign}gift ${what}, to buyers you picked` : `${campaign}gift ${what}, sent by itself`;
+      return why.picked ? `${campaign}gift ${what}, to buyers you picked` : `${campaign}gift ${what}, status update`;
     }
     case "MANUAL":
       return why.mail_subject ? `Your email "${why.mail_subject}"` : "Your email to buyers";

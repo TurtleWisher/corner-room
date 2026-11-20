@@ -19,6 +19,12 @@ import {
   subjectForAll,
   submitDoneLine,
   submitLabel,
+  firstNameInstead,
+  namesWrittenOut,
+  STATUS_MAIL_WHEN,
+  updateButtonLabel,
+  updateSentLine,
+  updatesWaitingLine,
   workflowSteps,
 } from "@/lib/gift-status-mail-view";
 
@@ -109,7 +115,7 @@ describe("gift status emails (D-CAMPAIGN-05, D-CAMPAIGN-06)", () => {
     expect(workflowSteps(item({ state: "DRAFT" }), true)[1].line).toMatch(/Use this email puts it in use at once/);
     expect(tones(item({ state: "IN_REVIEW" }))).toEqual(["done", "waiting", "skip"]);
     expect(tones(item({ state: "APPROVED", live: true, sent_count: 3 }))).toEqual(["done", "done", "done"]);
-    expect(workflowSteps(item({ sent_count: 3 }), false)[2].line).toMatch(/mark a gift dispatched.*Sent 3 times so far/);
+    expect(workflowSteps(item({ sent_count: 3 }), false)[2].line).toMatch(/press Send the Dispatched update.*Sent 3 times so far/);
     expect(workflowSteps(item({ state: "RETURNED", review_note: "Name the courier" }), false)[1]).toMatchObject({ tone: "problem", line: "Sent back: Name the courier" });
   });
 
@@ -141,3 +147,39 @@ describe("gift status emails (D-CAMPAIGN-05, D-CAMPAIGN-06)", () => {
     expect(sentNowLine(0, 2, [])).toMatch(/^Nobody was emailed/);
   });
 });
+
+describe("Send update (owner, 2026-11-20, D-CAMPAIGN-08)", () => {
+  it("says the email waits for the button", () => {
+    expect(Object.values(STATUS_MAIL_WHEN).every((w) => /^Sends when you press Send the \w+ update, never/.test(w))).toBe(true);
+    expect(updateButtonLabel("DISPATCHED")).toBe("Send the Dispatched update");
+    expect(updateButtonLabel("MISSING", 2)).toBe("Send the Missing update to 2");
+    expect(updatesWaitingLine("RETURNED", 1)).toBe("1 buyer is marked returned and hasn't been told yet.");
+    expect(updatesWaitingLine("DISPATCHED", 4)).toBe("4 buyers are marked dispatched and haven't been told yet.");
+    expect(updateSentLine(3, 3)).toMatch(/^Told 3 buyers\./);
+    expect(updateSentLine(3, 2)).toBe("Told 3 buyers: 2 by email, 1 only in their Corner Room account (no email address).");
+  });
+});
+
+describe("a buyer's name typed out (owner, 2026-11-20)", () => {
+  const names = ["Ishmamul Haque", "Samiul Islam", null];
+  it("finds a name in the subject or greeting line, as the server does", () => {
+    expect(namesWrittenOut("Your gift left", "Dear Ishmamul,\n\nYour poster left.", names)).toEqual(["Ishmamul"]);
+    expect(namesWrittenOut("On its way, Samiul", "Hi {first_name}", names)).toEqual(["Samiul"]);
+    expect(namesWrittenOut("On its way, samiul", "Hi {first_name}", names)).toEqual([]);
+    expect(namesWrittenOut("Your {gift} left", "Hi {first_name},\n\nThanks, Samiul here.", names)).toEqual([]);
+    expect(namesWrittenOut("x", "Hi {first_name}, I hope you love it", ["Hope Rahman"])).toEqual([]);
+    expect(namesWrittenOut("From Mizuls", "Hi {first_name}", ["Mizuls Fan"], ["MIZULS"])).toEqual([]);
+    expect(namesWrittenOut("x", "See [Ishmamul's map](https://ishmamul.example/x)", names)).toEqual([]);
+    expect(namesWrittenOut("x", "প্রিয় সামিউল,", ["সামিউল ইসলাম"])).toEqual(["সামিউল"]);
+  });
+  it("puts the First name fill-in in its place, leaving fill-ins, links and later lines alone", () => {
+    expect(
+      firstNameInstead("Ishmamul, it's on its way", "Dear Ishmamul, [Ishmamul's map](https://ishmamul.example)\n\nIshmamul said hi.", ["Ishmamul"]),
+    ).toEqual({
+      subject: "{first_name}, it's on its way",
+      body: "Dear {first_name}, [Ishmamul's map](https://ishmamul.example)\n\nIshmamul said hi.",
+    });
+    expect(firstNameInstead("a", "b", [])).toEqual({ subject: "a", body: "b" });
+  });
+});
+
