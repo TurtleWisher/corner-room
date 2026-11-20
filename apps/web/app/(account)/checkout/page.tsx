@@ -427,7 +427,20 @@ function NewCheckout() {
     setBusy(true);
     try {
       let order: OrderRecord;
-      if (item.kind === "offer" && gifted) order = await createGiftOrder(item.id, key, { people: gifted.people, note: gifted.note }, chosen?.minor ?? undefined);
+      if (item.kind === "offer" && gifted)
+        order = await createGiftOrder(
+          item.id,
+          key,
+          {
+            people: gifted.people,
+            note: gifted.note,
+            subject: gifted.design.subject.trim() || null,
+            look: gifted.design.look,
+            show_cover: gifted.design.show_cover,
+            file_ids: gifted.design.file_ids,
+          },
+          chosen?.minor ?? undefined,
+        );
       else if (item.kind === "offer" && paying) order = await createCreditOrder(item.id, key, addressConfirmed, chosen?.minor ?? undefined);
       else if (item.kind === "offer") order = await createCatalogOrder(item.id, key, addressConfirmed, chosen?.minor ?? undefined);
       else {
@@ -509,6 +522,8 @@ function NewCheckout() {
           draft={gift}
           onChange={setGift}
           ownEmail={user?.email}
+          offerId={item.id}
+          title={summary.data.title}
           each={open && chosen?.minor ? { amount_minor: chosen.minor, currency_code: open.currency_code } : summary.data.price}
         />
       ) : null}

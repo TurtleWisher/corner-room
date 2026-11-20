@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from cornerroom.infra.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -40,8 +40,20 @@ OPEN_STATUSES = ("WAITING_ACCOUNT", "CHOOSING")
 CHOICES = ("KEEP_CREDIT", "PASS_ON", "DECLINE")
 CREDIT_REASONS = ("GIFT_KEPT", "GIFT_DECLINED", "GIFT_NOT_CLAIMED", "SPENT")
 
-NOTE_MAX = 300
+# D-GIFT-FAN-02 (owner, 2026-11-20): the giver designs the email; staff review all of it.
+NOTE_MAX = 2000
+SUBJECT_MAX = 150
 NAME_MAX = 120
+LOOKS = ("SKY", "EMBER", "NIGHT")
+FILES_MAX = 5
+# Pictures show in the email; PDFs are offered as downloads. Nothing else (no audio or programs).
+FILE_TYPES = {
+    "image/jpeg": "IMAGE",
+    "image/png": "IMAGE",
+    "image/webp": "IMAGE",
+    "image/gif": "IMAGE",
+    "application/pdf": "PDF",
+}
 
 
 class FanGift(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -53,6 +65,7 @@ class FanGift(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("note_state IN ('NONE','WAITING','APPROVED','REMOVED')", name="note_state"),
         CheckConstraint("work_type IN ('TRACK','RELEASE')", name="work_type"),
         CheckConstraint("unit_amount_minor > 0", name="unit_amount_positive"),
+        CheckConstraint("look IN ('SKY','EMBER','NIGHT')", name="look"),
         UniqueConstraint("order_id", name="uq_fan_gifts_order_id"),
         Index("ix_fan_gifts_giver", "giver_user_id"),
         Index("ix_fan_gifts_note_state", "note_state", "status"),
@@ -69,7 +82,13 @@ class FanGift(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     act_id: Mapped[UUID] = mapped_column(nullable=False)
     unit_amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
+    # The giver's own email (D-GIFT-FAN-02): `note` is its message (fill-ins and links as in artist
+    # emails), plus an optional subject, a look and the cover switch; `note_state` is the review of
+    # all of it (NONE when the giver wrote nothing and attached nothing).
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    look: Mapped[str] = mapped_column(String(10), nullable=False, default="SKY", server_default="SKY")
+    show_cover: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
     note_state: Mapped[str] = mapped_column(String(10), nullable=False, default="NONE")
     note_reviewed_by: Mapped[UUID | None] = mapped_column(nullable=True)
     note_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -108,6 +127,30 @@ class FanGiftRecipient(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     emailed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class FanGiftFile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """A picture or PDF a giver attaches to a gift's email (D-GIFT-FAN-02). Uploaded while writing,
+    tied to the gift when it is placed; only the giver, staff of the gift's label and the people the
+    gift is for (through their gift link) can open it."""
+
+    __tablename__ = "fan_gift_files"
+    __table_args__ = (
+        CheckConstraint("kind IN ('IMAGE','PDF')", name="kind"),
+        Index("ix_fan_gift_files_owner", "owner_user_id", "gift_id"),
+        Index("ix_fan_gift_files_gift", "gift_id"),
+        {"schema": "commerce"},
+    )
+
+    owner_user_id: Mapped[UUID] = mapped_column(ForeignKey("identity.users.id"), nullable=False)
+    gift_id: Mapped[UUID | None] = mapped_column(ForeignKey("commerce.fan_gifts.id"), nullable=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    object_key: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class GiftCredit(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -172,6 +215,42 @@ def clean_note(value: Any) -> str | None:
     if len(text) > NOTE_MAX:
         raise ValueError("NOTE_TOO_LONG")
     return text
+
+
+def clean_subject(value: Any) -> str | None:
+    """An optional subject line of the giver's own: one line, no links."""
+    line = " ".join(str(value or "").split())
+    if not line:
+        return None
+    if len(line) > SUBJECT_MAX:
+        raise ValueError("SUBJECT_TOO_LONG")
+    if "](" in line or "http://" in line.lower() or "https://" in line.lower():
+        raise ValueError("SUBJECT_HAS_LINK")
+    return line
+
+
+_LINK = re.compile(r"\[([^\]\n]*)\]\(([^)\s]*)\)")
+
+
+def message_links_ok(message: str | None) -> bool:
+    """Links in the message must be full https addresses, as in artist emails."""
+    return all(url.lower().startswith("https://") and len(url) > 8 for _label, url in _LINK.findall(message or ""))
+
+
+def clean_look(value: Any) -> str:
+    look = str(value or "SKY").upper()
+    if look not in LOOKS:
+        raise ValueError("BAD_LOOK")
+    return look
+
+
+def file_kind(content_type: str | None) -> str | None:
+    return FILE_TYPES.get((content_type or "").split(";")[0].strip().lower())
+
+
+def needs_review(*, note: str | None, subject: str | None, files: int) -> bool:
+    """Anything the giver wrote or attached waits for staff before anyone is emailed."""
+    return bool(note or subject or files)
 
 
 def expires_from(now: datetime, claim_days: int) -> datetime | None:

@@ -2,7 +2,8 @@
 
 /*
  * Checkout steps for fan gifts and gift credit (owner, 2026-11-20, D-GIFT-FAN-01).
- * GiftStep: buy this music for people you know, by email, with an optional note Corner Room checks.
+ * GiftStep: buy this music for people you know, by email, with an email of the giver's own design
+ * (D-GIFT-FAN-02, GiftEmailEditor) that Corner Room checks before anyone gets it.
  * CreditStep: pay the whole order with gift credit for this artist's music, when it covers it.
  * The server checks the people and the note again and decides every total.
  */
@@ -10,30 +11,41 @@
 import { Gift, Wallet } from "lucide-react";
 
 import { Card, Field, Money, Textarea } from "@/components/ds";
+import { GiftEmailEditor, NO_DESIGN } from "@/components/fan-gifts/gift-email-editor";
 import { useAsync } from "@/components/use-async";
-import { fetchOfferCredit, type GiftPerson } from "@/features/fan-gifts/api";
-import { giftPromise, MAX_PEOPLE, NOTE_MAX, noteProblem, parsePeople, peopleLine, peopleProblem } from "@/lib/fan-gift-view";
+import { fetchOfferCredit, type GiftDesign, type GiftPerson } from "@/features/fan-gifts/api";
+import { giftPromise, MAX_PEOPLE, noteProblem, parsePeople, peopleLine, peopleProblem, subjectProblem } from "@/lib/fan-gift-view";
 
-export type GiftDraft = { on: boolean; peopleText: string; note: string };
+export type GiftDraft = { on: boolean; peopleText: string; design: GiftDesign };
 
-export const NO_GIFT: GiftDraft = { on: false, peopleText: "", note: "" };
+export const NO_GIFT: GiftDraft = { on: false, peopleText: "", design: NO_DESIGN };
 
-/** The checked people and note, or why the gift can't be placed yet. */
-export function readGift(draft: GiftDraft, ownEmail: string | null | undefined): { people: GiftPerson[]; note: string | null; problem: string | null } {
+/** The checked people and the email's design, or why the gift can't be placed yet. */
+export function readGift(
+  draft: GiftDraft,
+  ownEmail: string | null | undefined,
+): { people: GiftPerson[]; note: string | null; design: GiftDesign; problem: string | null } {
   const people = parsePeople(draft.peopleText);
-  const problem = peopleProblem(people, ownEmail) ?? noteProblem(draft.note);
-  return { people, note: draft.note.trim() || null, problem };
+  const problem = peopleProblem(people, ownEmail) ?? noteProblem(draft.design.note) ?? subjectProblem(draft.design.subject);
+  return { people, note: draft.design.note.trim() || null, design: draft.design, problem };
 }
+
+const designProblem = (d: GiftDesign) => noteProblem(d.note) ?? subjectProblem(d.subject);
 
 export function GiftStep({
   draft,
   onChange,
   ownEmail,
   each,
+  offerId,
+  title,
 }: {
   draft: GiftDraft;
   onChange: (next: GiftDraft) => void;
   ownEmail: string | null | undefined;
+  /** For the email preview (the server writes it). */
+  offerId: string;
+  title: string;
   /** The price per person, as the offer states it (the server decides the total). */
   each: { amount_minor: number; currency_code: string } | null;
 }) {
@@ -60,7 +72,7 @@ export function GiftStep({
           <Field
             label="Their email addresses"
             hint={`One per line, up to ${MAX_PEOPLE}. Add a name like this: Rumi Das <rumi@example.com>`}
-            error={typed && read.problem && read.problem !== noteProblem(draft.note) ? read.problem : undefined}
+            error={typed && read.problem && read.problem !== designProblem(draft.design) ? read.problem : undefined}
           >
             {(c) => (
               <Textarea
@@ -73,9 +85,17 @@ export function GiftStep({
               />
             )}
           </Field>
-          <Field label="A note (optional)" hint={`Up to ${NOTE_MAX} characters. Corner Room reads every note before it's sent.`} error={noteProblem(draft.note) ?? undefined}>
-            {(c) => <Textarea {...c} rows={2} value={draft.note} onChange={(e) => onChange({ ...draft, note: e.target.value })} />}
-          </Field>
+          <div className="border-t border-line pt-4">
+            <h3 className="text-base font-bold text-fg">Their email</h3>
+            <p className="mb-4 mt-1 text-sm text-fg-muted">Write it your way and see it as each of them will.</p>
+            <GiftEmailEditor
+              offerId={offerId}
+              title={title}
+              people={read.people}
+              design={draft.design}
+              onChange={(design) => onChange({ ...draft, design })}
+            />
+          </div>
           {read.people.length && !read.problem && each ? (
             <p className="text-sm text-fg" aria-live="polite">
               For {peopleLine(read.people.length)},{" "}
@@ -83,7 +103,7 @@ export function GiftStep({
             </p>
           ) : null}
           <ul className="grid gap-1 border-l-2 border-line pl-3 text-sm text-fg">
-            {giftPromise(Boolean(draft.note.trim())).map((line) => (
+            {giftPromise(Boolean(draft.design.note.trim() || draft.design.subject.trim() || draft.design.file_ids.length)).map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>

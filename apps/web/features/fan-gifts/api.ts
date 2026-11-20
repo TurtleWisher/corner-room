@@ -3,7 +3,7 @@
  * credit go through POST /orders (`gift`, `use_credit`); the server decides every total.
  */
 
-import { apiFetch } from "@/lib/api/client";
+import { apiFetch, getAccessToken, getApiBaseUrl } from "@/lib/api/client";
 import type { OrderRecord } from "@/features/ticketing/api";
 
 export type MoneyValue = { amount_minor: number; currency_code: string };
@@ -13,6 +13,16 @@ export type GiftPerson = { email: string; name?: string | null };
 export type GiftStatus = "WAITING" | "GIVEN" | "WAITING_ACCOUNT" | "CHOOSING" | "KEPT_CREDIT" | "PASSED_ON" | "DECLINED" | "EXPIRED";
 
 export type GiftChoice = "KEEP_CREDIT" | "PASS_ON" | "DECLINE";
+
+/** D-GIFT-FAN-02: a picture (shown in the email) or a PDF (a download). */
+export type GiftFile = { id: string; name: string; kind: "IMAGE" | "PDF"; byte_size: number };
+
+export type GiftLook = "SKY" | "EMBER" | "NIGHT";
+
+/** The giver's own email: message (fill-ins and links), subject, look, cover switch and files. */
+export type GiftDesign = { note: string; subject: string; look: GiftLook; show_cover: boolean; file_ids: string[] };
+
+export type GiftPreview = { subject: string; html: string; text: string; needs_review: boolean };
 
 export type SpendOption = {
   offer_id: string;
@@ -40,6 +50,8 @@ export type GiftPage = {
   amount: MoneyValue | null;
   credit: MoneyValue | null;
   spend_on: SpendOption[];
+  /** The giver's pictures and PDFs, once Corner Room passed them. */
+  files?: GiftFile[];
 };
 
 export type GiverState = "NOT_SENT_YET" | "DELIVERED" | "ACCEPTED" | "PASSED_ON" | "DECLINED" | "NOT_CLAIMED";
@@ -65,6 +77,9 @@ export type OfferCredit = { usable: boolean; balance: MoneyValue | null; act_nam
 export type FanGiftNote = {
   id: string;
   note: string | null;
+  subject?: string | null;
+  look?: GiftLook;
+  files?: GiftFile[];
   title: string;
   act_name: string;
   giver_name: string | null;
@@ -75,7 +90,7 @@ export type FanGiftNote = {
 export async function createGiftOrder(
   offerId: string,
   idempotencyKey: string,
-  gift: { people: GiftPerson[]; note: string | null },
+  gift: { people: GiftPerson[]; note: string | null; subject?: string | null; look?: GiftLook; show_cover?: boolean; file_ids?: string[] },
   amountMinor?: number,
 ): Promise<OrderRecord> {
   return apiFetch<OrderRecord>("/api/v1/orders", {
@@ -123,6 +138,58 @@ export async function fetchMyGiftCredit(): Promise<GiftCredit[]> {
 
 export async function fetchOfferCredit(offerId: string): Promise<OfferCredit> {
   return apiFetch<OfferCredit>(`/api/v1/me/gift-credit/offers/${offerId}`);
+}
+
+export async function uploadGiftFile(file: File): Promise<GiftFile> {
+  const form = new FormData();
+  form.append("file", file);
+  return apiFetch<GiftFile>("/api/v1/me/fan-gift-files", { method: "POST", body: form, retry: false, timeoutMs: 120000 });
+}
+
+export async function deleteGiftFile(id: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/me/fan-gift-files/${id}`, { method: "DELETE", retry: false });
+}
+
+/** The gift email exactly as one person will get it; nothing is sent or kept. */
+export async function previewGiftEmail(offerId: string, design: GiftDesign, personName: string | null, amountMinor?: number): Promise<GiftPreview> {
+  return apiFetch<GiftPreview>("/api/v1/fan-gifts/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      offer_id: offerId,
+      note: design.note || null,
+      subject: design.subject || null,
+      look: design.look,
+      show_cover: design.show_cover,
+      file_ids: design.file_ids,
+      person_name: personName,
+      ...(amountMinor === undefined ? {} : { amount_minor: amountMinor }),
+    }),
+    retry: false,
+  });
+}
+
+export async function fetchStaffGiftPreview(giftId: string): Promise<{ subject: string; html: string; files: GiftFile[] }> {
+  return apiFetch(`/api/v1/staff/fan-gift-notes/${giftId}/preview`);
+}
+
+/** A staff copy of a gift's file, as a blob for the preview (the token stays in memory, as apiFetch). */
+export async function fetchStaffGiftFile(fileId: string): Promise<Blob | null> {
+  const token = getAccessToken();
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/api/v1/staff/fan-gift-files/${fileId}`, {
+      credentials: "omit",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    return res.ok ? await res.blob() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A file's address for the person a gift is for, through their own gift link. */
+export function giftFileUrl(token: string, fileId: string): string {
+  return `${getApiBaseUrl()}/api/v1/gifts/${encodeURIComponent(token)}/files/${fileId}`;
 }
 
 export async function fetchFanGiftNotes(): Promise<FanGiftNote[]> {

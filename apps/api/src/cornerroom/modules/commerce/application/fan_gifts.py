@@ -7,9 +7,10 @@ giver pays. Fulfilment gives the music to the people on the gift, never to the g
 from __future__ import annotations
 
 import hashlib
+import re
 import secrets
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import structlog
 from sqlalchemy import func, select
@@ -29,13 +30,21 @@ from cornerroom.kernel.events import (
     DomainEvent,
 )
 from cornerroom.modules.audit.application.service import AuditService
+from cornerroom.modules.commerce.application.fan_gift_email import GiftEmail, write_gift_email
 from cornerroom.modules.commerce.domain.fan_gifts import (
+    FILES_MAX,
     FanGift,
+    FanGiftFile,
     FanGiftRecipient,
     GiftCredit,
     act_of,
+    clean_look,
     clean_note,
     clean_people,
+    clean_subject,
+    file_kind,
+    message_links_ok,
+    needs_review,
     credit_back_reason,
     expires_from,
     giver_state,
@@ -53,8 +62,54 @@ PEOPLE_PROBLEMS = {
     "OWN_EMAIL": "A gift is for someone else, so leave out your own email address",
     "SAME_EMAIL_TWICE": "Each email address can be on a gift once",
     "TOO_MANY_PEOPLE": "That's more people than one gift can go to",
-    "NOTE_TOO_LONG": "Keep the note to 300 characters",
+    "NOTE_TOO_LONG": "Keep the message to 2,000 characters",
+    "SUBJECT_TOO_LONG": "Keep the subject to 150 characters",
+    "SUBJECT_HAS_LINK": "A subject can't have a link in it",
+    "BAD_LINK": "Links in the message need a full web address starting with https://",
+    "BAD_LOOK": "Choose one of the looks",
+    "TOO_MANY_FILES": "Attach at most 5 files",
+    "FILE_NOT_FOUND": "One of the attached files isn't there any more; attach it again",
 }
+
+# Pending files (uploaded, not on a placed gift yet) one person may keep at a time.
+PENDING_FILES_MAX = 20
+
+# The first bytes of each file type allowed, so a renamed file of another kind is refused.
+_MAGIC = (
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+    (b"%PDF-", "application/pdf"),
+)
+
+
+def sniff_type(data: bytes) -> str | None:
+    for magic, mime in _MAGIC:
+        if data.startswith(magic):
+            return mime
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def clean_design(raw: dict[str, Any]) -> dict[str, Any]:
+    """The giver's email design, checked. Raises ValueError with a PEOPLE_PROBLEMS code."""
+    note = clean_note(raw.get("note"))
+    if not message_links_ok(note):
+        raise ValueError("BAD_LINK")
+    file_ids = [str(f) for f in (raw.get("file_ids") or [])]
+    if len(file_ids) > FILES_MAX:
+        raise ValueError("TOO_MANY_FILES")
+    if len(set(file_ids)) != len(file_ids):
+        raise ValueError("FILE_NOT_FOUND")
+    return {
+        "note": note,
+        "subject": clean_subject(raw.get("subject")),
+        "look": clean_look(raw.get("look")),
+        "show_cover": raw.get("show_cover") is not False,
+        "file_ids": file_ids,
+    }
 
 
 def _hash(token: str) -> str:
@@ -138,6 +193,7 @@ class FanGiftService:
         note: Any,
         idempotency_key: str,
         chosen_amount_minor: int | None = None,
+        design: dict[str, Any] | None = None,
     ):
         """The giver's order: one line per person, paid like any order. Nothing about the people is
         looked up before paying (whether they have an account or own the music stays private)."""
@@ -184,10 +240,12 @@ class FanGiftService:
             people_rows = clean_people(
                 people, giver_email=giver.email if giver else None, max_people=int(self.settings.fan_gift_max_people)
             )
-            note_text = clean_note(note)
+            looks = clean_design({**(design or {}), "note": note})
         except ValueError as exc:
             code = str(exc)
             raise AppError(code, PEOPLE_PROBLEMS.get(code, "Check the gift's details"), 422) from exc
+        note_text = looks["note"]
+        files = await self._own_pending_files(ctx, looks["file_ids"])
         unit = amount_to_charge(
             lowest_minor=offer.amount_minor,
             open_price=bool(offer.open_price),
@@ -213,11 +271,17 @@ class FanGiftService:
         gift = FanGift(
             giver_user_id=ctx.user_id, order_id=order.id, organization_id=product.organization_id,
             product_id=product.id, work_type=kind, work_id=work.id, act_id=act_id, unit_amount_minor=unit,
-            currency_code=offer.currency_code, note=note_text, note_state="WAITING" if note_text else "NONE",
+            currency_code=offer.currency_code, note=note_text, subject=looks["subject"], look=looks["look"],
+            show_cover=looks["show_cover"],
+            # D-GIFT-FAN-02: anything the giver wrote or attached waits for staff.
+            note_state="WAITING" if needs_review(note=note_text, subject=looks["subject"], files=len(files)) else "NONE",
             status="PENDING_PAYMENT",
         )
         self.session.add(gift)
         await self.session.flush()
+        for position, f in enumerate(files):
+            f.gift_id = gift.id
+            f.position = position
         for person in people_rows:
             item = OrderItem(
                 order_id=order.id, item_type=kind, ref_id=work.id, product_id=product.id, quantity=1,
@@ -243,9 +307,183 @@ class FanGiftService:
         )
         await self.audit.record_from_auth(
             ctx, action="fan_gift.placed", entity_type="FanGift", entity_id=gift.id,
-            new_state={"people": len(people_rows), "note": bool(note_text)}, organization_id=product.organization_id,
+            new_state={"people": len(people_rows), "note": bool(note_text), "files": len(files), "look": gift.look},
+            organization_id=product.organization_id,
         )
         return order, payment
+
+    # ---- the giver's email: files and previews (D-GIFT-FAN-02) ----------------------------------
+
+    async def _own_pending_files(self, ctx: AuthContext, ids: list[str]) -> list[FanGiftFile]:
+        out = []
+        for fid in ids:
+            try:
+                row = await self.session.get(FanGiftFile, UUID(fid))
+            except ValueError:
+                row = None
+            if row is None or row.deleted_at is not None or row.owner_user_id != ctx.user_id or row.gift_id is not None:
+                raise AppError("FILE_NOT_FOUND", PEOPLE_PROBLEMS["FILE_NOT_FOUND"], 422)
+            out.append(row)
+        return out
+
+    @staticmethod
+    def file_out(row: FanGiftFile) -> dict[str, Any]:
+        return {"id": row.id, "name": row.name, "kind": row.kind, "byte_size": row.byte_size}
+
+    async def add_file(self, ctx: AuthContext, *, filename: str, content_type: str | None, data: bytes) -> dict[str, Any]:
+        """A picture or PDF for a gift's email. Checked by its own first bytes, not just its name."""
+        from cornerroom.infra.storage import get_storage
+
+        if not data:
+            raise AppError("VALIDATION_ERROR", "That file is empty", 422, extras={"field": "file"})
+        mime = sniff_type(data)
+        kind = file_kind(mime)
+        if kind is None or (content_type and file_kind(content_type) is None):
+            raise AppError("FILE_TYPE", "Attach a picture (JPG, PNG, WebP or GIF) or a PDF", 422, extras={"field": "file"})
+        pending = await self.session.scalar(
+            select(func.count()).where(
+                FanGiftFile.owner_user_id == ctx.user_id, FanGiftFile.gift_id.is_(None), FanGiftFile.deleted_at.is_(None)
+            )
+        )
+        if int(pending or 0) >= PENDING_FILES_MAX:
+            raise AppError("TOO_MANY_FILES", "Remove some attached files first", 409)
+        name = " ".join(str(filename or "").split())[:200] or ("picture" if kind == "IMAGE" else "document.pdf")
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-")[:120] or "file"
+        row = FanGiftFile(owner_user_id=ctx.user_id, kind=kind, name=name, content_type=mime, byte_size=len(data))
+        row.id = uuid4()
+        row.object_key = f"fan-gift-files/{ctx.user_id}/{row.id}/{safe}"
+        await get_storage(self.settings).put(object_key=row.object_key, data=data, mime=mime, storage_class="artist_mail")
+        self.session.add(row)
+        await self.session.flush()
+        return self.file_out(row)
+
+    async def delete_file(self, ctx: AuthContext, file_id: UUID) -> None:
+        row = await self.session.get(FanGiftFile, file_id)
+        if row is None or row.deleted_at is not None or row.owner_user_id != ctx.user_id:
+            raise NotFoundError("File not found")
+        if row.gift_id is not None:
+            raise AppError("FILE_IN_USE", "This file is on a gift already", 409)
+        row.deleted_at = self.clock.now()
+        await self.session.flush()
+
+    async def _bytes(self, row: FanGiftFile) -> tuple[bytes, str, str, str]:
+        from cornerroom.infra.storage import get_storage
+
+        data = await get_storage(self.settings).get_bytes(row.object_key)
+        return data, row.content_type, row.name, row.kind
+
+    async def file_for_owner(self, ctx: AuthContext, file_id: UUID) -> tuple[bytes, str, str, str]:
+        row = await self.session.get(FanGiftFile, file_id)
+        if row is None or row.deleted_at is not None or row.owner_user_id != ctx.user_id:
+            raise NotFoundError("File not found")
+        return await self._bytes(row)
+
+    async def file_for_staff(self, ctx: AuthContext, file_id: UUID) -> tuple[bytes, str, str, str]:
+        org = await self._staff_org(ctx)
+        row = await self.session.get(FanGiftFile, file_id)
+        gift = await self.session.get(FanGift, row.gift_id) if row is not None and row.gift_id else None
+        if row is None or row.deleted_at is not None or gift is None or gift.organization_id != org:
+            raise NotFoundError("File not found")
+        return await self._bytes(row)
+
+    async def file_for_token(self, token: str, file_id: UUID) -> tuple[bytes, str, str, str]:
+        """The people a gift is for open its files through their own gift link, once staff passed them."""
+        _person, gift = await self._by_token(token)
+        row = await self.session.get(FanGiftFile, file_id)
+        if row is None or row.deleted_at is not None or row.gift_id != gift.id or gift.note_state != "APPROVED":
+            raise NotFoundError("File not found")
+        return await self._bytes(row)
+
+    async def _gift_files(self, gift_id: UUID) -> list[FanGiftFile]:
+        return list(
+            (
+                await self.session.execute(
+                    select(FanGiftFile)
+                    .where(FanGiftFile.gift_id == gift_id, FanGiftFile.deleted_at.is_(None))
+                    .order_by(FanGiftFile.position)
+                )
+            ).scalars()
+        )
+
+    async def _cover(self, work_type: str, work_id: UUID, show: bool) -> str | None:
+        if not show:
+            return None
+        from cornerroom.modules.commerce.application.artist_mail import ArtistMailService
+
+        cover, _listen = await ArtistMailService(self.session, self.settings)._music_links({"type": work_type, "id": str(work_id)})
+        return cover
+
+    def _api(self) -> str:
+        return (self.settings.public_api_base_url or self.settings.web_base_url).rstrip("/")
+
+    async def preview(self, ctx: AuthContext, *, offer_id: UUID, raw: dict[str, Any], person_name: str | None) -> dict[str, Any]:
+        """The email as one person will get it, before paying. Pictures are `cid:file-<id>` for the
+        page to fill in with the copies it fetched; nothing here is sent or kept."""
+        offer = await self.session.get(Offer, offer_id)
+        product = await self.session.get(Product, offer.product_id) if offer is not None else None
+        if offer is None or product is None or product.product_type not in ("TRACK", "RELEASE"):
+            raise NotFoundError("Offer not found")
+        kind, work = await self._work(product)
+        if work is None:
+            raise NotFoundError("Offer not found")
+        try:
+            looks = clean_design(raw)
+        except ValueError as exc:
+            code = str(exc)
+            raise AppError(code, PEOPLE_PROBLEMS.get(code, "Check the email"), 422) from exc
+        rows = []
+        for fid in looks["file_ids"]:
+            try:
+                row = await self.session.get(FanGiftFile, UUID(fid))
+            except ValueError:
+                row = None
+            if row is not None and row.deleted_at is None and row.owner_user_id == ctx.user_id:
+                rows.append(row)
+        act_id = act_of(work.primary_artist_id, work.primary_band_id)
+        mail = write_gift_email(
+            look=looks["look"], giver=await self._person_name(ctx.user_id), passed_by=None, title=work.title,
+            act=await self._act_name(act_id) if act_id else "the artist", person_name=person_name,
+            subject=looks["subject"], message=looks["note"], status="GIVEN", link=f"{self.settings.web_base_url.rstrip('/')}/gift/preview",
+            claim_days=int(self.settings.fan_gift_claim_days), preorder=offer.audience == "PRESALE",
+            cover_url=await self._cover(kind, work.id, looks["show_cover"]),
+            files=[{"name": r.name, "kind": r.kind, "url": f"cid:file-{r.id}"} for r in rows],
+        )
+        return {"subject": mail.subject, "html": mail.html, "text": mail.text, "needs_review": needs_review(
+            note=looks["note"], subject=looks["subject"], files=len(rows))}
+
+    async def write_for(
+        self, gift: FanGift, person: FanGiftRecipient, *, status: str, link: str, file_url, passed_by: str | None = None,
+        designed: bool | None = None,
+    ) -> GiftEmail:
+        """One person's email for a placed gift: the giver's words and files only once staff passed
+        them (`designed` draws it as if passed, for the staff preview)."""
+        order = await self.session.get(Order, gift.order_id)
+        if designed is None:
+            designed = gift.note_state == "APPROVED"
+        files = await self._gift_files(gift.id) if designed else []
+        return write_gift_email(
+            look=gift.look if designed or gift.note_state == "NONE" else "SKY",
+            giver=await self._person_name(gift.giver_user_id), passed_by=passed_by, title=await self._title(gift),
+            act=await self._act_name(gift.act_id), person_name=person.name,
+            subject=gift.subject if designed else None, message=gift.note if designed else None, status=status, link=link,
+            claim_days=int(self.settings.fan_gift_claim_days), preorder=bool(order is not None and order.is_presale),
+            cover_url=await self._cover(gift.work_type, gift.work_id, gift.show_cover or not (designed or gift.note_state == "NONE")),
+            files=[{"name": f.name, "kind": f.kind, "url": file_url(f)} for f in files],
+        )
+
+    async def staff_preview(self, ctx: AuthContext, gift_id: UUID) -> dict[str, Any]:
+        """The email waiting for review, as its first person would get it."""
+        org = await self._staff_org(ctx)
+        gift = await self.session.get(FanGift, gift_id)
+        if gift is None or gift.organization_id != org:
+            raise NotFoundError("Gift not found")
+        people = await self._recipients(gift.id)
+        mail = await self.write_for(
+            gift, people[0], status="GIVEN", link=f"{self.settings.web_base_url.rstrip('/')}/gift/preview",
+            file_url=lambda f: f"cid:file-{f.id}", designed=True,
+        )
+        files = [self.file_out(f) for f in await self._gift_files(gift.id)]
+        return {"subject": mail.subject, "html": mail.html, "files": files}
 
     async def gift_for_order(self, order_id: UUID) -> FanGift | None:
         return (await self.session.execute(select(FanGift).where(FanGift.order_id == order_id))).scalar_one_or_none()
@@ -544,6 +782,8 @@ class FanGiftService:
             "amount": {"amount_minor": gift.unit_amount_minor, "currency_code": gift.currency_code} if mine else None,
             "credit": None,
             "spend_on": [],
+            # D-GIFT-FAN-02: the giver's pictures and PDFs, once staff passed them (opened via the link).
+            "files": [self.file_out(f) for f in await self._gift_files(gift.id)] if mine and gift.note_state == "APPROVED" else [],
         }
         if mine and person.status == "KEPT_CREDIT":
             out["credit"] = {"amount_minor": await self.balance(ctx.user_id, gift.act_id, gift.currency_code), "currency_code": gift.currency_code}  # type: ignore[union-attr]
@@ -668,7 +908,9 @@ class FanGiftService:
         ).scalars().all()
         return [
             {
-                "id": g.id, "note": g.note, "title": await self._title(g), "act_name": await self._act_name(g.act_id),
+                "id": g.id, "note": g.note, "subject": g.subject, "look": g.look,
+                "files": [self.file_out(f) for f in await self._gift_files(g.id)],
+                "title": await self._title(g), "act_name": await self._act_name(g.act_id),
                 "giver_name": await self._person_name(g.giver_user_id), "people": len(await self._recipients(g.id)),
                 "paid_at": g.paid_at,
             }
@@ -681,7 +923,7 @@ class FanGiftService:
         if gift is None or gift.organization_id != org:
             raise NotFoundError("Gift not found")
         if gift.status != "WAITING_NOTE" or gift.note_state != "WAITING":
-            raise AppError("NOTE_REVIEWED", "This note has already been checked", 409)
+            raise AppError("NOTE_REVIEWED", "This email has already been checked", 409)
         gift.note_state = "APPROVED" if approve else "REMOVED"
         gift.note_reviewed_by = ctx.user_id
         gift.note_reviewed_at = self.clock.now()
@@ -697,31 +939,6 @@ class FanGiftService:
 # ---- emails (outbox side consumer) ----------------------------------------------------------------
 
 CLAIM_EVENTS = {USER_VERIFIED, USER_REGISTERED, USER_ACTIVATED}
-
-
-def gift_email(
-    *, giver: str | None, passed_by: str | None, title: str, act: str, note: str | None, status: str, link: str,
-    claim_days: int, preorder: bool = False,
-) -> tuple[str, str]:
-    who = giver or "Someone"
-    subject = f"{who} sent you {title} by {act}"
-    lines = [f"{who} bought {title} by {act} on Corner Room as a gift for you."]
-    if passed_by:
-        lines = [f"{passed_by} passed on a gift to you: {title} by {act}, first given by {who}."]
-    if note:
-        lines += ["", f"{who} wrote:", note]
-    lines.append("")
-    if status == "GIVEN" and preorder:
-        lines.append("It's a pre-order: it's yours now and unlocks in your library the day it comes out.")
-    elif status == "GIVEN":
-        lines.append("It's in your library now. Open your gift to listen:")
-    elif status == "CHOOSING":
-        lines.append("Open your gift to see what you can do with it:")
-    else:
-        wait = f" The gift waits {claim_days} days." if claim_days > 0 else ""
-        lines.append(f"Create your free Corner Room account with this email address to get it.{wait}")
-    lines += [link, "", "You got this email because someone typed your address into a gift on Corner Room."]
-    return subject, "\n".join(lines)
 
 
 def returned_email(*, title: str, act: str, status: str, amount: str, link: str) -> tuple[str, str]:
@@ -756,14 +973,16 @@ async def consume_fan_gift_event(event: DomainEvent, session: AsyncSession, sett
     base = settings.web_base_url.rstrip("/")
     title, act = await svc._title(gift), await svc._act_name(gift.act_id)
     payload = event.payload or {}
+    html_body = None
     if event.event_type == FAN_GIFT_SENT:
         to = person.email
-        subject, body = gift_email(
-            giver=await svc._person_name(gift.giver_user_id), passed_by=payload.get("passed_by"), title=title, act=act,
-            note=gift.note if gift.note_state == "APPROVED" else None, status=person.status,
-            link=f"{base}/gift/{payload.get('token')}", claim_days=int(settings.fan_gift_claim_days),
-            preorder=bool((order := await session.get(Order, gift.order_id)) is not None and order.is_presale),
+        token = str(payload.get("token") or "")
+        mail = await svc.write_for(
+            gift, person, status=person.status, link=f"{base}/gift/{token}", passed_by=payload.get("passed_by"),
+            # Each person opens the files through their own gift link (D-GIFT-FAN-02).
+            file_url=lambda f: f"{svc._api()}/api/v1/gifts/{token}/files/{f.id}",
         )
+        subject, body, html_body = mail.subject, mail.text, mail.html
     else:
         giver = await session.get(User, gift.giver_user_id)
         if giver is None or not giver.email:
@@ -776,5 +995,5 @@ async def consume_fan_gift_event(event: DomainEvent, session: AsyncSession, sett
         log.warning("fan_gift_email_skipped", reason="no_email_provider", event_id=str(event.event_id))
         return
     # A failed send raises, so the outbox retries the event.
-    await sender.send(to=to, subject=subject, body=body)
+    await sender.send(to=to, subject=subject, body=body, html=html_body)
     log.info("fan_gift_email_sent", kind=event.event_type, to=mask_email(to))

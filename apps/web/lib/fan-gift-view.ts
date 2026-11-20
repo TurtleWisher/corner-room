@@ -9,7 +9,61 @@ import type { GiftPage, GiftPerson, GiverState, MyGift } from "@/features/fan-gi
 
 /** The most people one gift order can go to (server setting `fan_gift_max_people`, 10). */
 export const MAX_PEOPLE = 10;
-export const NOTE_MAX = 300;
+/** D-GIFT-FAN-02: the giver's own email. */
+export const NOTE_MAX = 2000;
+export const SUBJECT_MAX = 150;
+export const FILES_MAX = 5;
+export const FILE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif,application/pdf";
+
+export const LOOKS: { key: "SKY" | "EMBER" | "NIGHT"; label: string; swatch: [string, string] }[] = [
+  { key: "SKY", label: "Sky", swatch: ["#53c8ea", "#ffffff"] },
+  { key: "EMBER", label: "Ember", swatch: ["#ff8a4c", "#fffaf6"] },
+  { key: "NIGHT", label: "Night", swatch: ["#53c8ea", "#17142e"] },
+];
+
+/** The fill-ins a giver can use: each becomes that person's own words (as the server does). */
+export const GIFT_FILL_INS = [
+  { key: "first_name" as const, label: "Their first name", hint: "Each person's first name, as you typed it" },
+  { key: "music" as const, label: "The music", hint: "The song or release you're giving" },
+];
+
+export function subjectProblem(subject: string): string | null {
+  const line = subject.trim();
+  if (line.length > SUBJECT_MAX) return `Keep the subject to ${SUBJECT_MAX} characters.`;
+  if (/\]\(|https?:\/\//i.test(line)) return "A subject can't have a link in it.";
+  return null;
+}
+
+/** Links in the message need a full https address, as the server checks. */
+export function linksProblem(message: string): string | null {
+  for (const m of message.matchAll(/\[[^\]\n]*\]\(([^)\s]*)\)/g)) {
+    if (!/^https:\/\/.+/i.test(m[1])) return "Links need a full web address starting with https://";
+  }
+  return null;
+}
+
+export function fileProblem(file: { type: string; size: number }, count: number, maxBytes = 20 * 1024 * 1024): string | null {
+  if (count >= FILES_MAX) return `Attach at most ${FILES_MAX} files.`;
+  if (!FILE_ACCEPT.split(",").includes(file.type)) return "Attach a picture (JPG, PNG, WebP or GIF) or a PDF.";
+  if (file.size > maxBytes) return "That file is too large.";
+  return null;
+}
+
+/** Previews carry pictures as `cid:file-<id>`; the page swaps in the copies it has. */
+export function withPictures(html: string, urls: Record<string, string>): string {
+  return html.replace(/cid:file-([0-9a-f-]{36})/gi, (whole, id: string) => urls[id] ?? whole);
+}
+
+/** The inside of a written email's <body>, to draw it in the page (no frames are allowed). */
+export function emailBody(html: string): string {
+  const m = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html);
+  return m ? m[1] : html;
+}
+
+/** Whose name the preview shows: each typed person, by name or email. */
+export function previewPeople(people: { email: string; name?: string | null }[]): { label: string; name: string | null }[] {
+  return people.length ? people.map((p) => ({ label: p.name || p.email, name: p.name ?? null })) : [{ label: "Someone without a name", name: null }];
+}
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -45,7 +99,7 @@ export function peopleProblem(people: GiftPerson[], ownEmail: string | null | un
 }
 
 export function noteProblem(note: string): string | null {
-  return note.trim().length > NOTE_MAX ? `Keep the note to ${NOTE_MAX} characters.` : null;
+  return note.trim().length > NOTE_MAX ? `Keep the message to ${NOTE_MAX.toLocaleString("en-US")} characters.` : (linksProblem(note) ?? null);
 }
 
 export function peopleLine(n: number): string {
@@ -55,7 +109,7 @@ export function peopleLine(n: number): string {
 /** Said before paying: what happens, honestly, and that the note is checked. */
 export function giftPromise(hasNote: boolean): string[] {
   return [
-    "Each person is emailed once you've paid" + (hasNote ? " and Corner Room has checked your note." : "."),
+    "Each person is emailed once you've paid" + (hasNote ? " and Corner Room has checked your email." : "."),
     "If they have an account the music is theirs at once; if not, they get it when they sign up with that email.",
     "If a gift isn't claimed in 7 days, or someone says no thanks, you get its amount back as credit to spend on this artist's music.",
   ];
@@ -145,4 +199,13 @@ export function giftOffer(
 /** Checkout with Give it as a gift already ticked. */
 export function giftHref(offerId: string): string {
   return `/checkout?offer=${offerId}&gift=1`;
+}
+
+/** A message as plain words on the gift page: links keep their words, fill-ins are left out
+ * (the email filled them in; the page shows the giver's text as written). */
+export function noteText(note: string): string {
+  return note
+    .replace(/\[([^\]\n]*)\]\([^)\s]*\)/g, "$1")
+    .replace(/\{(first_name|music)\}/g, "")
+    .replace(/[ \t]+([,.!?])/g, "$1");
 }
