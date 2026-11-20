@@ -270,8 +270,11 @@ export default function TrackPage() {
                   opensRoom
                 />
               )}
-              {/* D-GIFT-FAN-01: owners too (their Buy turns into Play), so owning it never stops a gift. */}
-              <GiveGiftLink commerce={commerce} kind="TRACK" id={track.id} title={track.title} releaseIds={track.release_ids ?? []} />
+              {/* D-GIFT-FAN-01: beside Buy for people who don't own it; owners get "Give it to someone"
+                  in the gift section below instead of a button next to Play (owner, 2026-11-21). */}
+              {buy.kind !== "owned" ? (
+                <GiveGiftLink commerce={commerce} kind="TRACK" id={track.id} title={track.title} releaseIds={track.release_ids ?? []} />
+              ) : null}
             </div>
             {buy.kind !== "owned" ? (
               <SongTeaserMain teasers={teasers} trackId={track.id} songTitle={track.title} artist={artist} className="music-rise mt-4" />
@@ -288,8 +291,15 @@ export default function TrackPage() {
             <p className="mt-8 max-w-md text-sm text-fg-muted">
               Buy a song, or the release it is on, to keep it. Sign in to listen to what you own.
             </p>
-            {/* A live gift campaign for this song (D-CAMPAIGN-01). */}
-            <GiftNote trackId={track.id} className="mt-6 max-w-md" />
+            {/* A live gift campaign for this song (D-CAMPAIGN-01), and for owners "Give it to someone". */}
+            <GiftNote
+              trackId={track.id}
+              className="mt-6 max-w-2xl"
+              commerce={commerce}
+              owned={buy.kind === "owned"}
+              title={track.title}
+              releaseIds={track.release_ids ?? []}
+            />
             <SongTeasersSection teasers={teasers} trackId={track.id} songTitle={track.title} artist={artist} className="mt-8" />
           </div>
           {/* Phones: the same sections, after the title and buy button. */}

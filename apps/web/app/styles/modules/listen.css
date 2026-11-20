@@ -155,111 +155,81 @@ html:has([data-module="music"] .lr) {
   padding: 0;
 }
 
-/* The top bar's right end: the ways out, and under the close button the lyrics switch (owner,
-   2026-11-06, D-ROOM-05). A real switch with its state in words; on, the track fills with Sky and
-   the square thumb (Indigo Ink, 6.8:1 on Sky) moves right. The first time it can be used in a
-   visit, its track sends out two soft Ice rings to be noticed; never under reduced motion. */
+/* The top bar's right end, one row (owner, 2026-11-21): the gift icon, the lyrics toggle and the
+   ✕, each a small glass square. Nothing hangs under it, so the header keeps its height. */
 [data-module="music"] .lr-top-end {
   position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-/* The Lyrics switch hangs under the ✕ without making the header taller, so the room keeps its
-   height for the cover. */
-[data-module="music"] .lr-top-end > .lr-lyrics-control {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  right: 0;
-}
-/* On a phone the space under the ✕ is the cover's: the switch sits beside the ✕ instead, and the
-   no-lyrics reason is read out but not drawn ("None" on the switch already says it). */
-@media (max-width: 639px) {
-  [data-module="music"] .lr-top-end {
-    flex-direction: row-reverse;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  [data-module="music"] .lr-top-end > .lr-lyrics-control {
-    position: static;
-  }
-  [data-module="music"] .lr-top-end .lr-lyrics-reason {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
+  align-items: center;
+  gap: 0.5rem;
 }
 [data-module="music"] .lr-lyrics-control {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.3rem;
+  align-items: center;
 }
+
+/* The lyrics toggle (D-ROOM-05, made minimal 2026-11-21): one lyrics icon. On, it is lit in Sky
+   with a soft glow; off, it dims and a slash draws across it. Only transform and opacity move. */
 [data-module="music"] .lr-lyrics-switch {
-  gap: 0.55rem;
-  padding: 0 0.75rem;
   cursor: pointer;
+  color: var(--cr-fg-muted);
+  transition: color 200ms var(--lr-ease);
 }
 [data-module="music"] .lr-lyrics-switch[aria-checked="true"] {
   --cut-fill: rgb(83 200 234 / 0.16);
   --cut-border: rgb(187 237 254 / 0.5);
+  color: #bbedfe;
 }
 [data-module="music"] .lr-lyrics-switch:disabled {
   cursor: default;
-  color: var(--cr-fg-muted);
+  opacity: 0.45;
 }
-[data-module="music"] .lr-switch-track {
+[data-module="music"] .lr-lyrics-icon {
   position: relative;
-  width: 2.25rem;
-  height: 1.25rem;
-  flex: none;
-  border: 1px solid rgb(187 237 254 / 0.45);
-  background: rgb(11 9 25 / 0.55);
+  display: inline-flex;
   transition:
-    background-color 200ms var(--lr-ease),
-    border-color 200ms var(--lr-ease);
+    transform 260ms var(--lr-ease),
+    filter 260ms var(--lr-ease);
 }
-[data-module="music"] .lr-switch-thumb {
+[data-module="music"] .lr-lyrics-switch[aria-checked="true"] .lr-lyrics-icon {
+  transform: scale(1.06);
+  filter: drop-shadow(0 0 6px rgb(83 200 234 / 0.65));
+}
+[data-module="music"] .lr-lyrics-switch:active .lr-lyrics-icon {
+  transform: scale(0.9);
+}
+[data-module="music"] .lr-lyrics-slash {
   position: absolute;
-  left: 2px;
-  top: 2px;
-  width: 14px;
-  height: 14px;
-  background: var(--cr-fg-muted);
+  left: 50%;
+  top: 50%;
+  width: 1.45rem;
+  height: 2px;
+  margin: -1px 0 0 -0.725rem;
+  background: currentColor;
+  box-shadow: 0 0 0 1.5px rgb(11 9 25 / 0.85);
+  transform: rotate(-45deg) scaleX(1);
+  transform-origin: left center;
   transition:
-    transform 200ms var(--lr-ease),
-    background-color 200ms var(--lr-ease);
+    transform 260ms var(--lr-ease),
+    opacity 200ms var(--lr-ease);
 }
-[data-module="music"] .lr-lyrics-switch[aria-checked="true"] .lr-switch-track {
-  border-color: #bbedfe;
-  background: #53c8ea;
+[data-module="music"] .lr-lyrics-switch[aria-checked="true"] .lr-lyrics-slash {
+  transform: rotate(-45deg) scaleX(0);
+  opacity: 0;
 }
-[data-module="music"] .lr-lyrics-switch[aria-checked="true"] .lr-switch-thumb {
-  transform: translateX(16px);
-  background: #2e2860;
+[data-module="music"] .lr-lyrics-switch:disabled .lr-lyrics-slash {
+  opacity: 0;
 }
-[data-module="music"] .lr-lyrics-switch:disabled .lr-switch-track {
-  border-style: dashed;
-  border-color: rgb(187 237 254 / 0.3);
-}
-[data-module="music"] .lr-switch-state {
-  min-width: 1.5rem;
-  font-size: 0.75rem;
-  color: var(--cr-fg-muted);
-}
-[data-module="music"] .lr-lyrics-switch[aria-checked="true"] .lr-switch-state {
-  color: var(--cr-highlight);
-}
+/* Why there is no toggle is read out and shown in its tooltip, not drawn. */
 [data-module="music"] .lr-lyrics-reason {
-  max-width: 12rem;
-  font-size: 0.75rem;
-  text-align: right;
-  color: var(--cr-fg-muted);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
-[data-module="music"] .lr-lyrics-switch[data-invite] .lr-switch-track {
+[data-module="music"] .lr-lyrics-switch[data-invite] {
   animation: lr-invite 1.5s ease-out 0.9s 2;
 }
 @keyframes lr-invite {
@@ -272,6 +242,44 @@ html:has([data-module="music"] .lr) {
   100% {
     box-shadow: 0 0 0 0 rgb(187 237 254 / 0);
   }
+}
+
+/* Give as a gift (owner, 2026-11-21): a gift icon in the room's corner whose words slide out on
+   hover or focus. The words are always its name for screen readers. */
+[data-module="music"] .lr-reveal {
+  width: auto;
+  min-width: 2.5rem;
+  padding: 0 0.7rem;
+  gap: 0;
+  color: var(--cr-fg-muted);
+  transition: color 200ms var(--lr-ease);
+}
+[data-module="music"] .lr-reveal:hover,
+[data-module="music"] .lr-reveal:focus-visible {
+  color: var(--cr-fg);
+}
+[data-module="music"] .lr-reveal-words {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition:
+    max-width 280ms var(--lr-ease),
+    opacity 200ms var(--lr-ease),
+    margin 280ms var(--lr-ease);
+}
+[data-module="music"] .lr-reveal:hover .lr-reveal-words,
+[data-module="music"] .lr-reveal:focus-visible .lr-reveal-words {
+  max-width: 9rem;
+  margin-left: 0.5rem;
+  opacity: 1;
+}
+[data-module="music"] .lr-reveal svg {
+  transition: transform 260ms var(--lr-ease);
+}
+[data-module="music"] .lr-reveal:hover svg {
+  transform: rotate(-8deg) scale(1.08);
 }
 
 /* Carousel view. */
@@ -1067,13 +1075,19 @@ html:has([data-module="music"] .lr) {
   [data-module="music"] .lr-halo,
   [data-module="music"] .lr-bob,
   [data-module="music"] .lr-lyric-text::before,
-  [data-module="music"] .lr-lyrics-switch .lr-switch-track,
+  [data-module="music"] .lr-lyrics-switch,
   [data-module="music"] .lr-eq i {
     animation: none !important;
   }
-  [data-module="music"] .lr-switch-track,
-  [data-module="music"] .lr-switch-thumb {
+  [data-module="music"] .lr-lyrics-icon,
+  [data-module="music"] .lr-lyrics-slash,
+  [data-module="music"] .lr-reveal svg,
+  [data-module="music"] .lr-reveal-words {
     transition: none;
+  }
+  [data-module="music"] .lr-reveal:hover svg,
+  [data-module="music"] .lr-lyrics-switch:active .lr-lyrics-icon {
+    transform: none;
   }
   /* The line now stays still where it is sung; nothing glides or leans. */
   [data-module="music"] .lr-lyric,

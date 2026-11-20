@@ -88,14 +88,15 @@ describe("gift status emails (D-CAMPAIGN-05, D-CAMPAIGN-06)", () => {
   });
 
   it("previews as the real buyer by name, and picks the buyers in a status", () => {
-    expect(previewValues({ name: "Samiul Islam" }, "MIZULS", "Chaya Pore", "A poster")).toEqual({
+    expect(previewValues({ name: "Samiul Islam" }, "MIZULS", "Chaya Pore")).toEqual({
       first_name: "Samiul",
       buyer_name: "Samiul Islam",
       artist: "MIZULS",
       music: "Chaya Pore",
-      gift: "A poster",
+      // What the gift is stays a surprise (D-CAMPAIGN-09).
+      gift: "gift",
     });
-    expect(previewValues(null, "MIZULS", "", "A poster").first_name).toBe("there");
+    expect(previewValues(null, "MIZULS", "").first_name).toBe("there");
     const people = [
       { id: "a", name: "A", status: "DISPATCHED" as const, reachable: true },
       { id: "b", name: "B", status: "PREPARED" as const, reachable: true },
@@ -104,7 +105,9 @@ describe("gift status emails (D-CAMPAIGN-05, D-CAMPAIGN-06)", () => {
     expect(peopleIn(people, "DISPATCHED").map((p) => p.id)).toEqual(["a"]);
     expect(sentCountLine(0)).toBe("Not sent yet");
     expect(sentCountLine(12)).toBe("Sent 12 times");
-    expect(subjectForAll("Your gift from {artist}, {first_name}: {gift}", "Rumi", "", "A card")).toBe("Your gift from Rumi, (their first name): A card");
+    // Owner, 2026-11-21 (D-CAMPAIGN-09): never what the gift is.
+    expect(subjectForAll("Your gift from {artist}, {first_name}: {gift}", "Rumi", "")).toBe("Your gift from Rumi, (their first name): gift");
+    expect(subjectForAll("Your gift ({gift}) left", "Rumi", "")).toBe("Your gift left");
   });
 
   it("tells the workflow step by step, from the API's state", () => {

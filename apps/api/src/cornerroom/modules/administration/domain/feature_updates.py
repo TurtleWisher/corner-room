@@ -116,6 +116,7 @@ FEATURES: Final[list[dict]] = [
             "gift went to as buyers. The person a gift went to earns the artist's collectible."
         ),
         "updates": [
+            {"date": "2026-11-21", "kind": "IMPROVED", "title": "Give it to someone", "details": "If you already own a song or release, Give it to someone sits in the gift section under its buttons instead of beside Play, on song and release pages."},
             {"date": "2026-11-20", "kind": "NEW", "title": "Design your gift email", "details": "Write the gift email your way, with their first name, links, a subject, a look, the cover and pictures or PDFs, and see it as each person will before you pay. Corner Room checks it first."},
             {"date": "2026-11-20", "kind": "IMPROVED", "title": "Gift music you own, and pre-orders", "details": "Give as a gift on song, release and pre-sale pages, also for people who already own it; pre-orders can be gifts; Studio Sales marks gift sales; the person gifted earns the collectible."},
             {"date": "2026-11-20", "kind": "NEW", "title": "Give music as a gift", "details": "Buy a song or release for people you know by email, with a note Corner Room checks, keep or pass on a gift you already own, and spend gift credit on the same artist's music."},
@@ -243,6 +244,7 @@ FEATURES: Final[list[dict]] = [
             "the giver; music paid with gift credit earns it for its buyer."
         ),
         "updates": [
+            {"date": "2026-11-21", "kind": "IMPROVED", "title": "The gift stays a surprise", "details": "Song and release pages only say that the artist gives a gift with the music, and Corner Room's own emails and notes no longer say what it is, so buyers find out when it's in their hands."},
             {"date": "2026-11-20", "kind": "IMPROVED", "title": "Gift updates wait for Send update", "details": "Marking gifts Dispatched, Returned or Missing no longer emails anyone. The artist presses Send update (for the whole status or the chosen gifts), checks the email, then it goes."},
             {"date": "2026-11-20", "kind": "FIXED", "title": "One buyer's name sent to everyone", "details": "Copying and pasting in the email writer turned the First name fill-in into the previewed buyer's name. It stays a fill-in now, and emails that greet a buyer by a typed name are stopped with a one-click fix."},
             {"date": "2026-11-09", "kind": "NEW", "title": "Emails to buyers you pick need approval", "details": "An email to buyers picked by hand goes to Corner Room with its people as one request; once approved, the artist presses Send. Staff send at once."},
@@ -325,8 +327,9 @@ FEATURES: Final[list[dict]] = [
         "description": (
             "Play opens the listening room: a full-screen view with the blurred cover, a carousel, and the "
             "lyrics on a ring round the cover that follow the song when staff have timed them. Lyrics are on "
-            "from the start, with a Lyrics switch under the close button (beside it on phones); turning them "
-            "off is remembered on that device. The room is one still screen that fits the window without "
+            "from the start, with a small lyrics icon beside the close button that lights up when they're on "
+            "and is crossed out when they're off; turning them off is remembered on that device. A gift icon "
+            "in the same corner opens Give as a gift; its words slide out when you point at it. The room is one still screen that fits the window without "
             "scrolling, and a double-click on empty space goes properly full screen (the same again comes "
             "out). The big "
             "title links to the song page. When the browser blocks the automatic start, the room shows the "
@@ -336,6 +339,7 @@ FEATURES: Final[list[dict]] = [
             "made on their own phone or computer. Artists can turn story sharing off for a release."
         ),
         "updates": [
+            {"date": "2026-11-21", "kind": "IMPROVED", "title": "Quieter corner controls", "details": "The lyrics switch is now one lyrics icon that lights up or is crossed out, and a gift icon beside it opens Give as a gift, its words showing when you point at it."},
             {"date": "2026-11-14", "kind": "IMPROVED", "title": "Title on one line", "details": "The room's big title always fits on one line, however long, getting smaller as needed; no word or bracket is left on a line of its own. The version sits after it, smaller and quieter, as a note on which version it is."},
             {"date": "2026-11-14", "kind": "IMPROVED", "title": "Version after the title", "details": "When the artist gives a song a version, such as Acoustic Demo, the room's big title shows it in brackets after the song's name."},
             {"date": "2026-11-14", "kind": "FIXED", "title": "Bar fits the song", "details": "The song box in the room's bar keeps room for the title, Playing and the scrubber; on smaller screens the tools move to their own row."},

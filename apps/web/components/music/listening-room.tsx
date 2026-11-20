@@ -57,6 +57,7 @@ import { creditHref } from "@/lib/music-view";
 import { LYRICS_PREF, lyricsChoice, lyricsOnFrom, lyricsSwitch } from "@/lib/room-controls-view";
 import { useRoomFullscreen } from "@/components/music/room-fullscreen";
 import { RoomLyricsSwitch } from "@/components/music/room-lyrics-switch";
+import { RoomGiftButton } from "@/components/music/room-gift-button";
 import { StoryShareButton } from "@/components/music/story-share";
 import { clock, durationLabel } from "@/lib/player-model";
 import { titleFit, titleParts, titleWithVersion } from "@/lib/track-title-view";
@@ -442,7 +443,7 @@ function useRoomLyrics(trackId: string | null): RoomLyrics {
   return { trackId, loaded: mine !== null, lines, times, on, toggle };
 }
 
-/** The lyrics switch under the close button, on the room's one lyrics state. */
+/** The lyrics toggle beside the close button, on the room's one lyrics state. */
 function TopLyricsSwitch() {
   const lyrics = useContext(LyricsContext);
   return <RoomLyricsSwitch state={lyricsSwitch({ loaded: lyrics.loaded, lineCount: lyrics.lines.length, on: lyrics.on })} onToggle={lyrics.toggle} />;
@@ -1054,6 +1055,9 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
             <span className="cr-eyebrow hidden text-[0.6875rem] text-fg-muted sm:inline">Listening room</span>
           </div>
           <div className="lr-top-end">
+            {/* One row (owner, 2026-11-21): Give as a gift, the lyrics toggle, then the ways out. */}
+            {track ? <RoomGiftButton trackId={track.id} title={track.title} /> : null}
+            {track ? <TopLyricsSwitch /> : null}
             <div className="flex items-center gap-2">
               {track && mode === "focus" ? (
                 <button type="button" onClick={exitFocus} className="lr-chip cr-cut cr-cut-sm cr-focus">
@@ -1070,7 +1074,6 @@ export function ListeningRoom({ fallback }: { fallback?: React.ReactNode }) {
                 <X aria-hidden="true" className="size-4" />
               </button>
             </div>
-            {track ? <TopLyricsSwitch /> : null}
           </div>
         </header>
 

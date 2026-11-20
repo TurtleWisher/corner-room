@@ -1056,7 +1056,8 @@ class GiftCampaignService:
         for c in rows:
             if target in await self._subjects(c.works or []):
                 _row, _org, name = await self.studio._profile(c.profile_type, c.profile_id)
-                out.append({"id": c.id, "title": c.title, "gift_items": c.gift_items, "description": c.description, "artist": name})
+                # Never the gift, its title or description (D-CAMPAIGN-09): a surprise until it arrives.
+                out.append({"id": c.id, "artist": name})
         return out
 
 
@@ -1065,17 +1066,17 @@ class GiftCampaignService:
 GIFT_EMAILS: dict[str, tuple[str, str]] = {
     GIFT_DISPATCHED: (
         "A gift is on its way",
-        "Good news from {artist}: a gift for buying {music} is on its way to you ({gift}). It should reach you in the next few days.",
+        "Good news from {artist}: a gift for buying {music} is on its way to you. It should reach you in the next few days.",
     ),
     GIFT_RETURNED: (
         "Your gift couldn't be delivered",
-        "Your gift from {artist} ({gift}), for buying {music}, couldn't be delivered and came back. Please check that "
+        "Your gift from {artist}, for buying {music}, couldn't be delivered and came back. Please check that "
         "the delivery address you gave us is correct. Once your address is right, it will be sent again. We'll email "
         "you again when there's news.",
     ),
     GIFT_MARKED_MISSING: (
         "Your gift is taking longer than expected",
-        "Your gift from {artist} ({gift}), for buying {music}, hasn't arrived yet. We're finding out where it is and "
+        "Your gift from {artist}, for buying {music}, hasn't arrived yet. We're finding out where it is and "
         "will email you as soon as we know more. If it doesn't turn up, we'll send another. You don't need to do "
         "anything for now.",
     ),

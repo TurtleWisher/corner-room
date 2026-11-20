@@ -36,7 +36,8 @@ def test_purchase_counts_only_while_live() -> None:
 def test_gift_email_for_buyers_without_an_account() -> None:
     subject, body = build_gift_email(artist="MIZULS", gift="a signed poster", music="Chaya Pore", web_base_url="https://www.cornerroom.live/")
     assert subject == "A gift is on its way"
-    assert "MIZULS" in body and "signed poster" in body and "Chaya Pore" in body and "next few days" in body
+    # What the gift is stays a surprise (owner, 2026-11-21, D-CAMPAIGN-09).
+    assert "MIZULS" in body and "signed poster" not in body and "Chaya Pore" in body and "next few days" in body
     assert "https://www.cornerroom.live" in body
 
 
@@ -58,13 +59,13 @@ def test_returned_and_missing_emails() -> None:
         artist="MIZULS", gift="a signed poster", music="Chaya Pore", web_base_url="https://www.cornerroom.live/", event_type=GIFT_RETURNED
     )
     assert subject == "Your gift couldn't be delivered"
-    assert body.startswith("Your gift from MIZULS (a signed poster), for buying Chaya Pore, couldn't be delivered")
+    assert body.startswith("Your gift from MIZULS, for buying Chaya Pore, couldn't be delivered")
     assert "delivery address you gave us" in body and "it will be sent again" in body
     subject, body = build_gift_email(
         artist="MIZULS", gift="a signed poster", music="Chaya Pore", web_base_url="https://www.cornerroom.live/", event_type=GIFT_MARKED_MISSING
     )
     assert subject == "Your gift is taking longer than expected"
-    assert body.startswith("Your gift from MIZULS (a signed poster), for buying Chaya Pore, hasn't arrived yet")
+    assert body.startswith("Your gift from MIZULS, for buying Chaya Pore, hasn't arrived yet")
     assert "we'll send another" in body and "You don't need to do anything" in body
 
 
@@ -108,7 +109,8 @@ async def test_gift_campaign_review_pause_tracking_and_dispatch(client: AsyncCli
     live = await client.post(f"/api/v1/catalog-intake/gift-campaigns/{cid}/review", headers=bearer(reviewer), json={"action": "approve"})
     assert live.status_code == 200 and live.json()["status"] == "ACTIVE"
     public = (await client.get("/api/v1/gift-campaigns", params={"release_id": release_id})).json()
-    assert [g["title"] for g in public] == ["Launch gift"] and public[0]["artist"] == "Gift Band"
+    # Only that a gift comes with it, never what it is (owner, 2026-11-21, D-CAMPAIGN-09).
+    assert len(public) == 1 and public[0]["artist"] == "Gift Band" and set(public[0]) == {"id", "artist"}
 
     # A buyer from before the campaign doesn't count; one while it is live does.
     fan = await register_and_login(client, "gift-fan@example.com")
@@ -181,7 +183,8 @@ async def test_gift_campaign_review_pause_tracking_and_dispatch(client: AsyncCli
     async with factory() as session:
         note = (await session.execute(select(Notification).where(Notification.type == "gift.dispatched"))).scalars().one()
     assert str(note.user_id) == fan["user"]["id"]
-    assert "Gift Band" in note.body and "signed poster" in note.body and "next few days" in note.body
+    # Never what the gift is (owner, 2026-11-21, D-CAMPAIGN-09).
+    assert "Gift Band" in note.body and "signed poster" not in note.body and "next few days" in note.body
     # Missing waits to be told too; Send update tells the buyer.
     missing = await client.post(move, headers=bearer(token), json={"to": "MISSING", "recipient_ids": [fan_row["id"]]})
     assert missing.json()["counts"]["MISSING"] == 1 and missing.json()["updates_waiting"]["MISSING"] == 1

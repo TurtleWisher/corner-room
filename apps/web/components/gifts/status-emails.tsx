@@ -141,7 +141,7 @@ export function AutomaticEmailEditor({
   const named = mails.people.filter((p) => p.reachable);
   const previewPerson: StatusMailPerson | null =
     named.find((p) => p.id === previewId) ?? peopleIn(named, item.status)[0] ?? named[0] ?? null;
-  const values = previewValues(previewPerson, mails.artist, mails.music, mails.campaign.gift_items);
+  const values = previewValues(previewPerson, mails.artist, mails.music);
 
   const editing = item.state !== "IN_REVIEW";
   const dirty = changed(draft, saved);
@@ -188,7 +188,7 @@ export function AutomaticEmailEditor({
           </h3>
           <Badge tone={item.live ? "positive" : "neutral"}>{inUseLabel(item)}</Badge>
         </div>
-        <p className="mt-2 text-lg font-bold text-fg">&ldquo;{subjectForAll(inUse.subject, mails.artist, mails.music, mails.campaign.gift_items)}&rdquo;</p>
+        <p className="mt-2 text-lg font-bold text-fg">&ldquo;{subjectForAll(inUse.subject, mails.artist, mails.music)}&rdquo;</p>
         {pending ? (
           <p className="mt-2 flex items-start gap-2 text-sm text-fg">
             <Hourglass aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" /> {pending}

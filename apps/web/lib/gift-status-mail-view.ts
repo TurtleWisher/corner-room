@@ -6,7 +6,7 @@
  */
 
 import type { GiftRecipientStatus, StatusMail, StatusMailInput, StatusMailPerson, StatusMailSent, StatusMailState, StatusMailStatus } from "@/features/gifts/api";
-import { plainText, type MailValues } from "@/lib/artist-mail-view";
+import { hideGift, plainText, type MailValues } from "@/lib/artist-mail-view";
 
 export const STATUS_MAIL_TITLE: Record<StatusMailStatus, string> = {
   DISPATCHED: "Gift dispatched",
@@ -164,9 +164,10 @@ export function buttonProblem(label: string | null, url: string | null): string 
 }
 
 /** Each fill-in as this buyer reads it: their own name, the act, the music and the gift. */
-export function previewValues(person: Pick<StatusMailPerson, "name"> | null, artist: string, music: string, gift: string): MailValues {
+export function previewValues(person: Pick<StatusMailPerson, "name"> | null, artist: string, music: string): MailValues {
   const name = (person?.name ?? "").trim();
-  return { first_name: name.split(/\s+/)[0] || NO_NAME, buyer_name: name || NO_NAME, artist, music: music || "your music", gift };
+  // What the gift is stays a surprise (D-CAMPAIGN-09): `{gift}` reads "gift", as the server writes it.
+  return { first_name: name.split(/\s+/)[0] || NO_NAME, buyer_name: name || NO_NAME, artist, music: music || "your music", gift: "gift" };
 }
 
 /** The buyers whose gift is in this status: the ones a send for this status reaches. */
@@ -175,8 +176,8 @@ export function peopleIn<T extends { status: GiftRecipientStatus; reachable: boo
 }
 
 /** A subject as every buyer reads it: the act, music and gift filled in, names as "(their name)". */
-export function subjectForAll(subject: string, artist: string, music: string, gift: string): string {
-  return plainText(subject, { first_name: "(their first name)", buyer_name: "(their name)", artist, music: music || "your music", gift });
+export function subjectForAll(subject: string, artist: string, music: string): string {
+  return plainText(hideGift(subject), { first_name: "(their first name)", buyer_name: "(their name)", artist, music: music || "your music", gift: "gift" });
 }
 
 /** "Sent 12 times", for the report line. */

@@ -186,10 +186,10 @@ class ReviewIn(BaseModel):
 
 
 class PublicGiftOut(BaseModel):
+    """A live gift campaign on a public page: only that the act gives one (owner, 2026-11-21,
+    D-CAMPAIGN-09: what the gift is stays a surprise until it is in the buyer's hands)."""
+
     id: UUID
-    title: str
-    gift_items: str
-    description: str | None
     artist: str
 
 
