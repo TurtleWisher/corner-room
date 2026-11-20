@@ -7,12 +7,14 @@ must be fine."""
 from __future__ import annotations
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy import func, select
 
 
 @pytest.mark.postgres
 @pytest.mark.asyncio
-async def test_seeding_again_with_newer_template_versions() -> None:
+async def test_seeding_again_with_newer_template_versions(client: AsyncClient) -> None:
+    # `client` sets up the migrated test database.
     from cornerroom.infra.db import get_session_factory
     from cornerroom.infra.seed import seed_foundation
     from cornerroom.infra.settings import get_settings
