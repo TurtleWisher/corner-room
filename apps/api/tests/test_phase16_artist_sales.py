@@ -15,6 +15,8 @@ from tests.test_audio_phase7_release_commerce import _released
 LINE_KEYS = {
     "id", "subject_type", "subject_id", "title", "release_type", "quantity", "amount_minor",
     "refunded_amount_minor", "currency_code", "order_status", "ordered_at",
+    # D-GIFT-FAN-01: GIFT or CREDIT, how the sale was paid; says nothing about the buyer.
+    "how",
 }
 
 
