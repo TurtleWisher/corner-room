@@ -220,12 +220,12 @@ async def seed_foundation(session: AsyncSession, settings: Settings) -> None:
 
     invite_tpl = (
         await session.execute(
-            select(NotificationTemplate).where(
+            select(NotificationTemplate.id).where(
                 NotificationTemplate.type == "organization.invitation_issued",
                 NotificationTemplate.locale == "en",
-            )
+            ).limit(1)
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
     if invite_tpl is None:
         session.add(
             NotificationTemplate(
@@ -269,14 +269,16 @@ async def seed_foundation(session: AsyncSession, settings: Settings) -> None:
         ("account.locked", "Your account was locked."),
         ("refresh_token.replay_detected", "A sign-in token was reused. Sessions in that family were revoked."),
     ):
+        # A type may have several versions (the newest is used, e.g. migration 0063): any one means
+        # it exists. scalar_one_or_none() stopped the API from starting on 2026-11-21.
         found = (
             await session.execute(
-                select(NotificationTemplate).where(
+                select(NotificationTemplate.id).where(
                     NotificationTemplate.type == ntype,
                     NotificationTemplate.locale == "en",
-                )
+                ).limit(1)
             )
-        ).scalar_one_or_none()
+        ).scalars().first()
         if found is None:
             session.add(
                 NotificationTemplate(type=ntype, locale="en", version=1, body=body)
