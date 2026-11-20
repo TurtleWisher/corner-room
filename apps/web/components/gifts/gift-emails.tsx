@@ -220,7 +220,7 @@ export function GiftEmails({
                 >
                   <span className="min-w-[8rem] font-bold text-fg">When {STATUS_MAIL_TAB[status].toLowerCase()}</span>
                   <span className="min-w-0 flex-1 truncate text-sm text-fg-muted">
-                    &ldquo;{subjectForAll(version.subject, mails.artist, mails.music, mails.campaign.gift_items)}&rdquo;
+                    &ldquo;{subjectForAll(version.subject, mails.artist, mails.music)}&rdquo;
                   </span>
                   <span className="flex items-center gap-2">
                     <Badge tone={item.live ? "positive" : "neutral"}>{inUseLabel(item)}</Badge>
@@ -308,7 +308,7 @@ function SendCard({
             ) : null}
           </p>
           <p className="mt-1 truncate text-base font-bold text-fg">
-            {subjectForAll(send.subject, mails.artist, mails.music, mails.campaign.gift_items)}
+            {subjectForAll(send.subject, mails.artist, mails.music)}
           </p>
           <p className="mt-1 text-sm text-fg">To {namesLine(names)}</p>
           <p className="mt-1 text-sm text-fg-muted">{sendStatusLine(send)}</p>
@@ -324,7 +324,7 @@ function SendCard({
             artist={mails.artist}
             subject={send.subject}
             body={send.body}
-            values={previewValues(first, mails.artist, mails.music, mails.campaign.gift_items)}
+            values={previewValues(first, mails.artist, mails.music)}
             kind="GIFT_UPDATE"
             button={send.button_label && send.button_url ? { label: send.button_label, url: send.button_url } : null}
             files={[]}

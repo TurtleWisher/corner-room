@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 
 import type { MailFile, MailWork } from "@/features/artist-mail/api";
 import { coverUrl } from "@/lib/cover-view";
-import { parseRich, plainText, type MailValues } from "@/lib/artist-mail-view";
+import { hideGift, parseRich, plainText, type MailValues } from "@/lib/artist-mail-view";
 
 function Words({ text, values }: { text: string; values: MailValues }) {
   const paragraphs = text.trim().split(/\n{2,}/).filter((p) => p.trim());
@@ -64,6 +64,12 @@ export function MailPreview({
   files?: Pick<MailFile, "id" | "name" | "kind">[];
 }) {
   const cover = work ? coverUrl(work.type === "RELEASE" ? { release: work.id } : { track: work.id }, 480) : null;
+  if (kind === "GIFT_UPDATE") {
+    // What the gift is stays a surprise (D-CAMPAIGN-09), as the server writes it.
+    subject = hideGift(subject);
+    body = hideGift(body);
+    button = button ? { ...button, label: hideGift(button.label) } : null;
+  }
   return (
     <section aria-label="Preview of the email" className="am-preview">
       <p className="mb-2 text-xs text-[#5d5a7e]">

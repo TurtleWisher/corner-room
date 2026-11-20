@@ -412,10 +412,21 @@ export default function ReleasePage() {
                   )
                 ) : null}
                 {hero.notOnSale ? <p className="self-center text-sm text-fg-muted">Not on sale yet.</p> : null}
-                {/* D-GIFT-FAN-01: owners too (their Buy turns into Play), so owning it never stops a gift. */}
-                {release.status === "RELEASED" ? <GiveGiftLink commerce={commerce} kind="RELEASE" id={release.id} title={release.title} /> : null}
+                {/* D-GIFT-FAN-01: beside Buy for people who don't own the release; owners get "Give it to
+                    someone" in the gift section below, never a button next to Play (owner, 2026-11-21). */}
+                {release.status === "RELEASED" && releaseBuy?.kind !== "owned" ? (
+                  <GiveGiftLink commerce={commerce} kind="RELEASE" id={release.id} title={release.title} />
+                ) : null}
               </div>
             ) : null}
+            {/* The artist's gift (never what it is) and, for owners, "Give it to someone" (owner, 2026-11-21). */}
+            <GiftNote
+              releaseId={release.id}
+              className="mt-6 max-w-2xl"
+              commerce={commerce}
+              owned={release.status === "RELEASED" && releaseBuy?.kind === "owned"}
+              title={release.title}
+            />
             {hero.credits && onlySong ? (
               // A single: who made the song, where a second Play button used to be (D-SINGLE-01).
               <div className="mt-8 max-w-lg">
@@ -450,7 +461,6 @@ export default function ReleasePage() {
           )}
         </section>
         <ReleaseTeasers releaseId={release.id} artist={artist} />
-        <GiftNote releaseId={release.id} className="max-w-xl" />
         {release.primary_band_id ? <BandLineup bandId={release.primary_band_id} /> : null}
         {canStaff && !canModerateMusic(user?.permissions) ? <ReleaseArtistTools release={release} /> : null}
         {canStaff && canModerateMusic(user?.permissions) ? (

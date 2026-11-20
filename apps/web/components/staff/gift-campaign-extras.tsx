@@ -122,7 +122,7 @@ function WaitingMail({
           artist={mails.artist}
           subject={version.subject}
           body={version.body}
-          values={previewValues(person, mails.artist, mails.music, mails.campaign.gift_items)}
+          values={previewValues(person, mails.artist, mails.music)}
           kind="GIFT_UPDATE"
           button={version.button_label && version.button_url ? { label: version.button_label, url: version.button_url } : null}
         />
@@ -209,7 +209,7 @@ function WaitingSend({
           artist={mails.artist}
           subject={send.subject}
           body={send.body}
-          values={previewValues(first, mails.artist, mails.music, mails.campaign.gift_items)}
+          values={previewValues(first, mails.artist, mails.music)}
           kind="GIFT_UPDATE"
           button={send.button_label && send.button_url ? { label: send.button_label, url: send.button_url } : null}
         />

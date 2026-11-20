@@ -39,14 +39,24 @@ export const FILL_INS: { key: FillKey; label: string; hint: string }[] = [
 
 export const FILL_KEYS = FILL_INS.map((f) => f.key);
 
-/** Collectible status emails (D-CAMPAIGN-05) also name the gift itself. */
-export const GIFT_UPDATE_FILL_INS: { key: FillKey; label: string; hint: string }[] = [
+/** Collectible status emails (D-CAMPAIGN-05). Owner, 2026-11-21 (D-CAMPAIGN-09): buyers never read
+ * what the gift is before it's in their hands, so there's no button for it any more; words written
+ * before keep working and `{gift}` reads "gift" (as `with_gift` on the server). */
+export const GIFT_UPDATE_FILL_INS: { key: FillKey; label: string; hint: string }[] = [...FILL_INS];
+
+/** Hints for every fill-in an editor may hold, the old `{gift}` included. */
+export const FILL_HINTS: { key: FillKey; label: string; hint: string }[] = [
   ...FILL_INS,
-  { key: "gift", label: "The gift", hint: "The gift this campaign gives" },
+  { key: "gift", label: "Gift", hint: "Reads \"gift\": what the gift is stays a surprise" },
 ];
 
 /** Every fill-in the editor can hold, whichever email it is writing. */
-export const ALL_FILL_KEYS: FillKey[] = GIFT_UPDATE_FILL_INS.map((f) => f.key);
+export const ALL_FILL_KEYS: FillKey[] = FILL_HINTS.map((f) => f.key);
+
+/** As the server's `with_gift`: a bracketed "({gift})" is left out, any other `{gift}` reads "gift". */
+export function hideGift(text: string): string {
+  return text.replace(/[ \t]*\(\{gift\}\)/g, "").replace(/\{gift\}/g, "gift");
+}
 
 export type MailValues = Record<Exclude<FillKey, "gift">, string> & { gift?: string };
 

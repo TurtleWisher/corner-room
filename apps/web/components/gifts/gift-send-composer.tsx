@@ -112,7 +112,7 @@ export function GiftSendComposer({
   const allListed = listedIds.length > 0 && listedIds.every((id) => picked.has(id));
   const someListed = listedIds.some((id) => picked.has(id));
   const previewPerson = gets.find((p) => p.id === previewId) ?? gets[0] ?? pickedPeople[0] ?? null;
-  const values = previewValues(previewPerson, mails.artist, mails.music, mails.campaign.gift_items);
+  const values = previewValues(previewPerson, mails.artist, mails.music);
 
   const counts: Partial<Record<GiftRecipientStatus, number>> = {};
   for (const p of people) counts[p.status] = (counts[p.status] ?? 0) + 1;

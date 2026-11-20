@@ -11,9 +11,9 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link2, Link2Off } from "lucide-react";
 
-import { ALL_FILL_KEYS, FILL_INS, GIFT_UPDATE_FILL_INS, parseRich, type FillKey, type MailValues } from "@/lib/artist-mail-view";
+import { ALL_FILL_KEYS, FILL_HINTS, FILL_INS, parseRich, type FillKey, type MailValues } from "@/lib/artist-mail-view";
 
-const FILL_HINT = Object.fromEntries(GIFT_UPDATE_FILL_INS.map((f) => [f.key, f.hint])) as Record<FillKey, string>;
+const FILL_HINT = Object.fromEntries(FILL_HINTS.map((f) => [f.key, f.hint])) as Record<FillKey, string>;
 
 function chip(key: FillKey, values: MailValues): HTMLElement {
   const el = document.createElement("span");

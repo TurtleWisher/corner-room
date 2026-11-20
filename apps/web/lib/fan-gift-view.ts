@@ -209,3 +209,12 @@ export function noteText(note: string): string {
     .replace(/\{(first_name|music)\}/g, "")
     .replace(/[ \t]+([,.!?])/g, "$1");
 }
+
+/** The owner's "Give it to someone" card beside the artist's gift card (owner, 2026-11-21). */
+export function giftCornerWords(title: string): { title: string; body: string; label: string } {
+  return {
+    title: "Give it to someone",
+    body: `Send ${title} to a friend by email. You pay, they keep it.`,
+    label: `Give ${title} as a gift`,
+  };
+}

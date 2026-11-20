@@ -98,7 +98,8 @@ export type GiftCampaignInput = {
   works?: GiftWork[];
 };
 
-export type PublicGift = { id: string; title: string; gift_items: string; description?: string | null; artist: string };
+/** Only that an act gives a gift with this music, never what it is (D-CAMPAIGN-09). */
+export type PublicGift = { id: string; artist: string };
 
 export function fetchGiftCampaigns(kind: "artist" | "band", id: string): Promise<GiftCampaign[]> {
   return apiFetch<GiftCampaign[]>(`/api/v1/studio/profiles/${kind}/${id}/gift-campaigns`);

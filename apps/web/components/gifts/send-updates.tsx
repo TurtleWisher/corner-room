@@ -176,7 +176,7 @@ export function SendUpdates({
               artist={mails.artist}
               subject={version.subject}
               body={version.body}
-              values={previewValues(first ? { name: first.name ?? null } : null, mails.artist, mails.music, mails.campaign.gift_items)}
+              values={previewValues(first ? { name: first.name ?? null } : null, mails.artist, mails.music)}
               kind="GIFT_UPDATE"
               button={version.button_label && version.button_url ? { label: version.button_label, url: version.button_url } : null}
             />

@@ -10,7 +10,8 @@ describe("gift status email templates (D-CAMPAIGN-06)", () => {
       expect(list.length).toBeGreaterThanOrEqual(2);
       for (const t of list) {
         expect(t.body.startsWith("Hi {first_name}")).toBe(true);
-        expect(t.body).toContain("{gift}");
+        // Owner, 2026-11-21 (D-CAMPAIGN-09): never what the gift is.
+        expect(t.body + t.subject).not.toContain("{gift}");
       }
     }
   });
@@ -33,7 +34,7 @@ describe("other gift news templates (D-CAMPAIGN-07)", () => {
   it("greets by name, mentions the gift and leaves the news to the act", async () => {
     const { otherTemplates } = await import("@/lib/gift-status-mail-templates");
     const list = otherTemplates("we", "https://x/");
-    expect(list.every((t) => t.body.startsWith("Hi {first_name}") && t.body.includes("{gift}"))).toBe(true);
+    expect(list.every((t) => t.body.startsWith("Hi {first_name}") && t.body.includes("gift") && !t.body.includes("{gift}"))).toBe(true);
     expect(unfilledMarks(list[0].body)).toEqual(["[add the news]"]);
     expect(list[1].body).toContain("We're getting");
     expect(list[1].button?.url).toBe("https://x/account");

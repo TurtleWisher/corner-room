@@ -8,26 +8,28 @@ import { RoomLyricsSwitch } from "./room-lyrics-switch";
 afterEach(cleanup);
 
 describe("RoomLyricsSwitch", () => {
-  it("is a real switch, on, with its state in words", () => {
+  it("is a real switch, on, shown by the lit icon alone (owner, 2026-11-21: no words)", () => {
     const toggle = vi.fn();
     render(<RoomLyricsSwitch state={lyricsSwitch({ loaded: true, lineCount: 4, on: true })} onToggle={toggle} />);
     const sw = screen.getByRole("switch", { name: /Lyrics/ });
     expect(sw.tagName).toBe("BUTTON");
     expect(sw.getAttribute("aria-checked")).toBe("true");
-    expect(sw.textContent).toContain("On");
+    expect(sw.textContent).toBe("");
+    expect(sw.getAttribute("title")).toMatch(/Hide the lyrics/);
+    expect(sw.querySelector(".lr-lyrics-slash")).toBeTruthy();
     expect(sw.className).toContain("cr-focus");
     sw.click();
     expect(toggle).toHaveBeenCalledTimes(1);
   });
 
-  it("takes keyboard focus (a native button, so Enter and Space work), and shows off in words", () => {
+  it("takes keyboard focus (a native button, so Enter and Space work), and says off in its title", () => {
     const toggle = vi.fn();
     render(<RoomLyricsSwitch state={lyricsSwitch({ loaded: true, lineCount: 4, on: false })} onToggle={toggle} />);
     const sw = screen.getByRole("switch", { name: /Lyrics/ });
     sw.focus();
     expect(document.activeElement).toBe(sw);
     expect(sw.getAttribute("aria-checked")).toBe("false");
-    expect(sw.textContent).toContain("Off");
+    expect(sw.getAttribute("title")).toMatch(/Show the lyrics/);
   });
 
   it("invites once: the pulse is dropped when its animation ends", () => {
@@ -36,7 +38,7 @@ describe("RoomLyricsSwitch", () => {
     expect(sw.hasAttribute("data-invite")).toBe(true);
     const end = new Event("animationend", { bubbles: true });
     Object.defineProperty(end, "animationName", { value: "lr-invite" });
-    fireEvent(sw.querySelector(".lr-switch-track")!, end);
+    fireEvent(sw, end);
     expect(sw.hasAttribute("data-invite")).toBe(false);
   });
 
