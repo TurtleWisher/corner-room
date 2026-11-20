@@ -561,12 +561,13 @@ function NewCheckout() {
         <>
           {creditable && !giving ? <CreditStep offerId={item.id} on={useCredit} onChange={setUseCredit} /> : null}
           {/* A gift's giver gets no collectible from it, so a gift needs no delivery address. */}
-          {giving ? null : <DeliveryAddressStep confirmed={addressConfirmed} onConfirmedChange={setAddressConfirmed} />}
+          {/* Test buys earn no collectible either, so no address (D-TEST-BUY-01). */}
+          {giving || testBuyer ? null : <DeliveryAddressStep confirmed={addressConfirmed} onConfirmedChange={setAddressConfirmed} />}
           <div className="flex flex-wrap items-center gap-4">
             <Button
               size="lg"
               busy={busy}
-              disabled={(giving ? Boolean(gifted?.problem) : !addressConfirmed) || Boolean(chosen && chosen.minor === null)}
+              disabled={(giving ? Boolean(gifted?.problem) : !testBuyer && !addressConfirmed) || Boolean(chosen && chosen.minor === null)}
               onClick={() => void place()}
             >
               {item.kind === "tickets" ? "Reserve and pay" : paying ? "Get it with credit" : "Continue to payment"}
@@ -576,7 +577,7 @@ function NewCheckout() {
             </Link>
           </div>
           {giving && gifted?.problem ? <p className="text-sm text-fg-muted">{gifted.problem}</p> : null}
-          {!giving && !addressConfirmed ? <p className="text-sm text-fg-muted">Confirm where we can send gifts to continue.</p> : null}
+          {!giving && !testBuyer && !addressConfirmed ? <p className="text-sm text-fg-muted">Confirm where we can send gifts to continue.</p> : null}
         </>
       ) : null}
     </div>

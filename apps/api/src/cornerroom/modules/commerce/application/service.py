@@ -249,7 +249,10 @@ class CheckoutService:
             found = await self._existing_order(ctx, idempotency_key)
             if found is not None:
                 return found
-        address = await self._confirmed_delivery_address(ctx, delivery_confirmed)
+        # D-TEST-BUY-01 (owner, 2026-11-21): a platform admin's buy is a test, never a sale. Tests earn
+        # no collectible, so they need no delivery address.
+        is_test = await self.is_test_buyer(ctx)
+        address = None if is_test else await self._confirmed_delivery_address(ctx, delivery_confirmed)
         offer = await self.session.get(Offer, offer_id)
         if offer is None or offer.deleted_at is not None or offer.status != "ACTIVE":
             raise NotFoundError("Offer not found")
@@ -291,8 +294,6 @@ class CheckoutService:
                 raise AppError("CREDIT_NOT_USABLE", "Gift credit can't pay for this", 409)
         credit_minor = money.amount_minor if use_credit else 0
         charged = 0 if use_credit else money.amount_minor
-        # D-TEST-BUY-01 (owner, 2026-11-21): a platform admin's buy is a test, never a sale.
-        is_test = await self.is_test_buyer(ctx)
         if is_test and use_credit:
             raise AppError("TEST_BUY", "A test buy doesn't use gift credit", 422)
         order = Order(
@@ -310,7 +311,8 @@ class CheckoutService:
         )
         self.session.add(order)
         await self.session.flush()
-        self._copy_delivery_address(order, address)
+        if address is not None:
+            self._copy_delivery_address(order, address)
         self.session.add(
             OrderItem(
                 order_id=order.id,
