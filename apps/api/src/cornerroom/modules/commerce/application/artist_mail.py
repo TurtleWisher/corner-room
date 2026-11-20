@@ -220,6 +220,7 @@ class ArtistMailService:
                 .where(
                     Order.status.in_(KEPT_ORDER_STATUSES),
                     Order.deleted_at.is_(None),
+                    Order.is_test.is_(False),  # a staff test buy is never a buyer (D-TEST-BUY-01)
                     (OrderItem.product_id.in_(set(products) or none)) | (OrderItem.ref_id.in_(subjects)),
                 )
             )
@@ -1107,6 +1108,8 @@ class ArtistMailService:
         order = await self.session.get(Order, order_id)
         if order is None or order.deleted_at is not None or order.status not in KEPT_ORDER_STATUSES:
             return 0
+        if order.is_test:
+            return 0  # a staff test buy never reaches the artist (D-TEST-BUY-01)
         # D-GIFT-FAN-01: a gift's giver doesn't own the music, so no thank-you for owning it.
         from cornerroom.modules.commerce.domain.fan_gifts import FanGift
 
@@ -1474,7 +1477,7 @@ class ArtistMailService:
                 select(OrderItem.item_type, OrderItem.ref_id)
                 .join(Order, Order.id == OrderItem.order_id)
                 .where(Order.user_id == user_id, Order.status.in_(KEPT_ORDER_STATUSES), Order.deleted_at.is_(None),
-                       OrderItem.item_type.in_(("TRACK", "RELEASE")))
+                       Order.is_test.is_(False), OrderItem.item_type.in_(("TRACK", "RELEASE")))
                 .distinct()
             )
         ).all()

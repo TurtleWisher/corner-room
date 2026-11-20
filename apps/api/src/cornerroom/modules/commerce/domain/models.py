@@ -42,6 +42,9 @@ class Order(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ba
     # D-GIFT-FAN-01: paid with gift credit for the act's music (no new money; that sale counted when
     # the gift was paid for). 0 on every other order.
     paid_with_credit_minor: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    # D-TEST-BUY-01 (owner, 2026-11-21): a platform admin's test buy. No money; never in sales,
+    # royalties, finance, the artist's emails, gift campaigns, pre-sale numbers or analytics.
+    is_test: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
 
 
 class OrderItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):

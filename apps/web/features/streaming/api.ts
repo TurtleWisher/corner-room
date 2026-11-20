@@ -213,6 +213,11 @@ export async function removeLibraryItem(item_id: string): Promise<void> {
 /** Songs this person may listen to without buying (D-STREAM-02): catalog staff, or the music's own
  * artist or band. Listening only; downloads and offline saving still need a purchase. */
 export async function fetchMyStreamAccess(): Promise<string[]> {
-  const res = await apiFetch<{ track_ids: string[] }>("/api/v1/me/stream-access", { retry: false });
-  return res.track_ids;
+  return (await fetchMyAccess()).trackIds;
+}
+
+/** The same, with whether this person is a platform admin: plays everything, buys as a test (D-STREAM-03, D-TEST-BUY-01). */
+export async function fetchMyAccess(): Promise<{ trackIds: string[]; platformStaff: boolean }> {
+  const res = await apiFetch<{ track_ids: string[]; platform_staff?: boolean }>("/api/v1/me/stream-access", { retry: false });
+  return { trackIds: res.track_ids, platformStaff: res.platform_staff === true };
 }

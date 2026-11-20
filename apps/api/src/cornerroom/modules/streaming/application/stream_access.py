@@ -6,6 +6,10 @@
   any buying restriction"); the Administrator role holds `org.admin` but not `music.approve`.
 - The music's own people: the artist who claimed the profile, or the admins of the band, may stream
   their own songs, including songs on their releases.
+- Platform admins (owner, 2026-11-21, D-STREAM-03): `music.approve` or `org.admin` for the whole
+  platform (a role with no organization) or in the workspace that runs Corner Room (type PLATFORM)
+  may stream every song on Corner Room. A label's own staff keep only their label's music, so one
+  label never hears another's unreleased songs. Platform admins' buys are tests (D-TEST-BUY-01).
 
 This is listening only. Downloads and offline saving still need a purchase (D-AUDIO-06, D-AUDIO-18),
 and buying stays possible. Everyone else needs an entitlement, as before (Q-P9-04 / Q-P8-09).
@@ -53,14 +57,32 @@ class StreamAccess:
                 (bands if artist.kind == "BAND" else artists).add(pid)
         return artists, bands
 
+    async def is_platform_staff(self, user_id: UUID) -> bool:
+        """Catalog staff or admins for the whole platform, or in the workspace that runs Corner Room."""
+        from cornerroom.modules.identity.domain.models import Organization
+
+        if STAFF_PERMISSIONS & set(await self.authz.permission_keys(user_id, organization_id=None)):
+            return True
+        for membership in await self.authz.load_memberships(user_id):
+            if membership.status != "ACTIVE":
+                continue
+            org = await self.session.get(Organization, membership.organization_id)
+            if org is None or org.deleted_at is not None or org.type != "PLATFORM":
+                continue
+            if STAFF_PERMISSIONS & set(await self.authz.permission_keys(user_id, organization_id=org.id)):
+                return True
+        return False
+
     async def can_stream(self, user_id: UUID, track_id: UUID) -> bool:
-        """Staff of the song's organization, or the people of its artist or band (or of a release
-        it is on)."""
+        """Platform admins; staff of the song's organization; or the people of its artist or band
+        (or of a release it is on)."""
         from cornerroom.modules.music.domain.models import Release, ReleaseTrack, Track
 
         track = await self.session.get(Track, track_id)
         if track is None:
             return False
+        if await self.is_platform_staff(user_id):
+            return True
         if track.primary_org_id is not None:
             keys = await self.authz.permission_keys(user_id, organization_id=track.primary_org_id)
             if STAFF_PERMISSIONS & set(keys):
@@ -84,6 +106,9 @@ class StreamAccess:
         """Every song this user may stream without buying, for the web app's Play buttons."""
         from cornerroom.modules.music.domain.models import Release, ReleaseTrack, Track
 
+        if await self.is_platform_staff(user_id):
+            rows = await self.session.execute(select(Track.id).where(Track.deleted_at.is_(None)))
+            return list(rows.scalars())
         orgs = await self.staff_org_ids(user_id)
         artists, bands = await self.owned_profiles(user_id)
         conditions = []

@@ -5,6 +5,7 @@ import type { OrderRecord } from "@/lib/api";
 import { humanizeStatus } from "@/lib/format/status";
 import { preorderNote } from "@/lib/presale-view";
 import { ORDER_STATUS, PAYMENT_STATUS } from "@/lib/status-maps";
+import { TEST_BUY_WORDS } from "@/lib/test-buy-view";
 
 /** commerce order purposes: TICKET, TRACK, RELEASE; SUBSCRIPTION only on old orders (D-COMMERCE-01). */
 const PURPOSE: Record<string, string> = { TICKET: "Tickets", TRACK: "Music", SUBSCRIPTION: "Subscription" };
@@ -29,6 +30,7 @@ export function OrdersTable({ orders }: { orders: OrderRecord[] }) {
           <TR key={row.id}>
             <TD>
               {row.purpose ? (PURPOSE[row.purpose] ?? humanizeStatus(row.purpose)) : "Order"}
+              {row.is_test ? <span className="ml-2 text-xs font-semibold text-highlight">({TEST_BUY_WORDS.tag})</span> : null}
               {preorderNote(row) ? <span className="block text-xs text-fg-muted">{preorderNote(row)}</span> : null}
             </TD>
             <TD>

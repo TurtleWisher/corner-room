@@ -137,6 +137,7 @@ class PresaleService:
                 Order.is_presale.is_(True),
                 Order.status.in_(PRESALE_ORDER_STATUSES),
                 Order.deleted_at.is_(None),
+                Order.is_test.is_(False),  # a staff test pre-order is never told, refunded or counted
                 OrderItem.ref_id == release_id,
             )
             .distinct()

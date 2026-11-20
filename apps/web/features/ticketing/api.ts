@@ -84,6 +84,8 @@ export type OrderRecord = {
   paid_with_credit_minor?: number;
   /** Bought as a gift for other people (D-GIFT-FAN-01). */
   is_gift?: boolean;
+  /** A platform admin's test buy: no money, never counted (D-TEST-BUY-01). */
+  is_test?: boolean;
 };
 
 export type TicketRecord = {
@@ -168,6 +170,11 @@ export async function createCatalogOrder(offer_id: string, idempotencyKey: strin
     body: JSON.stringify({ offer_id, delivery_address_confirmed: deliveryConfirmed, ...(amountMinor === undefined ? {} : { amount_minor: amountMinor }) }),
     retry: false,
   });
+}
+
+/** Finish a platform admin's test buy (D-TEST-BUY-01): no money moves. */
+export async function completeTestOrder(orderId: string): Promise<OrderRecord> {
+  return apiFetch<OrderRecord>(`/api/v1/orders/${orderId}/complete-test`, { method: "POST", retry: false });
 }
 
 export async function sandboxConfirmPayment(paymentId: string): Promise<OrderRecord> {

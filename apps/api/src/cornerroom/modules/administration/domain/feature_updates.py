@@ -304,6 +304,7 @@ FEATURES: Final[list[dict]] = [
             "administrators and the music's own artist or band listen without buying."
         ),
         "updates": [
+            {"date": "2026-11-21", "kind": "IMPROVED", "title": "Admins play every song", "details": "Corner Room's own admins play every song on Corner Room without buying; a label's staff still play only their label's music."},
             {
                 "date": "2026-11-16",
                 "kind": "IMPROVED",
@@ -516,6 +517,7 @@ FEATURES: Final[list[dict]] = [
             "one arrives). A delivery address is confirmed before paying, in any country."
         ),
         "updates": [
+            {"date": "2026-11-21", "kind": "NEW", "title": "Staff test buys", "details": "When a Corner Room admin buys, it is a test: they go through checkout as a fan would and press Complete as a test. No money moves, and it never reaches sales, royalties, the artist or any live numbers."},
             {"date": "2026-10-29", "kind": "IMPROVED", "title": "Simple delivery address", "details": "The same few fields for every country."},
             {"date": "2026-10-28", "kind": "IMPROVED", "title": "Addresses anywhere", "details": "Addresses and phone numbers in any country."},
             {"date": "2026-10-25", "kind": "NEW", "title": "Finance staff alerts", "details": "Finance staff are emailed when a buyer sends a Bangla QR transaction ID."},

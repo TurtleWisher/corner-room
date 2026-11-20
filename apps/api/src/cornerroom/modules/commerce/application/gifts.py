@@ -487,6 +487,8 @@ class GiftCampaignService:
                     # instead (below). An order paid with gift credit is its buyer's, as any order
                     # (owner, 2026-11-20, D-GIFT-FAN-01: whoever has been gifted to earns it).
                     Order.id.not_in(select(FanGift.order_id)),
+                    # Staff test buys never earn a collectible (D-TEST-BUY-01).
+                    Order.is_test.is_(False),
                     (OrderItem.product_id.in_(products or {UUID(int=0)})) | (OrderItem.ref_id.in_(subjects)),
                 )
                 .distinct()
@@ -526,6 +528,7 @@ class GiftCampaignService:
                     FanGiftRecipient.user_id.is_not(None),
                     FanGift.status == "DELIVERED",
                     Order.status.in_(GIFT_ORDER_STATUSES),
+                    Order.is_test.is_(False),
                     (FanGift.product_id.in_(products or {UUID(int=0)})) | (FanGift.work_id.in_(subjects)),
                 )
             )
