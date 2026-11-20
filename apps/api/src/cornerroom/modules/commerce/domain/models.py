@@ -39,6 +39,9 @@ class Order(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ba
     is_presale: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     # D-GIFT-MUSIC-01: a ৳0 order made by an artist's music gift (no payment, never money).
     music_gift_id: Mapped[UUID | None] = mapped_column(ForeignKey("commerce.music_gifts.id"), nullable=True)
+    # D-GIFT-FAN-01: paid with gift credit for the act's music (no new money; that sale counted when
+    # the gift was paid for). 0 on every other order.
+    paid_with_credit_minor: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
 
 
 class OrderItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):

@@ -61,6 +61,7 @@ from cornerroom.modules.commerce.domain.gifts import (
     phone_key,
     update_waiting,
 )
+from cornerroom.modules.commerce.domain.fan_gifts import FanGift
 from cornerroom.modules.commerce.domain.models import Order, OrderDeliveryAddress, OrderItem, PresaleClaim, Product
 
 # Paid orders that still count (a fully refunded order no longer earns the gift).
@@ -482,6 +483,10 @@ class GiftCampaignService:
                     Order.deleted_at.is_(None),
                     # Music an artist gave away (D-GIFT-MUSIC-01) wasn't bought: it earns no campaign gift.
                     Order.music_gift_id.is_(None),
+                    # Fan gifts and orders paid with gift credit (D-GIFT-FAN-01): who earns a
+                    # collectible from them is still the owner's call (OPEN), so neither does yet.
+                    Order.id.not_in(select(FanGift.order_id)),
+                    Order.paid_with_credit_minor == 0,
                     (OrderItem.product_id.in_(products or {UUID(int=0)})) | (OrderItem.ref_id.in_(subjects)),
                 )
                 .distinct()

@@ -152,6 +152,11 @@ MUSIC_GIFT_SUBMITTED = "MusicGiftSubmitted"
 MUSIC_GIFT_APPROVED = "MusicGiftApproved"
 MUSIC_GIFT_REJECTED = "MusicGiftRejected"
 MUSIC_GIFT_GIVEN = "MusicGiftGiven"
+# D-GIFT-FAN-01: fans buy music for people they know (commerce/application/fan_gifts.py).
+# FanGiftSent: one person was emailed their gift. FanGiftReturned: a declined or unclaimed gift went
+# back to the giver as credit for the act's music.
+FAN_GIFT_SENT = "FanGiftSent"
+FAN_GIFT_RETURNED = "FanGiftReturned"
 # D-CHANGES-01: changes to released music wait for staff (music/application/changes.py).
 RELEASE_CHANGES_SUBMITTED = "ReleaseChangesSubmitted"
 RELEASE_CHANGES_REJECTED = "ReleaseChangesRejected"

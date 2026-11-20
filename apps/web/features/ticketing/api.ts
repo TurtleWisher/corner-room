@@ -80,6 +80,10 @@ export type OrderRecord = {
   payment_submission?: PaymentSubmission | null;
   /** A pre-order made before the release was out; the music unlocks on release day (D-PRESALE-02). */
   is_presale?: boolean;
+  /** Paid with gift credit for the act's music: no payment, no new money (D-GIFT-FAN-01). */
+  paid_with_credit_minor?: number;
+  /** Bought as a gift for other people (D-GIFT-FAN-01). */
+  is_gift?: boolean;
 };
 
 export type TicketRecord = {

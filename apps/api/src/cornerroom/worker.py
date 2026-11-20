@@ -254,7 +254,15 @@ async def send_scheduled_artist_mail(ctx: dict) -> int:
         await session.commit()
     if dispatched:
         log.info("scheduled_gifts_dispatched", gifts=dispatched, operation="commerce.gift_campaigns")
-    return sent + given + dispatched
+    # Fan gifts nobody claimed in time go back to the giver as credit (D-GIFT-FAN-01).
+    from cornerroom.modules.commerce.application.fan_gifts import FanGiftService
+
+    async with factory() as session:
+        returned = await FanGiftService(session).expire_due()
+        await session.commit()
+    if returned:
+        log.info("fan_gifts_returned", gifts=returned, operation="commerce.fan_gifts")
+    return sent + given + dispatched + returned
 
 
 class WorkerSettings:

@@ -1,6 +1,6 @@
 "use client";
 
-import { Headphones, ShoppingBag } from "lucide-react";
+import { Gift, Headphones, ShoppingBag } from "lucide-react";
 
 import { OrdersTable } from "@/components/account/orders-table";
 import { ButtonLink, EmptyState, ErrorState, Skeleton, StatusChip } from "@/components/ds";
@@ -111,9 +111,15 @@ export default function PurchasesPage() {
       title="Purchases"
       what="your purchases"
       actions={
-        <ButtonLink href="/store" variant="secondary" size="sm">
-          <ShoppingBag aria-hidden="true" /> Store
-        </ButtonLink>
+        <div className="flex flex-wrap gap-2">
+          {/* D-GIFT-FAN-01: gifts bought for other people and gift credit. */}
+          <ButtonLink href="/account/gifts" variant="secondary" size="sm">
+            <Gift aria-hidden="true" /> Your gifts
+          </ButtonLink>
+          <ButtonLink href="/store" variant="secondary" size="sm">
+            <ShoppingBag aria-hidden="true" /> Store
+          </ButtonLink>
+        </div>
       }
     >
       <Purchases />

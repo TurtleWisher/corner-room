@@ -104,6 +104,23 @@ class OrderCreate(BaseModel):
     # D-OPEN-PRICE-01: what the buyer chose to pay for an open-price offer (minor units, in the
     # offer's currency). Refused for a fixed price and below the offer's lowest amount.
     amount_minor: int | None = Field(default=None, gt=0, le=9_000_000_000_000)
+    # D-GIFT-FAN-01: pay the whole order with gift credit for the act's music (no payment).
+    use_credit: bool = False
+    # D-GIFT-FAN-01: buy this offer as a gift for these people, each paid for, with an optional note.
+    gift: "GiftOrderIn | None" = None
+
+
+class GiftPersonIn(BaseModel):
+    email: str = Field(max_length=320)
+    name: str | None = Field(default=None, max_length=200)
+
+
+class GiftOrderIn(BaseModel):
+    people: list[GiftPersonIn] = Field(min_length=1, max_length=200)
+    note: str | None = Field(default=None, max_length=2000)
+
+
+OrderCreate.model_rebuild()
 
 
 class PaymentOut(BaseModel):
@@ -149,6 +166,9 @@ class OrderOut(BaseModel):
     currency_code: str
     # D-PRESALE-02: a pre-order; the music unlocks on release day.
     is_presale: bool = False
+    # D-GIFT-FAN-01: paid with gift credit (no payment), and whether it is a gift for other people.
+    paid_with_credit_minor: int = 0
+    is_gift: bool = False
     payment: PaymentOut | None = None
     # Present on single-order reads (create, get, confirm); omitted in lists.
     items: list[OrderItemOut] | None = None
@@ -265,6 +285,7 @@ def _order_out(row: Order, payment: Payment | None, details: dict[str, Any] | No
         total_amount_minor=row.total_amount_minor,
         currency_code=row.currency_code,
         is_presale=bool(getattr(row, "is_presale", False)),
+        paid_with_credit_minor=int(getattr(row, "paid_with_credit_minor", 0) or 0),
         payment=_payment_out(payment) if payment else None,
     )
     if details is not None:
@@ -279,7 +300,11 @@ def _order_out(row: Order, payment: Payment | None, details: dict[str, Any] | No
 
 
 async def _order_full(svc: CheckoutService, row: Order, payment: Payment | None) -> OrderOut:
-    return _order_out(row, payment, await svc.order_details(row))
+    from cornerroom.modules.commerce.application.fan_gifts import FanGiftService
+
+    out = _order_out(row, payment, await svc.order_details(row))
+    out.is_gift = await FanGiftService(svc.session, settings=svc.settings).gift_for_order(row.id) is not None
+    return out
 
 
 def _ticket_out(row: Ticket, token: str | None) -> TicketOut:
@@ -451,6 +476,13 @@ async def create_order(
         if body.offer_id is None:
             raise AppError("VALIDATION_ERROR", "Only an open price takes an amount", 422)
         fingerprint["amount_minor"] = body.amount_minor
+    if body.use_credit or body.gift is not None:
+        if body.offer_id is None:
+            raise AppError("VALIDATION_ERROR", "Only music takes a gift or gift credit", 422)
+        if body.use_credit and body.gift is not None:
+            raise AppError("VALIDATION_ERROR", "Gift credit can't pay for a gift", 422)
+        fingerprint["use_credit"] = body.use_credit
+        fingerprint["gift"] = body.gift.model_dump(mode="json") if body.gift is not None else None
     started = await begin_idempotent(
         session,
         key=key,
@@ -468,6 +500,17 @@ async def create_order(
                 idempotency_key=f"{ctx.user_id}:{idempotency_key}",
                 delivery_confirmed=body.delivery_address_confirmed,
             )
+        elif body.gift is not None:
+            from cornerroom.modules.commerce.application.fan_gifts import FanGiftService
+
+            order, payment = await FanGiftService(session, settings=settings).checkout(
+                ctx,
+                offer_id=body.offer_id,
+                people=[p.model_dump() for p in body.gift.people],
+                note=body.gift.note,
+                idempotency_key=f"{ctx.user_id}:{idempotency_key}",
+                chosen_amount_minor=body.amount_minor,
+            )
         else:
             order, payment = await svc.checkout_from_offer(
                 ctx,
@@ -475,6 +518,7 @@ async def create_order(
                 idempotency_key=f"{ctx.user_id}:{idempotency_key}",
                 delivery_confirmed=body.delivery_address_confirmed,
                 chosen_amount_minor=body.amount_minor,
+                use_credit=body.use_credit,
             )
         out =(await _order_full(svc, order, payment)).model_dump(mode="json")
         await complete_idempotent(session, started, status_code=201, body=json.dumps(out, default=str))
