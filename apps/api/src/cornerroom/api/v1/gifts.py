@@ -100,8 +100,8 @@ class CampaignOut(BaseModel):
 
 class RecipientOut(BaseModel):
     id: UUID
-    # YET_TO_SEND (not prepared yet), PREPARED, DISPATCHED (the buyer was told), RECEIVED, RETURNED
-    # or MISSING (D-CAMPAIGN-03).
+    # YET_TO_SEND (not prepared yet), PREPARED, DISPATCHED, RECEIVED, RETURNED or MISSING
+    # (D-CAMPAIGN-03). Moving a gift tells nobody (D-CAMPAIGN-08).
     status: str
     # BUYER (found on Corner Room or the pre-sale list) or ADDED (typed in or from a sheet, D-CAMPAIGN-04).
     source: str = "BUYER"
@@ -112,6 +112,10 @@ class RecipientOut(BaseModel):
     dispatched_at: datetime | None = None
     # When it was received, returned or marked missing.
     outcome_at: datetime | None = None
+    # D-CAMPAIGN-08: when the buyer was told about this status (Send update), and whether they are
+    # still waiting to be told (Dispatched, Returned or Missing, reachable, not told since it moved).
+    told_at: datetime | None = None
+    update_waiting: bool = False
     # Staff only.
     email: str | None = None
     # Staff, and the artist when they send the gifts themselves.
@@ -127,6 +131,8 @@ class CampaignDetailOut(CampaignOut):
     shows_contact: bool
     # Where each status may go next.
     transitions: dict[str, list[str]] = Field(default_factory=dict)
+    # D-CAMPAIGN-08: per status that tells the buyer, how many buyers haven't been told yet.
+    updates_waiting: dict[str, int] = Field(default_factory=dict)
     recipients: list[RecipientOut]
     # D-CAMPAIGN-04: whether people can be added now, whether this viewer approves the act's additions,
     # and the additions still waiting for staff (with the details the act typed in).
@@ -138,6 +144,9 @@ class CampaignDetailOut(CampaignOut):
     moved: int | None = None
     skipped: int | None = None
     added: int | None = None
+    # After Send update: how many buyers were told, and how many of them by email.
+    told: int | None = None
+    emailed: int | None = None
 
 
 RecipientStatus = Literal["YET_TO_SEND", "PREPARED", "DISPATCHED", "RECEIVED", "RETURNED", "MISSING"]
@@ -240,8 +249,8 @@ async def resume_campaign(campaign_id: UUID, ctx: Ctx, svc: Svc) -> CampaignDeta
 
 @router.post("/studio/gift-campaigns/{campaign_id}/recipients/transition", response_model=CampaignDetailOut)
 async def track_gifts(campaign_id: UUID, body: RecipientsTransitionIn, ctx: Ctx, svc: Svc) -> CampaignDetailOut:
-    """Collectible tracking (D-CAMPAIGN-03): prepare, dispatch now or at a time (the buyer is told it
-    is on its way), then received, returned or missing (returned and missing tell the buyer)."""
+    """Collectible tracking (D-CAMPAIGN-03): prepare, dispatch now or at a time, then received,
+    returned or missing. Moving tells nobody: Send update does (owner, 2026-11-20, D-CAMPAIGN-08)."""
     return CampaignDetailOut(
         **await svc.transition(
             ctx, campaign_id, to=body.to, ids=body.recipient_ids, every=body.every, dispatch_at=body.dispatch_at
@@ -433,6 +442,20 @@ class StatusMailTestOut(BaseModel):
 async def status_emails(campaign_id: UUID, ctx: Ctx, svc: MailSvc) -> StatusMailsOut:
     """The emails each collectible status sends the buyer: Corner Room's wording or the act's own."""
     return StatusMailsOut(**await svc.view(ctx, campaign_id))
+
+
+class SendUpdateIn(BaseModel):
+    """Tell the buyers in one status who haven't been told yet: all of them, or just these."""
+
+    recipient_ids: list[UUID] | None = Field(default=None, max_length=500)
+
+
+@router.post("/studio/gift-campaigns/{campaign_id}/status-emails/{status}/send-update", response_model=CampaignDetailOut)
+async def send_status_update(campaign_id: UUID, status: MailStatus, body: SendUpdateIn, ctx: Ctx, svc: MailSvc) -> CampaignDetailOut:
+    """Send update (owner, 2026-11-20, D-CAMPAIGN-08): email the buyers whose gift is in this status
+    and who haven't been told since it moved, with the act's approved words or Corner Room's.
+    Whoever may move the gifts may press it."""
+    return CampaignDetailOut(**await svc.send_update(ctx, campaign_id, status, body.recipient_ids))
 
 
 @router.put("/studio/gift-campaigns/{campaign_id}/status-emails/{status}", response_model=StatusMailsOut)

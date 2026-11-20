@@ -4,8 +4,8 @@
  * Every email of one gift campaign, on the campaign's own page (owner, 2026-11-09, D-CAMPAIGN-07:
  * "I can't manage my gift update emails from the collectible section directly"). Three parts:
  *
- *   - How it works, in two lanes: automatic emails (they go by themselves when a gift moves, with
- *     wording Corner Room approved) and emails to buyers you pick (words and people go to Corner
+ *   - How it works, in two lanes: automatic emails (one wording per status, Corner Room approved;
+ *     since 2026-11-20, D-CAMPAIGN-08, they go when the act presses Send update, never on a move) and emails to buyers you pick (words and people go to Corner
  *     Room together; once approved you press Send). Staff send at once.
  *   - Emails to buyers you pick: write one (people from Collectibles arrive already picked), and
  *     each request's card says where it is, with the one action that fits (Send, Change, Take back;
@@ -125,7 +125,8 @@ export function GiftEmails({
             </span>
             <p className="mt-3 font-bold text-fg">Automatic emails</p>
             <p className="mt-1 text-sm text-fg-muted">
-              Go by themselves when you mark a gift Dispatched, Returned or Missing. You only write the wording once;{" "}
+              Go out when you press Send update on Collectibles, after marking gifts Dispatched, Returned or Missing. Marking a gift
+              emails nobody. You only write the wording once;{" "}
               {atOnce ? "yours is used at once." : "Corner Room approves it once."}
             </p>
           </div>
@@ -198,7 +199,7 @@ export function GiftEmails({
       {/* Automatic emails. */}
       <section aria-labelledby="ge-auto" className="grid gap-3">
         <div>
-          <p className="sk-kicker">Sent by themselves</p>
+          <p className="sk-kicker">Sent with Send update</p>
           <h3 id="ge-auto" className="mt-1 text-xl font-bold text-fg">
             Automatic emails
           </h3>
@@ -465,7 +466,7 @@ function SentSoFar({ mails }: { mails: StatusMails }) {
                     <span className="block text-xs text-fg-muted">
                       {h.gift_status === "OTHER" ? "Other news" : STATUS_MAIL_TAB[h.gift_status as StatusMailStatus] ?? h.gift_status}
                       {" · "}
-                      {h.send_id ? "picked by you" : "sent by itself"}
+                      {h.send_id ? "picked by you" : "status update"}
                     </span>
                   </span>
                   <span className="flex items-center gap-3 text-xs text-fg-muted">

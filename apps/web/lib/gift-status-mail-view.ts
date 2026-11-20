@@ -2,6 +2,7 @@
  * Gift status emails in Studio (owner, 2026-11-07, D-CAMPAIGN-05 and D-CAMPAIGN-06): words for each
  * status and state, which version sends, and the email as one buyer will read it (their own name).
  * Pure helpers; the API keeps the emails, decides what sends and writes the real email.
+ * Since owner, 2026-11-20 (D-CAMPAIGN-08) moving a gift emails nobody: the act presses Send update.
  */
 
 import type { GiftRecipientStatus, StatusMail, StatusMailInput, StatusMailPerson, StatusMailSent, StatusMailState, StatusMailStatus } from "@/features/gifts/api";
@@ -20,10 +21,85 @@ export const STATUS_MAIL_TAB: Record<StatusMailStatus, string> = {
 };
 
 export const STATUS_MAIL_WHEN: Record<StatusMailStatus, string> = {
-  DISPATCHED: "Sends by itself when a gift is dispatched, now or at its set time.",
-  RETURNED: "Sends by itself when a gift is marked returned.",
-  MISSING: "Sends by itself when a gift is marked missing.",
+  DISPATCHED: "Sends when you press Send the Dispatched update, never when a gift is just marked dispatched.",
+  RETURNED: "Sends when you press Send the Returned update, never when a gift is just marked returned.",
+  MISSING: "Sends when you press Send the Missing update, never when a gift is just marked missing.",
 };
+
+/** The button that tells buyers (D-CAMPAIGN-08). */
+export function updateButtonLabel(status: StatusMailStatus, n?: number): string {
+  return `Send the ${STATUS_MAIL_TAB[status]} update${n ? ` to ${n}` : ""}`;
+}
+
+/** "3 buyers are marked dispatched and haven't been told yet." */
+export function updatesWaitingLine(status: StatusMailStatus, n: number): string {
+  const who = `${n} ${n === 1 ? "buyer is" : "buyers are"}`;
+  return `${who} marked ${STATUS_MAIL_TAB[status].toLowerCase()} and ${n === 1 ? "hasn't" : "haven't"} been told yet.`;
+}
+
+/** After Send update: who was told, and how. */
+export function updateSentLine(told: number, emailed: number): string {
+  const who = `${told} ${told === 1 ? "buyer" : "buyers"}`;
+  if (emailed >= told) return `Told ${who}. Each email shows in the Emails part as On its way, then Sent.`;
+  const none = told - emailed;
+  return `Told ${who}: ${emailed} by email, ${none} only in their Corner Room account (no email address).`;
+}
+
+/** Said after moving gifts into a status that tells the buyer: nobody has been emailed yet. */
+export const MOVE_TELLS_NOBODY = "Nobody has been emailed. Send the update when you're ready.";
+
+// --- A buyer's name typed out (owner, 2026-11-20: "Dear Ishmamul" went to every buyer) -----------
+
+// Fill-ins and whole links ([words](https://...)) are never a typed-out name: a link's words can't hold a fill-in.
+const FILL_OR_LINK = /\{[a-z_]+\}|\[[^\]\n]*\]\([^)\s]*\)/g;
+const WORD = /[\p{L}\p{M}][\p{L}\p{M}\p{N}'_]*/gu;
+
+function cased(w: string): boolean {
+  return w[0].toUpperCase() !== w[0].toLowerCase();
+}
+
+/**
+ * The buyers' names written out in the subject or the greeting line (the first line of the message)
+ * instead of the First name fill-in. Mirrors `names_written_out` on the server, which refuses them:
+ * a name in a cased script counts only with a capital, words of the act, music and gift never.
+ */
+export function namesWrittenOut(subject: string, body: string, names: (string | null | undefined)[], ignore: (string | null | undefined)[] = []): string[] {
+  const skip = new Set(ignore.flatMap((t) => (t ?? "").match(WORD) ?? []).map((w) => w.toLowerCase()));
+  const wanted = new Map<string, string>();
+  for (const n of names) {
+    for (const w of (n ?? "").match(WORD) ?? []) {
+      if ([...w].length >= 3 && !skip.has(w.toLowerCase()) && !wanted.has(w.toLowerCase())) wanted.set(w.toLowerCase(), w[0].toUpperCase() + w.slice(1));
+    }
+  }
+  if (!wanted.size) return [];
+  const firstLine = (body ?? "").split("\n").find((l) => l.trim()) ?? "";
+  const found: string[] = [];
+  for (const part of [subject ?? "", firstLine]) {
+    for (const w of part.replace(FILL_OR_LINK, " ").match(WORD) ?? []) {
+      const hit = wanted.get(w.toLowerCase());
+      if (hit && (!cased(w) || w[0] === w[0].toUpperCase()) && !found.includes(hit)) found.push(hit);
+    }
+  }
+  return found;
+}
+
+/** Put the First name fill-in where these names are written out in the subject and greeting line. */
+export function firstNameInstead(subject: string, body: string, names: string[]): { subject: string; body: string } {
+  if (!names.length) return { subject, body };
+  const lower = new Set(names.map((n) => n.toLowerCase()));
+  // Fill-ins and link addresses are kept as they are; only plain words are swapped.
+  const swap = (text: string) =>
+    text
+      .split(/(\{[a-z_]+\}|\[[^\]\n]*\]\([^)\s]*\))/)
+      .map((piece, i) =>
+        i % 2 ? piece : piece.replace(WORD, (w) => (lower.has(w.toLowerCase()) && (!cased(w) || w[0] === w[0].toUpperCase()) ? "{first_name}" : w)),
+      )
+      .join("");
+  const lines = body.split("\n");
+  const i = lines.findIndex((l) => l.trim());
+  if (i >= 0) lines[i] = swap(lines[i]);
+  return { subject: swap(subject), body: lines.join("\n") };
+}
 
 export const STATE_LABEL: Record<StatusMailState, string> = {
   DRAFT: "Your draft, not sent for review",
@@ -135,7 +211,7 @@ export function workflowSteps(item: StatusMail, approvesAtOnce: boolean): Step[]
   const sent = item.sent_count;
   const deliver: Step = {
     title: "Buyers get it",
-    line: `By itself when you mark a gift ${status}.${sent ? ` ${sentCountLine(sent)} so far.` : ""}`,
+    line: `When you press Send the ${STATUS_MAIL_TAB[item.status]} update on Collectibles, after marking gifts ${status}.${sent ? ` ${sentCountLine(sent)} so far.` : ""}`,
     tone: sent ? "done" : "skip",
   };
   return [write, approval, deliver];
@@ -162,7 +238,7 @@ export function submitLabel(approvesAtOnce: boolean): string {
 /** Said after the main button, from the state the API came back with. */
 export function submitDoneLine(next: StatusMail | undefined): string {
   const status = next ? STATUS_MAIL_TAB[next.status].toLowerCase() : "";
-  if (next?.state === "APPROVED") return `Approved and in use. From now on every buyer whose gift is marked ${status} gets this email. Nobody was emailed just now.`;
+  if (next?.state === "APPROVED") return `Approved and in use. Send the ${next ? STATUS_MAIL_TAB[next.status] : ""} update sends this email to buyers whose gift is marked ${status}. Nobody was emailed just now.`;
   return "Sent to Corner Room for approval. Nobody was emailed. Until it's approved, buyers get the email in use now.";
 }
 

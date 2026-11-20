@@ -119,7 +119,7 @@ GIFT_CAMPAIGN_APPROVED = "GiftCampaignApproved"
 GIFT_CAMPAIGN_REJECTED = "GiftCampaignRejected"
 GIFT_CAMPAIGN_PAUSED = "GiftCampaignPaused"
 GIFT_CAMPAIGN_RESUMED = "GiftCampaignResumed"
-# One per recipient: the buyer is told the gift is on its way (in-app and email).
+# One per recipient when its gift leaves. Since D-CAMPAIGN-08 it tells nobody (see GIFT_UPDATE_SENT).
 GIFT_DISPATCHED = "GiftDispatched"
 # D-CAMPAIGN-03: collectible tracking. Returned and missing tell the buyer too (owner, 2026-11-06).
 GIFT_PREPARED = "GiftPrepared"
@@ -128,6 +128,9 @@ GIFT_DISPATCH_SCHEDULED = "GiftDispatchScheduled"
 GIFT_RECEIVED = "GiftReceived"
 GIFT_RETURNED = "GiftReturned"
 GIFT_MARKED_MISSING = "GiftMarkedMissing"
+# D-CAMPAIGN-08 (owner, 2026-11-20): one per buyer when the act presses Send update; the payload's
+# `status` says which (DISPATCHED, RETURNED, MISSING). The moves above tell nobody.
+GIFT_UPDATE_SENT = "GiftUpdateSent"
 # D-CAMPAIGN-05: the act's own wording for those status emails, approved by staff.
 GIFT_STATUS_MAIL_SUBMITTED = "GiftStatusMailSubmitted"
 GIFT_STATUS_MAIL_APPROVED = "GiftStatusMailApproved"

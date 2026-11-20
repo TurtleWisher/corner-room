@@ -298,7 +298,7 @@ function ActMailbox({
                       <h3 id="mb-auto-gifts" className="flex items-center gap-2 text-lg font-bold text-fg">
                         <Gift aria-hidden="true" className="size-5 text-highlight" /> Gift campaign emails
                       </h3>
-                      <p className="text-sm text-fg-muted">Each campaign emails buyers by itself when a gift is marked Dispatched, Returned or Missing. Open one to change its wording.</p>
+                      <p className="text-sm text-fg-muted">Each campaign has one email per status (Dispatched, Returned, Missing). It goes out when you press Send update on the campaign&apos;s Collectibles. Open one to change its wording.</p>
                       {giftList.length ? (
                         <ul className="grid gap-2">
                           {giftList.map((c) => (

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const api = vi.hoisted(() => ({ trackGifts: vi.fn() }));
+const api = vi.hoisted(() => ({ trackGifts: vi.fn(), fetchStatusMails: vi.fn(), sendStatusUpdate: vi.fn() }));
 vi.mock("@/features/gifts/api", async (orig) => ({ ...(await orig<typeof import("@/features/gifts/api")>()), ...api }));
 
 import type { GiftCampaignDetail, GiftRecipient } from "@/features/gifts/api";
@@ -44,6 +44,16 @@ const people: GiftRecipient[] = [
   { id: "r3", status: "PREPARED", has_account: true, name: "Tushar", prepared_at: "2026-11-06T10:00:00Z" },
 ];
 
+beforeAll(() => {
+  // jsdom has no <dialog> modal support.
+  HTMLDialogElement.prototype.showModal = function () {
+    this.setAttribute("open", "");
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.removeAttribute("open");
+    this.dispatchEvent(new Event("close"));
+  };
+});
 beforeEach(() => api.trackGifts.mockReset());
 afterEach(cleanup);
 
@@ -67,9 +77,11 @@ describe("CollectibleTracking", () => {
     fireEvent.click(screen.getByLabelText("Choose Tushar"));
     expect(screen.queryByRole("button", { name: /Mark received/ })).toBeNull();
     expect(screen.getByRole("button", { name: /Mark not prepared 1/ })).toBeTruthy();
-    expect(screen.getByText(/emails each buyer that their gift is on its way/)).toBeTruthy();
+    // Owner, 2026-11-20 (D-CAMPAIGN-08): moving emails nobody.
+    expect(screen.getByText(/Moving them emails nobody/)).toBeTruthy();
     await act(async () => screen.getByRole("button", { name: /Dispatch 1/ }).click());
     expect(api.trackGifts).toHaveBeenCalledWith("c1", { to: "DISPATCHED", recipient_ids: ["r3"] });
+    expect(screen.getByRole("status").textContent).toMatch(/Nobody has been emailed/);
   });
 
   it("schedules a dispatch at a chosen Bangladesh time, never one already gone", async () => {
@@ -130,5 +142,53 @@ describe("CollectibleTracking", () => {
     fireEvent.click(screen.getByLabelText("Choose Tushar"));
     fireEvent.click(screen.getByRole("button", { name: /Email these 2/ }));
     expect(onEmail).toHaveBeenCalledWith(["r1", "r3"]);
+  });
+
+  it("sends an update only after its check, and never one that names a buyer", async () => {
+    const told: GiftRecipient[] = [
+      { id: "r4", status: "DISPATCHED", has_account: true, name: "Ishmamul Haque", update_waiting: true },
+      { id: "r5", status: "DISPATCHED", has_account: true, name: "Rumi Das", update_waiting: true },
+    ];
+    const c = { ...campaign(told), updates_waiting: { DISPATCHED: 2 } };
+    const item = (body: string) => ({
+      status: "DISPATCHED", default_subject: "On its way", default_body: "Hi {first_name}", subject: null, body: null,
+      button_label: null, button_url: null, file_ids: [], state: "APPROVED", review_note: null, live: true,
+      live_subject: "Your {gift} left", live_body: body, live_button_label: null, live_button_url: null, live_file_ids: [],
+      sent_count: 0, can_review: false,
+    });
+    const mails = (body: string) => ({
+      campaign: { id: "c1", title: "Card", gift_items: "A signed card", status: "ACTIVE" }, profile: { kind: "artist", id: "a1" },
+      artist: "MIZULS", music: "Chaya Pore", viewer_role: "owner", fill_ins: [], items: [item(body)], people: [],
+    });
+    api.fetchStatusMails.mockResolvedValue(mails("Dear Ishmamul,\n\nIt left."));
+    const { unmount } = render(<CollectibleTracking c={c} onChange={() => {}} />);
+    expect(screen.getByText("2 buyers are marked dispatched and haven't been told yet.")).toBeTruthy();
+    await act(async () => screen.getByRole("button", { name: "Send the Dispatched update" }).click());
+    expect(await screen.findByText(/greets Ishmamul by name/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: /Email these 2 now/ }) as HTMLButtonElement).disabled).toBe(true);
+    unmount();
+
+    api.fetchStatusMails.mockResolvedValue(mails("Dear {first_name},\n\nIt left."));
+    api.sendStatusUpdate.mockResolvedValue({ ...campaign(told.map((t) => ({ ...t, update_waiting: false }))), told: 2, emailed: 2 });
+    const onChange = vi.fn();
+    render(<CollectibleTracking c={c} onChange={onChange} />);
+    expect(api.sendStatusUpdate).not.toHaveBeenCalled();
+    await act(async () => screen.getByRole("button", { name: "Send the Dispatched update" }).click());
+    const send = await screen.findByRole("button", { name: /Email these 2 now/ });
+    expect(screen.queryByText(/greets/)).toBeNull();
+    await act(async () => (send as HTMLButtonElement).click());
+    expect(api.sendStatusUpdate).toHaveBeenCalledWith("c1", "DISPATCHED", undefined);
+    expect(onChange).toHaveBeenCalled();
+    expect(screen.getByText(/^Told 2 buyers\./)).toBeTruthy();
+  });
+
+  it("sends the update to just the chosen buyers from the floating bar", async () => {
+    const told: GiftRecipient[] = [
+      { id: "r4", status: "DISPATCHED", has_account: true, name: "Ishmamul", update_waiting: true },
+      { id: "r5", status: "DISPATCHED", has_account: true, name: "Rumi", update_waiting: true },
+    ];
+    render(<CollectibleTracking c={{ ...campaign(told), updates_waiting: { DISPATCHED: 2 } }} onChange={() => {}} />);
+    fireEvent.click(screen.getByLabelText("Choose Rumi"));
+    expect(screen.getByRole("button", { name: /Send the Dispatched update to 1/ })).toBeTruthy();
   });
 });

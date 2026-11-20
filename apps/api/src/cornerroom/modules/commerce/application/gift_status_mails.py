@@ -12,6 +12,11 @@ something the buyer is owed, so they always send: a stop from the act's emails d
 and they carry no stop link or cover picture (a plain, personal message, the kind mail apps file
 with the person's own mail). Account holders' in-app note stays and sends no second email.
 
+Nothing goes out when a gift moves (owner, 2026-11-20, D-CAMPAIGN-08): the act presses Send update
+for a status, and only then are the buyers in it who haven't been told yet emailed (`send_update`).
+Words that greet one buyer by their written-out name are refused before they reach anyone
+(`names_written_out`): one buyer's name once went to everyone.
+
 Emails to buyers the act picks by hand (owner, 2026-11-09, D-CAMPAIGN-07) are one request: the
 words and the people go to staff together, staff approve or send it back with a note, and only then
 can the act press Send. Staff's own requests are approved and sent at once (D-REVIEW-ARTIST-01).
@@ -35,16 +40,14 @@ from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import (
     ARTIST_MAIL_QUEUED,
-    GIFT_DISPATCHED,
     GIFT_MAIL_SEND_APPROVED,
     GIFT_MAIL_SEND_RETURNED,
     GIFT_MAIL_SEND_SENT,
     GIFT_MAIL_SEND_SUBMITTED,
-    GIFT_MARKED_MISSING,
-    GIFT_RETURNED,
     GIFT_STATUS_MAIL_APPROVED,
     GIFT_STATUS_MAIL_RETURNED,
     GIFT_STATUS_MAIL_SUBMITTED,
+    GIFT_UPDATE_SENT,
     DomainEvent,
 )
 from cornerroom.modules.commerce.domain.artist_mail import ArtistMailFile, ArtistMailMessage
@@ -55,6 +58,8 @@ from cornerroom.modules.commerce.domain.gifts import (
     GiftMailSend,
     GiftRecipient,
     GiftStatusMail,
+    names_written_out,
+    update_waiting,
 )
 
 SUBJECT_MAX = 200
@@ -73,7 +78,7 @@ _FILL = re.compile(r"\{([a-z_]+)\}")
 _UNFINISHED = re.compile(r"\[add [^\]]*\]", re.IGNORECASE)
 _URL = re.compile(r"^https?://[^\s<>\"']{1,2000}$")
 
-EVENT_STATUS = {GIFT_DISPATCHED: "DISPATCHED", GIFT_RETURNED: "RETURNED", GIFT_MARKED_MISSING: "MISSING"}
+STATUS_WORDS = {"DISPATCHED": "Dispatched", "RETURNED": "Returned", "MISSING": "Missing"}
 
 # Corner Room's own wording: what sends until the act's is approved, and where editing starts.
 DEFAULTS: dict[str, tuple[str, str]] = {
@@ -150,6 +155,18 @@ def mail_values(name: str | None, artist: str, music: str) -> dict[str, str]:
     """What each fill-in becomes for one buyer: their own name, never a stand-in when it's known."""
     clean = " ".join((name or "").split())
     return {"first_name": first_name(clean), "buyer_name": clean or NO_NAME, "artist": artist, "music": music or "your music"}
+
+
+def refuse_written_names(found: list[str]) -> None:
+    """Stop words that greet a buyer by a name typed out, which every other buyer would read too."""
+    if found:
+        names = ", ".join(found[:3]) + (" and others" if len(found) > 3 else "")
+        raise AppError(
+            "NAME_WRITTEN_OUT",
+            f"These words greet {names} by name, so every buyer would read that name",
+            422,
+            "Put the First name fill-in where the name is, so each buyer reads their own.",
+        )
 
 
 class GiftStatusMailService:
@@ -287,6 +304,20 @@ class GiftStatusMailService:
             ).scalar_one()
         )
 
+    async def _names(self, campaign: GiftCampaign, ids: list[UUID] | None = None) -> list[str | None]:
+        """The buyers' names on this campaign (or just these), for the written-out name check."""
+        query = select(GiftRecipient).where(GiftRecipient.campaign_id == campaign.id)
+        if ids is not None:
+            query = query.where(GiftRecipient.id.in_(ids))
+        rows = (await self.session.execute(query)).scalars().all()
+        contact = await self.gifts._contact(list(rows))
+        return [contact.get(r.id, {}).get("name") for r in rows]
+
+    async def _check_names(self, campaign: GiftCampaign, subject: str, body: str, names: list[str | None]) -> None:
+        _row, _org, artist = await self.gifts.studio._profile(campaign.profile_type, campaign.profile_id)
+        ignore = [artist, campaign.gift_items, await self.gifts._music_line(campaign)]
+        refuse_written_names(names_written_out(subject, body, names, ignore))
+
     # --- writing --------------------------------------------------------------------------------
 
     def _status(self, status: str) -> str:
@@ -354,6 +385,7 @@ class GiftStatusMailService:
             raise AppError("INVALID_TRANSITION", "Nothing new to send for review", 409)
         if unfinished(row.subject, row.body, row.button_label):
             raise AppError("UNFINISHED_EMAIL", "Write the parts marked [add ...] first", 422)
+        await self._check_names(campaign, row.subject, row.body, await self._names(campaign))
         row.state = "IN_REVIEW"
         row.submitted_by = ctx.user_id
         row.submitted_at = self.clock.now()
@@ -383,6 +415,7 @@ class GiftStatusMailService:
                 ctx.user_id in owners or ctx.user_id in {row.created_by, row.updated_by, row.submitted_by}
             ):
                 raise AppError("SAME_PERSON_REVIEW", "Someone else must approve this", 403, "You wrote or changed this email")
+            await self._check_names(campaign, row.subject, row.body, await self._names(campaign))
             row.live_subject, row.live_body = row.subject, row.body
             row.live_button_label, row.live_button_url = row.button_label, row.button_url
             row.live_file_ids = list(row.file_ids or [])
@@ -473,18 +506,51 @@ class GiftStatusMailService:
         await mail._event(ctx, ARTIST_MAIL_QUEUED, "ArtistMailMessage", message.id, {"kind": kind}, campaign.organization_id)
         return True
 
-    async def tell_buyer(self, recipient_id: UUID, status: str) -> bool:
-        """A gift moved to a status that tells the buyer (worker, from the gift's event)."""
-        recipient = await self.session.get(GiftRecipient, recipient_id)
-        if recipient is None or status not in STATUS_MAIL_STATUSES:
-            return False
-        campaign = await self.session.get(GiftCampaign, recipient.campaign_id)
-        if campaign is None:
-            return False
-        _row, _org, artist = await self.gifts.studio._profile(campaign.profile_type, campaign.profile_id)
-        name = (await self.gifts._contact([recipient])).get(recipient.id, {}).get("name")
+    async def send_update(self, ctx: AuthContext, campaign_id: UUID, status: str, ids: list[UUID] | None = None) -> dict[str, Any]:
+        """Send update (owner, 2026-11-20, D-CAMPAIGN-08): tell the buyers whose gift is in this
+        status and who haven't been told since it moved (all of them, or just the chosen ones).
+        The words are the act's approved ones, else Corner Room's; each buyer gets them by email
+        with their own name, and account holders also get the in-app note. Who may press it is who
+        may move the gifts."""
+        status = self._status(status)
+        campaign, rows, artist = await self.gifts._recipients_for_action(ctx, campaign_id, ids or None, None if ids else status)
+        due = [r for r in rows if r.status == status and update_waiting(r)]
+        if not due:
+            raise AppError("NOTHING_TO_SEND", f"Everyone whose gift is {STATUS_WORDS[status]} has already been told", 409)
         version = self._sending(status, (await self._rows(campaign.id)).get(status))
-        return await self._queue(None, campaign, recipient, status, version, artist=artist, music=await self.gifts._music_line(campaign), name=name)
+        contact = await self.gifts._contact(due)
+        music = await self.gifts._music_line(campaign)
+        refuse_written_names(
+            names_written_out(
+                version["subject"], version["body"], [contact.get(r.id, {}).get("name") for r in due],
+                [artist, campaign.gift_items, music],
+            )
+        )
+        now = self.clock.now()
+        emailed = 0
+        for r in due:
+            name = contact.get(r.id, {}).get("name")
+            if await self._queue(ctx, campaign, r, status, version, artist=artist, music=music, name=name):
+                emailed += 1
+            r.told_at = now
+            await enqueue_outbox(
+                self.session,
+                DomainEvent(
+                    event_type=GIFT_UPDATE_SENT, producer="commerce", aggregate_type="GiftRecipient", aggregate_id=r.id,
+                    payload={**self.gifts._buyer_payload(r, campaign, artist, music), "status": status},
+                    occurred_at=now, actor_id=ctx.user_id, organization_id=campaign.organization_id,
+                    correlation_id=ctx.request_id,
+                ),
+            )
+        await self.session.flush()
+        await self.audit.record_from_auth(
+            ctx, action="gift_campaign.update_sent", entity_type="GiftCampaign", entity_id=campaign.id,
+            new_state={"status": status, "told": len(due), "emailed": emailed, "chosen": bool(ids)},
+            organization_id=campaign.organization_id,
+        )
+        out = await self.gifts.detail(ctx, campaign.id)
+        out["told"], out["emailed"] = len(due), emailed
+        return out
 
     # --- emails to buyers the act picks (D-CAMPAIGN-07) -------------------------------------------
 
@@ -549,6 +615,8 @@ class GiftStatusMailService:
         )
         if set(wanted) - known:
             raise AppError("VALIDATION_ERROR", "Someone on the list isn't on this campaign", 422)
+        if len(wanted) > 1:
+            await self._check_names(campaign, subject, body, await self._names(campaign, [UUID(w) for w in wanted]))
         return {
             "purpose": purpose, "subject": subject, "body": body, "button_label": label, "button_url": url,
             "file_ids": files, "recipient_ids": wanted,
@@ -713,12 +781,3 @@ class GiftStatusMailService:
             kind="TEST", to=me.email, user_id=me.id, subject_prefix="[Test] ",
         )
         return {"sent_to": me.email}
-
-
-async def queue_gift_email(event: DomainEvent, session: AsyncSession, settings: Settings) -> bool:
-    """A gift moved to a status that tells the buyer: queue its email (the act's approved words or
-    Corner Room's). False for events that aren't one of these."""
-    status = EVENT_STATUS.get(event.event_type)
-    if status is None or event.aggregate_id is None:
-        return False
-    return await GiftStatusMailService(session, settings).tell_buyer(event.aggregate_id, status)

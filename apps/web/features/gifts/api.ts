@@ -50,6 +50,10 @@ export type GiftRecipient = {
   dispatched_at?: string | null;
   /** When it was received, returned or marked missing. */
   outcome_at?: string | null;
+  /** D-CAMPAIGN-08: when the buyer was told about this status (Send update), and whether they are
+   * still waiting to be told (moving a gift tells nobody). */
+  told_at?: string | null;
+  update_waiting?: boolean;
   email?: string | null;
   name?: string | null;
   phone?: string | null;
@@ -63,6 +67,8 @@ export type GiftCampaignDetail = GiftCampaign & {
   shows_contact: boolean;
   /** Where each status may go next (from the API; the page never hard-codes it). */
   transitions: Partial<Record<GiftRecipientStatus, GiftRecipientStatus[]>>;
+  /** D-CAMPAIGN-08: per status that tells the buyer, how many buyers haven't been told yet. */
+  updates_waiting?: Partial<Record<StatusMailStatus, number>>;
   recipients: GiftRecipient[];
   /** D-CAMPAIGN-04: whether people can be added now, whether this viewer approves the act's
    * additions, and the additions still waiting for staff. */
@@ -74,6 +80,9 @@ export type GiftCampaignDetail = GiftCampaign & {
   moved?: number | null;
   skipped?: number | null;
   added?: number | null;
+  /** After Send update: how many buyers were told, and how many of them by email. */
+  told?: number | null;
+  emailed?: number | null;
 };
 
 /** Someone who bought outside Corner Room (D-CAMPAIGN-04): an email or a phone each. */
@@ -345,4 +354,15 @@ export function deliverGiftSend(id: string, sendId: string): Promise<StatusMails
 
 export function testStatusMail(id: string, status: StatusMailStatus, body: StatusMailInput & { recipient_id: string | null }): Promise<{ sent_to: string }> {
   return apiFetch<{ sent_to: string }>(`${mailsPath(id)}/${status}/test`, { method: "POST", headers: json, body: JSON.stringify(body), retry: false });
+}
+
+/** Send update (owner, 2026-11-20, D-CAMPAIGN-08): tell the buyers in this status who haven't been
+ * told yet (all of them, or just the chosen ones), with the act's approved words or Corner Room's. */
+export function sendStatusUpdate(id: string, status: StatusMailStatus, recipientIds?: string[]) {
+  return apiFetch<GiftCampaignDetail>(`${mailsPath(id)}/${status}/send-update`, {
+    method: "POST",
+    headers: json,
+    body: JSON.stringify(recipientIds?.length ? { recipient_ids: recipientIds } : {}),
+    retry: false,
+  });
 }

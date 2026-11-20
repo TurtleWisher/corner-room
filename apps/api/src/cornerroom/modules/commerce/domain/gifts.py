@@ -172,12 +172,56 @@ class GiftRecipient(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     dispatch_set_by: Mapped[UUID | None] = mapped_column(nullable=True)
     outcome_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     outcome_by: Mapped[UUID | None] = mapped_column(nullable=True)
+    # D-CAMPAIGN-08 (owner, 2026-11-20): moving a gift emails nobody. When the buyer was last told
+    # about its status: empty after every move, set when the act presses Send update. A gift that is
+    # Dispatched, Returned or Missing with no time here is waiting to be told.
+    told_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 # The statuses that email the buyer, and so the ones an act may word itself (owner, 2026-11-07,
 # D-CAMPAIGN-05). Prepared and received don't email anyone.
 STATUS_MAIL_STATUSES = ("DISPATCHED", "RETURNED", "MISSING")
 STATUS_MAIL_STATES = ("DRAFT", "IN_REVIEW", "APPROVED", "RETURNED")
+
+
+def update_waiting(r: GiftRecipient) -> bool:
+    """D-CAMPAIGN-08: this buyer's gift is in a status that tells them, they can be emailed, and
+    nobody has pressed Send update for it since it moved."""
+    return r.status in STATUS_MAIL_STATUSES and r.told_at is None and bool(r.email or r.user_id) and not r.waiting
+
+
+# Fill-ins and link addresses, left out of the name check; a word is letters (Bangla included).
+_FILL_OR_LINK = re.compile(r"\{[a-z_]+\}|\[[^\]\n]*\]\([^)\s]*\)")
+_WORD = re.compile(r"[^\W\d_][\w'ঀ-৿]*", re.UNICODE)
+
+
+def _cased(word: str) -> bool:
+    return word[:1].upper() != word[:1].lower()
+
+
+def names_written_out(subject: str, body: str, names: list[str | None], ignore: list[str | None] = ()) -> list[str]:
+    """The buyers' names that sit in an email's subject or greeting line as plain words instead of
+    the First name fill-in (owner, 2026-11-20: one buyer's name went to everyone). Only the subject
+    and the first line of the message are checked, where a name greets someone, so a buyer called
+    Hope doesn't stop "I hope you love it" further down. A name in a cased script counts only when
+    written with a capital, as a greeting is. Words of the act's name, the music and the gift are
+    never counted. Pure, for the send and review checks."""
+    skip = {w.lower() for part in ignore if part for w in _WORD.findall(part)}
+    wanted: dict[str, str] = {}
+    for name in names:
+        for w in _WORD.findall(name or ""):
+            if len(w) >= 3 and w.lower() not in skip:
+                wanted.setdefault(w.lower(), w[:1].upper() + w[1:])
+    if not wanted:
+        return []
+    first_line = next((line for line in (body or "").splitlines() if line.strip()), "")
+    found: list[str] = []
+    for part in (subject or "", first_line):
+        for w in _WORD.findall(_FILL_OR_LINK.sub(" ", part)):
+            key = w.lower()
+            if key in wanted and (not _cased(w) or w[:1].isupper()) and wanted[key] not in found:
+                found.append(wanted[key])
+    return found
 
 
 class GiftStatusMail(UUIDPrimaryKeyMixin, TimestampMixin, Base):

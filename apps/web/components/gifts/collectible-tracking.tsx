@@ -6,21 +6,24 @@
  * their counts, a search over name, email, phone and address, and the list. Tick gifts and a bar
  * floats up with the moves the API allows (dispatch now or at a chosen time) and "Email them", which
  * opens the campaign's email writer with those people already picked. The API decides who may
- * update and which moves exist.
+ * update and which moves exist. Moving a gift emails nobody (owner, 2026-11-20, D-CAMPAIGN-08):
+ * buyers are told when the act presses Send update (`SendUpdates`), for a whole status or the chosen.
  */
 
 import { useMemo, useState } from "react";
-import { CalendarClock, CircleAlert, Mail, PackageCheck, Truck, UserPlus, X } from "lucide-react";
+import { CalendarClock, CircleAlert, Mail, PackageCheck, Send, Truck, UserPlus, X } from "lucide-react";
 
 import { Button, DateTime, Input } from "@/components/ds";
 import { AddPeople } from "@/components/gifts/add-people";
+import { SendUpdates, UPDATE_STATUSES, waitingFor, type UpdateAsk } from "@/components/gifts/send-updates";
 import { WaitingPeople } from "@/components/gifts/waiting-people";
 import { Check, FilterChips, NoMatch, SearchField, SelectionBar, StatusMark, type ChipOption } from "@/components/studio-kit";
-import { removeGiftPerson, trackGifts, type GiftCampaignDetail, type GiftMove, type GiftRecipientStatus } from "@/features/gifts/api";
+import { removeGiftPerson, trackGifts, type GiftCampaignDetail, type GiftMove, type GiftRecipientStatus, type StatusMailStatus } from "@/features/gifts/api";
 import { ApiError } from "@/lib/api/client";
 import { fromLocalInput, toLocalInput } from "@/lib/artist-mail-view";
 import type { StatusTone } from "@/lib/format/status";
-import { isLater, MOVE_LABEL, MOVE_TELLS_BUYER, movesFor, RECIPIENT_STATUS_LABEL, RECIPIENT_STATUSES, trackedSince } from "@/lib/gifts-view";
+import { MOVE_TELLS_NOBODY, updateButtonLabel } from "@/lib/gift-status-mail-view";
+import { isLater, MOVE_LABEL, movesFor, RECIPIENT_STATUS_LABEL, RECIPIENT_STATUSES, trackedSince } from "@/lib/gifts-view";
 import { searchList, shownCount } from "@/lib/list-search-view";
 
 const TONE: Record<GiftRecipientStatus, StatusTone> = {
@@ -38,11 +41,14 @@ export function CollectibleTracking({
   c,
   onChange,
   onEmail,
+  onWording,
 }: {
   c: GiftCampaignDetail;
   onChange: (next: GiftCampaignDetail) => void;
   /** Open the email writer with these people picked (the campaign page's Emails part). */
   onEmail?: (recipientIds: string[]) => void;
+  /** Open the Emails part to change a status email's wording. */
+  onWording?: () => void;
 }) {
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<Filter>("ALL");
@@ -52,6 +58,7 @@ export function CollectibleTracking({
   const [later, setLater] = useState(false);
   const [when, setWhen] = useState("");
   const [adding, setAdding] = useState(false);
+  const [ask, setAsk] = useState<UpdateAsk | null>(null);
 
   const byStatus = useMemo(() => (filter === "ALL" ? c.recipients : c.recipients.filter((r) => r.status === filter)), [c.recipients, filter]);
   const shown = useMemo(
@@ -61,11 +68,15 @@ export function CollectibleTracking({
   const moves = movesFor(c.recipients, chosen, c.transitions);
   const whenIso = later ? fromLocalInput(when) : null;
   const whenOk = !later || isLater(whenIso, new Date());
-  const tells = moves.map((m) => MOVE_TELLS_BUYER[m.to]).filter(Boolean);
+  const tellsNobody = moves.some((m) => (UPDATE_STATUSES as string[]).includes(m.to));
   const shownIds = shown.map((r) => r.id);
   const allShownChosen = shownIds.length > 0 && shownIds.every((id) => chosen.has(id));
   const someShownChosen = shownIds.some((id) => chosen.has(id));
   const chosenIds = c.recipients.filter((r) => chosen.has(r.id)).map((r) => r.id);
+  // Chosen buyers still waiting to be told, per status (Send the ... update to these).
+  const chosenUpdates = UPDATE_STATUSES.map((s: StatusMailStatus) => ({ status: s, ids: waitingFor(c, { status: s, ids: chosenIds }).map((r) => r.id) })).filter(
+    (u) => u.ids.length > 0,
+  );
 
   const chips: ChipOption<Filter>[] = [
     { key: "ALL", label: "Everyone", count: c.counts.TOTAL },
@@ -84,9 +95,10 @@ export function CollectibleTracking({
         return;
       }
       const skipped = next.skipped ?? 0;
+      const quiet = (UPDATE_STATUSES as string[]).includes(move.to) && !move.dispatch_at && (next.moved ?? 0) > 0;
       setMessage({
         ok: true,
-        text: `${done(next.moved ?? 0)}${skipped ? ` ${skipped} couldn't make that move and stayed as they were.` : ""}`,
+        text: `${done(next.moved ?? 0)}${skipped ? ` ${skipped} couldn't make that move and stayed as they were.` : ""}${quiet ? ` ${MOVE_TELLS_NOBODY}` : ""}`,
       });
     } catch (err) {
       setMessage({ ok: false, text: err instanceof ApiError ? err.message : "That didn't go through. Please try again." });
@@ -108,7 +120,7 @@ export function CollectibleTracking({
           </h3>
           <p className="mt-1 max-w-2xl text-sm text-fg-muted">
             {c.can_dispatch
-              ? "Tick gifts to move them along. Dispatched, Returned and Missing email the buyer by themselves."
+              ? "Tick gifts to move them along. Moving a gift emails nobody: send the update when you're ready."
               : "Corner Room's team sends these gifts and keeps this list up to date."}
           </p>
         </div>
@@ -137,6 +149,7 @@ export function CollectibleTracking({
         </div>
       ) : null}
       <WaitingPeople c={c} onChange={onChange} />
+      <SendUpdates c={c} onChange={onChange} ask={ask} onAsk={setAsk} onWording={onWording} />
 
       <div className="grid gap-3">
         <FilterChips<Filter> label="Show gifts by status" options={chips} value={filter} onChange={(f) => setFilter(f)} />
@@ -230,6 +243,7 @@ export function CollectibleTracking({
                     <td>
                       <StatusMark tone={TONE[r.status] ?? "neutral"}>{RECIPIENT_STATUS_LABEL[r.status] ?? r.status}</StatusMark>
                       {r.status === "PREPARED" && r.dispatch_at ? <span className="block text-xs font-normal text-fg-muted">Set to leave later</span> : null}
+                      {r.update_waiting ? <span className="block text-xs font-normal text-fg-muted">Not told yet</span> : null}
                     </td>
                     <td className="text-fg-muted">
                       {since ? (
@@ -319,19 +333,18 @@ export function CollectibleTracking({
                   </Button>
                 );
               })}
+              {chosenUpdates.map((u) => (
+                <Button key={`tell-${u.status}`} size="sm" variant="secondary" onClick={() => setAsk({ status: u.status, ids: u.ids })}>
+                  <Send aria-hidden="true" /> {updateButtonLabel(u.status, u.ids.length)}
+                </Button>
+              ))}
               {onEmail ? (
                 <Button size="sm" variant="ghost" onClick={() => onEmail(chosenIds)}>
                   <Mail aria-hidden="true" /> Email {chosenIds.length === 1 ? "them" : `these ${chosenIds.length}`}
                 </Button>
               ) : null}
             </div>
-            {tells.length ? (
-              <ul className="grid gap-1 text-xs text-fg-muted">
-                {tells.map((t) => (
-                  <li key={t}>{t}</li>
-                ))}
-              </ul>
-            ) : null}
+            {tellsNobody ? <p className="text-xs text-fg-muted">Moving them emails nobody. Send the update afterwards, when you&apos;re ready.</p> : null}
           </div>
         </SelectionBar>
       ) : null}

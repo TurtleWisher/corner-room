@@ -153,20 +153,44 @@ async def test_gift_campaign_review_pause_tracking_and_dispatch(client: AsyncCli
     scheduled = await client.post(move, headers=bearer(token), json={"to": "DISPATCHED", "recipient_ids": [fan_row["id"]], "dispatch_at": later})
     assert scheduled.json()["counts"]["SCHEDULED"] == 1 and scheduled.json()["counts"]["PREPARED"] == 2
     assert next(r for r in scheduled.json()["recipients"] if r["id"] == fan_row["id"])["dispatch_at"]
-    # Dispatch now instead: the buyer is told.
+    # Dispatch now instead. Moving tells nobody (owner, 2026-11-20, D-CAMPAIGN-08): the buyer
+    # waits to be told until the act presses Send update.
     sent = await client.post(move, headers=bearer(token), json={"to": "DISPATCHED", "recipient_ids": [fan_row["id"]]})
     assert sent.status_code == 200, sent.text
     assert sent.json()["counts"] == {"YET_TO_SEND": 0, "PREPARED": 1, "DISPATCHED": 1, "RECEIVED": 0, "RETURNED": 0, "MISSING": 0, "TOTAL": 2, "SCHEDULED": 0, "WAITING": 0}
+    assert sent.json()["updates_waiting"] == {"DISPATCHED": 1, "RETURNED": 0, "MISSING": 0}
+    assert next(r for r in sent.json()["recipients"] if r["id"] == fan_row["id"])["update_waiting"]
     while await drain_outbox({}):
         pass
     factory = async_sessionmaker(get_engine(), expire_on_commit=False)
     async with factory() as session:
+        assert not (await session.execute(select(Notification).where(Notification.type == "gift.dispatched"))).scalars().all()
+    update = f"/api/v1/studio/gift-campaigns/{cid}/status-emails"
+    # Nobody missing yet, so that update has nobody to tell; a stranger can't press it.
+    assert (await client.post(f"{update}/MISSING/send-update", headers=bearer(token), json={})).status_code == 409
+    stranger = await register_and_login(client, "gift-stranger@example.com")
+    assert (await client.post(f"{update}/DISPATCHED/send-update", headers=bearer(stranger["access_token"]), json={})).status_code == 404
+    told = await client.post(f"{update}/DISPATCHED/send-update", headers=bearer(token), json={})
+    assert told.status_code == 200, told.text
+    assert told.json()["told"] == 1 and told.json()["updates_waiting"]["DISPATCHED"] == 0
+    assert next(r for r in told.json()["recipients"] if r["id"] == fan_row["id"])["told_at"]
+    # Pressed again: everyone has been told already.
+    assert (await client.post(f"{update}/DISPATCHED/send-update", headers=bearer(token), json={})).status_code == 409
+    while await drain_outbox({}):
+        pass
+    async with factory() as session:
         note = (await session.execute(select(Notification).where(Notification.type == "gift.dispatched"))).scalars().one()
     assert str(note.user_id) == fan["user"]["id"]
     assert "Gift Band" in note.body and "signed poster" in note.body and "next few days" in note.body
-    # Missing tells the buyer; then it turns up after all.
+    # Missing waits to be told too; Send update tells the buyer.
     missing = await client.post(move, headers=bearer(token), json={"to": "MISSING", "recipient_ids": [fan_row["id"]]})
-    assert missing.json()["counts"]["MISSING"] == 1
+    assert missing.json()["counts"]["MISSING"] == 1 and missing.json()["updates_waiting"]["MISSING"] == 1
+    while await drain_outbox({}):
+        pass
+    async with factory() as session:
+        assert not (await session.execute(select(Notification).where(Notification.type == "gift.missing"))).scalars().all()
+    chosen = await client.post(f"{update}/MISSING/send-update", headers=bearer(token), json={"recipient_ids": [fan_row["id"]]})
+    assert chosen.status_code == 200 and chosen.json()["told"] == 1
     while await drain_outbox({}):
         pass
     async with factory() as session:

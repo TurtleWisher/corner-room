@@ -3,8 +3,9 @@
  *
  * The rule in one line: the words and the people go to Corner Room together; nobody is emailed until
  * Corner Room approves it and someone presses Send. Staff (outside the act's team) send at once.
- * Automatic emails are separate: they go by themselves when a gift is marked Dispatched, Returned or
- * Missing, with words Corner Room already approved (or Corner Room's own).
+ * Automatic emails are separate: since D-CAMPAIGN-08 they go when the act presses Send update for a
+ * status (never on the move itself), for gifts marked Dispatched, Returned or Missing, with words
+ * Corner Room already approved (or Corner Room's own).
  *
  * Pure helpers; the API keeps every request, checks the people and sends.
  */

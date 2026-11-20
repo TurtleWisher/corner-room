@@ -34,11 +34,11 @@ import { friendlyError } from "@/lib/error-copy";
 import type { StatusTone } from "@/lib/format/status";
 import { PURPOSE_HINT, PURPOSE_LABEL, PURPOSES, guessPurpose, reach, sendButtonLabel, sendPromise, sentLine } from "@/lib/gift-send-view";
 import { giftTemplates, otherTemplates } from "@/lib/gift-status-mail-templates";
-import { buttonProblem, previewValues, sendingVersion } from "@/lib/gift-status-mail-view";
+import { buttonProblem, firstNameInstead, namesWrittenOut, previewValues, sendingVersion } from "@/lib/gift-status-mail-view";
 import { RECIPIENT_STATUS_LABEL, RECIPIENT_STATUSES } from "@/lib/gifts-view";
 import { searchList, shownCount } from "@/lib/list-search-view";
 
-import type { Notice } from "./status-emails";
+import { TypedNames, type Notice } from "./status-emails";
 
 const TONE: Record<GiftRecipientStatus, StatusTone> = {
   YET_TO_SEND: "neutral",
@@ -125,7 +125,13 @@ export function GiftSendComposer({
   const marks = unfilledMarks(`${words.subject}\n${words.body}\n${words.button_label ?? ""}`);
   const typos = unknownFillIns(`${words.subject}\n${words.body}`, ALL_FILL_KEYS);
   const buttonIssue = buttonProblem(words.button_label, words.button_url);
-  const ready = Boolean(words.subject.trim() && words.body.trim()) && !marks.length && !typos.length && !buttonIssue && pickedPeople.length > 0;
+  // To more than one person, a typed-out name would reach them all (owner, 2026-11-20; the server refuses it too).
+  const typedNames =
+    pickedPeople.length > 1
+      ? namesWrittenOut(words.subject, words.body, pickedPeople.map((p) => p.name), [mails.artist, mails.campaign.gift_items, mails.music])
+      : [];
+  const ready =
+    Boolean(words.subject.trim() && words.body.trim()) && !marks.length && !typos.length && !buttonIssue && !typedNames.length && pickedPeople.length > 0;
   const set = (patch: Partial<typeof words>) => {
     setTouched(true);
     setWords((w) => ({ ...w, ...patch }));
@@ -342,8 +348,9 @@ export function GiftSendComposer({
         </div>
       </fieldset>
 
-      {marks.length || typos.length || problem ? (
+      {marks.length || typos.length || typedNames.length || problem ? (
         <div className="grid gap-1">
+          {typedNames.length ? <TypedNames names={typedNames} onFix={() => set(firstNameInstead(words.subject, words.body, typedNames))} /> : null}
           {marks.length ? (
             <p role="alert" className="flex items-center gap-2 text-sm text-danger">
               <CircleAlert aria-hidden="true" className="size-4" /> Fill in {marks.join(", ")} first.

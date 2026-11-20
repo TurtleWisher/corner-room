@@ -36,13 +36,6 @@ export const MOVE_LABEL: Record<GiftRecipientStatus, string> = {
   MISSING: "Mark missing",
 };
 
-/** Moves that email the buyer (owner, 2026-11-06), said beside the buttons before they are pressed. */
-export const MOVE_TELLS_BUYER: Partial<Record<GiftRecipientStatus, string>> = {
-  DISPATCHED: "Dispatching emails each buyer that their gift is on its way and should reach them in the next few days.",
-  RETURNED:
-    "Marking returned emails each buyer that the gift came back, asks them to check their delivery address and says it will be sent again.",
-  MISSING: "Marking missing emails each buyer that the gift hasn't arrived yet and that another will be sent if it doesn't turn up.",
-};
 
 export const SENDER_LABEL = { ARTIST: "You send the gifts", CORNER_ROOM: "Corner Room sends the gifts" } as const;
 

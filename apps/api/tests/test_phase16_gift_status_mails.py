@@ -1,6 +1,7 @@
 """The act's own collectible status emails (owner, 2026-11-07, D-CAMPAIGN-05): written in the
 artist-email editor per campaign and status (Dispatched, Returned, Missing), approved by staff, then
-sent to every buyer in place of Corner Room's wording. They always send (no stop link)."""
+sent to every buyer in place of Corner Room's wording when the act presses Send update (D-CAMPAIGN-08).
+They always send (no stop link)."""
 
 from __future__ import annotations
 
@@ -14,7 +15,16 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from cornerroom.infra.db import get_engine
 from cornerroom.infra.errors import AppError
 from cornerroom.modules.commerce.application.artist_mail_render import write_email
-from cornerroom.modules.commerce.application.gift_status_mails import DEFAULTS, check_button, check_words, mail_values, unfinished, with_gift
+from cornerroom.modules.commerce.application.gift_status_mails import (
+    DEFAULTS,
+    check_button,
+    check_words,
+    mail_values,
+    refuse_written_names,
+    unfinished,
+    with_gift,
+)
+from cornerroom.modules.commerce.domain.gifts import names_written_out, update_waiting
 from cornerroom.modules.notifications.domain.models import Notification, NotificationDelivery
 from cornerroom.worker import drain_outbox
 from tests.auth_helpers import bearer, register_and_login
@@ -53,6 +63,54 @@ def test_status_emails_have_no_stop_link() -> None:
     assert "Track your parcel: https://cr.example/c/1" in written.text and ">Track your parcel</a>" in written.html
     assert [link["url"] for link in written.links] == ["https://example.com/map", "https://courier.example/123"]
     assert "Stop emails" not in written.text and "/purchases" in written.text
+
+
+def test_a_buyers_typed_out_name_is_caught() -> None:
+    """Owner, 2026-11-20: "Dear Ishmamul" went to every buyer. A buyer's name written out in the
+    subject or greeting line is caught; the First name fill-in, other lines and the act's name aren't."""
+    names = ["Ishmamul Haque", "Samiul Islam", None]
+    assert names_written_out("Your gift left", "Dear Ishmamul,\n\nYour poster left.", names) == ["Ishmamul"]
+    assert names_written_out("On its way, samiul", "Hi {first_name}", names) == []  # not written as a name
+    assert names_written_out("On its way, Samiul", "Hi {first_name}", names) == ["Samiul"]
+    assert names_written_out("Your {gift} left", "Hi {first_name},\n\nThanks, Samiul here.", names) == []
+    assert names_written_out("x", "Hope you love it", ["Hope Rahman"]) == ["Hope"]
+    assert names_written_out("x", "Hi {first_name}, I hope you love it", ["Hope Rahman"]) == []
+    assert names_written_out("From Mizuls", "Hi {first_name}", ["Mizuls Fan"], ["MIZULS"]) == []
+    assert names_written_out("x", "See [it](https://ishmamul.example/x)", names) == []
+    assert names_written_out("x", "প্রিয় সামিউল,", ["সামিউল ইসলাম"]) == ["সামিউল"]
+    with pytest.raises(AppError) as caught:
+        refuse_written_names(["Ishmamul"])
+    assert caught.value.code == "NAME_WRITTEN_OUT"
+    refuse_written_names([])
+
+
+def test_waiting_to_be_told_and_the_note_it_makes() -> None:
+    """D-CAMPAIGN-08: a gift in a status that tells the buyer waits until Send update; the event
+    Send update writes makes the status's own in-app note, once."""
+    from datetime import UTC, datetime
+    from uuid import uuid4
+
+    from cornerroom.kernel.events import GIFT_DISPATCHED, GIFT_UPDATE_SENT, DomainEvent
+    from cornerroom.modules.commerce.domain.gifts import GiftRecipient
+    from cornerroom.modules.notifications.domain.policy import as_notice
+
+    r = GiftRecipient(status="DISPATCHED", email="a@example.com", waiting=False)
+    assert update_waiting(r)
+    r.told_at = datetime.now(UTC)
+    assert not update_waiting(r)
+    assert not update_waiting(GiftRecipient(status="RECEIVED", email="a@example.com", waiting=False))
+    assert not update_waiting(GiftRecipient(status="MISSING", phone="0170", waiting=False))  # no way to email them
+    event = DomainEvent(
+        event_type=GIFT_UPDATE_SENT, producer="commerce", aggregate_type="GiftRecipient", aggregate_id=uuid4(),
+        payload={"status": "DISPATCHED"}, occurred_at=datetime.now(UTC),
+    )
+    note = as_notice(event)
+    assert note.event_type == GIFT_DISPATCHED and note.event_id == event.event_id
+    assert as_notice(DomainEvent(**{**_fields(event), "payload": {"status": "RECEIVED"}})).event_type == GIFT_UPDATE_SENT
+
+
+def _fields(event: Any) -> dict[str, Any]:
+    return {k: getattr(event, k) for k in event.__slots__}
 
 
 class _Sender:
@@ -124,8 +182,16 @@ async def test_act_writes_status_email_staff_approve_and_it_sends(client: AsyncC
     item = edited.json()["items"][0]
     assert item["state"] == "DRAFT" and item["live"] and item["live_subject"] == "Your {gift} left"
 
-    # Dispatching sends the act's approved words to the buyer by email; the in-app note stays and
-    # sends no email of its own.
+    # Words that greet one buyer by a typed-out name can't go to staff (owner, 2026-11-20): every
+    # buyer would read it. The edit above stays a draft; the approved words keep sending.
+    named = await client.put(f"{base}/MISSING", headers=bearer(token), json={"subject": "Still looking", "body": "Dear Samiul,\n\nWe're looking."})
+    assert named.status_code == 200
+    refused = await client.post(f"{base}/MISSING/submit", headers=bearer(token))
+    assert refused.status_code == 422 and refused.json()["code"] == "NAME_WRITTEN_OUT", refused.text
+    await client.delete(f"{base}/MISSING", headers=bearer(token))
+
+    # Dispatching emails nobody (D-CAMPAIGN-08). Send update sends the act's approved words to the
+    # buyer by email; the in-app note stays and sends no email of its own.
     sender = _Sender()
     monkeypatch.setattr("cornerroom.modules.notifications.infra.email.email_sender_for", lambda _settings: sender)
     people = (await client.get(base, headers=bearer(token))).json()["people"]
@@ -134,6 +200,12 @@ async def test_act_writes_status_email_staff_approve_and_it_sends(client: AsyncC
     move = f"/api/v1/studio/gift-campaigns/{cid}/recipients/transition"
     await client.post(move, headers=bearer(token), json={"to": "PREPARED", "recipient_ids": [rid]})
     assert (await client.post(move, headers=bearer(token), json={"to": "DISPATCHED", "recipient_ids": [rid]})).status_code == 200
+    while await drain_outbox({}):
+        pass
+    assert not [m for m in sender.sent if m["to"] == "smail-fan@example.com"]
+    pressed = await client.post(f"{base}/DISPATCHED/send-update", headers=bearer(token), json={})
+    assert pressed.status_code == 200, pressed.text
+    assert pressed.json()["told"] == 1 and pressed.json()["emailed"] == 1
     while await drain_outbox({}):
         pass
     mails = [m for m in sender.sent if m["to"] == "smail-fan@example.com"]

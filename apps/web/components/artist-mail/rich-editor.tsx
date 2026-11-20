@@ -88,12 +88,36 @@ function insertNode(node: Node) {
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return;
   const range = sel.getRangeAt(0);
+  // A fragment empties as it goes in, so the caret goes after its last piece.
+  const last = node instanceof DocumentFragment ? node.lastChild : node;
   range.deleteContents();
   range.insertNode(node);
-  range.setStartAfter(node);
+  if (last) range.setStartAfter(last);
   range.collapse(true);
   sel.removeAllRanges();
   sel.addRange(range);
+}
+
+/**
+ * The selection as saved text, fill-ins as {first_name} and links as [words](https://...).
+ * Copying used to take the chips' preview words, so cutting "Hi Ishmamul," and pasting it back
+ * wrote one buyer's name into an email every buyer got (owner, 2026-11-20).
+ */
+export function selectionText(root: HTMLElement): string | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed || !root.contains(sel.getRangeAt(0).commonAncestorContainer)) return null;
+  const holder = document.createElement("div");
+  holder.append(sel.getRangeAt(0).cloneContents());
+  return serialize(holder);
+}
+
+/** Pasted saved text as editor pieces: {first_name} becomes a fill-in again, links stay links. */
+export function pastedPieces(text: string, values: MailValues): DocumentFragment {
+  const holder = document.createElement("div");
+  render(holder, text, values);
+  const out = document.createDocumentFragment();
+  out.append(...holder.childNodes);
+  return out;
 }
 
 export function RichEditor({
@@ -276,10 +300,31 @@ export function RichEditor({
           if (singleLine) return;
           document.execCommand("insertLineBreak");
         }}
+        onCopy={(e) => {
+          const text = ref.current ? selectionText(ref.current) : null;
+          if (text === null) return;
+          e.preventDefault();
+          e.clipboardData.setData("text/plain", text);
+        }}
+        onCut={(e) => {
+          const text = ref.current ? selectionText(ref.current) : null;
+          if (text === null) return;
+          e.preventDefault();
+          e.clipboardData.setData("text/plain", text);
+          document.execCommand("delete");
+          emit();
+        }}
         onPaste={(e) => {
           e.preventDefault();
-          const text = e.clipboardData.getData("text/plain");
-          document.execCommand("insertText", false, singleLine ? text.replace(/\s*\n\s*/g, " ") : text);
+          const raw = e.clipboardData.getData("text/plain");
+          const text = singleLine ? raw.replace(/\s*\n\s*/g, " ") : raw;
+          if (parseRich(text).every((t) => t.kind === "text")) {
+            document.execCommand("insertText", false, text);
+            return;
+          }
+          // Fill-ins and links pasted back stay fill-ins and links, never one buyer's words.
+          insertNode(pastedPieces(text, values));
+          emit();
         }}
         onClick={(e) => {
           // Links open from the preview, not while writing.
