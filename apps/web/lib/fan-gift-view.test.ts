@@ -7,8 +7,15 @@ import {
   giftStatusLine,
   noteProblem,
   giftPaidLine,
+  emailBody,
+  fileProblem,
   giftHref,
   giftOffer,
+  linksProblem,
+  noteText,
+  previewPeople,
+  subjectProblem,
+  withPictures,
   parsePeople,
   peopleProblem,
   recipientLine,
@@ -33,13 +40,14 @@ describe("fan gifts (owner, 2026-11-20, D-GIFT-FAN-01)", () => {
     const eleven = Array.from({ length: 11 }, (_, i) => ({ email: `p${i}@example.com` }));
     expect(peopleProblem(eleven, null)).toMatch(/at most 10/);
     expect(peopleProblem([{ email: "a@example.com" }], "me@example.com")).toBeNull();
-    expect(noteProblem("x".repeat(301))).toMatch(/300/);
+    expect(noteProblem("x".repeat(2001))).toMatch(/2,000/);
+    expect(noteProblem("see [this](http://x.example)")).toMatch(/https/);
     expect(noteProblem("Happy Eid")).toBeNull();
   });
 
   it("never tells the giver why, and promises only what the server does", () => {
     expect(Object.values(GIVER_STATE).join(" ")).not.toMatch(/own|already|bought/i);
-    expect(giftPromise(true)[0]).toMatch(/checked your note/);
+    expect(giftPromise(true)[0]).toMatch(/checked your email/);
     expect(giftPromise(false).join(" ")).toMatch(/7 days/);
     expect(giftStatusLine({ status: "WAITING_NOTE", note_state: "WAITING" })).toMatch(/checking your note/);
     expect(giftStatusLine({ status: "DELIVERED", note_state: "REMOVED" })).toMatch(/without your note/);
@@ -69,5 +77,23 @@ describe("fan gifts (owner, 2026-11-20, D-GIFT-FAN-01)", () => {
     expect(giftOffer(offers, "RELEASE", "r2")?.id).toBe("o3");
     expect(giftOffer(offers, "RELEASE", "r3")).toBeNull();
     expect(giftHref("o2")).toBe("/checkout?offer=o2&gift=1");
+  });
+
+  it("checks the giver's email as the server does, and draws previews with this page's pictures (D-GIFT-FAN-02)", () => {
+    expect(subjectProblem("For you")).toBeNull();
+    expect(subjectProblem("x".repeat(151))).toMatch(/150/);
+    expect(subjectProblem("see [it](https://x.example)")).toMatch(/link/);
+    expect(linksProblem("[ok](https://x.example) and [bad](ftp://x)")).toMatch(/https/);
+    expect(linksProblem("[ok](https://x.example)")).toBeNull();
+    expect(fileProblem({ type: "image/png", size: 10 }, 0)).toBeNull();
+    expect(fileProblem({ type: "audio/mpeg", size: 10 }, 0)).toMatch(/picture/);
+    expect(fileProblem({ type: "image/png", size: 10 }, 5)).toMatch(/at most 5/);
+    expect(fileProblem({ type: "application/pdf", size: 30 * 1024 * 1024 }, 0)).toMatch(/too large/);
+    const id = "0b5e8a52-6c1f-4f0e-9a8d-3c2b1a0f9e8d";
+    expect(withPictures(`<img src="cid:file-${id}">`, { [id]: "blob:x" })).toBe('<img src="blob:x">');
+    expect(emailBody("<html><head><title>t</title></head><body style=\"x\"><p>Hi</p></body></html>")).toBe("<p>Hi</p>");
+    expect(previewPeople([])).toEqual([{ label: "Someone without a name", name: null }]);
+    expect(previewPeople([{ email: "a@example.com", name: "Rumi" }, { email: "b@example.com" }]).map((p) => p.label)).toEqual(["Rumi", "b@example.com"]);
+    expect(noteText("Dear {first_name}, see [our song](https://x.example)!")).toBe("Dear, see our song!");
   });
 });

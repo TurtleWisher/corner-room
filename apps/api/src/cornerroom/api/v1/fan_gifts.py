@@ -7,11 +7,12 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.api.deps import db_session, get_auth_context, get_optional_auth_context, settings_dep
+from cornerroom.infra.errors import AppError
 from cornerroom.infra.settings import Settings
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.commerce.application.fan_gifts import FanGiftService
@@ -63,6 +64,7 @@ class GiftPageOut(BaseModel):
     amount: MoneyOut | None = None
     credit: MoneyOut | None = None
     spend_on: list[SpendOut] = []
+    files: list["GiftFileOut"] = []
 
 
 class ChooseIn(BaseModel):
@@ -104,9 +106,45 @@ class OfferCreditOut(BaseModel):
     act_name: str | None = None
 
 
+class GiftFileOut(BaseModel):
+    id: UUID
+    name: str
+    # IMAGE (shown in the email) or PDF (a download).
+    kind: str
+    byte_size: int
+
+
+class PreviewIn(BaseModel):
+    offer_id: UUID
+    note: str | None = Field(default=None, max_length=4000)
+    subject: str | None = Field(default=None, max_length=400)
+    look: str | None = Field(default=None, max_length=10)
+    show_cover: bool = True
+    file_ids: list[UUID] = Field(default_factory=list, max_length=10)
+    # Whose name {first_name} shows (one of the people typed); None reads "there".
+    person_name: str | None = Field(default=None, max_length=200)
+
+
+class PreviewOut(BaseModel):
+    subject: str
+    html: str
+    text: str
+    # Words or files wait for Corner Room to check before anyone is emailed.
+    needs_review: bool
+
+
+class StaffPreviewOut(BaseModel):
+    subject: str
+    html: str
+    files: list[GiftFileOut]
+
+
 class NoteOut(BaseModel):
     id: UUID
     note: str | None
+    subject: str | None = None
+    look: str = "SKY"
+    files: list[GiftFileOut] = []
     title: str
     act_name: str
     giver_name: str | None = None
@@ -122,6 +160,69 @@ class NoteReviewOut(BaseModel):
     id: UUID
     note_state: str
     status: str
+
+
+def _file_response(found: tuple[bytes, str, str, str]) -> Response:
+    data, mime, name, kind = found
+    safe = "".join(ch for ch in name if ch.isalnum() or ch in "._- ")[:120] or "file"
+    disposition = "inline" if kind == "IMAGE" else "attachment"
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{safe}"',
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, max-age=300",
+        },
+    )
+
+
+@router.post("/me/fan-gift-files", response_model=GiftFileOut, status_code=201)
+async def add_gift_file(
+    svc: Svc, ctx: Ctx, settings: Annotated[Settings, Depends(settings_dep)],
+    file: UploadFile = File(...), name: str | None = Form(default=None),
+) -> dict[str, Any]:
+    """A picture or PDF for a gift's email (D-GIFT-FAN-02). Same size limit as other uploads."""
+    limit = settings.media_cover_max_bytes
+    data = await file.read(limit + 1)
+    if len(data) > limit:
+        raise AppError("UPLOAD_TOO_LARGE", "File too large", 422, f"The limit is {limit} bytes")
+    return await svc.add_file(ctx, filename=name or file.filename or "", content_type=file.content_type, data=data)
+
+
+@router.get("/me/fan-gift-files/{file_id}")
+async def my_gift_file(file_id: UUID, svc: Svc, ctx: Ctx) -> Response:
+    return _file_response(await svc.file_for_owner(ctx, file_id))
+
+
+@router.delete("/me/fan-gift-files/{file_id}", status_code=204)
+async def delete_gift_file(file_id: UUID, svc: Svc, ctx: Ctx) -> Response:
+    await svc.delete_file(ctx, file_id)
+    return Response(status_code=204)
+
+
+@router.post("/fan-gifts/preview", response_model=PreviewOut)
+async def preview_gift_email(body: PreviewIn, svc: Svc, ctx: Ctx) -> dict[str, Any]:
+    """The gift email exactly as one person will get it. Nothing is sent or kept."""
+    raw = body.model_dump(exclude={"offer_id", "person_name"})
+    raw["file_ids"] = [str(f) for f in body.file_ids]
+    return await svc.preview(ctx, offer_id=body.offer_id, raw=raw, person_name=body.person_name)
+
+
+@router.get("/gifts/{token}/files/{file_id}")
+async def gift_file(token: str, file_id: UUID, svc: Svc) -> Response:
+    """A gift's picture or PDF, opened through the person's own gift link."""
+    return _file_response(await svc.file_for_token(token, file_id))
+
+
+@router.get("/staff/fan-gift-notes/{gift_id}/preview", response_model=StaffPreviewOut)
+async def staff_preview(gift_id: UUID, svc: Svc, ctx: Ctx) -> dict[str, Any]:
+    return await svc.staff_preview(ctx, gift_id)
+
+
+@router.get("/staff/fan-gift-files/{file_id}")
+async def staff_gift_file(file_id: UUID, svc: Svc, ctx: Ctx) -> Response:
+    return _file_response(await svc.file_for_staff(ctx, file_id))
 
 
 @router.get("/gifts/{token}", response_model=GiftPageOut)
@@ -157,3 +258,6 @@ async def note_queue(svc: Svc, ctx: Ctx) -> list[dict[str, Any]]:
 @router.post("/staff/fan-gift-notes/{gift_id}/review", response_model=NoteReviewOut)
 async def review_note(gift_id: UUID, body: NoteReviewIn, svc: Svc, ctx: Ctx) -> dict[str, Any]:
     return await svc.review_note(ctx, gift_id, approve=body.approve)
+
+
+GiftPageOut.model_rebuild()

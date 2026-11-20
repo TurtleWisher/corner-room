@@ -9,7 +9,7 @@
 
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { CircleAlert, Gift, Headphones, LogIn, Send, UserPlus, Wallet } from "lucide-react";
+import { CircleAlert, FileText, Gift, Headphones, LogIn, Send, UserPlus, Wallet } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
@@ -18,10 +18,10 @@ import { RoomCube } from "@/components/brand/room-cube";
 import { Button, ButtonLink, Card, DateTime, ErrorState, Field, Input, Money, Skeleton } from "@/components/ds";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
-import { chooseGift, openGift, type GiftChoice, type GiftPage } from "@/features/fan-gifts/api";
+import { chooseGift, giftFileUrl, openGift, type GiftChoice, type GiftPage } from "@/features/fan-gifts/api";
 import { maybeCoverUrl, offerCoverSource } from "@/lib/cover-view";
 import { friendlyError } from "@/lib/error-copy";
-import { CHOICE_WORDS, giftHeadline, peopleProblem, recipientLine, signInHref } from "@/lib/fan-gift-view";
+import { CHOICE_WORDS, giftHeadline, noteText, peopleProblem, recipientLine, signInHref } from "@/lib/fan-gift-view";
 
 function listenHref(page: GiftPage): string {
   return page.work_type === "RELEASE" ? `/releases/${page.work_id}` : `/tracks/${page.work_id}`;
@@ -146,7 +146,22 @@ function GiftBody({ token }: { token: string }) {
           {giftHeadline(g)}
         </h1>
         {g.note ? (
-          <blockquote className="mt-4 border-l-2 border-highlight pl-3 whitespace-pre-wrap text-fg">{g.note}</blockquote>
+          <blockquote className="mt-4 border-l-2 border-highlight pl-3 whitespace-pre-wrap text-fg">{noteText(g.note)}</blockquote>
+        ) : null}
+        {g.files?.length ? (
+          // D-GIFT-FAN-02: the giver's pictures and PDFs, through this person's own gift link.
+          <div className="mt-4 grid gap-3">
+            {g.files.map((f) =>
+              f.kind === "IMAGE" ? (
+                // eslint-disable-next-line @next/next/no-img-element -- served by the API through the gift link
+                <img key={f.id} src={giftFileUrl(token, f.id)} alt={f.name} className="max-h-[28rem] w-auto max-w-full border border-line" />
+              ) : (
+                <a key={f.id} href={giftFileUrl(token, f.id)} className="cr-focus inline-flex items-center gap-2 font-semibold text-link underline">
+                  <FileText aria-hidden="true" className="size-4" /> Download {f.name}
+                </a>
+              ),
+            )}
+          </div>
         ) : null}
 
         {g.viewer === "RECIPIENT" ? (

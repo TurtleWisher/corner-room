@@ -101,9 +101,12 @@ FEATURES: Final[list[dict]] = [
         "summary": "Buy a song or release for people you know, by email, and pay for it yourself.",
         "description": (
             "On any song, release or pre-sale page, Give as a gift (shown to owners too) opens checkout "
-            "with Give it as a gift ticked; the fan types up to 10 email addresses and an optional "
-            "note, and pays for each person. Pre-orders can be gifts the same way. The sale counts for the artist when the giver pays. Corner "
-            "Room checks every note before anyone is emailed. Someone with an account owns the music at "
+            "with Give it as a gift ticked; the fan types up to 10 email addresses, designs the email they "
+            "get (a message with their first name and links, an optional subject, one of three looks, the "
+            "cover on or off, up to 5 pictures or PDFs) while seeing it exactly as each person will, and "
+            "pays for each person. Pre-orders can be gifts the same way. The sale counts for the artist when the giver pays. Corner "
+            "Room checks every email a fan wrote or attached files to before anyone is emailed, and can send it in "
+            "Corner Room's own words instead. Someone with an account owns the music at "
             "once; a new address gets it when it signs up with that email. Someone who already owns it "
             "chooses: keep the amount as credit for that artist's music, pass it on to another email, or "
             "say no thanks. A gift that is declined, or not claimed in 7 days, goes back to the giver as "
@@ -113,6 +116,7 @@ FEATURES: Final[list[dict]] = [
             "gift went to as buyers. The person a gift went to earns the artist's collectible."
         ),
         "updates": [
+            {"date": "2026-11-20", "kind": "NEW", "title": "Design your gift email", "details": "Write the gift email your way, with their first name, links, a subject, a look, the cover and pictures or PDFs, and see it as each person will before you pay. Corner Room checks it first."},
             {"date": "2026-11-20", "kind": "IMPROVED", "title": "Gift music you own, and pre-orders", "details": "Give as a gift on song, release and pre-sale pages, also for people who already own it; pre-orders can be gifts; Studio Sales marks gift sales; the person gifted earns the collectible."},
             {"date": "2026-11-20", "kind": "NEW", "title": "Give music as a gift", "details": "Buy a song or release for people you know by email, with a note Corner Room checks, keep or pass on a gift you already own, and spend gift credit on the same artist's music."},
         ],

@@ -117,7 +117,12 @@ class GiftPersonIn(BaseModel):
 
 class GiftOrderIn(BaseModel):
     people: list[GiftPersonIn] = Field(min_length=1, max_length=200)
-    note: str | None = Field(default=None, max_length=2000)
+    # D-GIFT-FAN-02: the giver's own email: message, subject, look, cover switch and files.
+    note: str | None = Field(default=None, max_length=4000)
+    subject: str | None = Field(default=None, max_length=400)
+    look: str | None = Field(default=None, max_length=10)
+    show_cover: bool = True
+    file_ids: list[UUID] = Field(default_factory=list, max_length=10)
 
 
 OrderCreate.model_rebuild()
@@ -508,6 +513,10 @@ async def create_order(
                 offer_id=body.offer_id,
                 people=[p.model_dump() for p in body.gift.people],
                 note=body.gift.note,
+                design={
+                    "subject": body.gift.subject, "look": body.gift.look, "show_cover": body.gift.show_cover,
+                    "file_ids": [str(f) for f in body.gift.file_ids],
+                },
                 idempotency_key=f"{ctx.user_id}:{idempotency_key}",
                 chosen_amount_minor=body.amount_minor,
             )

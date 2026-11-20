@@ -16,7 +16,8 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from cornerroom.modules.commerce.application.fan_gifts import gift_email, mask_email, returned_email
+from cornerroom.modules.commerce.application.fan_gift_email import write_gift_email
+from cornerroom.modules.commerce.application.fan_gifts import clean_design, mask_email, returned_email, sniff_type
 from cornerroom.modules.commerce.domain.fan_gifts import (
     clean_note,
     clean_people,
@@ -58,7 +59,7 @@ def test_note_is_optional_and_short() -> None:
     assert clean_note("  ") is None
     assert clean_note(" Happy birthday \r\n") == "Happy birthday"
     with pytest.raises(ValueError, match="NOTE_TOO_LONG"):
-        clean_note("x" * 301)
+        clean_note("x" * 2001)
 
 
 def test_the_giver_never_learns_why() -> None:
@@ -68,6 +69,23 @@ def test_the_giver_never_learns_why() -> None:
     assert giver_state("DECLINED") == "DECLINED" and giver_state("EXPIRED") == "NOT_CLAIMED"
     assert credit_back_reason("DECLINED") == "GIFT_DECLINED" and credit_back_reason("EXPIRED") == "GIFT_NOT_CLAIMED"
     assert credit_back_reason("KEPT_CREDIT") is None
+
+
+def test_the_design_is_checked_and_files_by_their_first_bytes() -> None:
+    assert clean_design({"note": " Hi ", "look": "ember", "file_ids": ["a"]}) == {
+        "note": "Hi", "subject": None, "look": "EMBER", "show_cover": True, "file_ids": ["a"],
+    }
+    for raw, code in (
+        ({"note": "[x](http://bad.example)"}, "BAD_LINK"),
+        ({"subject": "see https://x"}, "SUBJECT_HAS_LINK"),
+        ({"look": "PINK"}, "BAD_LOOK"),
+        ({"file_ids": list("abcdef")}, "TOO_MANY_FILES"),
+    ):
+        with pytest.raises(ValueError, match=code):
+            clean_design(raw)
+    assert sniff_type(b"\x89PNG\r\n\x1a\nrest") == "image/png" and sniff_type(b"%PDF-1.7") == "application/pdf"
+    assert sniff_type(b"RIFF\x00\x00\x00\x00WEBPVP8") == "image/webp"
+    assert sniff_type(b"<html><script>") is None
 
 
 def test_seven_days_to_claim_and_choices_only_for_owners() -> None:
@@ -80,15 +98,22 @@ def test_seven_days_to_claim_and_choices_only_for_owners() -> None:
 
 
 def test_gift_emails_say_what_happens_next() -> None:
-    subject, body = gift_email(
-        giver="Samiul", passed_by=None, title="Chhaya Pore", act="MIZULS", note="For you", status="WAITING_ACCOUNT",
+    mail = write_gift_email(
+        look="SKY", giver="Samiul", passed_by=None, title="Chhaya Pore", act="MIZULS", person_name="Rumi Das",
+        subject=None, message="Hi {first_name}, [our song](https://example.com/s)", status="WAITING_ACCOUNT",
         link="https://x/gift/t", claim_days=7,
     )
-    assert subject == "Samiul sent you Chhaya Pore by MIZULS"
-    assert "For you" in body and "waits 7 days" in body and "https://x/gift/t" in body
+    assert mail.subject == "Samiul sent you Chhaya Pore by MIZULS"
+    assert "Hi Rumi, our song (https://example.com/s)" in mail.text and "waits 7 days" in mail.text and "https://x/gift/t" in mail.text
+    assert 'href="https://example.com/s"' in mail.html and "Hi Rumi" in mail.html
     # The email to someone who owned it doesn't say so either (the giver may be reading over a shoulder).
-    _s, owned = gift_email(giver=None, passed_by="Rumi", title="T", act="A", note=None, status="CHOOSING", link="L", claim_days=7)
-    assert "Rumi passed on a gift" in owned and "already" not in owned
+    owned = write_gift_email(
+        look="NIGHT", giver=None, passed_by="Rumi", title="T", act="A", person_name=None, subject="For {first_name}",
+        message=None, status="CHOOSING", link="L", claim_days=7,
+        files=[{"name": "card.png", "kind": "IMAGE", "url": "cid:file-1"}, {"name": "zine.pdf", "kind": "PDF", "url": "U"}],
+    )
+    assert owned.subject == "For there" and "Rumi passed on a gift" in owned.text and "already" not in owned.text
+    assert 'src="cid:file-1"' in owned.html and "Download zine.pdf" in owned.html and "#17142e" in owned.html
     _s, back = returned_email(title="T", act="A", status="EXPIRED", amount="BDT 30.00", link="L")
     assert "wasn't claimed in time" in back and "BDT 30.00" in back and "credit" in back
     assert mask_email("samiul@example.com") == "s•••@example.com"
@@ -273,3 +298,78 @@ async def test_a_fan_gift_from_payment_to_credit(client: AsyncClient) -> None:
     lines = (await client.get(f"/api/v1/studio/profiles/artist/{artist_id}/sales/lines", headers=bearer(owner["access_token"]))).json()["items"]
     hows = [line.get("how") for line in lines]
     assert hows.count("GIFT") == 5 and hows.count("CREDIT") == 1 and None in hows
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_a_designed_gift_email_with_files(client: AsyncClient) -> None:
+    """D-GIFT-FAN-02: the giver designs the email and sees it as each person will; staff review it."""
+    admin, orgs = await _orgs(client)
+    label = orgs["LABEL"]
+    release_id, _track, _owner, _artist = await _released(client, admin, label, "fd-owner@example.com", "Design Act")
+    ops = await _staff_with(client, admin, "fd-ops@example.com", "finance_manager", label)
+    reviewer = await _staff_with(client, admin, "fd-reviewer@example.com", "content_manager", label)
+    proposal = next(p for p in (await client.get("/api/v1/offer-proposals", headers=bearer(ops))).json() if p["release_id"] == release_id)
+    await client.post(f"/api/v1/offer-proposals/{proposal['id']}/decision", headers=bearer(ops), json={"decision": "accept"})
+    offer = next(o for o in (await client.get("/api/v1/offers")).json()["items"] if o.get("subject_id") == release_id)
+    giver = await register_and_login(client, "fd-giver@example.com")
+    g = bearer(giver["access_token"])
+    friend = await register_and_login(client, "fd-friend@example.com")
+    await _mark_verified("fd-friend@example.com")
+
+    # Only pictures and PDFs, checked by their first bytes; only the giver opens a pending file.
+    fake = await client.post("/api/v1/me/fan-gift-files", headers=g, files={"file": ("x.png", b"<html>", "image/png")})
+    assert fake.status_code == 422 and fake.json()["code"] == "FILE_TYPE"
+    up = await client.post("/api/v1/me/fan-gift-files", headers=g, files={"file": ("card.png", PNG, "image/png")})
+    assert up.status_code == 201, up.text
+    pic = up.json()
+    assert pic["kind"] == "IMAGE"
+    assert (await client.get(f"/api/v1/me/fan-gift-files/{pic['id']}", headers=g)).content == PNG
+    assert (await client.get(f"/api/v1/me/fan-gift-files/{pic['id']}", headers=bearer(friend["access_token"]))).status_code == 404
+
+    design = {"note": "Dear {first_name}, [our song](https://example.com/s)", "subject": "For {first_name}", "look": "EMBER",
+              "show_cover": False, "file_ids": [pic["id"]]}
+    preview = await client.post("/api/v1/fan-gifts/preview", headers=g, json={"offer_id": offer["id"], "person_name": "Nila Akter", **design})
+    assert preview.status_code == 200, preview.text
+    shown = preview.json()
+    assert shown["subject"] == "For Nila" and "Dear Nila" in shown["html"] and f'cid:file-{pic["id"]}' in shown["html"]
+    assert shown["needs_review"] is True and "#fffaf6" in shown["html"]
+
+    placed = await client.post(
+        "/api/v1/orders", headers={**g, "Idempotency-Key": f"d-{uuid4()}"},
+        json={"offer_id": offer["id"], "gift": {"people": [{"email": "fd-friend@example.com", "name": "Nila Akter"}], **design}},
+    )
+    assert placed.status_code == 201, placed.text
+    await _pay(client, giver["access_token"], placed.json())
+    # A file on a placed gift can't be removed or used again.
+    assert (await client.delete(f"/api/v1/me/fan-gift-files/{pic['id']}", headers=g)).status_code == 409
+
+    queue = (await client.get("/api/v1/staff/fan-gift-notes", headers=bearer(reviewer))).json()
+    item = next(q for q in queue if q["subject"] == "For {first_name}")
+    assert item["look"] == "EMBER" and [f["name"] for f in item["files"]] == ["card.png"]
+    staff_view = (await client.get(f"/api/v1/staff/fan-gift-notes/{item['id']}/preview", headers=bearer(reviewer))).json()
+    assert staff_view["subject"] == "For Nila" and "Dear Nila" in staff_view["html"]
+    assert (await client.get(f"/api/v1/staff/fan-gift-files/{pic['id']}", headers=bearer(reviewer))).content == PNG
+    # Before staff pass it, the gift link can't open the file.
+    tokens = await _tokens()
+    assert "fd-friend@example.com" not in tokens
+    await client.post(f"/api/v1/staff/fan-gift-notes/{item['id']}/review", headers=bearer(reviewer), json={"approve": True})
+    tokens = await _tokens()
+    token = tokens["fd-friend@example.com"]
+    assert (await client.get(f"/api/v1/gifts/{token}/files/{pic['id']}")).content == PNG
+
+    # The email the friend gets is the designed one.
+    from cornerroom.infra.db import get_session_factory
+    from cornerroom.modules.commerce.application.fan_gifts import FanGiftService
+    from cornerroom.modules.commerce.domain.fan_gifts import FanGift, FanGiftRecipient
+
+    async with get_session_factory()() as session:
+        gift = await session.get(FanGift, UUID(item["id"]))
+        person = (await session.execute(select(FanGiftRecipient).where(FanGiftRecipient.gift_id == gift.id))).scalar_one()
+        mail = await FanGiftService(session).write_for(
+            gift, person, status=person.status, link="L", file_url=lambda f: f"/files/{f.id}",
+        )
+    assert mail.subject == "For Nila" and "Dear Nila" in mail.html and f"/files/{pic['id']}" in mail.html
