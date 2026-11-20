@@ -233,10 +233,20 @@ class CheckoutService:
         idempotency_key: str,
         delivery_confirmed: bool = False,
         chosen_amount_minor: int | None = None,
-    ) -> tuple[Order, Payment]:
-        found = await self._existing_order(ctx, idempotency_key)
-        if found is not None:
-            return found
+        use_credit: bool = False,
+    ) -> tuple[Order, Payment | None]:
+        if use_credit:
+            existing = (
+                await self.session.execute(select(Order).where(Order.idempotency_key == idempotency_key))
+            ).scalar_one_or_none()
+            if existing is not None:
+                if existing.user_id != ctx.user_id:
+                    raise AppError("CONFLICT", "Idempotency-Key reused", 409)
+                return existing, None
+        else:
+            found = await self._existing_order(ctx, idempotency_key)
+            if found is not None:
+                return found
         address = await self._confirmed_delivery_address(ctx, delivery_confirmed)
         offer = await self.session.get(Offer, offer_id)
         if offer is None or offer.deleted_at is not None or offer.status != "ACTIVE":
@@ -266,10 +276,24 @@ class CheckoutService:
         else:
             item_type = "TRACK" if product.product_type in {"TRACK", "CATALOG_ACCESS"} else "OTHER"
             purpose = "TRACK"
+        credit_act = None
+        if use_credit:
+            # D-GIFT-FAN-01: gift credit pays a whole order of the same act's released music. No new
+            # money: the sale counted when the gift was paid for, so the order is ৳0.
+            from cornerroom.modules.commerce.application.fan_gifts import FanGiftService
+
+            if offer.audience == "PRESALE" or product.product_type not in {"TRACK", "RELEASE"}:
+                raise AppError("CREDIT_NOT_USABLE", "Gift credit pays for music that is out", 409)
+            credit_act = await FanGiftService(self.session, settings=self.settings, clock=self.clock).act_for_product(product)
+            if credit_act is None:
+                raise AppError("CREDIT_NOT_USABLE", "Gift credit can't pay for this", 409)
+        credit_minor = money.amount_minor if use_credit else 0
+        charged = 0 if use_credit else money.amount_minor
         order = Order(
             user_id=ctx.user_id,
             status="PENDING_PAYMENT",
-            total_amount_minor=money.amount_minor,
+            total_amount_minor=charged,
+            paid_with_credit_minor=credit_minor,
             currency_code=money.currency_code,
             idempotency_key=idempotency_key,
             purpose=purpose,
@@ -287,13 +311,15 @@ class CheckoutService:
                 ref_id=product.subject_id,
                 product_id=product.id,
                 quantity=1,
-                unit_amount_minor=money.amount_minor,
-                amount_minor=money.amount_minor,
+                unit_amount_minor=charged,
+                amount_minor=charged,
                 currency_code=money.currency_code,
             )
         )
         await self.session.flush()
         self._add_tax_line(order)
+        if credit_act is not None:
+            return await self._pay_with_credit(ctx, order, product, credit_act, credit_minor)
         payment = await self.payments.create_intent(
             ctx, order=order, idempotency_key=f"pay:{idempotency_key}"
         )
@@ -318,6 +344,32 @@ class CheckoutService:
             organization_id=product.organization_id,
         )
         return order, payment
+
+    async def _pay_with_credit(
+        self, ctx: AuthContext, order: Order, product: Product, act_id: UUID, amount_minor: int
+    ) -> tuple[Order, None]:
+        """A ৳0 order paid with gift credit: no payment, owned at once (D-GIFT-FAN-01)."""
+        from cornerroom.modules.commerce.application.fan_gifts import FanGiftService
+
+        await FanGiftService(self.session, settings=self.settings, clock=self.clock).spend(
+            ctx, act_id=act_id, amount_minor=amount_minor, currency_code=order.currency_code, order=order
+        )
+        order_transition_action(order.status, "PAID")
+        order.status = "PAID"
+        await self.session.flush()
+        await self._fulfill_items(ctx, order)
+        order_transition_action(order.status, "FULFILLED")
+        order.status = "FULFILLED"
+        await self.session.flush()
+        await self.audit.record_from_auth(
+            ctx,
+            action="order.paid_with_credit",
+            entity_type="Order",
+            entity_id=order.id,
+            new_state={"status": order.status, "paid_with_credit_minor": amount_minor},
+            organization_id=product.organization_id,
+        )
+        return order, None
 
     async def _check_music_offer(self, ctx: AuthContext, offer: Offer, product: Product) -> None:
         """Release and song purchases follow the artist's choices (D-AUDIO-10, -11, -12)."""
@@ -513,6 +565,13 @@ class CheckoutService:
         return order
 
     async def _fulfill_items(self, ctx: AuthContext | None, order: Order) -> UUID | None:
+        # D-GIFT-FAN-01: a gift order gives the music to the people on the gift, never the giver.
+        from cornerroom.modules.commerce.application.fan_gifts import FanGiftService
+
+        gifts = FanGiftService(self.session, settings=self.settings, clock=self.clock)
+        gift = await gifts.gift_for_order(order.id)
+        if gift is not None:
+            return await gifts.on_paid(gift)
         items = list(
             (
                 await self.session.execute(select(OrderItem).where(OrderItem.order_id == order.id))

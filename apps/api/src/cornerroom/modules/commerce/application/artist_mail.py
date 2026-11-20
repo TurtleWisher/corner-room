@@ -1107,6 +1107,11 @@ class ArtistMailService:
         order = await self.session.get(Order, order_id)
         if order is None or order.deleted_at is not None or order.status not in KEPT_ORDER_STATUSES:
             return 0
+        # D-GIFT-FAN-01: a gift's giver doesn't own the music, so no thank-you for owning it.
+        from cornerroom.modules.commerce.domain.fan_gifts import FanGift
+
+        if (await self.session.execute(select(FanGift.id).where(FanGift.order_id == order.id))).first() is not None:
+            return 0
         user = await self.session.get(User, order.user_id)
         if user is None or user.deleted_at is not None:
             return 0

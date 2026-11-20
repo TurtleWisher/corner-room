@@ -204,10 +204,22 @@ export function MusicReceipt({
           </h2>
           <p className="mt-1 text-fg">{artist ?? "Artist not available"}</p>
           <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
-            <dt className="text-fg-muted">Paid</dt>
-            <dd className="text-fg">
-              <Money value={{ amount_minor: order.total_amount_minor, currency_code: order.currency_code }} minorDigits="always" />
-            </dd>
+            {order.paid_with_credit_minor ? (
+              // D-GIFT-FAN-01: paid with gift credit, so no money changed hands now.
+              <>
+                <dt className="text-fg-muted">Paid with</dt>
+                <dd className="text-fg">
+                  <Money value={{ amount_minor: order.paid_with_credit_minor, currency_code: order.currency_code }} minorDigits="always" /> of gift credit
+                </dd>
+              </>
+            ) : (
+              <>
+                <dt className="text-fg-muted">Paid</dt>
+                <dd className="text-fg">
+                  <Money value={{ amount_minor: order.total_amount_minor, currency_code: order.currency_code }} minorDigits="always" />
+                </dd>
+              </>
+            )}
             {order.created_at ? (
               <>
                 <dt className="text-fg-muted">Date</dt>

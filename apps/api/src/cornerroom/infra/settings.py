@@ -135,6 +135,12 @@ class Settings(BaseSettings):
     # (minor units: 1000 and 10_000_000). 0 turns that end of the range off.
     open_price_min_minor: int = 1_000
     open_price_max_minor: int = 10_000_000
+    # Fan gifts (owner, 2026-11-20, D-GIFT-FAN-01). The owner left the most people one gift order
+    # can go to for us to set: 10 keeps one Bangla QR payment checkable by staff and limits a typo
+    # sending many emails. A gift nobody claims in 7 days (owner) goes back to the giver as credit
+    # for the act's music. 0 people = no limit; 0 days = gifts never go back.
+    fan_gift_max_people: int = 10
+    fan_gift_claim_days: int = 7
     # Owner, 2026-11-07 (D-REVIEW-SOLO-01): while the owner is the only staff, nobody else can be the
     # second person, so the rule "someone else must approve this" is off and whatever a person with
     # the staff right to approve sends in is approved at once. Turn it on (true) when more staff join.

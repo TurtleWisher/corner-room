@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
-import { CalendarClock, CircleCheck, LogIn } from "lucide-react";
+import { CalendarClock, CircleCheck, Gift, LogIn } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { LitSurface } from "@/components/brand/corner-light";
 import { CoverArt } from "@/components/brand/cover-art";
 import { RoomCube } from "@/components/brand/room-cube";
 import { DeliveryAddressStep } from "@/components/checkout/delivery-address-step";
+import { CreditStep, GiftStep, NO_GIFT, readGift, type GiftDraft } from "@/components/checkout/gift-step";
 import { PaymentPanel } from "@/components/checkout/payment-panel";
 import { PowerTransition } from "@/components/checkout/power-transition";
 import { GenericSummary, MusicReceipt, TicketConfirmation, TicketSummary, TrackSummary } from "@/components/checkout/summaries";
@@ -18,6 +19,8 @@ import { Button, ButtonLink, Card, DateTime, ErrorState, Field, Input, Money, Sk
 import { useCredits } from "@/components/music/credits";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { fetchPresale } from "@/features/catalog/api";
+import { createCreditOrder, createGiftOrder } from "@/features/fan-gifts/api";
+import { giftPaidLine } from "@/lib/fan-gift-view";
 import { maybeCoverUrl, offerCoverSource } from "@/lib/cover-view";
 import { amountAsTyped, amountProblemWords, lowestFor, readChosenAmount, type ChosenAmount } from "@/lib/open-price-view";
 import { formatMoney } from "@/lib/format/money";
@@ -198,7 +201,21 @@ function OrderCheckout({ initial }: { initial: OrderRecord }) {
     return (
       <div className="mx-auto max-w-3xl">
         <Heading>{ctx?.kind === "tickets" ? "You're going" : "Thank you"}</Heading>
-        {ctx?.kind === "tickets" ? (
+        {order.is_gift ? (
+          // D-GIFT-FAN-01: the giver doesn't get the music; the people on the gift do.
+          <Card className="p-6" role="status">
+            <p className="flex items-center gap-2 text-xl font-bold text-fg">
+              <Gift aria-hidden="true" className="size-6 text-highlight" /> Your gift is paid
+            </p>
+            <p className="mt-2 text-sm text-fg">
+              Paid <Money value={{ amount_minor: order.total_amount_minor, currency_code: order.currency_code }} minorDigits="always" />.{" "}
+              {giftPaidLine(order.items?.length ?? 1)}
+            </p>
+            <ButtonLink href="/account/gifts" className="mt-6">
+              Your gifts
+            </ButtonLink>
+          </Card>
+        ) : ctx?.kind === "tickets" ? (
           <TicketConfirmation order={order} event={ctx.event} />
         ) : ctx?.kind === "track" ? (
           <MusicReceipt order={order} track={ctx.track} artist={artist} />
@@ -250,7 +267,9 @@ function OrderCheckout({ initial }: { initial: OrderRecord }) {
         confirmed={moment === "playing"}
         title="Payment received"
         detail={
-          ctx?.kind === "tickets"
+          order.is_gift
+            ? "Your gift is on its way."
+            : ctx?.kind === "tickets"
             ? "Your tickets are ready."
             : ctx?.kind === "track" && ctx.track
               ? `${ctx.track.title} is in your library.`
@@ -346,6 +365,10 @@ function NewCheckout() {
   // D-OPEN-PRICE-01: what the buyer types for an open price; empty until they change it, so the
   // field starts at the lowest amount.
   const [amountText, setAmountText] = useState<string | null>(null);
+  // D-GIFT-FAN-01: buy it for other people, or pay with gift credit for the artist's music.
+  const [gift, setGift] = useState<GiftDraft>(NO_GIFT);
+  const [useCredit, setUseCredit] = useState(false);
+  const { user } = useAuth();
   const summary = useAsync(() => (item ? loadSummary(item) : Promise.resolve(null)), [item?.kind, item?.id]);
   const owned = useAsync(
     () =>
@@ -385,6 +408,15 @@ function NewCheckout() {
 
   const open = summary.status === "ok" ? (summary.data?.open ?? null) : null;
   const chosen = open ? readChosenAmount(amountText ?? amountAsTyped(open.amount_minor), open) : null;
+  const music = summary.status === "ok" ? summary.data?.offer : null;
+  // Only music that is out, at its normal price, can be a gift or be paid with credit.
+  const giftable =
+    item.kind === "offer" &&
+    Boolean(music && (music.product_type === "TRACK" || music.product_type === "RELEASE")) &&
+    !(summary.status === "ok" && summary.data?.presale);
+  const giving = giftable && gift.on;
+  const gifted = giving ? readGift(gift, user?.email) : null;
+  const paying = giftable && !giving && useCredit;
 
   async function place() {
     if (!item) return;
@@ -393,7 +425,9 @@ function NewCheckout() {
     setBusy(true);
     try {
       let order: OrderRecord;
-      if (item.kind === "offer") order = await createCatalogOrder(item.id, key, addressConfirmed, chosen?.minor ?? undefined);
+      if (item.kind === "offer" && gifted) order = await createGiftOrder(item.id, key, { people: gifted.people, note: gifted.note }, chosen?.minor ?? undefined);
+      else if (item.kind === "offer" && paying) order = await createCreditOrder(item.id, key, addressConfirmed, chosen?.minor ?? undefined);
+      else if (item.kind === "offer") order = await createCatalogOrder(item.id, key, addressConfirmed, chosen?.minor ?? undefined);
       else {
         const hold = await createHold(item.id, Number.parseInt(quantity, 10));
         order = await createOrder(hold.id, key, addressConfirmed);
@@ -468,7 +502,16 @@ function NewCheckout() {
 
       {error ? <ErrorState title="Something went wrong" message={error} /> : null}
 
-      {summary.status === "ok" && summary.data?.offer && owned.status === "ok" && alreadyOwns(owned.data, summary.data.offer) ? (
+      {giftable && summary.status === "ok" && summary.data ? (
+        <GiftStep
+          draft={gift}
+          onChange={setGift}
+          ownEmail={user?.email}
+          each={open && chosen?.minor ? { amount_minor: chosen.minor, currency_code: open.currency_code } : summary.data.price}
+        />
+      ) : null}
+
+      {!giving && summary.status === "ok" && summary.data?.offer && owned.status === "ok" && alreadyOwns(owned.data, summary.data.offer) ? (
         <Card className="p-6">
           <p className="font-semibold text-fg">
             {summary.data.offer.product_type === "TRACK"
@@ -480,19 +523,28 @@ function NewCheckout() {
           <ButtonLink href={afterPurchaseHref(item, summary.data.offer).href} className="mt-4">
             Listen now
           </ButtonLink>
+          {giftable ? <p className="mt-3 text-sm text-fg-muted">You can still give it to someone: tick Give it as a gift above.</p> : null}
         </Card>
       ) : summary.status === "ok" && summary.data ? (
         <>
-          <DeliveryAddressStep confirmed={addressConfirmed} onConfirmedChange={setAddressConfirmed} />
+          {giftable && !giving ? <CreditStep offerId={item.id} on={useCredit} onChange={setUseCredit} /> : null}
+          {/* A gift's giver gets no collectible from it, so a gift needs no delivery address. */}
+          {giving ? null : <DeliveryAddressStep confirmed={addressConfirmed} onConfirmedChange={setAddressConfirmed} />}
           <div className="flex flex-wrap items-center gap-4">
-            <Button size="lg" busy={busy} disabled={!addressConfirmed || Boolean(chosen && chosen.minor === null)} onClick={() => void place()}>
-              {item.kind === "tickets" ? "Reserve and pay" : "Continue to payment"}
+            <Button
+              size="lg"
+              busy={busy}
+              disabled={(giving ? Boolean(gifted?.problem) : !addressConfirmed) || Boolean(chosen && chosen.minor === null)}
+              onClick={() => void place()}
+            >
+              {item.kind === "tickets" ? "Reserve and pay" : paying ? "Get it with credit" : "Continue to payment"}
             </Button>
             <Link href="/store" className="cr-focus text-sm font-semibold text-fg-muted hover:text-fg">
               Cancel
             </Link>
           </div>
-          {!addressConfirmed ? <p className="text-sm text-fg-muted">Confirm where we can send gifts to continue.</p> : null}
+          {giving && gifted?.problem ? <p className="text-sm text-fg-muted">{gifted.problem}</p> : null}
+          {!giving && !addressConfirmed ? <p className="text-sm text-fg-muted">Confirm where we can send gifts to continue.</p> : null}
         </>
       ) : null}
     </div>

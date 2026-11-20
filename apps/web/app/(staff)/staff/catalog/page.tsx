@@ -11,6 +11,7 @@ import { CircleAlert, Search } from "lucide-react";
 import { ArtistMailReview } from "@/components/staff/artist-mail-review";
 import { ChangesQueue } from "@/components/staff/changes-review";
 import { GiftsReview } from "@/components/staff/gifts-review";
+import { FanGiftNotes } from "@/components/staff/fan-gift-notes";
 import { MusicGiftsReview } from "@/components/staff/music-gifts-review";
 import { TeasersReview } from "@/components/staff/teasers-review";
 import { PresaleQueue } from "@/components/staff/presale-review";
@@ -424,6 +425,7 @@ export default function StaffCatalogPage() {
         <ChangesQueue />
         <GiftsReview />
         <MusicGiftsReview />
+        <FanGiftNotes />
         <TeasersReview />
         <ArtistMailReview />
         <LyricsQueue />

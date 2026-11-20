@@ -94,6 +94,26 @@ FEATURES: Final[list[dict]] = [
         ],
     },
     {
+        "id": "fan-gifts",
+        "name": "Fan gifts and gift credit",
+        "area": "Fans",
+        "audience": ["Fans", "Artists", "Staff"],
+        "summary": "Buy a song or release for people you know, by email, and pay for it yourself.",
+        "description": (
+            "At checkout a fan ticks Give it as a gift, types up to 10 email addresses and an optional "
+            "note, and pays for each person. The sale counts for the artist when the giver pays. Corner "
+            "Room checks every note before anyone is emailed. Someone with an account owns the music at "
+            "once; a new address gets it when it signs up with that email. Someone who already owns it "
+            "chooses: keep the amount as credit for that artist's music, pass it on to another email, or "
+            "say no thanks. A gift that is declined, or not claimed in 7 days, goes back to the giver as "
+            "credit for that artist's music. Credit pays for a whole song or release of the same artist "
+            "at checkout. The giver sees Delivered, Accepted, Passed on, Declined or Not claimed, never why."
+        ),
+        "updates": [
+            {"date": "2026-11-20", "kind": "NEW", "title": "Give music as a gift", "details": "Buy a song or release for people you know by email, with a note Corner Room checks, keep or pass on a gift you already own, and spend gift credit on the same artist's music."},
+        ],
+    },
+    {
         "id": "music-gifts",
         "name": "Music gifts",
         "area": "Artists",
@@ -211,7 +231,8 @@ FEATURES: Final[list[dict]] = [
             "gift emails nobody: the artist presses Send update for dispatched, returned or missing gifts, "
             "sees the email first, and only then are those buyers told. A "
             "release's numbers page shows its collectibles. Music given free through a music gift doesn't "
-            "earn a campaign gift."
+            "earn a campaign gift, and neither (for now) does music bought as a fan gift or paid with gift "
+            "credit."
         ),
         "updates": [
             {"date": "2026-11-20", "kind": "IMPROVED", "title": "Gift updates wait for Send update", "details": "Marking gifts Dispatched, Returned or Missing no longer emails anyone. The artist presses Send update (for the whole status or the chosen gifts), checks the email, then it goes."},
