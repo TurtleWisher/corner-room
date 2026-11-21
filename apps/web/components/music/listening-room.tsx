@@ -31,6 +31,7 @@ import { playerStatusText, RepeatButton, ShuffleButton, usePlayer, usePlayerProg
 import { TrackActions } from "@/components/music/track-actions";
 import { useAsync } from "@/components/use-async";
 import {
+  carouselTurn,
   carouselWindow,
   edgeZone,
   isVisibleOffset,
@@ -799,11 +800,21 @@ function ProblemActions({ track }: { track: PlayerTrack }) {
   );
 }
 
-/** The centred 3D carousel. Choosing a side card plays it; choosing the front card opens focus. */
+/**
+ * The centred 3D carousel. Choosing a side card plays it; choosing the front card opens focus.
+ * A mouse over it turns the whole carousel toward the pointer, in 3D, and it settles back when the
+ * mouse leaves (owner, 2026-11-22); it never changes the song. Still under reduced motion.
+ */
 function Carousel({ onFocus, frontRef }: { onFocus: () => void; frontRef: React.Ref<HTMLButtonElement> }) {
   const p = usePlayer();
   const touch = useRef<{ x: number; y: number } | null>(null);
+  const turnFrame = useRef(0);
   const items = carouselWindow(p.queue, p.index);
+  useEffect(() => () => window.cancelAnimationFrame(turnFrame.current), []);
+  const setTurn = (stage: HTMLElement, turn: number, lean: number) => {
+    stage.style.setProperty("--lr-turn", `${turn}deg`);
+    stage.style.setProperty("--lr-lean", `${lean}deg`);
+  };
   return (
     <div
       className="lr-stage"
@@ -818,6 +829,22 @@ function Carousel({ onFocus, frontRef }: { onFocus: () => void; frontRef: React.
           e.preventDefault();
           p.next();
         }
+      }}
+      onPointerMove={(e) => {
+        if (e.pointerType !== "mouse") return;
+        const stage = e.currentTarget;
+        const { clientX, clientY } = e;
+        // One write per frame, however fast the mouse moves; the cards' own transition eases it.
+        window.cancelAnimationFrame(turnFrame.current);
+        turnFrame.current = window.requestAnimationFrame(() => {
+          const { turn, lean } = carouselTurn(clientX, clientY, stage.getBoundingClientRect());
+          setTurn(stage, turn, lean);
+        });
+      }}
+      onPointerLeave={(e) => {
+        if (e.pointerType !== "mouse") return;
+        window.cancelAnimationFrame(turnFrame.current);
+        setTurn(e.currentTarget, 0, 0);
       }}
       onPointerDown={(e) => {
         if (e.pointerType !== "mouse") touch.current = { x: e.clientX, y: e.clientY };

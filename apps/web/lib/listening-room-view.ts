@@ -29,6 +29,28 @@ export function carouselWindow<T>(queue: readonly T[], index: number): CarouselI
   return out;
 }
 
+/** How far the carousel turns and leans toward the mouse at the stage's edges (owner, 2026-11-22). */
+export const CAROUSEL_TURN_DEG = 12;
+export const CAROUSEL_LEAN_DEG = 5;
+
+/**
+ * The carousel's turn toward a mouse at (x, y) over a stage box, in degrees: right of centre turns
+ * it right (its face follows the pointer), above centre leans it up. 0 and 0 at the centre, outside
+ * the box held at the edge, and for an empty box.
+ */
+export function carouselTurn(
+  x: number,
+  y: number,
+  box: { left: number; top: number; width: number; height: number },
+): { turn: number; lean: number } {
+  if (!(box.width > 0) || !(box.height > 0) || !Number.isFinite(x) || !Number.isFinite(y)) return { turn: 0, lean: 0 };
+  const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+  const nx = clamp(((x - box.left) / box.width) * 2 - 1);
+  const ny = clamp(((y - box.top) / box.height) * 2 - 1);
+  const round = (v: number) => Math.round(v * 100) / 100 || 0;
+  return { turn: round(nx * CAROUSEL_TURN_DEG), lean: round(-ny * CAROUSEL_LEAN_DEG) };
+}
+
 /** How close to a side, in px, a mouse must come before the focus view shows that neighbour. */
 export const EDGE_ZONE_PX = 140;
 

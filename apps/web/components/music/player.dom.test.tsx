@@ -356,6 +356,27 @@ describe("ListeningRoom", () => {
     expect(audioEl().src).toContain("tok-t3");
   });
 
+  it("turns the carousel toward the mouse and settles back when it leaves, without changing the song", async () => {
+    renderRoom();
+    await act(async () => screen.getByText("start t2").click());
+    const stage = document.querySelector(".lr-stage") as HTMLElement;
+    stage.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 500, right: 1000, bottom: 500, x: 0, y: 0, toJSON: () => ({}) });
+    const src = audioEl().src;
+    await act(async () => pointerMove(stage, 1000, "mouse"));
+    await act(async () => new Promise<void>((done) => requestAnimationFrame(() => done())));
+    expect(stage.style.getPropertyValue("--lr-turn")).toBe("12deg");
+    // Touch never turns it (a swipe changes the song instead).
+    await act(async () => pointerMove(stage, 0, "touch"));
+    await act(async () => new Promise<void>((done) => requestAnimationFrame(() => done())));
+    expect(stage.style.getPropertyValue("--lr-turn")).toBe("12deg");
+    const leave = new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body });
+    Object.defineProperty(leave, "pointerType", { value: "mouse" });
+    await act(async () => fireEvent(stage, leave));
+    expect(stage.style.getPropertyValue("--lr-turn")).toBe("0deg");
+    expect(stage.style.getPropertyValue("--lr-lean")).toBe("0deg");
+    expect(audioEl().src).toBe(src);
+  });
+
   /** Two animation frames: the lyric ring moves its lines once a frame. */
   async function frames() {
     await act(async () => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));

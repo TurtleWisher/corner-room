@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { carouselWindow, edgeZone, isVisibleOffset, leaveTarget, nowPlayingAnnouncement, queuePositionLabel, roomEyebrow, swipeDirection, titleAtoms } from "./listening-room-view";
+import { CAROUSEL_LEAN_DEG, CAROUSEL_TURN_DEG, carouselTurn, carouselWindow, edgeZone, isVisibleOffset, leaveTarget, nowPlayingAnnouncement, queuePositionLabel, roomEyebrow, swipeDirection, titleAtoms } from "./listening-room-view";
 
 describe("carousel", () => {
   const q = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -112,3 +112,22 @@ describe("title pieces (D-ROOM-03)", () => {
   });
 });
 
+describe("carouselTurn (owner, 2026-11-22: the carousel turns toward the mouse)", () => {
+  const box = { left: 100, top: 50, width: 800, height: 400 };
+
+  it("is still at the centre and turns its face toward the pointer", () => {
+    expect(carouselTurn(500, 250, box)).toEqual({ turn: 0, lean: 0 });
+    expect(carouselTurn(900, 250, box).turn).toBe(CAROUSEL_TURN_DEG);
+    expect(carouselTurn(100, 250, box).turn).toBe(-CAROUSEL_TURN_DEG);
+    expect(carouselTurn(700, 250, box).turn).toBe(CAROUSEL_TURN_DEG / 2);
+    // Up leans it up, down leans it down.
+    expect(carouselTurn(500, 50, box).lean).toBe(CAROUSEL_LEAN_DEG);
+    expect(carouselTurn(500, 450, box).lean).toBe(-CAROUSEL_LEAN_DEG);
+  });
+
+  it("holds at the edge outside the box and stays still without a box", () => {
+    expect(carouselTurn(5000, -500, box)).toEqual({ turn: CAROUSEL_TURN_DEG, lean: CAROUSEL_LEAN_DEG });
+    expect(carouselTurn(10, 10, { left: 0, top: 0, width: 0, height: 0 })).toEqual({ turn: 0, lean: 0 });
+    expect(carouselTurn(Number.NaN, 10, box)).toEqual({ turn: 0, lean: 0 });
+  });
+});
