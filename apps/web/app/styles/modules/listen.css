@@ -345,7 +345,11 @@ html:has([data-module="music"] .lr) {
   top: 0;
   width: var(--card);
   margin-left: calc(var(--card) / -2);
-  transform: translate3d(calc(var(--card) * var(--tx)), 0, var(--tz)) rotateY(var(--ry)) scale(var(--s));
+  /* The whole carousel turns toward the mouse (--lr-turn, --lr-lean on the stage, owner
+     2026-11-22): every slot rotates about the same point, the stage's centre, before taking its
+     own place, so the side cards swing round the front one like one carousel. */
+  transform: rotateX(var(--lr-lean, 0deg)) rotateY(var(--lr-turn, 0deg)) translate3d(calc(var(--card) * var(--tx)), 0, var(--tz))
+    rotateY(var(--ry)) scale(var(--s));
   opacity: var(--o);
   transition:
     transform var(--lr-move) var(--lr-ease),
@@ -1106,5 +1110,10 @@ html:has([data-module="music"] .lr) {
   }
   [data-module="music"] .lr-slot {
     will-change: auto;
+  }
+  /* The carousel never turns toward the mouse. */
+  [data-module="music"] .lr-stage {
+    --lr-turn: 0deg !important;
+    --lr-lean: 0deg !important;
   }
 }

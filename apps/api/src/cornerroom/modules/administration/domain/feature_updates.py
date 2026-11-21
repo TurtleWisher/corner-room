@@ -342,6 +342,7 @@ FEATURES: Final[list[dict]] = [
             "made on their own phone or computer. Artists can turn story sharing off for a release."
         ),
         "updates": [
+            {"date": "2026-11-22", "kind": "IMPROVED", "title": "The carousel turns toward the mouse", "details": "With a mouse over the track carousel, the whole carousel swings in 3D to follow the pointer and settles back when it leaves. It never changes the song, and stays still for people who prefer less motion."},
             {"date": "2026-11-22", "kind": "FIXED", "title": "Lyrics keep turning under the mouse", "details": "Pointing at a line on the lyric ring lights it, and the ring keeps turning instead of stopping."},
             {"date": "2026-11-21", "kind": "IMPROVED", "title": "Quieter corner controls", "details": "The lyrics switch is now one lyrics icon that lights up or is crossed out, and a gift icon beside it opens Give as a gift, its words showing when you point at it."},
             {"date": "2026-11-14", "kind": "IMPROVED", "title": "Title on one line", "details": "The room's big title always fits on one line, however long, getting smaller as needed; no word or bracket is left on a line of its own. The version sits after it, smaller and quieter, as a note on which version it is."},
