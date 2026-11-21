@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { carryTimes, saveAction, songContext, songIdIn, songMark, tidyLyrics, wordsChanged } from "./staff-lyrics-view";
+import { carryTimes, lineWindow, matchParts, saveAction, searchWords, songContext, songIdIn, songMark, tapMarks, tidyLyrics, wordsChanged } from "./staff-lyrics-view";
 
 describe("staff lyrics sync helpers", () => {
   it("reads a song id out of a pasted address", () => {
@@ -39,5 +39,39 @@ describe("staff lyrics sync helpers", () => {
     expect(saveAction({ ...base, draft: "a\nB", times: [1, 2] })).toEqual({ label: "Save words and timings", words: true, times: true });
     expect(saveAction({ ...base, draft: "a\nb\nc", times: [1, 2] })).toEqual({ label: "Save words", words: true, times: false });
     expect(saveAction({ ...base, approvesAtOnce: false, draft: "a\nB", times: [1, 2] })?.label).toBe("Send words for approval");
+  });
+});
+
+describe("finder and sync page helpers (owner, 2026-11-21)", () => {
+  it("shows no list until something is typed", () => {
+    expect(searchWords("")).toEqual([]);
+    expect(searchWords("   ")).toEqual([]);
+    expect(searchWords(" kaal  stop ")).toEqual(["kaal", "stop"]);
+  });
+
+  it("marks the typed words in a title, any case, overlapping words merged", () => {
+    expect(matchParts("Last Stop", "stop")).toEqual([
+      { text: "Last ", hit: false },
+      { text: "Stop", hit: true },
+    ]);
+    expect(matchParts("Kaal Bela", "KAAL bel")).toEqual([
+      { text: "Kaal", hit: true },
+      { text: " ", hit: false },
+      { text: "Bel", hit: true },
+      { text: "a", hit: false },
+    ]);
+    expect(matchParts("Rumi", "")).toEqual([{ text: "Rumi", hit: false }]);
+    expect(matchParts("", "x")).toEqual([]);
+  });
+
+  it("places taps along the song and keeps them on it", () => {
+    expect(tapMarks([0, 30000, 90000], 60)).toEqual([0, 0.5, 1]);
+    expect(tapMarks([1000], 0)).toEqual([]);
+  });
+
+  it("gives the line before, on show and next", () => {
+    expect(lineWindow(["a", "b", "c"], 1)).toEqual({ before: "a", now: "b", after: "c" });
+    expect(lineWindow(["a", "b"], 0)).toEqual({ before: null, now: "a", after: "b" });
+    expect(lineWindow(["a"], -1)).toEqual({ before: null, now: null, after: "a" });
   });
 });

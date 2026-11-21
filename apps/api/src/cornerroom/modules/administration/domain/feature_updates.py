@@ -408,6 +408,7 @@ FEATURES: Final[list[dict]] = [
             "like any artist."
         ),
         "updates": [
+            {"date": "2026-11-21", "kind": "IMPROVED", "title": "A calmer, smoother sync page", "details": "The song search lists nothing until staff start typing, then unfolds with the typed words lit. The sync page shows the line before and after the one to tap, a timeline of the song with a mark for every tap (click to jump), a list that follows along, and P to play or pause."},
             {"date": "2026-11-21", "kind": "IMPROVED", "title": "Find a song and fix its words while syncing", "details": "Staff search released songs by title or artist instead of pasting an address, and fix the words, spacing and lines on the sync page; one Save keeps the words and their times together, and the song page, listening room and Studio show the fix."},
             {"date": "2026-11-02", "kind": "NEW", "title": "Timed lyrics", "details": "Staff tap along once per line."},
             {"date": "2026-10-28", "kind": "NEW", "title": "Lyrics with staff review", "details": "Song lyrics and lyrics changes waiting for staff."},

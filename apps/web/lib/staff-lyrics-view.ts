@@ -85,3 +85,44 @@ export function saveAction(o: {
   if (allTimed && timesChanged) return { label: "Save timings", words: false, times: true };
   return null;
 }
+
+/** The words someone typed into the song finder; nothing typed means no list (owner, 2026-11-21:
+ * the list unfolds only once they start writing). */
+export function searchWords(q: string): string[] {
+  return q.trim().split(/\s+/).filter(Boolean).slice(0, 6);
+}
+
+export type MatchPart = { text: string; hit: boolean };
+
+/** A title or name split into pieces, the ones matching a typed word marked, for highlighting. */
+export function matchParts(text: string, q: string): MatchPart[] {
+  const words = searchWords(q).map((w) => w.toLowerCase());
+  if (!text || !words.length) return text ? [{ text, hit: false }] : [];
+  const lower = text.toLowerCase();
+  const hit = new Array<boolean>(text.length).fill(false);
+  for (const w of words) {
+    for (let at = lower.indexOf(w); at >= 0; at = lower.indexOf(w, at + 1)) hit.fill(true, at, at + w.length);
+  }
+  const parts: MatchPart[] = [];
+  for (let i = 0; i < text.length; i += 1) {
+    const last = parts[parts.length - 1];
+    if (last && last.hit === hit[i]) last.text += text[i];
+    else parts.push({ text: text[i], hit: hit[i] });
+  }
+  return parts;
+}
+
+/** Where each tap sits along the song, 0 to 1, for the marks on the sync page's timeline. */
+export function tapMarks(timesMs: readonly number[], durationS: number): number[] {
+  if (!(durationS > 0)) return [];
+  return timesMs.map((t) => Math.min(1, Math.max(0, t / 1000 / durationS)));
+}
+
+/** The line before, the one on show and the next, for the sync page's three-line view. */
+export function lineWindow(lines: readonly string[], index: number): { before: string | null; now: string | null; after: string | null } {
+  return {
+    before: index > 0 ? (lines[index - 1] ?? null) : null,
+    now: index >= 0 ? (lines[index] ?? null) : null,
+    after: lines[index + 1] ?? null,
+  };
+}

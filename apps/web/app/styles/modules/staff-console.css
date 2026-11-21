@@ -541,17 +541,11 @@ main[data-theme="staff"] .st-search-input:focus {
   overflow: hidden;
 }
 .st-sync-line {
-  margin-top: 0.25rem;
-  font-size: 1.125rem;
+  font-size: 1.375rem;
+  line-height: 1.3;
   font-weight: 700;
   color: var(--cr-fg);
-  animation: st-line-in 220ms var(--ease-corner) both;
-}
-@keyframes st-line-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
+  overflow-wrap: anywhere;
 }
 .st-sync-meter {
   position: absolute;
@@ -864,5 +858,241 @@ main[data-theme="staff"] :where([role="status"], [role="alert"]) {
   }
   .st-q[data-flash] > * {
     outline: 2px solid var(--cr-highlight);
+  }
+}
+
+/* ======================================================================================
+ * Lyrics sync, smoother (owner, 2026-11-21: the finder lists nothing until something is typed,
+ * then unfolds; "make that page super enhanced and smooth"). Transform and opacity only, short,
+ * each tied to typing, a tap or the song moving. All of it stops under reduced motion.
+ * ====================================================================================== */
+
+/* Finder: the list folds open under the field. */
+.st-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--cr-dur-component) var(--ease-corner),
+    opacity var(--cr-dur-interaction) ease;
+}
+.st-fold[data-open] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.st-fold-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.st-row-in {
+  animation: st-row-in 260ms var(--ease-corner) both;
+  animation-delay: calc(var(--i, 0) * 28ms);
+}
+@keyframes st-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.st-rows {
+  transition: opacity var(--cr-dur-interaction) ease;
+}
+.st-rows[data-stale] {
+  opacity: 0.55;
+}
+mark.st-hit {
+  color: inherit;
+  background: none;
+  box-shadow: inset 0 -0.45em 0 color-mix(in srgb, var(--cr-highlight) 32%, transparent);
+}
+.st-search-spin,
+.st-search-clear {
+  position: absolute;
+  right: 0.625rem;
+  width: 1rem;
+  height: 1rem;
+  color: var(--cr-fg-muted);
+}
+.st-search-spin {
+  animation: st-spin 0.9s linear infinite;
+  pointer-events: none;
+}
+@keyframes st-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.st-search-clear {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  right: 0.375rem;
+  border-radius: 999px;
+  transition: color var(--cr-dur-micro) ease, background-color var(--cr-dur-micro) ease;
+}
+.st-search-clear:hover {
+  color: var(--cr-fg);
+  background: color-mix(in srgb, var(--cr-fg) 8%, transparent);
+}
+main[data-theme="staff"] .st-search-input {
+  padding-right: 2.25rem;
+}
+/* The browser's own clear cross would sit beside ours. */
+.st-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* Sync page: the timeline of the song with a mark for every tap. */
+.st-timeline {
+  position: relative;
+  height: 1.25rem;
+  cursor: default;
+}
+.st-timeline::before {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 4px;
+  margin-top: -2px;
+  background: color-mix(in srgb, var(--cr-fg) 10%, transparent);
+}
+.st-timeline[data-on] {
+  cursor: pointer;
+}
+.st-timeline-fill {
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 4px;
+  margin-top: -2px;
+  background: var(--cr-highlight);
+  transform-origin: left;
+  transform: scaleX(var(--at, 0));
+}
+.st-timeline-mark {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 12px;
+  margin: -6px 0 0 -1px;
+  background: var(--cr-fg);
+  opacity: 0.7;
+  animation: st-mark-in 240ms var(--ease-corner) both;
+}
+@keyframes st-mark-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0.2);
+  }
+}
+.st-timeline-head {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 999px;
+  background: var(--cr-fg);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--cr-highlight) 30%, transparent);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity var(--cr-dur-interaction) ease, transform var(--cr-dur-interaction) var(--ease-corner);
+}
+.st-timeline[data-on] .st-timeline-head {
+  opacity: 1;
+  transform: none;
+}
+.st-timeline:focus-visible {
+  outline: 2px solid var(--cr-focus);
+  outline-offset: 2px;
+}
+
+/* Sync page: three lines, the one to tap in the middle; each tap slides the next one up. */
+.st-sync-now {
+  min-height: 9rem;
+}
+.st-stage {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.375rem;
+  animation: st-stage-in 260ms var(--ease-corner) both;
+}
+@keyframes st-stage-in {
+  from {
+    opacity: 0.2;
+    transform: translateY(10px);
+  }
+}
+.st-stage-side {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--cr-fg-muted);
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The Tap key answers each tap with one ring. */
+.st-tap {
+  position: relative;
+  overflow: hidden;
+}
+.st-tap-ring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle, color-mix(in srgb, var(--cr-fg) 35%, transparent) 0, transparent 60%);
+  animation: st-tap-ring 420ms ease-out both;
+}
+@keyframes st-tap-ring {
+  from {
+    opacity: 1;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+.st-play[data-on] {
+  border-color: var(--cr-line-strong);
+}
+
+/* A time that just arrived flashes once in the lines list. */
+.st-lines {
+  position: relative;
+  scroll-behavior: auto;
+}
+.st-lines > li[data-timed] .st-lines-time {
+  animation: st-time-in 360ms var(--ease-corner) both;
+}
+@keyframes st-time-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+    color: var(--cr-highlight);
+  }
+}
+.st-lines > li[data-lit] {
+  transition: color var(--cr-dur-interaction) ease, background-color var(--cr-dur-interaction) ease, border-color var(--cr-dur-interaction) ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .st-fold,
+  .st-rows,
+  .st-timeline-head,
+  .st-search-clear {
+    transition: none;
+  }
+  .st-row-in,
+  .st-timeline-mark,
+  .st-stage,
+  .st-tap-ring,
+  .st-lines > li[data-timed] .st-lines-time {
+    animation: none;
+  }
+  .st-search-spin {
+    animation-duration: 2.4s;
   }
 }
