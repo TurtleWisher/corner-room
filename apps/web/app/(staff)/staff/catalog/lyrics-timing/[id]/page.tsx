@@ -11,7 +11,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, CircleAlert, Pause, Play, RotateCcw, Undo2 } from "lucide-react";
 
 import { usePlayer, usePlayerProgress } from "@/components/music/player";
@@ -19,16 +19,86 @@ import { Button, Card, ErrorState, LoadingState, Protected } from "@/components/
 import { fetchStaffLyrics, reviewLyrics, saveLyricTimings, saveStaffLyrics, type StaffLyrics } from "@/features/studio/api";
 import { friendlyError } from "@/lib/error-copy";
 import { lyricIndexAt, lyricLines, lyricLrc, lyricStamp, lyricTimes, shiftLines, tapLine } from "@/lib/lyrics-view";
-import { carryTimes, saveAction, tidyLyrics } from "@/lib/staff-lyrics-view";
+import { carryTimes, lineWindow, saveAction, songMark, tapMarks, tidyLyrics } from "@/lib/staff-lyrics-view";
 
 /** How far before a line a retake starts playing, so the tap can be made in time. */
 const RETAKE_LEAD_S = 3;
+
+const TONE: Record<string, string> = {
+  ok: "st-mark st-mark-ok",
+  todo: "st-mark st-mark-todo",
+  wait: "st-mark st-mark-wait",
+  none: "st-mark",
+};
 /** One nudge of every time, for taps that came a little late or early. */
 const NUDGE_MS = 100;
 
 function typing(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+}
+
+/** The song as a line: where it is now, and a mark for every tap. A click jumps there. */
+function Timeline({ on, position, duration, times, onSeek }: { on: boolean; position: number; duration: number; times: number[]; onSeek: (s: number) => void }) {
+  const ready = on && duration > 0;
+  const marks = ready ? tapMarks(times, duration) : [];
+  const at = ready ? Math.min(1, position / duration) : 0;
+  return (
+    <div
+      className="st-timeline mt-4"
+      data-on={ready ? "true" : undefined}
+      role="slider"
+      tabIndex={ready ? 0 : -1}
+      aria-label="Song position"
+      aria-valuemin={0}
+      aria-valuemax={Math.round(duration)}
+      aria-valuenow={Math.round(position)}
+      aria-valuetext={ready ? `${lyricStamp(position * 1000)} of ${lyricStamp(duration * 1000)}` : "Not playing"}
+      onClick={(e) => {
+        if (!ready) return;
+        const box = e.currentTarget.getBoundingClientRect();
+        onSeek(((e.clientX - box.left) / box.width) * duration);
+      }}
+      onKeyDown={(e) => {
+        if (!ready || (e.key !== "ArrowRight" && e.key !== "ArrowLeft")) return;
+        e.preventDefault();
+        onSeek(Math.max(0, Math.min(duration, position + (e.key === "ArrowRight" ? 5 : -5))));
+      }}
+    >
+      <span className="st-timeline-fill" style={{ ["--at" as string]: at }} />
+      {marks.map((m, i) => (
+        <span key={i} className="st-timeline-mark" style={{ left: `${m * 100}%` }} />
+      ))}
+      <span className="st-timeline-head" style={{ left: `${at * 100}%` }} />
+    </div>
+  );
+}
+
+/** The line before, the one to tap (or on time now) and the next, so the eye can read ahead. */
+function Stage({ lines, index, done, timed }: { lines: string[]; index: number; done: boolean; timed: number }) {
+  const w = lineWindow(lines, index);
+  const blank = "\u00a0";
+  return (
+    <div className="st-sync-now" aria-live="polite" data-done={done ? "true" : undefined}>
+      {lines.length === 0 ? (
+        <p className="text-sm text-fg-muted">Type the words below to start.</p>
+      ) : (
+        <>
+          <p className="st-eyebrow">{done ? "On time now" : `Next tap · line ${timed + 1} of ${lines.length}`}</p>
+          <div key={index} className="st-stage">
+            <p className="st-stage-side" aria-hidden="true">
+              {w.before ?? blank}
+            </p>
+            <p className="st-sync-line">{w.now ?? (done ? "Before the first line" : blank)}</p>
+            <p className="st-stage-side" aria-hidden="true">
+              {w.after ?? blank}
+            </p>
+          </div>
+        </>
+      )}
+      <span className="st-sync-meter" style={{ ["--done" as string]: lines.length ? timed / lines.length : 0 }} aria-hidden="true" />
+    </div>
+  );
 }
 
 function Workbench({ initial }: { initial: StaffLyrics }) {
@@ -52,6 +122,18 @@ function Workbench({ initial }: { initial: StaffLyrics }) {
   const action = lockedBy
     ? null
     : saveAction({ draft, live: record.lyrics, times, stored: record.lyrics_timings_ms, approvesAtOnce: record.approves_at_once });
+
+  // The lines list keeps the lit line in view (inside the list only; the page never jumps).
+  const list = useRef<HTMLOListElement>(null);
+  const lit = done ? now : times.length;
+  useEffect(() => {
+    const box = list.current;
+    const row = box?.children[lit] as HTMLElement | undefined;
+    if (!box || !row) return;
+    const top = row.offsetTop - box.offsetTop - box.clientHeight / 2 + row.clientHeight / 2;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.scrollTo({ top: Math.max(0, top), behavior: still ? "auto" : "smooth" });
+  }, [lit]);
 
   const playFrom = useCallback(
     async (at: number) => {
@@ -84,11 +166,15 @@ function Workbench({ initial }: { initial: StaffLyrics }) {
       } else if (e.key === "Backspace") {
         e.preventDefault();
         undo();
+      } else if ((e.key === "p" || e.key === "P") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        if (current) player.toggle();
+        else void playFrom(0);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tap, undo]);
+  }, [tap, undo, current, player, playFrom]);
 
   function editWords(next: string) {
     setTimes((was) => carryTimes(lyricLines(draft), lyricLines(next), was));
@@ -167,25 +253,19 @@ function Workbench({ initial }: { initial: StaffLyrics }) {
 
   return (
     <div className="st-sync grid gap-4">
-      <Card className="st-sync-deck p-4">
+      <Card className="st-sync-deck p-4 sm:p-5">
         <div className="flex flex-wrap items-center gap-2">
-          {playing ? (
-            <Button type="button" variant="outline" onClick={() => player.toggle()}>
-              <Pause aria-hidden="true" /> Pause
-            </Button>
-          ) : (
-            <Button type="button" variant="outline" onClick={() => void (current ? player.toggle() : playFrom(0))}>
-              <Play aria-hidden="true" /> {current ? "Resume" : "Play"}
-            </Button>
-          )}
+          <Button type="button" variant="outline" className="st-play" data-on={playing ? "true" : undefined} onClick={() => void (current ? player.toggle() : playFrom(0))}>
+            {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />} {playing ? "Pause" : current ? "Resume" : "Play"}
+          </Button>
           <Button type="button" variant="ghost" onClick={() => void playFrom(0)} aria-label="Play from the start">
             <RotateCcw aria-hidden="true" />
           </Button>
           <span className="tabular-nums text-sm text-fg-muted" aria-live="off">
             {current ? `${lyricStamp(position * 1000)} / ${lyricStamp(duration * 1000)}` : "Not playing"}
           </span>
-          <span className="ml-auto text-xs text-fg-muted">
-            <kbd className="st-kbd">Space</kbd> tap · <kbd className="st-kbd">Backspace</kbd> undo
+          <span className="ml-auto hidden text-xs text-fg-muted sm:inline">
+            <kbd className="st-kbd">Space</kbd> tap · <kbd className="st-kbd">Backspace</kbd> undo · <kbd className="st-kbd">P</kbd> play
           </span>
         </div>
         {current && player.problem ? (
@@ -193,34 +273,26 @@ function Workbench({ initial }: { initial: StaffLyrics }) {
             <CircleAlert aria-hidden="true" className="size-4" /> The song couldn&apos;t play here. Check that this account can play it.
           </p>
         ) : null}
+        <Timeline on={current} position={position} duration={duration} times={times} onSeek={(s) => void playFrom(s)} />
         <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-stretch">
-          <div className="st-sync-now" aria-live="polite" data-done={done ? "true" : undefined}>
-            {lines.length === 0 ? (
-              <p className="text-sm text-fg-muted">Type the words below to start.</p>
-            ) : done ? (
-              <>
-                <p className="st-eyebrow">On time now</p>
-                <p key={now} className="st-sync-line">{now >= 0 ? lines[now] : "Before the first line"}</p>
-              </>
-            ) : (
-              <>
-                <p className="st-eyebrow">
-                  Next tap · line {times.length + 1} of {lines.length}
-                </p>
-                <p key={times.length} className="st-sync-line">{lines[times.length]}</p>
-              </>
-            )}
-            <span className="st-sync-meter" style={{ ["--done" as string]: lines.length ? times.length / lines.length : 0 }} aria-hidden="true" />
-          </div>
-          <div className="flex gap-2">
-            <Button type="button" className="st-tap h-16 min-w-36 text-base" disabled={!playing || done || lines.length === 0} onClick={tap} onKeyDown={(e) => e.key === " " && e.preventDefault()}>
+          <Stage lines={lines} index={lit} done={done} timed={times.length} />
+          <div className="flex gap-2 md:flex-col">
+            <Button
+              type="button"
+              className="st-tap h-16 min-w-36 flex-1 text-base"
+              disabled={!playing || done || lines.length === 0}
+              onClick={tap}
+              onKeyDown={(e) => e.key === " " && e.preventDefault()}
+            >
+              {times.length ? <span key={times.length} className="st-tap-ring" aria-hidden="true" /> : null}
               Tap
             </Button>
-            <Button type="button" variant="outline" className="h-16" disabled={times.length === 0} onClick={undo} aria-label="Undo the last tap">
+            <Button type="button" variant="outline" className="h-16 md:h-10" disabled={times.length === 0} onClick={undo} aria-label="Undo the last tap">
               <Undo2 aria-hidden="true" />
             </Button>
           </div>
         </div>
+        {!playing && !done && lines.length > 0 ? <p className="mt-3 text-xs text-fg-muted">Press Play, then tap as each line starts.</p> : null}
       </Card>
 
       {record.lyrics_waiting ? (
@@ -279,13 +351,15 @@ function Workbench({ initial }: { initial: StaffLyrics }) {
               </Button>
             </div>
           </div>
-          <ol className="st-lines mt-2">
+          <ol ref={list} className="st-lines mt-2">
             {lines.map((line, i) => {
               const t = times[i];
-              const lit = done ? i === now : i === times.length;
+              const isLit = i === lit;
               return (
-                <li key={i} data-lit={lit ? "true" : undefined} data-timed={t !== undefined ? "true" : undefined} aria-current={lit ? "true" : undefined}>
-                  <span className="st-lines-time">{t === undefined ? "–" : lyricStamp(t)}</span>
+                <li key={i} data-lit={isLit ? "true" : undefined} data-timed={t !== undefined ? "true" : undefined} aria-current={isLit ? "true" : undefined}>
+                  <span key={t ?? "none"} className="st-lines-time">
+                    {t === undefined ? "–" : lyricStamp(t)}
+                  </span>
                   <span className="min-w-0 flex-1">{line}</span>
                   {t !== undefined ? (
                     <button type="button" className="st-lines-retake cr-focus" onClick={() => retake(i)}>
@@ -341,14 +415,22 @@ function LyricsSync({ trackId }: { trackId: string }) {
 
   if (error) return <ErrorState message={error} />;
   if (!record) return <LoadingState />;
+  const mark = songMark({
+    lines: lyricLines(record.lyrics).length,
+    timed: (record.lyrics_timings_ms?.length ?? 0) > 0,
+    lyrics_waiting: record.lyrics_waiting,
+  });
   return (
-    <div className="grid gap-4">
+    <div className="st-sync-page grid gap-4">
       <div>
         <Link href="/staff/catalog" className="cr-focus inline-flex items-center gap-1 text-sm text-fg-muted hover:text-fg">
           <ArrowLeft aria-hidden="true" className="size-4" /> Catalog
         </Link>
-        <h1 className="mt-1 text-2xl font-bold">{record.title}</h1>
-        {record.profile_name ? <p className="text-sm text-fg-muted">{record.profile_name} · Sync lyrics</p> : null}
+        <h1 className="st-sync-title mt-1 text-2xl font-bold">{record.title}</h1>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-muted">
+          <span>{record.profile_name ? `${record.profile_name} · Sync lyrics` : "Sync lyrics"}</span>
+          <span className={TONE[mark.tone]}>{mark.label}</span>
+        </p>
       </div>
       {record.status !== "RELEASED" ? (
         <ErrorState title="Not out yet" message="Only songs that are out can be synced here. Draft words are edited in the release." />
