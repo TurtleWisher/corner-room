@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 /*
  * Staff console home (/staff). Staff sign-in, the staff join welcome and the "staff only" notice
@@ -15,52 +15,15 @@ import { useAuth } from "@/components/auth-provider";
 import { SpotlightRegion } from "@/components/ds/spotlight";
 import { NavIcon } from "@/components/shell/nav-icons";
 import { Protected } from "@/components/staff/kit";
-import { useAsync } from "@/components/use-async";
+import { STAFF_QUEUES, useStaffQueues } from "@/components/staff/staff-queues";
 import { useWorkspace } from "@/components/workspace-provider";
-import { fetchMailReviewQueue } from "@/features/artist-mail/api";
-import { fetchOfferProposals, fetchStaffRefunds, fetchStaffSubmissions } from "@/features/commerce/api";
-import { fetchGiftReviewQueue } from "@/features/gifts/api";
-import { fetchMusicGiftReviewQueue } from "@/features/music-gifts/api";
-import { fetchProfileReviewQueue } from "@/features/profiles/api";
-import { fetchChangesQueue, fetchCoverQueue, fetchIntakeQueue, fetchLyricsQueue, fetchPresaleQueue } from "@/features/studio/api";
-import { fetchTeaserQueue } from "@/features/teasers/api";
 import { staffNavSections } from "@/lib/nav-view";
-import { sortQueues, waitingTotal, type QueueCount } from "@/lib/staff-console-view";
+import { waitingTotal } from "@/lib/staff-console-view";
 
-const QUEUES: { key: string; label: string; href: string; load: () => Promise<unknown[]> }[] = [
-  { key: "releases", label: "Releases to review", href: "/staff/catalog", load: () => fetchIntakeQueue(true) },
-  { key: "presales", label: "Pre-sales to review", href: "/staff/catalog", load: fetchPresaleQueue },
-  { key: "previews", label: "Previews to review", href: "/staff/catalog", load: fetchTeaserQueue },
-  { key: "changes", label: "Changes to released music", href: "/staff/catalog", load: fetchChangesQueue },
-  { key: "covers", label: "Covers to review", href: "/staff/catalog", load: fetchCoverQueue },
-  { key: "lyrics", label: "Lyrics to review", href: "/staff/catalog", load: fetchLyricsQueue },
-  { key: "mail", label: "Artist emails to review", href: "/staff/catalog", load: fetchMailReviewQueue },
-  { key: "gifts", label: "Gift campaigns to review", href: "/staff/catalog", load: fetchGiftReviewQueue },
-  { key: "music-gifts", label: "Music gifts to review", href: "/staff/catalog", load: fetchMusicGiftReviewQueue },
-  { key: "profiles", label: "Profile changes to review", href: "/staff/catalog/artists", load: fetchProfileReviewQueue },
-  { key: "prices", label: "Prices to agree", href: "/staff/commerce", load: () => fetchOfferProposals("PROPOSED") },
-  { key: "payments", label: "Payments to check", href: "/staff/commerce", load: () => fetchStaffSubmissions("SUBMITTED") },
-  { key: "refunds", label: "Refunds open", href: "/staff/commerce", load: fetchStaffRefunds },
-];
-
-/** Each queue is asked on its own: one that fails (no permission, no workspace) shows no number. */
-async function loadQueues(): Promise<QueueCount[]> {
-  const counts = await Promise.all(
-    QUEUES.map(async ({ load, ...q }) => {
-      try {
-        const rows = await load();
-        return { ...q, count: Array.isArray(rows) ? rows.length : null };
-      } catch {
-        return { ...q, count: null };
-      }
-    }),
-  );
-  return sortQueues(counts);
-}
-
-function Waiting({ workspaceId }: { workspaceId: string | null }) {
-  const state = useAsync(loadQueues, [workspaceId]);
-  const queues = state.status === "ok" ? state.data : [];
+function Waiting() {
+  // The one shared count the side menu's badges and the finder read too (staff-queues.tsx).
+  const state = useStaffQueues();
+  const queues = state.status === "ok" ? state.queues : [];
   const known = queues.filter((q) => q.count !== null);
   const total = waitingTotal(queues);
   return (
@@ -86,7 +49,7 @@ function Waiting({ workspaceId }: { workspaceId: string | null }) {
       </div>
       {state.status === "loading" ? (
         <ul className="st-queues" aria-busy="true">
-          {QUEUES.slice(0, 8).map((q) => (
+          {STAFF_QUEUES.slice(0, 8).map((q) => (
             <li key={q.key} className="st-queue st-queue-wait" />
           ))}
         </ul>
@@ -131,7 +94,7 @@ function ConsoleHome() {
         </p>
       </div>
 
-      <Waiting workspaceId={currentOrg?.id ?? null} />
+      <Waiting />
 
       <SpotlightRegion className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {sections.map((section) => (

@@ -19,7 +19,7 @@ import { emailsLine, reviewKind, SENDER_LABEL, waitingKindLabel, waitingLine, wo
 
 const FIELD = {
   title: "Name",
-  gift_items: "What the gift is",
+  gift_items: "What the collectible is",
   description: "Note for fans",
   sender: "Who sends",
   include_presale: "Pre-sale buyers",
@@ -148,15 +148,15 @@ export function GiftsReview() {
     if (!currentOrg) return;
     fetchGiftReviewQueue()
       .then(setItems)
-      .catch((err) => (err instanceof ApiError && err.status === 403 ? setItems([]) : setError(friendlyError(err, "Gift campaigns couldn't be loaded."))));
+      .catch((err) => (err instanceof ApiError && err.status === 403 ? setItems([]) : setError(friendlyError(err, "Collectibles couldn't be loaded."))));
   }, [currentOrg, round]);
 
   if (!currentOrg || (items !== null && items.length === 0 && !error)) return null;
   return (
     <Card className="p-5">
-      <h2 className="text-lg font-semibold">Gift campaigns waiting for review</h2>
+      <h2 className="text-lg font-semibold">Collectibles waiting for review</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Free gifts artists offer to their buyers. Fans see a campaign only once it is approved; changes to a live one wait here too.
+        Free collectibles artists offer to their buyers. Fans see a campaign only once it is approved; changes to a live one wait here too.
       </p>
       {error ? <ErrorState message={error} /> : items === null ? <LoadingState /> : (
         <ul className="mt-2">

@@ -7,9 +7,9 @@ import { actionable, countsLine, emailsLine, isLater, movesFor, reviewKind, trac
 describe("gift campaign words (owner, 2026-10-28)", () => {
   it("sums up the gifts, leaving out statuses with none", () => {
     const zero = { YET_TO_SEND: 0, PREPARED: 0, DISPATCHED: 0, RECEIVED: 0, RETURNED: 0, MISSING: 0, TOTAL: 0, SCHEDULED: 0 };
-    expect(countsLine(zero)).toBe("No one has earned this gift yet");
-    expect(countsLine({ ...zero, YET_TO_SEND: 3, PREPARED: 4, RECEIVED: 5, TOTAL: 12 })).toBe("12 gifts: 3 not prepared, 4 prepared, 5 received");
-    expect(countsLine({ ...zero, MISSING: 1, TOTAL: 1 })).toBe("1 gift: 1 missing");
+    expect(countsLine(zero)).toBe("No one has earned this collectible yet");
+    expect(countsLine({ ...zero, YET_TO_SEND: 3, PREPARED: 4, RECEIVED: 5, TOTAL: 12 })).toBe("12 collectibles: 3 not prepared, 4 prepared, 5 received");
+    expect(countsLine({ ...zero, MISSING: 1, TOTAL: 1 })).toBe("1 collectible: 1 missing");
   });
 
   it("names the music it covers", () => {
@@ -34,15 +34,15 @@ describe("gift campaign words (owner, 2026-10-28)", () => {
   it("tells staff when the artist's gift emails wait for approval (D-CAMPAIGN-05)", () => {
     const zero = { YET_TO_SEND: 0, PREPARED: 0, DISPATCHED: 0, RECEIVED: 0, RETURNED: 0, MISSING: 0, TOTAL: 0, SCHEDULED: 0 };
     expect(emailsLine({ emails_waiting: 0 })).toBeNull();
-    expect(emailsLine({ emails_waiting: 1 })).toBe("1 gift email written by the artist waits for approval");
-    expect(emailsLine({ emails_waiting: 2 })).toBe("2 gift emails written by the artist wait for approval");
+    expect(emailsLine({ emails_waiting: 1 })).toBe("1 collectible email written by the artist waits for approval");
+    expect(emailsLine({ emails_waiting: 2 })).toBe("2 collectible emails written by the artist wait for approval");
     expect(waitingKindLabel({ counts: zero, emails_waiting: 2 })).toBe("Emails waiting");
     expect(waitingKindLabel({ counts: { ...zero, WAITING: 1 }, emails_waiting: 0 })).toBe("People waiting");
     expect(waitingKindLabel({ counts: { ...zero, WAITING: 1 }, emails_waiting: 1 })).toBe("People and emails waiting");
     // Emails to buyers the artist picked wait too (D-CAMPAIGN-07).
     expect(emailsLine({ emails_waiting: 0, sends_waiting: 1 })).toBe("1 email to buyers the artist picked waits for approval");
     expect(emailsLine({ emails_waiting: 1, sends_waiting: 2 })).toBe(
-      "1 gift email written by the artist waits for approval; 2 emails to buyers the artist picked wait for approval",
+      "1 collectible email written by the artist waits for approval; 2 emails to buyers the artist picked wait for approval",
     );
     expect(waitingKindLabel({ counts: zero, emails_waiting: 0, sends_waiting: 1 })).toBe("Emails waiting");
   });

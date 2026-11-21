@@ -494,6 +494,50 @@ export function saveLyricTimings(trackId: string, timesMs: number[] | null): Pro
   });
 }
 
+/** D-LYRICS-04 (staff): a released song found by its title or its act's name. */
+export type LyricSong = {
+  track_id: string;
+  title: string;
+  profile_name: string | null;
+  release_title: string | null;
+  lines: number;
+  timed: boolean;
+  lyrics_waiting: boolean;
+};
+
+export function searchLyricSongs(q: string): Promise<LyricSong[]> {
+  const query = q.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
+  return apiFetch<LyricSong[]>(`/api/v1/catalog-intake/lyrics/songs${query}`);
+}
+
+/** D-LYRICS-04 (staff): a song's live words and times, and any change waiting for review. */
+export type StaffLyrics = {
+  track_id: string;
+  title: string;
+  status: string;
+  profile_name: string | null;
+  lyrics: string | null;
+  lyrics_timings_ms: number[] | null;
+  lyrics_waiting: boolean;
+  lyrics_pending: string | null;
+  waiting_from_me: boolean;
+  approves_at_once: boolean;
+};
+
+export function fetchStaffLyrics(trackId: string): Promise<StaffLyrics> {
+  return apiFetch<StaffLyrics>(`/api/v1/catalog-intake/tracks/${trackId}/lyrics`);
+}
+
+/** New words for a released song, with one time per sung line when every line is timed. */
+export function saveStaffLyrics(trackId: string, lyrics: string | null, timesMs: number[] | null): Promise<StaffLyrics> {
+  return apiFetch<StaffLyrics>(`/api/v1/catalog-intake/tracks/${trackId}/lyrics`, {
+    method: "PUT",
+    headers: json,
+    body: JSON.stringify({ lyrics, times_ms: timesMs }),
+    retry: false,
+  });
+}
+
 export function reviewLyrics(trackId: string, action: "approve" | "reject", note?: string): Promise<LyricsReviewItem> {
   return apiFetch<LyricsReviewItem>(`/api/v1/catalog-intake/tracks/${trackId}/lyrics/review`, {
     method: "POST",

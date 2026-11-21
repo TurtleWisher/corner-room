@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Menu } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -16,13 +16,18 @@ import { NavIcon } from "@/components/shell/nav-icons";
 import { SkipLink } from "@/components/shell/site-header";
 import { ShellBell } from "@/components/shell/shell-bell";
 import { StaffFinder } from "@/components/shell/staff-finder";
+import { StaffQueuesKeeper, useStaffQueues } from "@/components/staff/staff-queues";
 import { WorkspaceChip, WorkspacePrompt } from "@/components/shell/workspace-chip";
 import { activeHref, staffBreadcrumb, staffNavSections, type NavSection } from "@/lib/nav-view";
+import { badgeText, waitingByPage } from "@/lib/staff-console-view";
 import { cn } from "@/lib/utils";
 
 function StaffNav({ sections, onNavigate }: { sections: NavSection[]; onNavigate?: () => void }) {
   const pathname = usePathname();
   const active = activeHref(pathname, sections.flatMap((s) => s.items));
+  // What is waiting on each page, as a badge beside it: one look shows where the work is.
+  const { queues } = useStaffQueues();
+  const waiting = waitingByPage(queues);
   return (
     <nav aria-label="Staff">
       {sections.map((section) => (
@@ -43,7 +48,12 @@ function StaffNav({ sections, onNavigate }: { sections: NavSection[]; onNavigate
                     )}
                   >
                     <NavIcon href={item.href} />
-                    {item.label}
+                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                    {waiting[item.href] ? (
+                      <span className="st-badge" aria-label={`${waiting[item.href]} waiting`}>
+                        {badgeText(waiting[item.href])}
+                      </span>
+                    ) : null}
                   </Link>
                 </li>
               );
@@ -80,12 +90,29 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   useLeaveFanView();
+  // "/" puts the cursor in the page's own search field (or opens the page finder), like most consoles.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable)) return;
+      const field = document.querySelector<HTMLInputElement>('main[data-theme="staff"] input[type="search"]');
+      e.preventDefault();
+      if (field) {
+        field.focus();
+        field.select();
+      } else window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const sections = staffNavSections(user?.permissions);
   const crumb = staffBreadcrumb(pathname, sections);
 
   return (
     <div className="st-console lg:grid lg:min-h-dvh lg:grid-cols-[15rem_minmax(0,1fr)]">
       <SkipLink />
+      <StaffQueuesKeeper />
       <aside data-theme="staff" className="cr-scope hidden border-r border-line lg:block">
         <div className="sticky top-0 flex h-dvh flex-col">
           <div className="px-5 pb-4 pt-5">

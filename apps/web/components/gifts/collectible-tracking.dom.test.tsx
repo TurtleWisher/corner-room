@@ -68,7 +68,7 @@ describe("CollectibleTracking", () => {
     await act(async () => screen.getByRole("button", { name: /Mark all 2 not prepared as prepared/ }).click());
     expect(api.trackGifts).toHaveBeenCalledWith("c1", { to: "PREPARED", every: "YET_TO_SEND" });
     expect(onChange).toHaveBeenCalled();
-    expect(screen.getByRole("status").textContent).toContain("2 gifts marked prepared.");
+    expect(screen.getByRole("status").textContent).toContain("2 collectibles marked prepared.");
   });
 
   it("offers only the moves the chosen gifts allow, and dispatches now", async () => {
@@ -116,7 +116,7 @@ describe("CollectibleTracking", () => {
     render(<CollectibleTracking c={campaign(people, false)} onChange={() => {}} />);
     expect(screen.queryByRole("button", { name: /Mark all/ })).toBeNull();
     expect(screen.queryByLabelText("Choose Tushar")).toBeNull();
-    expect(screen.getByText(/Corner Room's team sends these gifts/)).toBeTruthy();
+    expect(screen.getByText(/Corner Room's team sends these collectibles/)).toBeTruthy();
   });
 
   it("searches buyers by name, email, phone or address", () => {

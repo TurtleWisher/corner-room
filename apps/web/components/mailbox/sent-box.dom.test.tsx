@@ -56,7 +56,7 @@ describe("Mailbox Sent (D-MAILBOX-01)", () => {
     });
     render(<SentBox profile={{ kind: "band", id: "b1" }} artist="MIZULS" />);
     expect(await screen.findByText("Samiul Islam")).toBeTruthy();
-    expect(screen.getByText(/Poster: gift on its way, to buyers you picked/)).toBeTruthy();
+    expect(screen.getByText(/Poster: collectible on its way, to buyers you picked/)).toBeTruthy();
     expect(screen.getAllByText("Couldn't send").length).toBe(2);
     await act(async () => {
       fireEvent.click(screen.getByText("Samiul Islam"));
@@ -65,14 +65,14 @@ describe("Mailbox Sent (D-MAILBOX-01)", () => {
     expect(await within(reading).findByText("MIZULS via Corner Room")).toBeTruthy();
     expect(within(reading).getByText(/Hi Samiul/)).toBeTruthy();
     expect(within(reading).getByText("Track your parcel")).toBeTruthy();
-    expect(within(reading).getByRole("link", { name: /Open the gift campaign/ }).getAttribute("href")).toBe("/studio/gifts/c1#emails");
+    expect(within(reading).getByRole("link", { name: /Open the collectible/ }).getAttribute("href")).toBe("/studio/gifts/c1#emails");
   });
 
   it("asks the server again for a search and for a kind", async () => {
     api.fetchMailbox.mockResolvedValue(box([item({})]));
     render(<SentBox profile={{ kind: "band", id: "b1" }} artist="MIZULS" />);
     await screen.findByText("Samiul Islam");
-    fireEvent.click(screen.getByRole("button", { name: /^Gift updates/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Collectible updates/ }));
     await act(async () => {});
     expect(api.fetchMailbox).toHaveBeenLastCalledWith({ kind: "band", id: "b1" }, expect.objectContaining({ kinds: ["GIFT_UPDATE"] }));
     fireEvent.change(screen.getByLabelText("Search sent emails"), { target: { value: "samiul" } });

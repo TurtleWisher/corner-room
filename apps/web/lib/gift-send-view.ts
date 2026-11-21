@@ -16,18 +16,18 @@ import type { StatusTone } from "@/lib/format/status";
 export const PURPOSES: GiftSendPurpose[] = ["DISPATCHED", "RETURNED", "MISSING", "OTHER"];
 
 export const PURPOSE_LABEL: Record<GiftSendPurpose, string> = {
-  DISPATCHED: "Gift on its way",
-  RETURNED: "Gift came back",
-  MISSING: "Gift is late",
-  OTHER: "Other gift news",
+  DISPATCHED: "Collectible on its way",
+  RETURNED: "Collectible came back",
+  MISSING: "Collectible is late",
+  OTHER: "Other collectible news",
 };
 
 /** Who a purpose reaches, in one short line. */
 export const PURPOSE_HINT: Record<GiftSendPurpose, string> = {
-  DISPATCHED: "Only buyers whose gift is marked Dispatched get it.",
-  RETURNED: "Only buyers whose gift is marked Returned get it.",
-  MISSING: "Only buyers whose gift is marked Missing get it.",
-  OTHER: "Everyone you pick gets it, wherever their gift is.",
+  DISPATCHED: "Only buyers whose collectible is marked Dispatched get it.",
+  RETURNED: "Only buyers whose collectible is marked Returned get it.",
+  MISSING: "Only buyers whose collectible is marked Missing get it.",
+  OTHER: "Everyone you pick gets it, wherever their collectible is.",
 };
 
 export const SEND_STATE_LABEL: Record<GiftSendState, string> = {
@@ -88,8 +88,8 @@ export function sentLine(atOnce: boolean, sent: number | null | undefined, skipp
   if (!atOnce) return "Sent to Corner Room. You'll find it under Picked-buyer emails; once it's approved, press Send.";
   const s = sent ?? 0;
   const k = skipped ?? 0;
-  if (!s) return "Nobody was emailed: none of them still has a gift in that status or an email address.";
-  return `Emailed ${s} ${s === 1 ? "buyer" : "buyers"}.${k ? ` ${k} skipped: their gift moved on or they have no email.` : ""}`;
+  if (!s) return "Nobody was emailed: none of them still has a collectible in that status or an email address.";
+  return `Emailed ${s} ${s === 1 ? "buyer" : "buyers"}.${k ? ` ${k} skipped: their collectible moved on or they have no email.` : ""}`;
 }
 
 /** One line for a request's card, from its state. */

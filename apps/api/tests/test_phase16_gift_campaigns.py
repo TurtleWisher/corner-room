@@ -35,7 +35,7 @@ def test_purchase_counts_only_while_live() -> None:
 
 def test_gift_email_for_buyers_without_an_account() -> None:
     subject, body = build_gift_email(artist="MIZULS", gift="a signed poster", music="Chaya Pore", web_base_url="https://www.cornerroom.live/")
-    assert subject == "A gift is on its way"
+    assert subject == "A collectible is on its way"
     # What the gift is stays a surprise (owner, 2026-11-21, D-CAMPAIGN-09).
     assert "MIZULS" in body and "signed poster" not in body and "Chaya Pore" in body and "next few days" in body
     assert "https://www.cornerroom.live" in body
@@ -58,14 +58,14 @@ def test_returned_and_missing_emails() -> None:
     subject, body = build_gift_email(
         artist="MIZULS", gift="a signed poster", music="Chaya Pore", web_base_url="https://www.cornerroom.live/", event_type=GIFT_RETURNED
     )
-    assert subject == "Your gift couldn't be delivered"
-    assert body.startswith("Your gift from MIZULS, for buying Chaya Pore, couldn't be delivered")
+    assert subject == "Your collectible couldn't be delivered"
+    assert body.startswith("Your collectible from MIZULS, for buying Chaya Pore, couldn't be delivered")
     assert "delivery address you gave us" in body and "it will be sent again" in body
     subject, body = build_gift_email(
         artist="MIZULS", gift="a signed poster", music="Chaya Pore", web_base_url="https://www.cornerroom.live/", event_type=GIFT_MARKED_MISSING
     )
-    assert subject == "Your gift is taking longer than expected"
-    assert body.startswith("Your gift from MIZULS, for buying Chaya Pore, hasn't arrived yet")
+    assert subject == "Your collectible is taking longer than expected"
+    assert body.startswith("Your collectible from MIZULS, for buying Chaya Pore, hasn't arrived yet")
     assert "we'll send another" in body and "You don't need to do anything" in body
 
 

@@ -9,6 +9,12 @@ released song.
 Lyric timings (owner, 2026-11-01, D-LYRICS-03): staff tap along to a released song once per sung
 line, and `lyrics_timings` keeps when each line starts (milliseconds). They belong to the text:
 when the number of sung lines changes, the timings are dropped and the room paces the lines again.
+
+Staff lyrics sync (owner, 2026-11-21, D-LYRICS-04): staff find a released song by its title or its
+act's name, and on the same page fix its words (wording, spacing, lines) while they time them. The
+words are the song's own `lyrics`, so the song page, the listening room and Studio all show the fix.
+A staff member on the act's own team waits like any artist (D-REVIEW-ARTIST-01) and approves the
+change from the staff side.
 """
 
 from __future__ import annotations
@@ -17,19 +23,22 @@ import re
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.infra.errors import AppError, NotFoundError
 from cornerroom.infra.settings import Settings, get_settings
-from cornerroom.infra.review_policy import second_review_on
+from cornerroom.infra.review_policy import approve_at_once, approves_at_once, second_review_on
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.kernel.clock import Clock, SystemClock
 from cornerroom.kernel.events import TRACK_LYRICS_CHANGED, TRACK_LYRICS_REJECTED, TRACK_LYRICS_SUBMITTED
 from cornerroom.modules.music.application.studio import EDITABLE_RELEASE_STATUSES, EDITABLE_TRACK_STATUSES, StudioService
+from cornerroom.modules.artists.domain.models import Artist
 from cornerroom.modules.music.domain.models import Release, ReleaseTrack, Track
 
 LYRICS_MAX_CHARS = 10_000
+# How many songs one staff lyrics search lists.
+SONG_SEARCH_LIMIT = 30
 # Songs whose lyrics change through staff review rather than the draft editor.
 REVIEWED_TRACK_STATUSES = frozenset({"APPROVED", "SCHEDULED", "RELEASED"})
 _CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
@@ -253,22 +262,173 @@ class LyricsService:
         )
         return await self._item(track)
 
-    async def save_timings(self, ctx: AuthContext, track_id: UUID, times: list[int] | None) -> dict[str, Any]:
-        """Staff (music.approve): when each line of a released song's lyrics starts, or None to go
-        back to pacing the lines across the song (D-LYRICS-03). The words themselves don't change."""
+    async def _staff_track(self, ctx: AuthContext, track_id: UUID) -> Track:
+        """A song staff may work on (music.approve in its organization). Anyone else: 404."""
         track = await self.music.get_track_row(track_id)
         org = track.primary_org_id
         if org is None or not await self.music._is_allowed(
             ctx.user_id, "music.approve", resource_type="track", resource_id=track.id, organization_id=org
         ):
             raise NotFoundError("Track not found")
+        return track
+
+    async def save_timings(self, ctx: AuthContext, track_id: UUID, times: list[int] | None) -> dict[str, Any]:
+        """Staff (music.approve): when each line of a released song's lyrics starts, or None to go
+        back to pacing the lines across the song (D-LYRICS-03). The words themselves don't change."""
+        track = await self._staff_track(ctx, track_id)
         if track.status != "RELEASED":
             raise AppError("INVALID_TRANSITION", "Only songs that are out can have their lyrics timed", 409)
         track.lyrics_timings = None if times is None else clean_timings(times, track.lyrics)
         track.updated_by = ctx.user_id
         await self.music._flush_versioned()
+        await self._audit_timed(ctx, track)
+        return {"track_id": track.id, "lyrics": track.lyrics, "lyrics_timings_ms": track.lyrics_timings}
+
+    async def _audit_timed(self, ctx: AuthContext, track: Track) -> None:
         await self.audit.record_from_auth(
             ctx, action="track.lyrics_timed", entity_type="Track", entity_id=track.id,
-            new_state={"lines_timed": len(track.lyrics_timings or [])}, organization_id=org,
+            new_state={"lines_timed": len(track.lyrics_timings or [])}, organization_id=track.primary_org_id,
         )
-        return {"track_id": track.id, "lyrics": track.lyrics, "lyrics_timings_ms": track.lyrics_timings}
+
+    # --- staff lyrics sync (D-LYRICS-04) --------------------------------------------------------
+
+    async def staff_songs(self, ctx: AuthContext, query: str | None) -> list[dict[str, Any]]:
+        """Released songs in the staff member's workspace whose title or act's name matches,
+        newest first. Without music.approve there: 404."""
+        org = ctx.organization_id
+        if org is None or not await self.music._is_allowed(
+            ctx.user_id, "music.approve", resource_type="release", resource_id=org, organization_id=org
+        ):
+            raise NotFoundError("Not found")
+        words = " ".join((query or "").split())[:100].split()[:6]
+        stmt = select(Track).where(Track.primary_org_id == org, Track.status == "RELEASED", Track.deleted_at.is_(None))
+        # Every word matches the title or the act's name, so "kaal stop" finds Kaal Bela's "Last Stop".
+        for word in words:
+            like = "%" + word.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            acts = select(Artist.id).where(Artist.stage_name.ilike(like, escape="\\"), Artist.deleted_at.is_(None))
+            stmt = stmt.where(
+                or_(
+                    Track.title.ilike(like, escape="\\"),
+                    Track.primary_artist_id.in_(acts),
+                    Track.primary_band_id.in_(acts),
+                )
+            )
+        tracks = list(
+            (
+                await self.session.execute(
+                    stmt.order_by(Track.created_at.desc(), Track.id).limit(SONG_SEARCH_LIMIT)
+                )
+            ).scalars()
+        )
+        names = await self._act_names(tracks)
+        releases = await self._first_releases([t.id for t in tracks])
+        return [
+            {
+                "track_id": t.id,
+                "title": t.title,
+                "profile_name": names.get(t.primary_artist_id or t.primary_band_id),  # type: ignore[arg-type]
+                "release_title": releases.get(t.id),
+                "lines": len(sung_lines(t.lyrics)),
+                "timed": timings_for(t.lyrics, t.lyrics_timings) is not None,
+                "lyrics_waiting": t.lyrics_pending_at is not None,
+            }
+            for t in tracks
+        ]
+
+    async def _act_names(self, tracks: list[Track]) -> dict[UUID, str]:
+        # A band's id is also its artist row's id (D-ARTIST-UNIFY-01).
+        ids = {t.primary_artist_id or t.primary_band_id for t in tracks} - {None}
+        if not ids:
+            return {}
+        rows = (await self.session.execute(select(Artist.id, Artist.stage_name).where(Artist.id.in_(ids)))).all()
+        return {row.id: row.stage_name for row in rows}
+
+    async def _first_releases(self, track_ids: list[UUID]) -> dict[UUID, str]:
+        if not track_ids:
+            return {}
+        rows = (
+            await self.session.execute(
+                select(ReleaseTrack.track_id, Release.title)
+                .join(Release, Release.id == ReleaseTrack.release_id)
+                .where(ReleaseTrack.track_id.in_(track_ids), Release.deleted_at.is_(None))
+                .order_by(Release.created_at)
+            )
+        ).all()
+        out: dict[UUID, str] = {}
+        for row in rows:
+            out.setdefault(row.track_id, row.title)
+        return out
+
+    async def staff_read(self, ctx: AuthContext, track_id: UUID) -> dict[str, Any]:
+        """What the staff sync page needs: the live words and times, and any change waiting."""
+        track = await self._staff_track(ctx, track_id)
+        names = await self._act_names([track])
+        act = track.primary_artist_id or track.primary_band_id
+        waiting = track.lyrics_pending_at is not None
+        return {
+            "track_id": track.id,
+            "title": track.title,
+            "status": track.status,
+            "profile_name": names.get(act) if act else None,
+            "lyrics": track.lyrics,
+            "lyrics_timings_ms": timings_for(track.lyrics, track.lyrics_timings),
+            "lyrics_waiting": waiting,
+            "lyrics_pending": track.lyrics_pending if waiting else None,
+            "waiting_from_me": waiting and track.lyrics_pending_by == ctx.user_id,
+            "approves_at_once": await approves_at_once(self.session, ctx, act, settings=self.settings),
+        }
+
+    async def staff_edit(
+        self, ctx: AuthContext, track_id: UUID, lyrics: str | None, times: list[int] | None
+    ) -> dict[str, Any]:
+        """Staff change a released song's words, and with them its timings when every line is
+        timed (`times`; None keeps the stored times while they still fit the words). Staff outside
+        the act's team change the words at once; anyone on its team waits for approval (from the
+        staff side), and the times are not kept until then. Someone else's change already waiting
+        must be reviewed first, so it is never silently replaced."""
+        track = await self._staff_track(ctx, track_id)
+        if track.status != "RELEASED":
+            raise AppError("INVALID_TRANSITION", "Only songs that are out can be worked on here", 409)
+        if track.lyrics_pending_at is not None and track.lyrics_pending_by != ctx.user_id:
+            raise AppError(
+                "LYRICS_WAITING", "A lyrics change for this song is waiting for review", 409,
+                "Approve it or send it back first",
+            )
+        text = clean_lyrics(lyrics)
+        timed = None if times is None else clean_timings(times, text)
+        if text == track.lyrics:
+            # The words listeners already see: only the times can change.
+            track.lyrics_pending = None
+            track.lyrics_pending_at = None
+            track.lyrics_pending_by = None
+            if timed is not None:
+                track.lyrics_timings = timed
+            track.updated_by = ctx.user_id
+            await self.music._flush_versioned()
+            if timed is not None:
+                await self._audit_timed(ctx, track)
+            return await self.staff_read(ctx, track_id)
+
+        org = track.primary_org_id
+        track.lyrics_pending = text
+        track.lyrics_pending_at = self.clock.now()
+        track.lyrics_pending_by = ctx.user_id
+        track.lyrics_review_note = None
+        track.updated_by = ctx.user_id
+        await self.music._flush_versioned()
+        await self.studio._event(TRACK_LYRICS_SUBMITTED, "Track", track.id, {}, ctx, org)
+        await self.audit.record_from_auth(
+            ctx, action="track.lyrics_submitted", entity_type="Track", entity_id=track.id,
+            new_state={"waiting": True, "has_lyrics": text is not None, "from_staff_console": True},
+            organization_id=org,
+        )
+        approved = await approve_at_once(
+            self.session, lambda: self.review(ctx, track_id, approve=True, note=None),
+            ctx=ctx, act_id=track.primary_artist_id or track.primary_band_id, settings=self.settings,
+        )
+        if approved and timed is not None:
+            track.lyrics_timings = timed
+            track.updated_by = ctx.user_id
+            await self.music._flush_versioned()
+            await self._audit_timed(ctx, track)
+        return await self.staff_read(ctx, track_id)

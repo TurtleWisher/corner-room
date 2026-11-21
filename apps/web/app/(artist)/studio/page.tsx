@@ -47,7 +47,7 @@ function shortcutsFor(profiles: CatalogProfile[]): Shortcut[] {
   const tiles: Shortcut[] = [
     { href: "/studio/sales", label: "Sales and buyers", body: "What sold, and the names of who bought it.", icon: ChartNoAxesColumn },
     { href: "/studio/releases/presales", label: "Pre-sales", body: "Sell before release day, with live numbers.", icon: Megaphone },
-    { href: "/studio/gifts", label: "Gifts", body: "Thank your buyers with a gift.", icon: Gift },
+    { href: "/studio/gifts", label: "Gifts", body: "Thank your buyers with a collectible, or give your music.", icon: Gift },
     { href: "/studio/profile", label: "Profile", body: "Your picture, bio and what fans see.", icon: UserRoundPen },
     { href: "/royalties", label: "Royalties", body: "Your earnings statements.", icon: Coins },
   ];

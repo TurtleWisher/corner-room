@@ -10,8 +10,8 @@ describe("mailbox", () => {
   });
 
   it("says why each person got an email", () => {
-    expect(whyLine({ kind: "GIFT_UPDATE", campaign: "Poster", gift_status: "DISPATCHED", picked: false })).toBe("Poster: gift on its way, status update");
-    expect(whyLine({ kind: "GIFT_UPDATE", campaign: "Poster", gift_status: "OTHER", picked: true })).toBe("Poster: gift other news, to buyers you picked");
+    expect(whyLine({ kind: "GIFT_UPDATE", campaign: "Poster", gift_status: "DISPATCHED", picked: false })).toBe("Poster: collectible on its way, status update");
+    expect(whyLine({ kind: "GIFT_UPDATE", campaign: "Poster", gift_status: "OTHER", picked: true })).toBe("Poster: collectible other news, to buyers you picked");
     expect(whyLine({ kind: "MANUAL", mail_subject: "New single" })).toBe('Your email "New single"');
     expect(whyLine({ kind: "GIFT", gift_title: "For friends" })).toBe("Music gift: For friends");
     expect(whyLine({ kind: "THANK_YOU" })).toMatch(/Thank-you/);

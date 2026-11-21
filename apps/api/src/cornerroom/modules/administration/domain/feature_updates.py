@@ -116,6 +116,7 @@ FEATURES: Final[list[dict]] = [
             "gift went to as buyers. The person a gift went to earns the artist's collectible."
         ),
         "updates": [
+            {"date": "2026-11-21", "kind": "IMPROVED", "title": "A small glass button", "details": "Give it to someone is one small liquid glass button under an owner's buttons, without a card or extra words; the artist's collectible is one quiet line at the end of the page."},
             {"date": "2026-11-21", "kind": "IMPROVED", "title": "Give it to someone", "details": "If you already own a song or release, Give it to someone sits in the gift section under its buttons instead of beside Play, on song and release pages."},
             {"date": "2026-11-20", "kind": "NEW", "title": "Design your gift email", "details": "Write the gift email your way, with their first name, links, a subject, a look, the cover and pictures or PDFs, and see it as each person will before you pay. Corner Room checks it first."},
             {"date": "2026-11-20", "kind": "IMPROVED", "title": "Gift music you own, and pre-orders", "details": "Give as a gift on song, release and pre-sale pages, also for people who already own it; pre-orders can be gifts; Studio Sales marks gift sales; the person gifted earns the collectible."},
@@ -244,6 +245,7 @@ FEATURES: Final[list[dict]] = [
             "the giver; music paid with gift credit earns it for its buyer."
         ),
         "updates": [
+            {"date": "2026-11-21", "kind": "IMPROVED", "title": "Called a collectible everywhere", "details": "What used to be a gift campaign is now a collectible on every page, for artists and staff, and in every email and note buyers get. Song and release pages say a collectible from the artist comes with the music, in one short line at the end of the page. Music gifts and gifts from fans keep their name."},
             {"date": "2026-11-21", "kind": "IMPROVED", "title": "The gift stays a surprise", "details": "Song and release pages only say that the artist gives a gift with the music, and Corner Room's own emails and notes no longer say what it is, so buyers find out when it's in their hands."},
             {"date": "2026-11-20", "kind": "IMPROVED", "title": "Gift updates wait for Send update", "details": "Marking gifts Dispatched, Returned or Missing no longer emails anyone. The artist presses Send update (for the whole status or the chosen gifts), checks the email, then it goes."},
             {"date": "2026-11-20", "kind": "FIXED", "title": "One buyer's name sent to everyone", "details": "Copying and pasting in the email writer turned the First name fill-in into the previewed buyer's name. It stays a fill-in now, and emails that greet a buyer by a typed name are stopped with a one-click fix."},
@@ -398,11 +400,15 @@ FEATURES: Final[list[dict]] = [
         "audience": ["Artists", "Fans", "Staff"],
         "summary": "Artists add lyrics, staff review them, and staff can time each line.",
         "description": (
-            "Artists add song lyrics in Studio; staff review them and later changes. Staff open the timing "
-            "page, play the released song and tap Space as each line starts, so the listening room follows "
-            "the song. Times are dropped if the number of sung lines changes."
+            "Artists add song lyrics in Studio; staff review them and later changes. On Catalog > Releases, "
+            "Sync lyrics finds any released song by its title or artist; its page plays the song, staff tap "
+            "Space as each line starts, and they can fix the words on the same page. Fixed words show on the "
+            "song page, in the listening room and in Studio. A spelling or spacing fix keeps every time; "
+            "adding or removing a line keeps the times before it. Staff who run the act wait for approval "
+            "like any artist."
         ),
         "updates": [
+            {"date": "2026-11-21", "kind": "IMPROVED", "title": "Find a song and fix its words while syncing", "details": "Staff search released songs by title or artist instead of pasting an address, and fix the words, spacing and lines on the sync page; one Save keeps the words and their times together, and the song page, listening room and Studio show the fix."},
             {"date": "2026-11-02", "kind": "NEW", "title": "Timed lyrics", "details": "Staff tap along once per line."},
             {"date": "2026-10-28", "kind": "NEW", "title": "Lyrics with staff review", "details": "Song lyrics and lyrics changes waiting for staff."},
         ],
@@ -632,6 +638,12 @@ FEATURES: Final[list[dict]] = [
             "Money > Customers and users lists every account and order with its payment status and a CSV."
         ),
         "updates": [
+            {
+                "date": "2026-11-21",
+                "kind": "IMPROVED",
+                "title": "Fewer clicks to the work",
+                "details": "The side menu shows how much is waiting beside each page, Catalog has a bar of the queues with work that glides to each one, Ctrl+K lists waiting queues first, and / jumps to a page's search. Pages, cards, buttons and lists answer with short, quiet motion (none when the device asks for less motion).",
+            },
             {
                 "date": "2026-11-16",
                 "kind": "IMPROVED",

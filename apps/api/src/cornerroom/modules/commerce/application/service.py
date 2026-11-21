@@ -198,13 +198,13 @@ class CheckoutService:
         if address is None:
             raise AppError(
                 "DELIVERY_ADDRESS_REQUIRED",
-                "Add an address where we can send your gifts before you pay",
+                "Add an address where we can send your collectibles before you pay",
                 409,
             )
         if not confirmed:
             raise AppError(
                 "DELIVERY_ADDRESS_CONFIRMATION_REQUIRED",
-                "Confirm the address where we can send your gifts before you pay",
+                "Confirm the address where we can send your collectibles before you pay",
                 422,
             )
         return address

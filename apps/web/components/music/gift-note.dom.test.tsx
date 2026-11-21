@@ -18,28 +18,27 @@ const commerce = {
 afterEach(cleanup);
 
 describe("GiftNote (owner, 2026-11-21)", () => {
-  it("says a gift comes with the music, never what it is", async () => {
+  it("says a collectible comes with the music in one line, never what it is", async () => {
     // Even if an older server still sent the gift, the page draws none of it.
     api.fetchPublicGifts.mockResolvedValue([{ id: "g1", artist: "MIZULS", gift_items: "Postcard", title: "Postcard drop" }]);
-    render(<GiftNote trackId="t1" />);
-    expect(await screen.findByText("A gift from MIZULS comes with this music")).toBeTruthy();
-    expect(screen.getByText(/stays a surprise/)).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(/Postcard/);
+    render(<GiftNote show="collectible" trackId="t1" commerce={commerce} owned title="Chhaya Pore" />);
+    expect(await screen.findByText(/Comes with a collectible from/)).toBeTruthy();
+    expect(screen.getByText("MIZULS")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/Postcard|gift/i);
     expect(screen.queryByText("Give it to someone")).toBeNull();
   });
 
-  it("gives an owner Give it to someone beside the artist's gift card", async () => {
-    api.fetchPublicGifts.mockResolvedValue([{ id: "g1", artist: "MIZULS" }]);
-    render(<GiftNote trackId="t1" commerce={commerce} owned title="Chhaya Pore" />);
+  it("gives an owner one Give it to someone pill, apart from the collectible", async () => {
+    api.fetchPublicGifts.mockClear();
+    render(<GiftNote show="give" trackId="t1" commerce={commerce} owned title="Chhaya Pore" />);
     const link = await screen.findByRole("link", { name: "Give Chhaya Pore as a gift" });
     expect(link.getAttribute("href")).toBe("/checkout?offer=o1&gift=1");
-    expect(screen.getByText("Give it to someone")).toBeTruthy();
-    expect(screen.getByText("A gift from MIZULS comes with this music")).toBeTruthy();
+    expect(link.textContent).toBe("Give it to someone");
+    expect(api.fetchPublicGifts).not.toHaveBeenCalled();
   });
 
-  it("shows the owner's card on its own when the artist gives nothing", async () => {
-    api.fetchPublicGifts.mockResolvedValue([]);
-    render(<GiftNote trackId="t1" commerce={commerce} owned title="Chhaya Pore" />);
-    expect(await screen.findByText("Give it to someone")).toBeTruthy();
+  it("draws nothing for someone who doesn't own the music", () => {
+    const { container } = render(<GiftNote show="give" trackId="t1" commerce={commerce} title="Chhaya Pore" />);
+    expect(container.textContent).toBe("");
   });
 });

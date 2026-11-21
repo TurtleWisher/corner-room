@@ -1,6 +1,6 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { choiceLabel, choicesFrom, fieldWords, findPages, sortQueues, stepIndex, waitingTotal } from "./staff-console-view";
+import { badgeText, choiceLabel, choicesFrom, fieldWords, findPages, findQueues, pageOf, queuesOn, sortQueues, stepIndex, waitingByPage, waitingTotal } from "./staff-console-view";
 
 describe("fieldWords", () => {
   it("turns a placeholder into a label", () => {
@@ -73,5 +73,33 @@ describe("queues", () => {
   });
   it("adds only known counts", () => {
     expect(waitingTotal(q)).toBe(10);
+  });
+});
+
+describe("waiting counts across the console (owner, 2026-11-21)", () => {
+  const queues = [
+    { key: "lyrics", label: "Lyrics to review", href: "/staff/catalog#q-lyrics", count: 2 },
+    { key: "covers", label: "Covers to review", href: "/staff/catalog#q-covers", count: 0 },
+    { key: "mail", label: "Artist emails to review", href: "/staff/catalog#q-mail", count: null },
+    { key: "releases", label: "Releases to review", href: "/staff/catalog#q-releases", count: 3 },
+    { key: "refunds", label: "Refunds open", href: "/staff/commerce", count: 120 },
+  ];
+
+  it("adds each page's waiting work for the menu badges, never counting the unknown", () => {
+    expect(pageOf("/staff/catalog#q-lyrics")).toBe("/staff/catalog");
+    expect(waitingByPage(queues)).toEqual({ "/staff/catalog": 5, "/staff/commerce": 120 });
+    expect(badgeText(120)).toBe("99+");
+    expect(badgeText(7)).toBe("7");
+  });
+
+  it("lists only the queues with work on a page for its jump bar", () => {
+    expect(queuesOn("/staff/catalog", queues).map((q) => q.key)).toEqual(["lyrics", "releases"]);
+    expect(queuesOn("/staff/commerce", queues)).toEqual([]);
+  });
+
+  it("finds waiting queues by their words", () => {
+    expect(findQueues(queues, "review").map((q) => q.key)).toEqual(["lyrics", "releases"]);
+    expect(findQueues(queues, "lyr").map((q) => q.key)).toEqual(["lyrics"]);
+    expect(findQueues(queues, "covers")).toEqual([]);
   });
 });

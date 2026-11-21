@@ -238,7 +238,7 @@ function ActMailbox({
                     {giftNeeds.length ? (
                       <section aria-labelledby="mb-gifts" className="grid gap-3">
                         <h3 id="mb-gifts" className="flex items-center gap-2 text-lg font-bold text-fg">
-                          <Gift aria-hidden="true" className="size-5 text-highlight" /> Gift emails
+                          <Gift aria-hidden="true" className="size-5 text-highlight" /> Collectible emails
                         </h3>
                         <ul className="grid gap-2">
                           {giftNeeds.map((c) => (
@@ -296,7 +296,7 @@ function ActMailbox({
                     <ThankYouSection {...shared} thankYous={data.thank_yous} onChanged={overview.reload} />
                     <section aria-labelledby="mb-auto-gifts" className="grid gap-3">
                       <h3 id="mb-auto-gifts" className="flex items-center gap-2 text-lg font-bold text-fg">
-                        <Gift aria-hidden="true" className="size-5 text-highlight" /> Gift campaign emails
+                        <Gift aria-hidden="true" className="size-5 text-highlight" /> Collectible emails
                       </h3>
                       <p className="text-sm text-fg-muted">Each campaign has one email per status (Dispatched, Returned, Missing). It goes out when you press Send update on the campaign&apos;s Collectibles. Open one to change its wording.</p>
                       {giftList.length ? (
@@ -317,7 +317,7 @@ function ActMailbox({
                         </ul>
                       ) : (
                         <p className="text-sm text-fg-muted">
-                          No gift campaigns yet.{" "}
+                          No collectibles yet.{" "}
                           <Link href="/studio/gifts" className="cr-focus font-semibold text-link underline">
                             Set one up
                           </Link>

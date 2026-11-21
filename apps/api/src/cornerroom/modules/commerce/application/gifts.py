@@ -201,7 +201,7 @@ class GiftCampaignService:
         if "gift_items" in data or not partial:
             items = _clean(data.get("gift_items"), 500)
             if not items:
-                raise AppError("VALIDATION_ERROR", "Say what the gift is", 422, extras={"field": "gift_items"})
+                raise AppError("VALIDATION_ERROR", "Say what the collectible is", 422, extras={"field": "gift_items"})
             out["gift_items"] = items
         if "description" in data:
             text = str(data.get("description") or "").strip()[:4000]
@@ -209,7 +209,7 @@ class GiftCampaignService:
         if "sender" in data or not partial:
             sender = str(data.get("sender") or "ARTIST").upper()
             if sender not in ("ARTIST", "CORNER_ROOM"):
-                raise AppError("VALIDATION_ERROR", "Choose who sends the gifts", 422, extras={"field": "sender"})
+                raise AppError("VALIDATION_ERROR", "Choose who sends the collectibles", 422, extras={"field": "sender"})
             out["sender"] = sender
         if "include_presale" in data:
             out["include_presale"] = bool(data.get("include_presale"))
@@ -856,7 +856,7 @@ class GiftCampaignService:
         if r is None or r.campaign_id != campaign.id or r.source != "ADDED":
             raise NotFoundError("Person not found")
         if r.status != "YET_TO_SEND":
-            raise AppError("INVALID_TRANSITION", "Their gift is already on its way, so they stay on the list", 409)
+            raise AppError("INVALID_TRANSITION", "Their collectible is already on its way, so they stay on the list", 409)
         if role != "staff" and not r.waiting:
             raise AppError("FORBIDDEN", "Ask Corner Room to remove someone they approved", 403)
         await self.session.delete(r)
@@ -875,7 +875,7 @@ class GiftCampaignService:
         if campaign.status not in TRACKABLE:
             raise AppError("INVALID_TRANSITION", "The campaign isn't live yet", 409)
         if role != "staff" and campaign.sender != "ARTIST":
-            raise AppError("FORBIDDEN", "Corner Room sends these gifts", 403)
+            raise AppError("FORBIDDEN", "Corner Room sends these collectibles", 403)
         # People still waiting for staff can't be tracked yet (D-CAMPAIGN-04).
         query = select(GiftRecipient).where(GiftRecipient.campaign_id == campaign.id, GiftRecipient.waiting.is_(False))
         if every is not None:
@@ -1068,18 +1068,18 @@ class GiftCampaignService:
 # seeded in infra/seed.py). Returned and missing: owner, 2026-11-06 (D-CAMPAIGN-03).
 GIFT_EMAILS: dict[str, tuple[str, str]] = {
     GIFT_DISPATCHED: (
-        "A gift is on its way",
-        "Good news from {artist}: a gift for buying {music} is on its way to you. It should reach you in the next few days.",
+        "A collectible is on its way",
+        "Good news from {artist}: a collectible for buying {music} is on its way to you. It should reach you in the next few days.",
     ),
     GIFT_RETURNED: (
-        "Your gift couldn't be delivered",
-        "Your gift from {artist}, for buying {music}, couldn't be delivered and came back. Please check that "
+        "Your collectible couldn't be delivered",
+        "Your collectible from {artist}, for buying {music}, couldn't be delivered and came back. Please check that "
         "the delivery address you gave us is correct. Once your address is right, it will be sent again. We'll email "
         "you again when there's news.",
     ),
     GIFT_MARKED_MISSING: (
-        "Your gift is taking longer than expected",
-        "Your gift from {artist}, for buying {music}, hasn't arrived yet. We're finding out where it is and "
+        "Your collectible is taking longer than expected",
+        "Your collectible from {artist}, for buying {music}, hasn't arrived yet. We're finding out where it is and "
         "will email you as soon as we know more. If it doesn't turn up, we'll send another. You don't need to do "
         "anything for now.",
     ),
@@ -1123,7 +1123,7 @@ async def consume_gift_email_event(event: DomainEvent, session: AsyncSession, se
         log.warning("gift_email_skipped", reason="no_email_provider", event_id=str(event.event_id))
         return
     subject, body = build_gift_email(
-        artist=str(payload.get("artist") or "The artist"), gift=str(payload.get("gift") or "a gift"),
+        artist=str(payload.get("artist") or "The artist"), gift=str(payload.get("gift") or "a collectible"),
         music=str(payload.get("music") or "their music"), web_base_url=settings.web_base_url, event_type=event.event_type,
     )
     # A failed send raises, so the outbox retries the event.

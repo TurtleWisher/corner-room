@@ -1266,7 +1266,7 @@ class StudioService:
 
         release, _role = await self._release(ctx, release_id)
         if release.status in {"RELEASED", "TAKEN_DOWN", "ARCHIVED"}:
-            raise AppError("INVALID_TRANSITION", "The release is out; write to buyers from Gifts, Emails", 409)
+            raise AppError("INVALID_TRANSITION", "The release is out; write to buyers from the Mailbox", 409)
         kind, pid = MusicService.profile_of(release)
         if kind is None or pid is None:
             raise NotFoundError("Release not found")

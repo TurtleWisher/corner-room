@@ -101,7 +101,7 @@ export function AddPeople({
             <UserPlus aria-hidden="true" className="size-4 text-highlight" /> Add people
           </h4>
           <p className="mt-1 text-sm text-fg-muted">
-            An email or a phone for each person, with a name and where to post the gift.{" "}
+            An email or a phone for each person, with a name and where to post the collectible.{" "}
             {staff ? "They count at once." : "They count once Corner Room approves them."}
           </p>
         </div>

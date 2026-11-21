@@ -419,10 +419,11 @@ export default function ReleasePage() {
                 ) : null}
               </div>
             ) : null}
-            {/* The artist's gift (never what it is) and, for owners, "Give it to someone" (owner, 2026-11-21). */}
+            {/* Owners: one liquid glass "Give it to someone" pill (owner, 2026-11-21). */}
             <GiftNote
+              show="give"
               releaseId={release.id}
-              className="mt-6 max-w-2xl"
+              className="mt-5"
               commerce={commerce}
               owned={release.status === "RELEASED" && releaseBuy?.kind === "owned"}
               title={release.title}
@@ -462,6 +463,8 @@ export default function ReleasePage() {
         </section>
         <ReleaseTeasers releaseId={release.id} artist={artist} />
         {release.primary_band_id ? <BandLineup bandId={release.primary_band_id} /> : null}
+        {/* The artist's collectible (D-CAMPAIGN-01), one quiet line below the music. */}
+        <GiftNote show="collectible" releaseId={release.id} />
         {canStaff && !canModerateMusic(user?.permissions) ? <ReleaseArtistTools release={release} /> : null}
         {canStaff && canModerateMusic(user?.permissions) ? (
           <ReleaseStaffTools

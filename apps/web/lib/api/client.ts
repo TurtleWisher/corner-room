@@ -126,6 +126,9 @@ export async function refreshAccessToken(): Promise<string | null> {
   return refreshInFlight;
 }
 
+/** Sent on window after any successful change (POST, PUT, PATCH, DELETE) through apiFetch. */
+export const API_WRITE_EVENT = "cr:api-write";
+
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const { timeoutMs = 8000, retry, headers, skipAuth, skipRefresh, ...init } = options;
   const method = (init.method ?? "GET").toUpperCase();
@@ -203,6 +206,11 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
         },
         "Request failed",
       );
+    }
+    // A change went through: anything that counts waiting work (the staff console's queue badges)
+    // can ask again. Carries the path only; no body, token or personal data.
+    if (method !== "GET" && typeof window !== "undefined" && !isAuthPath(path)) {
+      window.dispatchEvent(new CustomEvent(API_WRITE_EVENT, { detail: path }));
     }
     return body as T;
   } finally {

@@ -14,7 +14,7 @@ export const BOXES: { key: MailboxBox; label: string; hint: string }[] = [
   { key: "sent", label: "Sent", hint: "Every email, to whom, when and why" },
   { key: "outbox", label: "Waiting", hint: "Drafts, approvals and scheduled emails" },
   { key: "write", label: "Write", hint: "A new email to your buyers" },
-  { key: "automatic", label: "Automatic", hint: "Thank-yous, and the gift update wording Send update uses" },
+  { key: "automatic", label: "Automatic", hint: "Thank-yous, and the collectible update wording Send update uses" },
   { key: "templates", label: "Templates", hint: "Saved emails to start from" },
   { key: "report", label: "Report", hint: "Reach and link presses" },
 ];
@@ -31,7 +31,7 @@ export const KIND_LABEL: Record<MailboxKind, string> = {
   THANK_YOU: "Thank-you",
   MANUAL: "Email to buyers",
   GIFT: "Music gift",
-  GIFT_UPDATE: "Gift update",
+  GIFT_UPDATE: "Collectible update",
   TEST: "Test to you",
 };
 
@@ -39,7 +39,7 @@ export const KIND_LABEL: Record<MailboxKind, string> = {
 export const KIND_FILTERS: { key: MailboxKind | "ALL"; label: string }[] = [
   { key: "ALL", label: "All" },
   { key: "MANUAL", label: "To buyers" },
-  { key: "GIFT_UPDATE", label: "Gift updates" },
+  { key: "GIFT_UPDATE", label: "Collectible updates" },
   { key: "THANK_YOU", label: "Thank-yous" },
   { key: "GIFT", label: "Music gifts" },
   { key: "TEST", label: "Tests" },
@@ -80,7 +80,7 @@ export function whyLine(why: MailboxWhy): string {
     case "GIFT_UPDATE": {
       const what = GIFT_STATUS_WORD[why.gift_status ?? ""] ?? "update";
       const campaign = why.campaign ? `${why.campaign}: ` : "";
-      return why.picked ? `${campaign}gift ${what}, to buyers you picked` : `${campaign}gift ${what}, status update`;
+      return why.picked ? `${campaign}collectible ${what}, to buyers you picked` : `${campaign}collectible ${what}, status update`;
     }
     case "MANUAL":
       return why.mail_subject ? `Your email "${why.mail_subject}"` : "Your email to buyers";

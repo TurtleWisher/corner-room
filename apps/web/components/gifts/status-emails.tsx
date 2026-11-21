@@ -184,7 +184,7 @@ export function AutomaticEmailEditor({
       <section className="gm-inuse" aria-labelledby={`sm-${item.status}`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 id={`sm-${item.status}`} className="text-sm font-semibold text-fg-muted">
-            When a gift is marked {status}, the buyer gets
+            When a collectible is marked {status}, the buyer gets
           </h3>
           <Badge tone={item.live ? "positive" : "neutral"}>{inUseLabel(item)}</Badge>
         </div>
@@ -216,7 +216,7 @@ export function AutomaticEmailEditor({
         <h4 id={`write-${item.status}`} className="gm-part-title">
           Write the email
         </h4>
-        <p className="mt-1 text-sm text-fg-muted">Writing, saving and approving never emails a buyer. They get it when their gift is marked {status}.</p>
+        <p className="mt-1 text-sm text-fg-muted">Writing, saving and approving never emails a buyer. They get it when their collectible is marked {status}.</p>
 
         {editing ? (
           <fieldset className="mt-4">

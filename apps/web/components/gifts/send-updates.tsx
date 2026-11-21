@@ -112,7 +112,7 @@ export function SendUpdates({
               Updates to send
             </h4>
             <p className="mt-1 text-sm text-fg-muted">
-              Marking a gift emails nobody. When you&apos;re ready, send each update: you see the email before anyone gets it.
+              Marking a collectible emails nobody. When you&apos;re ready, send each update: you see the email before anyone gets it.
             </p>
           </div>
           <ul className="grid gap-2">

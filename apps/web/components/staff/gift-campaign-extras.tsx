@@ -116,7 +116,7 @@ function WaitingMail({
   return (
     <section className="rounded border p-4" aria-label={`${STATUS_MAIL_TITLE[item.status]} email waiting for approval`}>
       <p className="font-medium">{STATUS_MAIL_TITLE[item.status]} email, waiting for approval</p>
-      <p className="mt-1 text-sm text-muted-foreground">Sent to buyers when their gift is marked {item.status.toLowerCase()}, once approved.</p>
+      <p className="mt-1 text-sm text-muted-foreground">Sent to buyers when their collectible is marked {item.status.toLowerCase()}, once approved.</p>
       <div className="mt-3 max-w-2xl">
         <MailPreview
           artist={mails.artist}

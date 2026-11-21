@@ -21,6 +21,8 @@ const push = vi.fn();
 vi.mock("next/navigation", () => ({ usePathname: () => pathname, useSearchParams: () => new URLSearchParams(), useRouter: () => ({ push }) }));
 const fetchMyProfiles = vi.fn(async () => [] as { kind: string; id: string; display_name: string; status: string; can_publish: boolean }[]);
 vi.mock("@/features/studio/api", () => ({ fetchMyProfiles: () => fetchMyProfiles() }));
+// The staff shell reads the shared waiting counts; this file tests the shells, not the queues.
+vi.mock("@/components/staff/staff-queues", () => ({ useStaffQueues: () => ({ status: "ok", queues: [], at: 0, workspace: null, reload: () => {} }), StaffQueuesKeeper: () => null, STAFF_QUEUES: [] }));
 
 import { AccountMenu } from "./account-menu";
 import { MobileTabBar } from "./mobile-tab-bar";

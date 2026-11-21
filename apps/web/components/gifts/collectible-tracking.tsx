@@ -108,7 +108,7 @@ export function CollectibleTracking({
   }
 
   const pick = (rid: string) => setChosen((s) => (s.has(rid) ? new Set([...s].filter((x) => x !== rid)) : new Set([...s, rid])));
-  const plural = (n: number) => `${n} ${n === 1 ? "gift" : "gifts"}`;
+  const plural = (n: number) => `${n} ${n === 1 ? "collectible" : "collectibles"}`;
 
   return (
     <section aria-labelledby="tracking-title" className={`grid gap-5 ${c.can_dispatch && chosen.size > 0 ? "pb-48" : ""}`}>
@@ -116,12 +116,12 @@ export function CollectibleTracking({
         <div className="min-w-0">
           <p className="sk-kicker">Collectibles</p>
           <h3 id="tracking-title" className="mt-1 text-xl font-bold text-fg">
-            Where every gift is
+            Where every collectible is
           </h3>
           <p className="mt-1 max-w-2xl text-sm text-fg-muted">
             {c.can_dispatch
-              ? "Tick gifts to move them along. Moving a gift emails nobody: send the update when you're ready."
-              : "Corner Room's team sends these gifts and keeps this list up to date."}
+              ? "Tick collectibles to move them along. Moving one emails nobody: send the update when you're ready."
+              : "Corner Room's team sends these collectibles and keeps this list up to date."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -152,7 +152,7 @@ export function CollectibleTracking({
       <SendUpdates c={c} onChange={onChange} ask={ask} onAsk={setAsk} onWording={onWording} />
 
       <div className="grid gap-3">
-        <FilterChips<Filter> label="Show gifts by status" options={chips} value={filter} onChange={(f) => setFilter(f)} />
+        <FilterChips<Filter> label="Show collectibles by status" options={chips} value={filter} onChange={(f) => setFilter(f)} />
         <div className="flex flex-wrap items-center gap-3">
           <SearchField
             className="min-w-[14rem] flex-1"
@@ -163,7 +163,7 @@ export function CollectibleTracking({
             shortcut
           />
           <span className="text-sm text-fg-muted" aria-live="polite">
-            {shownCount(shown.length, c.recipients.length)} {c.recipients.length === 1 ? "gift" : "gifts"}
+            {shownCount(shown.length, c.recipients.length)} {c.recipients.length === 1 ? "collectible" : "collectibles"}
           </span>
         </div>
       </div>
@@ -175,12 +175,12 @@ export function CollectibleTracking({
       ) : null}
 
       {c.recipients.length === 0 ? (
-        <p className="text-sm text-fg">No one has earned this gift yet. Buyers appear here once their payment is confirmed.</p>
+        <p className="text-sm text-fg">No one has earned this collectible yet. Buyers appear here once their payment is confirmed.</p>
       ) : shown.length === 0 ? (
         query ? (
           <NoMatch query={query} onClear={() => setQuery("")} />
         ) : (
-          <p className="text-sm text-fg">No gifts are {filter !== "ALL" ? RECIPIENT_STATUS_LABEL[filter].toLowerCase() : "here"} right now.</p>
+          <p className="text-sm text-fg">No collectibles are {filter !== "ALL" ? RECIPIENT_STATUS_LABEL[filter].toLowerCase() : "here"} right now.</p>
         )
       ) : (
         <div className="overflow-x-auto">
@@ -202,7 +202,7 @@ export function CollectibleTracking({
                 <th>Buyer</th>
                 {c.shows_contact ? <th>Phone</th> : null}
                 {c.shows_contact ? <th>Address</th> : null}
-                <th>Gift</th>
+                <th>Collectible</th>
                 <th>When</th>
               </tr>
             </thead>
@@ -268,11 +268,11 @@ export function CollectibleTracking({
       )}
 
       {c.can_dispatch && chosen.size > 0 ? (
-        <SelectionBar label="Update chosen gifts">
+        <SelectionBar label="Update chosen collectibles">
           <div className="grid gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-fg">
-                {chosen.size} chosen{moves.length ? "" : ". These gifts can't move from where they are."}
+                {chosen.size} chosen{moves.length ? "" : ". These collectibles can't move from where they are."}
               </p>
               <button type="button" className="cr-focus text-sm font-semibold text-fg-muted hover:text-fg" onClick={() => setChosen(new Set())}>
                 Clear

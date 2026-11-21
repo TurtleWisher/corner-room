@@ -935,6 +935,60 @@ async def save_lyric_timings(track_id: UUID, body: LyricTimingsIn, ctx: Ctx, svc
     return LyricTimingsOut(**out)
 
 
+class LyricSongOut(BaseModel):
+    track_id: UUID
+    title: str
+    profile_name: str | None
+    release_title: str | None
+    lines: int
+    timed: bool
+    lyrics_waiting: bool
+
+
+@router.get("/catalog-intake/lyrics/songs", response_model=list[LyricSongOut])
+async def lyric_songs(ctx: Ctx, svc: StudioDep, q: Annotated[str | None, Query(max_length=200)] = None) -> list[LyricSongOut]:
+    """Staff: released songs to sync, by title or act name (D-LYRICS-04, music.approve)."""
+    from cornerroom.modules.music.application.lyrics import LyricsService
+
+    return [LyricSongOut(**r) for r in await LyricsService(svc.session, svc.settings, svc.clock).staff_songs(ctx, q)]
+
+
+class StaffLyricsOut(BaseModel):
+    track_id: UUID
+    title: str
+    status: str
+    profile_name: str | None
+    lyrics: str | None
+    lyrics_timings_ms: list[int] | None
+    lyrics_waiting: bool
+    lyrics_pending: str | None
+    waiting_from_me: bool
+    approves_at_once: bool
+
+
+class StaffLyricsIn(BaseModel):
+    lyrics: str | None = Field(default=None, max_length=12000)
+    # One start per sung line of the new words, in ms; null keeps the stored times while they fit.
+    times_ms: list[int] | None = Field(default=None, max_length=2000)
+
+
+@router.get("/catalog-intake/tracks/{track_id}/lyrics", response_model=StaffLyricsOut)
+async def staff_lyrics(track_id: UUID, ctx: Ctx, svc: StudioDep) -> StaffLyricsOut:
+    """Staff: a song's live words, times and any waiting change (D-LYRICS-04, music.approve)."""
+    from cornerroom.modules.music.application.lyrics import LyricsService
+
+    return StaffLyricsOut(**await LyricsService(svc.session, svc.settings, svc.clock).staff_read(ctx, track_id))
+
+
+@router.put("/catalog-intake/tracks/{track_id}/lyrics", response_model=StaffLyricsOut)
+async def staff_edit_lyrics(track_id: UUID, body: StaffLyricsIn, ctx: Ctx, svc: StudioDep) -> StaffLyricsOut:
+    """Staff: change a released song's words (and their times) from the sync page (D-LYRICS-04)."""
+    from cornerroom.modules.music.application.lyrics import LyricsService
+
+    out = await LyricsService(svc.session, svc.settings, svc.clock).staff_edit(ctx, track_id, body.lyrics, body.times_ms)
+    return StaffLyricsOut(**out)
+
+
 class CoverReviewItemOut(BaseModel):
     release_id: UUID
     title: str

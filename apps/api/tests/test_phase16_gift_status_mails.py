@@ -39,8 +39,8 @@ def test_words_are_checked() -> None:
             check_words(subject, body)
     assert unfinished("x", "Hi [add the courier name]") and not unfinished("x", "Hi [the shop](https://example.com)")
     # Owner, 2026-11-21 (D-CAMPAIGN-09): buyers never read what the gift is before it arrives.
-    assert with_gift("Your {gift} left", "signed poster") == "Your gift left"
-    assert with_gift("Your gift ({gift}) left", "signed poster") == "Your gift left"
+    assert with_gift("Your {gift} left", "signed poster") == "Your collectible left"
+    assert with_gift("Your collectible ({gift}) left", "signed poster") == "Your collectible left"
     # Corner Room's starting words greet the buyer and never say what the gift is (D-CAMPAIGN-09).
     assert all("{first_name}" in body and "{gift}" not in body for _subject, body in DEFAULTS.values())
     # A button needs its words and an https address, or nothing at all.
@@ -212,13 +212,13 @@ async def test_act_writes_status_email_staff_approve_and_it_sends(client: AsyncC
         pass
     mails = [m for m in sender.sent if m["to"] == "smail-fan@example.com"]
     assert len(mails) == 1
-    # {gift} reads "gift": what it is stays a surprise (owner, 2026-11-21, D-CAMPAIGN-09).
-    assert mails[0]["subject"] == "Your gift left"
-    assert "your gift from Mail Band left today" in mails[0]["body"] and "Stop emails" not in mails[0]["body"]
+    # {gift} reads "collectible": what it is stays a surprise (owner, 2026-11-21, D-CAMPAIGN-09).
+    assert mails[0]["subject"] == "Your collectible left"
+    assert "your collectible from Mail Band left today" in mails[0]["body"] and "Stop emails" not in mails[0]["body"]
     assert "signed poster" not in mails[0]["body"] and "signed poster" not in mails[0]["html"]
     # Greeted by their own name, never a stand-in.
     assert mails[0]["body"].startswith("Hi Samiul,") and "friend" not in mails[0]["body"]
-    assert "Track your gift:" in mails[0]["body"]
+    assert "Track your collectible:" in mails[0]["body"]
     assert mails[0]["from_name"] == "Mail Band via Corner Room" and mails[0]["html"]
     factory = async_sessionmaker(get_engine(), expire_on_commit=False)
     async with factory() as session:

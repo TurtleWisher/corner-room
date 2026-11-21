@@ -122,7 +122,7 @@ export function MailPreview({
             </>
           ) : kind === "GIFT_UPDATE" ? (
             <>
-              You&apos;re getting this because you&apos;re getting a gift from {artist} for music you bought on Corner Room. Replies to this email
+              You&apos;re getting this because you&apos;re getting a collectible from {artist} for music you bought on Corner Room. Replies to this email
               aren&apos;t read.
               <br />
               <span className="underline">Your music on Corner Room</span>

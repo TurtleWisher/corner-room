@@ -106,7 +106,7 @@ describe("automatic gift emails (D-CAMPAIGN-05, D-CAMPAIGN-06)", () => {
     api.fetchStatusMails.mockResolvedValue(mails());
     render(<GiftEmails campaignId="c1" />);
     await openAutomatic();
-    expect(await screen.findByText(/When a gift is marked dispatched, the buyer gets/)).toBeTruthy();
+    expect(await screen.findByText(/When a collectible is marked dispatched, the buyer gets/)).toBeTruthy();
     expect(within(preview()).getByText("Samiul", { exact: false })).toBeTruthy();
     expect(within(preview()).queryByText(/friend/)).toBeNull();
     // Another buyer: their own name.
@@ -153,7 +153,7 @@ describe("automatic gift emails (D-CAMPAIGN-05, D-CAMPAIGN-06)", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Use this email" }));
     });
-    expect(screen.getByRole("status").textContent).toMatch(/Approved and in use. Send the Dispatched update sends this email to buyers whose gift is marked dispatched. Nobody was emailed/);
+    expect(screen.getByRole("status").textContent).toMatch(/Approved and in use. Send the Dispatched update sends this email to buyers whose collectible is marked dispatched. Nobody was emailed/);
     expect(screen.getAllByText("Your approved email").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/“Off it goes”/).length).toBeGreaterThan(0);
   });
@@ -194,7 +194,7 @@ describe("emails to buyers you pick (D-CAMPAIGN-07)", () => {
     render(<GiftEmails campaignId="c1" pick={{ ids: ["r1"], at: 1 }} />);
     expect(await screen.findByText("Email buyers you pick")).toBeTruthy();
     // Samiul's gift is dispatched, so the purpose is guessed and the automatic wording is the start.
-    expect(screen.getByRole("button", { name: "Gift on its way" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Collectible on its way" }).getAttribute("aria-pressed")).toBe("true");
     expect((screen.getByRole("checkbox", { name: "Pick Samiul Islam" }) as HTMLInputElement).checked).toBe(true);
     expect(screen.getByText(/Nobody is emailed until it's approved and you press Send/)).toBeTruthy();
     // Search finds people by name.
@@ -215,8 +215,8 @@ describe("emails to buyers you pick (D-CAMPAIGN-07)", () => {
     render(<GiftEmails campaignId="c1" pick={{ ids: ["r1", "r2"], at: 1 }} />);
     await screen.findByText("Email buyers you pick");
     // Mixed statuses: other news reaches both.
-    expect(screen.getByRole("button", { name: "Other gift news" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "Gift on its way" }));
+    expect(screen.getByRole("button", { name: "Other collectible news" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Collectible on its way" }));
     expect(screen.getByText(/1 picked won't/)).toBeTruthy();
   });
 

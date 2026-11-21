@@ -49,7 +49,7 @@ describe("gift sends", () => {
     expect(sendButtonLabel(true, 1)).toBe("Send now to 1 buyer");
     expect(sendPromise(false)).toMatch(/Nobody is emailed until it's approved and you press Send/);
     expect(sentLine(false, null, null)).toMatch(/press Send/);
-    expect(sentLine(true, 2, 1)).toBe("Emailed 2 buyers. 1 skipped: their gift moved on or they have no email.");
+    expect(sentLine(true, 2, 1)).toBe("Emailed 2 buyers. 1 skipped: their collectible moved on or they have no email.");
   });
 
   it("describes each request's state", () => {

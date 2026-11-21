@@ -9,9 +9,9 @@ import type { GiftRecipientStatus, StatusMail, StatusMailInput, StatusMailPerson
 import { hideGift, plainText, type MailValues } from "@/lib/artist-mail-view";
 
 export const STATUS_MAIL_TITLE: Record<StatusMailStatus, string> = {
-  DISPATCHED: "Gift dispatched",
-  RETURNED: "Gift returned",
-  MISSING: "Gift missing",
+  DISPATCHED: "Collectible dispatched",
+  RETURNED: "Collectible returned",
+  MISSING: "Collectible missing",
 };
 
 export const STATUS_MAIL_TAB: Record<StatusMailStatus, string> = {
@@ -21,9 +21,9 @@ export const STATUS_MAIL_TAB: Record<StatusMailStatus, string> = {
 };
 
 export const STATUS_MAIL_WHEN: Record<StatusMailStatus, string> = {
-  DISPATCHED: "Sends when you press Send the Dispatched update, never when a gift is just marked dispatched.",
-  RETURNED: "Sends when you press Send the Returned update, never when a gift is just marked returned.",
-  MISSING: "Sends when you press Send the Missing update, never when a gift is just marked missing.",
+  DISPATCHED: "Sends when you press Send the Dispatched update, never when a collectible is just marked dispatched.",
+  RETURNED: "Sends when you press Send the Returned update, never when a collectible is just marked returned.",
+  MISSING: "Sends when you press Send the Missing update, never when a collectible is just marked missing.",
 };
 
 /** The button that tells buyers (D-CAMPAIGN-08). */
@@ -167,7 +167,7 @@ export function buttonProblem(label: string | null, url: string | null): string 
 export function previewValues(person: Pick<StatusMailPerson, "name"> | null, artist: string, music: string): MailValues {
   const name = (person?.name ?? "").trim();
   // What the gift is stays a surprise (D-CAMPAIGN-09): `{gift}` reads "gift", as the server writes it.
-  return { first_name: name.split(/\s+/)[0] || NO_NAME, buyer_name: name || NO_NAME, artist, music: music || "your music", gift: "gift" };
+  return { first_name: name.split(/\s+/)[0] || NO_NAME, buyer_name: name || NO_NAME, artist, music: music || "your music", gift: "collectible" };
 }
 
 /** The buyers whose gift is in this status: the ones a send for this status reaches. */
@@ -177,7 +177,7 @@ export function peopleIn<T extends { status: GiftRecipientStatus; reachable: boo
 
 /** A subject as every buyer reads it: the act, music and gift filled in, names as "(their name)". */
 export function subjectForAll(subject: string, artist: string, music: string): string {
-  return plainText(hideGift(subject), { first_name: "(their first name)", buyer_name: "(their name)", artist, music: music || "your music", gift: "gift" });
+  return plainText(hideGift(subject), { first_name: "(their first name)", buyer_name: "(their name)", artist, music: music || "your music", gift: "collectible" });
 }
 
 /** "Sent 12 times", for the report line. */
@@ -212,7 +212,7 @@ export function workflowSteps(item: StatusMail, approvesAtOnce: boolean): Step[]
   const sent = item.sent_count;
   const deliver: Step = {
     title: "Buyers get it",
-    line: `When you press Send the ${STATUS_MAIL_TAB[item.status]} update on Collectibles, after marking gifts ${status}.${sent ? ` ${sentCountLine(sent)} so far.` : ""}`,
+    line: `When you press Send the ${STATUS_MAIL_TAB[item.status]} update on Collectibles, after marking collectibles ${status}.${sent ? ` ${sentCountLine(sent)} so far.` : ""}`,
     tone: sent ? "done" : "skip",
   };
   return [write, approval, deliver];
@@ -239,7 +239,7 @@ export function submitLabel(approvesAtOnce: boolean): string {
 /** Said after the main button, from the state the API came back with. */
 export function submitDoneLine(next: StatusMail | undefined): string {
   const status = next ? STATUS_MAIL_TAB[next.status].toLowerCase() : "";
-  if (next?.state === "APPROVED") return `Approved and in use. Send the ${next ? STATUS_MAIL_TAB[next.status] : ""} update sends this email to buyers whose gift is marked ${status}. Nobody was emailed just now.`;
+  if (next?.state === "APPROVED") return `Approved and in use. Send the ${next ? STATUS_MAIL_TAB[next.status] : ""} update sends this email to buyers whose collectible is marked ${status}. Nobody was emailed just now.`;
   return "Sent to Corner Room for approval. Nobody was emailed. Until it's approved, buyers get the email in use now.";
 }
 
@@ -269,7 +269,7 @@ export function namesLine(names: string[]): string {
 
 /** After sending now: who it went to, and who it skipped. */
 export function sentNowLine(sent: number, skipped: number, names: string[]): string {
-  if (!sent) return "Nobody was emailed: none of the people you picked still has a gift in this status, or has an email address.";
+  if (!sent) return "Nobody was emailed: none of the people you picked still has a collectible in this status, or has an email address.";
   const who = `${sent} ${sent === 1 ? "buyer" : "buyers"}${names.length ? ` (${namesLine(names)})` : ""}`;
-  return `Emailed ${who}. Each one's line below shows On its way, then Sent.${skipped ? ` ${skipped} skipped: their gift moved on or they have no email.` : ""}`;
+  return `Emailed ${who}. Each one's line below shows On its way, then Sent.${skipped ? ` ${skipped} skipped: their collectible moved on or they have no email.` : ""}`;
 }
