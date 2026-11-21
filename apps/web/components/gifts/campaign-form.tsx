@@ -109,9 +109,9 @@ export function CampaignForm({
     <form onSubmit={submit} className="grid gap-4">
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="Campaign name" required>
-          {(c) => <Input {...c} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} placeholder="Launch gift" />}
+          {(c) => <Input {...c} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} placeholder="Launch collectible" />}
         </Field>
-        <Field label="What the gift is" required hint="Fans see this, e.g. a signed poster and a sticker">
+        <Field label="What the collectible is" required hint="Fans see this, e.g. a signed poster and a sticker">
           {(c) => <Input {...c} value={items} onChange={(e) => setItems(e.target.value)} maxLength={500} />}
         </Field>
       </div>
@@ -120,7 +120,7 @@ export function CampaignForm({
       </Field>
       <fieldset>
         <legend className="text-[0.8125rem] font-semibold text-fg">Which music</legend>
-        <p className="mt-1 text-sm text-fg-muted">Everyone who buys what you tick here while the campaign is live gets the gift.</p>
+        <p className="mt-1 text-sm text-fg-muted">Everyone who buys what you tick here while the campaign is live gets the collectible.</p>
         {releases.status === "loading" ? (
           <p className="mt-2 text-sm text-fg-muted">Loading your music</p>
         ) : music.length === 0 ? (
@@ -134,7 +134,7 @@ export function CampaignForm({
         )}
       </fieldset>
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Who sends the gifts">
+        <Field label="Who sends the collectibles">
           {(c) => (
             <Select {...c} value={sender} onChange={(e) => setSender(e.target.value as "ARTIST" | "CORNER_ROOM")}>
               <option value="ARTIST">I do (you see each buyer&apos;s name, phone and address to post them)</option>

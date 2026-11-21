@@ -78,3 +78,102 @@ async def test_staff_time_a_released_songs_lyrics(client: AsyncClient) -> None:
     await client.put(url, headers=bearer(reviewer), json={"times_ms": [0, 1, 2, 3]})
     cleared = await client.put(url, headers=bearer(reviewer), json={"times_ms": None})
     assert cleared.status_code == 200 and cleared.json()["lyrics_timings_ms"] is None
+
+
+def _second_review_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    from cornerroom.infra.settings import get_settings
+
+    monkeypatch.setenv("STAFF_SECOND_REVIEW", "false")
+    get_settings.cache_clear()
+
+
+async def _released_with_lyrics(client: AsyncClient, token: str, reviewer: str, artist_id: str, text: str) -> str:
+    release_id, track_id = await _ready_single(client, token, artist_id)
+    for action in ("start_review", "approve", "release"):
+        assert (await _review(client, reviewer, release_id, action)).status_code == 200
+    await _review_lyrics(client, token, reviewer, track_id, text)
+    return track_id
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_staff_find_a_song_and_fix_its_words_while_timing(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """D-LYRICS-04: staff search released songs by title or act, and fix the words on the sync
+    page; the song's own lyrics change, so the song page and Studio show the fix."""
+    _second_review_off(monkeypatch)
+    admin, orgs = await _orgs(client)
+    label = orgs["LABEL"]
+    owner = await register_and_login(client, "sync-owner@example.com")
+    token = owner["access_token"]
+    artist_id = await _artist_for(owner["user"]["id"], label, name="Searchable Singer")
+    reviewer = await _staff_with(client, admin, "sync-reviewer@example.com", "content_manager", label)
+    track_id = await _released_with_lyrics(client, token, reviewer, artist_id, "Line one\nLine two\n\nLine three")
+
+    # Found by the act's name and by part of the title; the artist can't search.
+    songs = "/api/v1/catalog-intake/lyrics/songs"
+    by_act = (await client.get(songs, headers=bearer(reviewer), params={"q": "searchable"})).json()
+    assert [s["track_id"] for s in by_act] == [track_id]
+    assert by_act[0]["profile_name"] == "Searchable Singer" and by_act[0]["lines"] == 3 and not by_act[0]["timed"]
+    # Words may mix the act and the title, in any order.
+    mixed = (await client.get(songs, headers=bearer(reviewer), params={"q": "singer searchable"})).json()
+    assert [s["track_id"] for s in mixed] == [track_id]
+    assert (await client.get(songs, headers=bearer(reviewer), params={"q": "no such 100%"})).json() == []
+    assert (await client.get(songs, headers=bearer(token))).status_code == 404
+
+    url = f"/api/v1/catalog-intake/tracks/{track_id}/lyrics"
+    read = (await client.get(url, headers=bearer(reviewer))).json()
+    assert read["lyrics"] == "Line one\nLine two\n\nLine three" and read["approves_at_once"] is True
+    assert (await client.get(url, headers=bearer(token))).status_code == 404
+    assert (await client.put(url, headers=bearer(token), json={"lyrics": "x"})).status_code == 404
+
+    # New words and their times in one save: live at once for staff outside the act.
+    saved = await client.put(
+        url, headers=bearer(reviewer),
+        json={"lyrics": "Line one\r\nLine two, fixed   \n\n\n\nLine three\nLine four", "times_ms": [1000, 2000, 3000, 4000]},
+    )
+    assert saved.status_code == 200, saved.text
+    body = saved.json()
+    assert body["lyrics"] == "Line one\nLine two, fixed\n\nLine three\nLine four"
+    assert body["lyrics_timings_ms"] == [1000, 2000, 3000, 4000] and not body["lyrics_waiting"]
+    public = (await client.get(f"/api/v1/tracks/{track_id}")).json()
+    assert public["lyrics"] == body["lyrics"] and public["lyrics_timings_ms"] == [1000, 2000, 3000, 4000]
+
+    # A spacing-only fix keeps the times; times that don't fit the new words are refused.
+    spaced = (await client.put(url, headers=bearer(reviewer), json={"lyrics": "Line one\nLine two, fixed\nLine three\n\nLine four"})).json()
+    assert spaced["lyrics_timings_ms"] == [1000, 2000, 3000, 4000]
+    assert (await client.put(url, headers=bearer(reviewer), json={"lyrics": "Only one", "times_ms": [0, 1]})).status_code == 422
+
+    # An artist's change waiting is reviewed first, never silently replaced.
+    await client.put(f"/api/v1/studio/tracks/{track_id}/lyrics", headers=bearer(token), json={"lyrics": "Artist words"})
+    blocked = await client.put(url, headers=bearer(reviewer), json={"lyrics": "Staff words"})
+    assert blocked.status_code == 409 and blocked.json()["code"] == "LYRICS_WAITING"
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_staff_on_the_acts_team_wait_for_their_words(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """D-REVIEW-ARTIST-01: a staff member who runs the act waits like any artist, then approves the
+    change from the staff side; the times are kept only once the words are live."""
+    _second_review_off(monkeypatch)
+    from tests.test_phase16_solo_review import _staff_artist
+
+    admin, orgs = await _orgs(client)
+    label = orgs["LABEL"]
+    token, artist_id = await _staff_artist(client, admin, "sync-staff-artist@example.com", label, "Staff Band Singer")
+    reviewer = await _staff_with(client, admin, "sync-other-reviewer@example.com", "content_manager", label)
+    track_id = await _released_with_lyrics(client, token, reviewer, artist_id, "A\nB")
+
+    url = f"/api/v1/catalog-intake/tracks/{track_id}/lyrics"
+    assert (await client.get(url, headers=bearer(token))).json()["approves_at_once"] is False
+    waiting = (await client.put(url, headers=bearer(token), json={"lyrics": "A\nB, fixed", "times_ms": [0, 900]})).json()
+    assert waiting["lyrics"] == "A\nB" and waiting["lyrics_waiting"] and waiting["waiting_from_me"]
+    assert waiting["lyrics_pending"] == "A\nB, fixed" and waiting["lyrics_timings_ms"] is None
+    # Their own waiting change can be replaced by them.
+    again = (await client.put(url, headers=bearer(token), json={"lyrics": "A\nB, fixed again"})).json()
+    assert again["lyrics_pending"] == "A\nB, fixed again"
+
+    approved = await client.post(
+        f"/api/v1/catalog-intake/tracks/{track_id}/lyrics/review", headers=bearer(token), json={"action": "approve"}
+    )
+    assert approved.status_code == 200, approved.text
+    assert (await client.get(f"/api/v1/tracks/{track_id}")).json()["lyrics"] == "A\nB, fixed again"

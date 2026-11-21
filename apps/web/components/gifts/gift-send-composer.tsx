@@ -268,7 +268,7 @@ export function GiftSendComposer({
           {skipped.length ? (
             <span className="text-fg-muted">
               {" "}
-              · {skipped.length} picked won&apos;t ({purpose === "OTHER" ? "no email address" : `their gift isn't ${RECIPIENT_STATUS_LABEL[purpose as GiftRecipientStatus].toLowerCase()} or they have no email`})
+              · {skipped.length} picked won&apos;t ({purpose === "OTHER" ? "no email address" : `their collectible isn't ${RECIPIENT_STATUS_LABEL[purpose as GiftRecipientStatus].toLowerCase()} or they have no email`})
             </span>
           ) : null}
         </p>

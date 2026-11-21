@@ -75,7 +75,7 @@ export function DeliveryAddressForm({
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
       <p className="text-sm text-fg">
-        Where gifts can reach you, in Bangladesh or anywhere else. Sending a gift to someone? Give their address and number instead.
+        Where collectibles can reach you, in Bangladesh or anywhere else. Sending a gift to someone? Give their address and number instead.
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Country" required className="sm:col-span-2" error={fieldError("country_code")}>

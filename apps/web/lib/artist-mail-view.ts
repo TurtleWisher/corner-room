@@ -47,7 +47,7 @@ export const GIFT_UPDATE_FILL_INS: { key: FillKey; label: string; hint: string }
 /** Hints for every fill-in an editor may hold, the old `{gift}` included. */
 export const FILL_HINTS: { key: FillKey; label: string; hint: string }[] = [
   ...FILL_INS,
-  { key: "gift", label: "Gift", hint: "Reads \"gift\": what the gift is stays a surprise" },
+  { key: "gift", label: "Collectible", hint: "Reads \"collectible\": what it is stays a surprise" },
 ];
 
 /** Every fill-in the editor can hold, whichever email it is writing. */
@@ -55,7 +55,7 @@ export const ALL_FILL_KEYS: FillKey[] = FILL_HINTS.map((f) => f.key);
 
 /** As the server's `with_gift`: a bracketed "({gift})" is left out, any other `{gift}` reads "gift". */
 export function hideGift(text: string): string {
-  return text.replace(/[ \t]*\(\{gift\}\)/g, "").replace(/\{gift\}/g, "gift");
+  return text.replace(/[ \t]*\(\{gift\}\)/g, "").replace(/\{gift\}/g, "collectible");
 }
 
 export type MailValues = Record<Exclude<FillKey, "gift">, string> & { gift?: string };

@@ -73,3 +73,35 @@ export function sortQueues(queues: readonly QueueCount[]): QueueCount[] {
 export function waitingTotal(queues: readonly QueueCount[]): number {
   return queues.reduce((sum, q) => sum + (q.count ?? 0), 0);
 }
+
+/** "/staff/catalog#q-lyrics" belongs to the page "/staff/catalog". */
+export function pageOf(href: string): string {
+  return href.split("#")[0];
+}
+
+/** What is waiting per staff page, for the side menu's badges. Unknown counts add nothing. */
+export function waitingByPage(queues: readonly QueueCount[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const q of queues) {
+    if (!q.count) continue;
+    const page = pageOf(q.href);
+    out[page] = (out[page] ?? 0) + q.count;
+  }
+  return out;
+}
+
+/** A badge never grows wider than "99+". */
+export function badgeText(n: number): string {
+  return n > 99 ? "99+" : String(n);
+}
+
+/** The queues with work in them that live on one page, for that page's jump bar. */
+export function queuesOn(page: string, queues: readonly QueueCount[]): QueueCount[] {
+  return queues.filter((q) => (q.count ?? 0) > 0 && pageOf(q.href) === page && q.href.includes("#"));
+}
+
+/** The queues whose words match the finder's query, waiting ones only. */
+export function findQueues<T extends QueueCount>(queues: readonly T[], query: string): T[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return queues.filter((q) => (q.count ?? 0) > 0 && words.every((w) => q.label.toLowerCase().includes(w)));
+}

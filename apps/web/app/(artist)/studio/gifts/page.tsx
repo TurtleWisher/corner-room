@@ -31,7 +31,7 @@ function ProfileGifts({ profile }: { profile: CatalogProfile }) {
         </h2>
         {!creating ? (
           <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus aria-hidden="true" /> New gift campaign
+            <Plus aria-hidden="true" /> New collectible
           </Button>
         ) : null}
       </div>
@@ -51,9 +51,9 @@ function ProfileGifts({ profile }: { profile: CatalogProfile }) {
         {list.status === "loading" ? (
           <Skeleton className="h-24 w-full" />
         ) : list.status === "error" ? (
-          <ErrorState title="Gift campaigns unavailable" message={loadErrorMessage(list.error, "your gift campaigns")} action={<RetryButton onClick={list.reload} />} />
+          <ErrorState title="Collectibles unavailable" message={loadErrorMessage(list.error, "your collectibles")} action={<RetryButton onClick={list.reload} />} />
         ) : list.data.length === 0 ? (
-          <EmptyState title="No gift campaigns yet" body="Send a gift to the people who buy your music: a poster, a sticker, anything you like." />
+          <EmptyState title="No collectibles yet" body="Send a collectible to the people who buy your music: a poster, a sticker, anything you like." />
         ) : (
           <ul className="grid gap-3">
             {list.data.map((c) => (
@@ -84,13 +84,13 @@ function Gifts() {
     return <ErrorState title="Gifts unavailable" message={loadErrorMessage(profiles.error, "your profiles")} action={<RetryButton onClick={profiles.reload} />} />;
   }
   if (profiles.data.length === 0) {
-    return <EmptyState title="No artist or band profile yet" body="Gift campaigns are for the artist and band profiles you publish for in Studio." />;
+    return <EmptyState title="No artist or band profile yet" body="Collectibles are for the artist and band profiles you publish for in Studio." />;
   }
   return (
     <div>
       <p className="flex max-w-2xl items-start gap-2 text-sm text-fg">
         <Gift aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-highlight" />
-        A free gift for the people who buy your music. Corner Room checks each campaign, and every change to a live one, before fans see it. You can
+        A free collectible for the people who buy your music. Corner Room checks each campaign, and every change to a live one, before fans see it. You can
         pause and restart it any time; purchases made while it is paused don&apos;t count.
       </p>
       <div className="mt-8">
@@ -108,7 +108,7 @@ export default function StudioGiftsPage() {
       audience="artist"
       eyebrow="Studio"
       title="Gifts"
-      what="your gift campaigns"
+      what="your collectibles"
       actions={
         <ButtonLink href="/studio" variant="secondary">
           <ArrowLeft aria-hidden="true" /> Studio home

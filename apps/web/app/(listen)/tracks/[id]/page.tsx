@@ -291,16 +291,19 @@ export default function TrackPage() {
             <p className="mt-8 max-w-md text-sm text-fg-muted">
               Buy a song, or the release it is on, to keep it. Sign in to listen to what you own.
             </p>
-            {/* A live gift campaign for this song (D-CAMPAIGN-01), and for owners "Give it to someone". */}
+            {/* Owners: one liquid glass "Give it to someone" pill (owner, 2026-11-21). */}
             <GiftNote
+              show="give"
               trackId={track.id}
-              className="mt-6 max-w-2xl"
+              className="mt-5"
               commerce={commerce}
               owned={buy.kind === "owned"}
               title={track.title}
               releaseIds={track.release_ids ?? []}
             />
             <SongTeasersSection teasers={teasers} trackId={track.id} songTitle={track.title} artist={artist} className="mt-8" />
+            {/* The artist's collectible (D-CAMPAIGN-01), one quiet line at the end of the page. */}
+            <GiftNote show="collectible" trackId={track.id} className="mt-10" />
           </div>
           {/* Phones: the same sections, after the title and buy button. */}
           <div className="md:hidden">

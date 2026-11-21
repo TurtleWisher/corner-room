@@ -37,13 +37,13 @@ export const MOVE_LABEL: Record<GiftRecipientStatus, string> = {
 };
 
 
-export const SENDER_LABEL = { ARTIST: "You send the gifts", CORNER_ROOM: "Corner Room sends the gifts" } as const;
+export const SENDER_LABEL = { ARTIST: "You send the collectibles", CORNER_ROOM: "Corner Room sends the collectibles" } as const;
 
 /** "12 gifts: 3 not prepared, 4 prepared, 5 received" (statuses with none are left out). */
 export function countsLine(c: GiftCampaign["counts"]): string {
-  if (!c.TOTAL) return "No one has earned this gift yet";
+  if (!c.TOTAL) return "No one has earned this collectible yet";
   const parts = RECIPIENT_STATUSES.filter((s) => (c[s] ?? 0) > 0).map((s) => `${c[s]} ${RECIPIENT_STATUS_LABEL[s].toLowerCase()}`);
-  return `${c.TOTAL} ${c.TOTAL === 1 ? "gift" : "gifts"}: ${parts.join(", ")}`;
+  return `${c.TOTAL} ${c.TOTAL === 1 ? "collectible" : "collectibles"}: ${parts.join(", ")}`;
 }
 
 /** What the campaign covers, for a list: "Chaya Pore" or "Chaya Pore and 2 more". */
@@ -99,7 +99,7 @@ export function emailsLine(c: Pick<GiftCampaign, "emails_waiting" | "sends_waiti
   const words = c.emails_waiting ?? 0;
   const sends = c.sends_waiting ?? 0;
   const parts: string[] = [];
-  if (words) parts.push(`${words} gift ${words === 1 ? "email" : "emails"} written by the artist ${words === 1 ? "waits" : "wait"} for approval`);
+  if (words) parts.push(`${words} collectible ${words === 1 ? "email" : "emails"} written by the artist ${words === 1 ? "waits" : "wait"} for approval`);
   if (sends) parts.push(`${sends} ${sends === 1 ? "email" : "emails"} to buyers the artist picked ${sends === 1 ? "waits" : "wait"} for approval`);
   return parts.length ? parts.join("; ") : null;
 }

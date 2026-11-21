@@ -123,7 +123,7 @@ export function SentBox({ profile, artist }: { profile: MailProfile; artist: str
   return (
     <div className="grid gap-4">
       <div className="grid gap-3">
-        <SearchField value={typed} onChange={setTyped} label="Search sent emails" placeholder="Search by person, subject, campaign or gift" shortcut />
+        <SearchField value={typed} onChange={setTyped} label="Search sent emails" placeholder="Search by person, subject, campaign or collectible" shortcut />
         <FilterChips<MailboxKind | "ALL"> label="Show by kind" options={kinds} value={kind} onChange={setKind} />
         <FilterChips<StateFilter> label="Show by delivery" options={STATE_FILTERS} value={state} onChange={setState} />
       </div>
@@ -279,7 +279,7 @@ function ReadingPane({ id, onClose }: { id: string; onClose: () => void }) {
           ) : null}
           {message.campaign_id ? (
             <Link href={`/studio/gifts/${message.campaign_id}#emails`} className="cr-focus inline-flex items-center gap-2 text-sm font-semibold text-link underline">
-              <Gift aria-hidden="true" className="size-4" /> Open the gift campaign <ExternalLink aria-hidden="true" className="size-3.5" />
+              <Gift aria-hidden="true" className="size-4" /> Open the collectible <ExternalLink aria-hidden="true" className="size-3.5" />
             </Link>
           ) : message.music_gift_id ? (
             <Link href={`/studio/gifts/music/${message.music_gift_id}`} className="cr-focus inline-flex items-center gap-2 text-sm font-semibold text-link underline">

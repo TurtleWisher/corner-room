@@ -219,15 +219,15 @@ export default function StudioGiftCampaignPage() {
     <AccountPage
       audience="artist"
       eyebrow="Studio"
-      title="Gift campaign"
-      what="this gift campaign"
+      title="Collectible"
+      what="this collectible"
       actions={
         <div className="flex flex-wrap gap-2">
           <ButtonLink href="/studio/mailbox" variant="ghost">
             <Inbox aria-hidden="true" /> Mailbox
           </ButtonLink>
           <ButtonLink href="/studio/gifts" variant="secondary">
-            <ArrowLeft aria-hidden="true" /> All gifts
+            <ArrowLeft aria-hidden="true" /> All collectibles
           </ButtonLink>
         </div>
       }

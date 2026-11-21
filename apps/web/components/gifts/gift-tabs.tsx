@@ -4,7 +4,7 @@
 import Link from "next/link";
 
 const TABS = [
-  { key: "campaigns", href: "/studio/gifts", label: "Gift campaigns" },
+  { key: "campaigns", href: "/studio/gifts", label: "Collectibles" },
   { key: "music", href: "/studio/gifts/music", label: "Music gifts" },
   // The Mailbox holds every email now (owner, 2026-11-09, D-MAILBOX-01).
   { key: "emails", href: "/studio/mailbox", label: "Emails" },

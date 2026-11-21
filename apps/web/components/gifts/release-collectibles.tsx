@@ -22,7 +22,7 @@ export function ReleaseCollectibles({ releaseId }: { releaseId: string }) {
         <h2 id="collectibles-title" className="flex items-center gap-2 text-xl font-bold text-fg">
           <PackageOpen aria-hidden="true" className="size-5 text-highlight" /> Collectibles
         </h2>
-        <p className="mt-1 text-sm text-fg-muted">Gifts that come with this music, and how far each buyer&apos;s has got.</p>
+        <p className="mt-1 text-sm text-fg-muted">Collectibles that come with this music, and how far each buyer&apos;s has got.</p>
       </div>
       {data.status === "loading" ? (
         <Skeleton className="h-28 w-full" />

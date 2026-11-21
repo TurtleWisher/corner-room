@@ -437,3 +437,432 @@ main[data-theme="staff"] tbody tr:hover {
     transform: none;
   }
 }
+
+/* ---------- Song finder rows and state marks (lyrics sync, D-LYRICS-04) ---------- */
+.st-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.st-search-icon {
+  position: absolute;
+  left: 0.75rem;
+  width: 1rem;
+  height: 1rem;
+  color: var(--cr-fg-muted);
+  pointer-events: none;
+}
+main[data-theme="staff"] .st-search-input {
+  width: 100%;
+  height: 2.5rem;
+  padding-left: 2.25rem;
+  font-size: 0.875rem;
+  color: var(--cr-fg);
+  border: 1px solid var(--cr-line);
+  background: var(--cr-surface-sunken);
+  outline: 0;
+  transition: border-color var(--cr-dur-micro) ease, box-shadow var(--cr-dur-micro) ease;
+}
+main[data-theme="staff"] .st-search-input:focus {
+  border-color: var(--cr-line-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cr-highlight) 18%, transparent);
+}
+.st-rows {
+  display: grid;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+.st-row {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
+  border-left: 2px solid transparent;
+  transition: background-color var(--cr-dur-micro) ease, border-color var(--cr-dur-micro) ease;
+}
+.st-row[data-active] {
+  border-left-color: var(--cr-highlight);
+  background: color-mix(in srgb, var(--cr-highlight) 8%, transparent);
+}
+.st-row-go {
+  color: var(--cr-fg-muted);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity var(--cr-dur-micro) ease, transform var(--cr-dur-micro) var(--ease-corner);
+}
+.st-row[data-active] .st-row-go {
+  opacity: 1;
+  transform: none;
+}
+.st-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--cr-fg-muted);
+  white-space: nowrap;
+}
+.st-mark::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.8;
+}
+.st-mark-ok {
+  color: var(--cr-success);
+}
+.st-mark-todo {
+  color: var(--cr-highlight);
+}
+.st-mark-wait {
+  color: var(--cr-warning);
+}
+
+/* ---------- Lyrics sync workbench ---------- */
+.st-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cr-fg-muted);
+}
+.st-sync-now {
+  position: relative;
+  min-height: 4rem;
+  padding: 0.75rem 1rem 1rem;
+  border: 1px solid var(--cr-line);
+  background: var(--cr-surface-sunken);
+  overflow: hidden;
+}
+.st-sync-line {
+  margin-top: 0.25rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--cr-fg);
+  animation: st-line-in 220ms var(--ease-corner) both;
+}
+@keyframes st-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.st-sync-meter {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--cr-highlight);
+  transform-origin: left;
+  transform: scaleX(var(--done, 0));
+  transition: transform 260ms var(--ease-corner);
+}
+.st-sync-now[data-done] .st-sync-meter {
+  background: var(--cr-success);
+}
+.st-tap:not(:disabled):active {
+  transform: scale(0.97);
+}
+main[data-theme="staff"] .st-words {
+  display: block;
+  width: 100%;
+  min-height: 22rem;
+  resize: vertical;
+  font-size: 0.875rem;
+  line-height: 1.75;
+  color: var(--cr-fg);
+  border: 1px solid var(--cr-line);
+  background: var(--cr-surface-sunken);
+  outline: 0;
+  transition: border-color var(--cr-dur-micro) ease, box-shadow var(--cr-dur-micro) ease;
+}
+main[data-theme="staff"] .st-words:focus {
+  border-color: var(--cr-line-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cr-highlight) 18%, transparent);
+}
+.st-lines {
+  max-height: 22rem;
+  overflow-y: auto;
+}
+.st-lines > li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.125rem;
+  padding: 0.25rem 0.5rem;
+  color: var(--cr-fg-muted);
+  border-left: 2px solid transparent;
+  transition: color var(--cr-dur-micro) ease, background-color var(--cr-dur-micro) ease;
+}
+.st-lines > li[data-timed] {
+  color: color-mix(in srgb, var(--cr-fg) 82%, transparent);
+}
+.st-lines > li[data-lit] {
+  color: var(--cr-fg);
+  font-weight: 600;
+  border-left-color: var(--cr-highlight);
+  background: color-mix(in srgb, var(--cr-highlight) 8%, transparent);
+}
+.st-lines-time {
+  width: 4.5rem;
+  flex: none;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.st-lines-retake {
+  flex: none;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-decoration: underline;
+  opacity: 0;
+  transition: opacity var(--cr-dur-micro) ease;
+}
+.st-lines > li:hover .st-lines-retake,
+.st-lines-retake:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .st-lines-retake {
+    opacity: 1;
+  }
+}
+.st-callout[data-tone="wait"] {
+  border-left: 3px solid var(--cr-warning);
+}
+/* The save bar floats at the bottom of the window while something is unsaved. */
+.st-savebar {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem 0.625rem 1rem;
+  border: 1px solid var(--cr-line);
+  background: color-mix(in srgb, var(--cr-surface-raised) 88%, transparent);
+  backdrop-filter: blur(10px);
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.st-savebar[data-on] {
+  border-color: var(--cr-line-strong);
+  box-shadow: 0 18px 40px -24px rgb(0 0 0 / 0.9);
+}
+@media (prefers-reduced-motion: reduce) {
+  .st-sync-line,
+  .st-row-go,
+  .st-sync-meter {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ======================================================================================
+ * Console-wide feel (owner, 2026-11-21: "super minimal and premium interactive ... effects and
+ * animations over the entire staff console", minimum clicks). This replaces "no motion beyond
+ * colour fades" above. Short, quiet motion only, each tied to something the person did or to new
+ * content arriving; nothing loops except loading. Everything here stops under reduced motion.
+ * ====================================================================================== */
+
+/* Waiting counts: menu badges, finder rows, the jump bar's chips. */
+.st-badge {
+  flex: none;
+  display: inline-flex;
+  min-width: 1.25rem;
+  height: 1.125rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.3125rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--cr-night, #140707);
+  background: var(--cr-highlight);
+  animation: st-pop 260ms cubic-bezier(0.22, 1.4, 0.36, 1) both;
+}
+@keyframes st-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+.st-jumpbar {
+  position: sticky;
+  top: 3.5rem;
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--cr-line);
+  background: color-mix(in srgb, var(--cr-surface-raised) 86%, transparent);
+  backdrop-filter: blur(10px);
+  animation: st-rise 260ms var(--ease-corner) both;
+}
+.st-chip {
+  display: inline-flex;
+  height: 1.75rem;
+  align-items: center;
+  gap: 0.4375rem;
+  padding: 0 0.375rem 0 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--cr-fg);
+  border: 1px solid var(--cr-line);
+  background: var(--cr-surface-sunken);
+  transition: border-color var(--cr-dur-micro) ease, background-color var(--cr-dur-micro) ease, transform 160ms var(--ease-corner);
+}
+.st-chip:hover {
+  border-color: color-mix(in srgb, var(--cr-highlight) 55%, transparent);
+  background: color-mix(in srgb, var(--cr-highlight) 8%, var(--cr-surface-sunken));
+}
+.st-chip:active {
+  transform: scale(0.96);
+}
+.st-chip-n {
+  min-width: 1.125rem;
+  padding: 0 0.25rem;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--cr-highlight);
+}
+/* A queue with nothing waiting draws nothing, so it takes no gap either. */
+.st-q:empty {
+  display: none;
+}
+.st-q {
+  scroll-margin-top: 7rem;
+}
+/* The queue someone jumped to lights up once. */
+.st-q[data-flash] > * {
+  animation: st-flash 1.4s var(--ease-corner) both;
+}
+@keyframes st-flash {
+  0%,
+  35% {
+    box-shadow: 0 0 0 2px var(--cr-highlight), 0 0 32px -6px color-mix(in srgb, var(--cr-highlight) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* Arriving on a page: its sections rise into place one after another, once. */
+@keyframes st-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+main[data-theme="staff"] .st-page > * > :where(*) {
+  animation: st-rise 360ms var(--ease-corner) both;
+}
+main[data-theme="staff"] .st-page > * > :nth-child(2) { animation-delay: 40ms; }
+main[data-theme="staff"] .st-page > * > :nth-child(3) { animation-delay: 80ms; }
+main[data-theme="staff"] .st-page > * > :nth-child(4) { animation-delay: 120ms; }
+main[data-theme="staff"] .st-page > * > :nth-child(5) { animation-delay: 160ms; }
+main[data-theme="staff"] .st-page > * > :nth-child(n + 6) { animation-delay: 200ms; }
+/* Sticky bars must not carry a transform after rising, or they stop sticking in some browsers. */
+main[data-theme="staff"] .st-page > * > :where(.st-jumpbar, .st-savebar) {
+  animation-fill-mode: backwards;
+}
+
+/* Cards answer the pointer with their edge, never by moving. */
+main[data-theme="staff"] .cr-glass-card {
+  transition: border-color 180ms ease, background-color 180ms ease;
+}
+main[data-theme="staff"] .cr-glass-card:hover,
+main[data-theme="staff"] .cr-glass-card:focus-within {
+  --cut-border: var(--cr-glass-edge-hover);
+}
+main[data-theme="staff"] .st-panel {
+  transition: border-color 180ms ease;
+}
+main[data-theme="staff"] .st-panel:hover {
+  border-color: var(--cr-line-strong);
+}
+
+/* Buttons and links that act: a small press, a soft lift on the main action. */
+[data-theme="staff"] :where(button, a[role="button"], .st-ghost, .st-finder-open):not(:disabled) {
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease-corner);
+}
+[data-theme="staff"] :where(button):not(:disabled):active {
+  transform: scale(0.97);
+}
+[data-theme="staff"] :where(button, a):where([class*="bg-accent"], [class*="bg-brand"]):not(:disabled):hover {
+  box-shadow: 0 8px 24px -12px color-mix(in srgb, var(--cr-highlight) 60%, transparent);
+}
+
+/* Lists and rows: a light trace follows the pointer down the list. */
+.st-nav-item svg,
+.st-jump svg {
+  transition: transform 200ms var(--ease-corner), color var(--cr-dur-micro) ease;
+}
+.st-nav-item:hover svg {
+  transform: translateX(2px);
+}
+.st-nav-on::before {
+  animation: st-bar-in 240ms var(--ease-corner) both;
+  transform-origin: center;
+}
+@keyframes st-bar-in {
+  from {
+    transform: scaleY(0.2);
+    opacity: 0;
+  }
+}
+
+/* Disclosures open smoothly where the browser can (Chrome 131+), else at once. */
+main[data-theme="staff"] details {
+  interpolate-size: allow-keywords;
+}
+main[data-theme="staff"] details::details-content {
+  block-size: 0;
+  overflow: hidden;
+  transition: block-size 220ms var(--ease-corner), content-visibility 220ms allow-discrete;
+}
+main[data-theme="staff"] details[open]::details-content {
+  block-size: auto;
+}
+main[data-theme="staff"] summary {
+  cursor: pointer;
+}
+
+/* Status and error panels arrive instead of popping in. */
+main[data-theme="staff"] :where([role="status"], [role="alert"]) {
+  animation: st-rise 220ms var(--ease-corner) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .st-badge,
+  .st-jumpbar,
+  .st-q[data-flash] > *,
+  .st-nav-on::before,
+  main[data-theme="staff"] .st-page > * > :where(*),
+  main[data-theme="staff"] :where([role="status"], [role="alert"]) {
+    animation: none;
+  }
+  [data-theme="staff"] :where(button):not(:disabled):active,
+  .st-chip:active,
+  .st-nav-item:hover svg {
+    transform: none;
+  }
+  main[data-theme="staff"] details::details-content {
+    transition: none;
+  }
+  .st-q[data-flash] > * {
+    outline: 2px solid var(--cr-highlight);
+  }
+}

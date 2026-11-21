@@ -116,7 +116,7 @@ export function GiftEmails({
       {/* How it works, so nobody has to guess what goes where. */}
       <section aria-labelledby="ge-how" className="grid gap-3">
         <h3 id="ge-how" className="sr-only">
-          How gift emails work
+          How collectible emails work
         </h3>
         <div className="sk-lanes">
           <div className="sk-lane cr-cut">
@@ -125,7 +125,7 @@ export function GiftEmails({
             </span>
             <p className="mt-3 font-bold text-fg">Automatic emails</p>
             <p className="mt-1 text-sm text-fg-muted">
-              Go out when you press Send update on Collectibles, after marking gifts Dispatched, Returned or Missing. Marking a gift
+              Go out when you press Send update on Collectibles, after marking collectibles Dispatched, Returned or Missing. Marking one
               emails nobody. You only write the wording once;{" "}
               {atOnce ? "yours is used at once." : "Corner Room approves it once."}
             </p>
@@ -349,8 +349,8 @@ function SendCard({
                     return {
                       tone: sent ? "success" : "problem",
                       text: sent
-                        ? `Emailed ${sent} ${sent === 1 ? "buyer" : "buyers"}.${skipped ? ` ${skipped} skipped: their gift moved on or they have no email.` : ""}`
-                        : "Nobody was emailed: none of them still has a gift in that status or an email address.",
+                        ? `Emailed ${sent} ${sent === 1 ? "buyer" : "buyers"}.${skipped ? ` ${skipped} skipped: their collectible moved on or they have no email.` : ""}`
+                        : "Nobody was emailed: none of them still has a collectible in that status or an email address.",
                     };
                   })
                 }
@@ -447,12 +447,12 @@ function SentSoFar({ mails }: { mails: StatusMails }) {
         </h3>
       </div>
       {history.length === 0 ? (
-        <p className="text-sm text-fg-muted">No gift emails yet.</p>
+        <p className="text-sm text-fg-muted">No collectible emails yet.</p>
       ) : (
         <>
           <FilterChips<SentFilter> label="Show sent emails by kind" options={options} value={filter} onChange={setFilter} />
           <div className="flex flex-wrap items-center gap-3">
-            <SearchField className="min-w-[12rem] flex-1" value={query} onChange={setQuery} label="Search sent gift emails" placeholder="Search by buyer or subject" />
+            <SearchField className="min-w-[12rem] flex-1" value={query} onChange={setQuery} label="Search sent collectible emails" placeholder="Search by buyer or subject" />
             <span className="text-sm text-fg-muted">{shownCount(shown.length, byPurpose.length)}</span>
           </div>
           {query && !shown.length ? (

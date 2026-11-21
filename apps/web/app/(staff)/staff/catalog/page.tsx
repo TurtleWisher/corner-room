@@ -14,6 +14,8 @@ import { GiftsReview } from "@/components/staff/gifts-review";
 import { FanGiftNotes } from "@/components/staff/fan-gift-notes";
 import { MusicGiftsReview } from "@/components/staff/music-gifts-review";
 import { TeasersReview } from "@/components/staff/teasers-review";
+import { LyricsSyncFinder } from "@/components/staff/lyrics-sync-finder";
+import { QueueJumpBar } from "@/components/staff/queue-jump";
 import { PresaleQueue } from "@/components/staff/presale-review";
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
 import { useWorkspace } from "@/components/workspace-provider";
@@ -386,53 +388,24 @@ function CoverQueue() {
   );
 }
 
-/**
- * Timing a released song's lyrics (owner, 2026-11-01, D-LYRICS-03): paste the song's address or
- * id, then tap along on the next page.
- */
-function TimeLyrics() {
-  const router = useRouter();
-  const [song, setSong] = useState("");
-  const id = song.trim().match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ?? null;
-  return (
-    <Card className="p-5">
-      <h2 className="text-lg font-semibold">Time a song&apos;s lyrics</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        For songs that are out and have lyrics: tap along once per line, and the listening room brings each line in on its time.
-      </p>
-      <form
-        className="mt-3 flex flex-wrap gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (id) router.push(`/staff/catalog/lyrics-timing/${id}`);
-        }}
-      >
-        <Input className="min-w-72 flex-1" value={song} onChange={(e) => setSong(e.target.value)} placeholder="Song page address or id" aria-label="Song page address or id" />
-        <Button type="submit" disabled={!id}>
-          Open
-        </Button>
-      </form>
-    </Card>
-  );
-}
-
 export default function StaffCatalogPage() {
   return (
     <Protected>
       <div className="grid gap-6">
         <h1 className="text-2xl font-bold">Catalog releases</h1>
-        <PresaleQueue />
-        <ChangesQueue />
-        <GiftsReview />
-        <MusicGiftsReview />
-        <FanGiftNotes />
-        <TeasersReview />
-        <ArtistMailReview />
-        <LyricsQueue />
-        <TimeLyrics />
-        <CoverQueue />
+        <QueueJumpBar />
+        <div id="q-presales" className="st-q"><PresaleQueue /></div>
+        <div id="q-changes" className="st-q"><ChangesQueue /></div>
+        <div id="q-gifts" className="st-q"><GiftsReview /></div>
+        <div id="q-music-gifts" className="st-q"><MusicGiftsReview /></div>
+        <div id="q-fan-gifts" className="st-q"><FanGiftNotes /></div>
+        <div id="q-previews" className="st-q"><TeasersReview /></div>
+        <div id="q-mail" className="st-q"><ArtistMailReview /></div>
+        <div id="q-lyrics" className="st-q"><LyricsQueue /></div>
+        <LyricsSyncFinder />
+        <div id="q-covers" className="st-q"><CoverQueue /></div>
         <StartRelease />
-        <Queue />
+        <div id="q-releases" className="st-q"><Queue /></div>
       </div>
     </Protected>
   );

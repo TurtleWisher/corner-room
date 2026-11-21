@@ -83,19 +83,19 @@ STATUS_WORDS = {"DISPATCHED": "Dispatched", "RETURNED": "Returned", "MISSING": "
 # Corner Room's own wording: what sends until the act's is approved, and where editing starts.
 DEFAULTS: dict[str, tuple[str, str]] = {
     "DISPATCHED": (
-        "Your gift from {artist} is on its way",
-        "Hi {first_name},\n\nGood news from {artist}: your gift for buying {music} is on its way to you. "
+        "Your collectible from {artist} is on its way",
+        "Hi {first_name},\n\nGood news from {artist}: your collectible for buying {music} is on its way to you. "
         "It should reach you in the next few days.",
     ),
     "RETURNED": (
-        "Your gift from {artist} couldn't be delivered",
-        "Hi {first_name},\n\nYour gift from {artist}, for buying {music}, couldn't be delivered and came back. "
+        "Your collectible from {artist} couldn't be delivered",
+        "Hi {first_name},\n\nYour collectible from {artist}, for buying {music}, couldn't be delivered and came back. "
         "Please check that the delivery address you gave us is correct. Once your address is right, it will be sent "
         "again. We'll email you again when there's news.",
     ),
     "MISSING": (
-        "Your gift from {artist} is taking longer than expected",
-        "Hi {first_name},\n\nYour gift from {artist}, for buying {music}, hasn't arrived yet. We're finding out "
+        "Your collectible from {artist} is taking longer than expected",
+        "Hi {first_name},\n\nYour collectible from {artist}, for buying {music}, hasn't arrived yet. We're finding out "
         "where it is and will email you as soon as we know more. If it doesn't turn up, we'll send another. You don't "
         "need to do anything for now.",
     ),
@@ -147,8 +147,8 @@ _GIFT_IN_BRACKETS = re.compile(r"[ \t]*\(\{gift\}\)")
 def with_gift(text: str, gift: str) -> str:
     """The gift fill-in, put in before the artist-email writer fills the rest. Owner, 2026-11-21
     (D-CAMPAIGN-09): buyers never read what the gift is before it is in their hands, so `{gift}`
-    reads "gift" and a bracketed "({gift})" is left out (words written before this rule)."""
-    return _GIFT_IN_BRACKETS.sub("", text).replace("{gift}", "gift")
+    reads "collectible" (owner, 2026-11-21: collectibles everywhere) and a bracketed "({gift})" is left out (words written before this rule)."""
+    return _GIFT_IN_BRACKETS.sub("", text).replace("{gift}", "collectible")
 
 
 def first_name(name: str | None) -> str:
@@ -521,7 +521,7 @@ class GiftStatusMailService:
         campaign, rows, artist = await self.gifts._recipients_for_action(ctx, campaign_id, ids or None, None if ids else status)
         due = [r for r in rows if r.status == status and update_waiting(r)]
         if not due:
-            raise AppError("NOTHING_TO_SEND", f"Everyone whose gift is {STATUS_WORDS[status]} has already been told", 409)
+            raise AppError("NOTHING_TO_SEND", f"Everyone whose collectible is {STATUS_WORDS[status]} has already been told", 409)
         version = self._sending(status, (await self._rows(campaign.id)).get(status))
         contact = await self.gifts._contact(due)
         music = await self.gifts._music_line(campaign)
@@ -586,7 +586,7 @@ class GiftStatusMailService:
     async def _clean_send(self, campaign: GiftCampaign, data: dict[str, Any]) -> dict[str, Any]:
         """The words, button, files and people of a request, or the reason they can't go to staff."""
         if campaign.status not in ("ACTIVE", "PAUSED", "ENDED"):
-            raise AppError("INVALID_TRANSITION", "Gifts can be emailed once the campaign has been live", 409)
+            raise AppError("INVALID_TRANSITION", "Collectible emails can go out once the campaign has been live", 409)
         purpose = str(data.get("purpose") or "").upper()
         if purpose not in SEND_PURPOSES:
             raise AppError("VALIDATION_ERROR", "Choose what the email is about", 422)

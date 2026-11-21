@@ -94,7 +94,7 @@ describe("gift status emails (D-CAMPAIGN-05, D-CAMPAIGN-06)", () => {
       artist: "MIZULS",
       music: "Chaya Pore",
       // What the gift is stays a surprise (D-CAMPAIGN-09).
-      gift: "gift",
+      gift: "collectible",
     });
     expect(previewValues(null, "MIZULS", "").first_name).toBe("there");
     const people = [
@@ -106,7 +106,7 @@ describe("gift status emails (D-CAMPAIGN-05, D-CAMPAIGN-06)", () => {
     expect(sentCountLine(0)).toBe("Not sent yet");
     expect(sentCountLine(12)).toBe("Sent 12 times");
     // Owner, 2026-11-21 (D-CAMPAIGN-09): never what the gift is.
-    expect(subjectForAll("Your gift from {artist}, {first_name}: {gift}", "Rumi", "")).toBe("Your gift from Rumi, (their first name): gift");
+    expect(subjectForAll("Your gift from {artist}, {first_name}: {gift}", "Rumi", "")).toBe("Your gift from Rumi, (their first name): collectible");
     expect(subjectForAll("Your gift ({gift}) left", "Rumi", "")).toBe("Your gift left");
   });
 
