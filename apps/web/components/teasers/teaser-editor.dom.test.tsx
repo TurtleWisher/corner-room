@@ -76,6 +76,9 @@ afterEach(cleanup);
 async function open() {
   render(<TeaserEditor teaserId="tz1" releaseId="rel1" />);
   await screen.findByRole("heading", { name: "Choose the part" }, { timeout: 5000 });
+  // Wait until the waveform has loaded too, so nothing still loading can redraw the editor under a
+  // typed time (under a busy full run that took over 1 s and the test typed too early, 2026-11-21).
+  await screen.findByRole("slider", { name: "Preview end" }, { timeout: 5000 });
 }
 
 describe("TeaserEditor", () => {
