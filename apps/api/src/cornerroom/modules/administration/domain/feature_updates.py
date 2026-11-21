@@ -342,6 +342,7 @@ FEATURES: Final[list[dict]] = [
             "made on their own phone or computer. Artists can turn story sharing off for a release."
         ),
         "updates": [
+            {"date": "2026-11-22", "kind": "FIXED", "title": "Lyrics keep turning under the mouse", "details": "Pointing at a line on the lyric ring lights it, and the ring keeps turning instead of stopping."},
             {"date": "2026-11-21", "kind": "IMPROVED", "title": "Quieter corner controls", "details": "The lyrics switch is now one lyrics icon that lights up or is crossed out, and a gift icon beside it opens Give as a gift, its words showing when you point at it."},
             {"date": "2026-11-14", "kind": "IMPROVED", "title": "Title on one line", "details": "The room's big title always fits on one line, however long, getting smaller as needed; no word or bracket is left on a line of its own. The version sits after it, smaller and quieter, as a note on which version it is."},
             {"date": "2026-11-14", "kind": "IMPROVED", "title": "Version after the title", "details": "When the artist gives a song a version, such as Acoustic Demo, the room's big title shows it in brackets after the song's name."},
@@ -401,13 +402,15 @@ FEATURES: Final[list[dict]] = [
         "summary": "Artists add lyrics, staff review them, and staff can time each line.",
         "description": (
             "Artists add song lyrics in Studio; staff review them and later changes. On Catalog > Releases, "
-            "Sync lyrics finds any released song by its title or artist; its page plays the song, staff tap "
-            "Space as each line starts, and they can fix the words on the same page. Fixed words show on the "
-            "song page, in the listening room and in Studio. A spelling or spacing fix keeps every time; "
+            "Sync lyrics finds any released song by its title or artist; its page plays the song, staff hold "
+            "Space while each line is sung (pressing marks its start, letting go its end), and they can fix "
+            "the words on the same page. In the listening room a line goes quiet once its singing ends. Fixed "
+            "words show on the song page, in the listening room and in Studio. A spelling or spacing fix keeps every time; "
             "adding or removing a line keeps the times before it. Staff who run the act wait for approval "
             "like any artist."
         ),
         "updates": [
+            {"date": "2026-11-22", "kind": "NEW", "title": "An end for every line", "details": "Staff hold Space while a line is sung: pressing marks where it starts and letting go where it ends. A quick tap still works, and that line then runs on until the next one. The timeline shows each line as a bar, the lines list shows both times, and the listening room and story videos let a line go quiet once its singing ends. Songs synced before keep their starts and show Needs line ends."},
             {"date": "2026-11-21", "kind": "IMPROVED", "title": "A calmer, smoother sync page", "details": "The song search lists nothing until staff start typing, then unfolds with the typed words lit. The sync page shows the line before and after the one to tap, a timeline of the song with a mark for every tap (click to jump), a list that follows along, and P to play or pause."},
             {"date": "2026-11-21", "kind": "IMPROVED", "title": "Find a song and fix its words while syncing", "details": "Staff search released songs by title or artist instead of pasting an address, and fix the words, spacing and lines on the sync page; one Save keeps the words and their times together, and the song page, listening room and Studio show the fix."},
             {"date": "2026-11-02", "kind": "NEW", "title": "Timed lyrics", "details": "Staff tap along once per line."},

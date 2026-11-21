@@ -605,8 +605,6 @@ main[data-theme="staff"] .st-words:focus {
   background: color-mix(in srgb, var(--cr-highlight) 8%, transparent);
 }
 .st-lines-time {
-  width: 4.5rem;
-  flex: none;
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
@@ -969,15 +967,20 @@ main[data-theme="staff"] .st-search-input {
   transform-origin: left;
   transform: scaleX(var(--at, 0));
 }
-.st-timeline-mark {
+/* D-LYRICS-05: one bar per line, from its start to its end; a line still held grows live. */
+.st-timeline-span {
   position: absolute;
   top: 50%;
-  width: 2px;
-  height: 12px;
-  margin: -6px 0 0 -1px;
-  background: var(--cr-fg);
-  opacity: 0.7;
+  height: 10px;
+  margin-top: -5px;
+  min-width: 2px;
+  background: color-mix(in srgb, var(--cr-fg) 55%, transparent);
+  border-left: 2px solid var(--cr-fg);
   animation: st-mark-in 240ms var(--ease-corner) both;
+}
+.st-timeline-span[data-open] {
+  background: color-mix(in srgb, var(--cr-highlight) 55%, transparent);
+  border-left-color: var(--cr-highlight);
 }
 @keyframes st-mark-in {
   from {
@@ -1058,6 +1061,38 @@ main[data-theme="staff"] .st-search-input {
 .st-play[data-on] {
   border-color: var(--cr-line-strong);
 }
+/* Held down while a line is sung: the key stays lit until it is let go. */
+.st-tap[data-holding] {
+  transform: scale(0.97);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cr-highlight) 45%, transparent), inset 0 0 18px color-mix(in srgb, var(--cr-fg) 22%, transparent);
+}
+.st-sync-line {
+  transition: opacity 320ms ease, color var(--cr-dur-interaction) ease;
+}
+/* The line being held, and a line whose singing has ended (it goes quiet until the next). */
+.st-sync-line[data-holding] {
+  color: var(--cr-highlight);
+}
+.st-sync-line[data-quiet] {
+  opacity: 0.45;
+}
+.st-lines-times {
+  display: grid;
+  width: 4.5rem;
+  flex: none;
+  line-height: 1.2;
+}
+.st-lines-end {
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--cr-fg-muted);
+}
+.st-lines-end[data-open] {
+  font-style: italic;
+}
+.st-lines > li[data-held] .st-lines-end {
+  color: var(--cr-highlight);
+}
 
 /* A time that just arrived flashes once in the lines list. */
 .st-lines {
@@ -1086,7 +1121,7 @@ main[data-theme="staff"] .st-search-input {
     transition: none;
   }
   .st-row-in,
-  .st-timeline-mark,
+  .st-timeline-span,
   .st-stage,
   .st-tap-ring,
   .st-lines > li[data-timed] .st-lines-time {

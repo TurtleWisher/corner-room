@@ -918,12 +918,15 @@ async def review_lyrics(track_id: UUID, body: LyricsReviewIn, ctx: Ctx, svc: Stu
 class LyricTimingsIn(BaseModel):
     # D-LYRICS-03: one start time per sung line, in ms; null removes the timings.
     times_ms: list[int] | None = Field(default=None, max_length=2000)
+    # D-LYRICS-05: when each line ends, one per start; null keeps starts only.
+    ends_ms: list[int] | None = Field(default=None, max_length=2000)
 
 
 class LyricTimingsOut(BaseModel):
     track_id: UUID
     lyrics: str | None
     lyrics_timings_ms: list[int] | None
+    lyrics_line_ends_ms: list[int] | None = None
 
 
 @router.put("/catalog-intake/tracks/{track_id}/lyrics/timings", response_model=LyricTimingsOut)
@@ -931,7 +934,7 @@ async def save_lyric_timings(track_id: UUID, body: LyricTimingsIn, ctx: Ctx, svc
     """Staff: when each line of a released song's lyrics starts (D-LYRICS-03, music.approve)."""
     from cornerroom.modules.music.application.lyrics import LyricsService
 
-    out = await LyricsService(svc.session, svc.settings, svc.clock).save_timings(ctx, track_id, body.times_ms)
+    out = await LyricsService(svc.session, svc.settings, svc.clock).save_timings(ctx, track_id, body.times_ms, body.ends_ms)
     return LyricTimingsOut(**out)
 
 
@@ -942,6 +945,7 @@ class LyricSongOut(BaseModel):
     release_title: str | None
     lines: int
     timed: bool
+    line_ends: bool = False
     lyrics_waiting: bool
 
 
@@ -960,6 +964,7 @@ class StaffLyricsOut(BaseModel):
     profile_name: str | None
     lyrics: str | None
     lyrics_timings_ms: list[int] | None
+    lyrics_line_ends_ms: list[int] | None = None
     lyrics_waiting: bool
     lyrics_pending: str | None
     waiting_from_me: bool
@@ -970,6 +975,8 @@ class StaffLyricsIn(BaseModel):
     lyrics: str | None = Field(default=None, max_length=12000)
     # One start per sung line of the new words, in ms; null keeps the stored times while they fit.
     times_ms: list[int] | None = Field(default=None, max_length=2000)
+    # D-LYRICS-05: when each of those lines ends; only with times_ms.
+    ends_ms: list[int] | None = Field(default=None, max_length=2000)
 
 
 @router.get("/catalog-intake/tracks/{track_id}/lyrics", response_model=StaffLyricsOut)
@@ -985,7 +992,9 @@ async def staff_edit_lyrics(track_id: UUID, body: StaffLyricsIn, ctx: Ctx, svc: 
     """Staff: change a released song's words (and their times) from the sync page (D-LYRICS-04)."""
     from cornerroom.modules.music.application.lyrics import LyricsService
 
-    out = await LyricsService(svc.session, svc.settings, svc.clock).staff_edit(ctx, track_id, body.lyrics, body.times_ms)
+    out = await LyricsService(svc.session, svc.settings, svc.clock).staff_edit(
+        ctx, track_id, body.lyrics, body.times_ms, body.ends_ms
+    )
     return StaffLyricsOut(**out)
 
 

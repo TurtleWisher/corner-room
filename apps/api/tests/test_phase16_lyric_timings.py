@@ -8,7 +8,7 @@ import pytest
 from httpx import AsyncClient
 
 from cornerroom.infra.errors import AppError
-from cornerroom.modules.music.application.lyrics import clean_timings, sung_lines, timings_for
+from cornerroom.modules.music.application.lyrics import clean_ends, clean_timings, ends_for, sung_lines, timings_for
 from tests.auth_helpers import bearer, register_and_login
 from tests.test_audio_phase4_studio import _artist_for
 from tests.test_audio_phase5_intake import _orgs, _staff_with
@@ -28,6 +28,23 @@ def test_one_time_per_sung_line_never_going_back() -> None:
     assert timings_for("One\ntwo", [0, 1, 2]) is None
     assert timings_for(lyrics, None) is None
 
+
+
+def test_every_line_ends_after_it_starts_and_before_the_next() -> None:
+    """D-LYRICS-05: one end per line, after its start, never after the next line's start."""
+    lyrics = "One\ntwo\n\nThree"
+    assert clean_ends([900, 2000, 5000], [0, 1500, 3000]) == [900, 2000, 5000]
+    # Back to back is fine: a line may end the moment the next starts.
+    assert clean_ends([1500, 3000, 3100], [0, 1500, 3000]) == [1500, 3000, 3100]
+    for bad in ([900, 2000], [0, 2000, 5000], [1600, 2000, 5000], [900, 1500, 5000]):
+        with pytest.raises(AppError):
+            clean_ends(bad, [0, 1500, 3000])
+    assert ends_for(lyrics, [0, 1500, 3000], [900, 2000, 5000]) == [900, 2000, 5000]
+    # Ends that no longer fit their starts (or starts that no longer fit the words) are not used.
+    assert ends_for(lyrics, [0, 1500, 3000], [900, 2000]) is None
+    assert ends_for(lyrics, [0, 1500, 3000], [1600, 2000, 5000]) is None
+    assert ends_for("One\ntwo", [0, 1500, 3000], [900, 2000, 5000]) is None
+    assert ends_for(lyrics, [0, 1500, 3000], None) is None
 
 async def _review_lyrics(client: AsyncClient, token: str, reviewer: str, track_id: str, text: str) -> None:
     await client.put(f"/api/v1/studio/tracks/{track_id}/lyrics", headers=bearer(token), json={"lyrics": text})
@@ -73,6 +90,24 @@ async def test_staff_time_a_released_songs_lyrics(client: AsyncClient) -> None:
     assert (await client.get(f"/api/v1/tracks/{track_id}")).json()["lyrics_timings_ms"] == [12000, 15500, 21000]
     await _review_lyrics(client, token, reviewer, track_id, "First line\nSecond line\n\nThird line\nFourth line")
     assert (await client.get(f"/api/v1/tracks/{track_id}")).json()["lyrics_timings_ms"] is None
+
+    # D-LYRICS-05: each line's end goes with the starts; ends that don't fit are refused.
+    four = [1000, 2000, 3000, 4000]
+    bad_ends = await client.put(url, headers=bearer(reviewer), json={"times_ms": four, "ends_ms": [1500, 2500, 3500]})
+    assert bad_ends.status_code == 422
+    ended = await client.put(url, headers=bearer(reviewer), json={"times_ms": four, "ends_ms": [1800, 2600, 4000, 6000]})
+    assert ended.status_code == 200, ended.text
+    assert ended.json()["lyrics_line_ends_ms"] == [1800, 2600, 4000, 6000]
+    public = (await client.get(f"/api/v1/tracks/{track_id}")).json()
+    assert public["lyrics_timings_ms"] == four and public["lyrics_line_ends_ms"] == [1800, 2600, 4000, 6000]
+    # New starts without ends drop the old ends; a new line count drops both.
+    starts_only = (await client.put(url, headers=bearer(reviewer), json={"times_ms": [1100, 2000, 3000, 4000]})).json()
+    assert starts_only["lyrics_line_ends_ms"] is None
+    await client.put(url, headers=bearer(reviewer), json={"times_ms": four, "ends_ms": [1800, 2600, 4000, 6000]})
+    await _review_lyrics(client, token, reviewer, track_id, "First line\nSecond line\n\nThird line")
+    dropped = (await client.get(f"/api/v1/tracks/{track_id}")).json()
+    assert dropped["lyrics_timings_ms"] is None and dropped["lyrics_line_ends_ms"] is None
+    await _review_lyrics(client, token, reviewer, track_id, "First line\nSecond line\n\nThird line\nFourth line")
 
     # Removing them goes back to pacing.
     await client.put(url, headers=bearer(reviewer), json={"times_ms": [0, 1, 2, 3]})
@@ -135,12 +170,26 @@ async def test_staff_find_a_song_and_fix_its_words_while_timing(client: AsyncCli
     body = saved.json()
     assert body["lyrics"] == "Line one\nLine two, fixed\n\nLine three\nLine four"
     assert body["lyrics_timings_ms"] == [1000, 2000, 3000, 4000] and not body["lyrics_waiting"]
+    assert body["lyrics_line_ends_ms"] is None
+
+    # D-LYRICS-05: the sync page saves each line's end with its start; a spacing fix keeps both.
+    ends = [1800, 2900, 3900, 6500]
+    with_ends = await client.put(
+        url, headers=bearer(reviewer),
+        json={"lyrics": body["lyrics"], "times_ms": [1000, 2000, 3000, 4000], "ends_ms": ends},
+    )
+    assert with_ends.status_code == 200, with_ends.text
+    assert with_ends.json()["lyrics_line_ends_ms"] == ends
+    listed = (await client.get(songs, headers=bearer(reviewer), params={"q": "searchable"})).json()
+    assert listed[0]["timed"] and listed[0]["line_ends"]
+    wrong = {"lyrics": body["lyrics"], "times_ms": [1000, 2000, 3000, 4000], "ends_ms": [900, 2900, 3900, 6500]}
+    assert (await client.put(url, headers=bearer(reviewer), json=wrong)).status_code == 422
     public = (await client.get(f"/api/v1/tracks/{track_id}")).json()
     assert public["lyrics"] == body["lyrics"] and public["lyrics_timings_ms"] == [1000, 2000, 3000, 4000]
 
     # A spacing-only fix keeps the times; times that don't fit the new words are refused.
     spaced = (await client.put(url, headers=bearer(reviewer), json={"lyrics": "Line one\nLine two, fixed\nLine three\n\nLine four"})).json()
-    assert spaced["lyrics_timings_ms"] == [1000, 2000, 3000, 4000]
+    assert spaced["lyrics_timings_ms"] == [1000, 2000, 3000, 4000] and spaced["lyrics_line_ends_ms"] == ends
     assert (await client.put(url, headers=bearer(reviewer), json={"lyrics": "Only one", "times_ms": [0, 1]})).status_code == 422
 
     # An artist's change waiting is reviewed first, never silently replaced.

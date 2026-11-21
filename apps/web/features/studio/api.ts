@@ -483,13 +483,19 @@ export function fetchLyricsQueue(): Promise<LyricsReviewItem[]> {
 }
 
 /** D-LYRICS-03 (staff, music.approve): when each sung line of a released song starts, or null to remove. */
-export type LyricTimings = { track_id: string; lyrics: string | null; lyrics_timings_ms: number[] | null };
+export type LyricTimings = {
+  track_id: string;
+  lyrics: string | null;
+  lyrics_timings_ms: number[] | null;
+  /** D-LYRICS-05: when each line ends, one per start; null when only the starts were tapped. */
+  lyrics_line_ends_ms?: number[] | null;
+};
 
-export function saveLyricTimings(trackId: string, timesMs: number[] | null): Promise<LyricTimings> {
+export function saveLyricTimings(trackId: string, timesMs: number[] | null, endsMs: number[] | null = null): Promise<LyricTimings> {
   return apiFetch<LyricTimings>(`/api/v1/catalog-intake/tracks/${trackId}/lyrics/timings`, {
     method: "PUT",
     headers: json,
-    body: JSON.stringify({ times_ms: timesMs }),
+    body: JSON.stringify({ times_ms: timesMs, ends_ms: timesMs ? endsMs : null }),
     retry: false,
   });
 }
@@ -502,6 +508,8 @@ export type LyricSong = {
   release_title: string | null;
   lines: number;
   timed: boolean;
+  /** D-LYRICS-05: every timed line also has its end. */
+  line_ends?: boolean;
   lyrics_waiting: boolean;
 };
 
@@ -518,6 +526,8 @@ export type StaffLyrics = {
   profile_name: string | null;
   lyrics: string | null;
   lyrics_timings_ms: number[] | null;
+  /** D-LYRICS-05: when each line ends; null when only the starts were tapped. */
+  lyrics_line_ends_ms?: number[] | null;
   lyrics_waiting: boolean;
   lyrics_pending: string | null;
   waiting_from_me: boolean;
@@ -529,11 +539,16 @@ export function fetchStaffLyrics(trackId: string): Promise<StaffLyrics> {
 }
 
 /** New words for a released song, with one time per sung line when every line is timed. */
-export function saveStaffLyrics(trackId: string, lyrics: string | null, timesMs: number[] | null): Promise<StaffLyrics> {
+export function saveStaffLyrics(
+  trackId: string,
+  lyrics: string | null,
+  timesMs: number[] | null,
+  endsMs: number[] | null = null,
+): Promise<StaffLyrics> {
   return apiFetch<StaffLyrics>(`/api/v1/catalog-intake/tracks/${trackId}/lyrics`, {
     method: "PUT",
     headers: json,
-    body: JSON.stringify({ lyrics, times_ms: timesMs }),
+    body: JSON.stringify({ lyrics, times_ms: timesMs, ends_ms: timesMs ? endsMs : null }),
     retry: false,
   });
 }
