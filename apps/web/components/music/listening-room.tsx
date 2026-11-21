@@ -46,9 +46,11 @@ import { coverSrcSet, coverUrl } from "@/lib/cover-view";
 import {
   floatingLines,
   lyricAgeAt,
+  lyricEnds,
   lyricIndexAt,
   lyricLines,
   lyricTimes,
+  lyricVoice,
   ringPose,
   type RingAxis,
   type RingPlane,
@@ -395,9 +397,18 @@ function useOneLineFit(text: string) {
  * lines are paced across the song, an estimate. Decorative here: the song page has the full
  * lyrics for reading and screen readers.
  */
-type RoomLyrics = { trackId: string | null; loaded: boolean; lines: string[]; times: number[] | null; on: boolean; toggle: () => void };
-const LyricsContext = createContext<RoomLyrics>({ trackId: null, loaded: false, lines: [], times: null, on: false, toggle: () => {} });
-type LoadedLyrics = { text: string | null; timingsMs: number[] | null; version: string | null };
+type RoomLyrics = {
+  trackId: string | null;
+  loaded: boolean;
+  lines: string[];
+  times: number[] | null;
+  /** D-LYRICS-05: when each timed line's singing ends (seconds), else null. */
+  ends: number[] | null;
+  on: boolean;
+  toggle: () => void;
+};
+const LyricsContext = createContext<RoomLyrics>({ trackId: null, loaded: false, lines: [], times: null, ends: null, on: false, toggle: () => {} });
+type LoadedLyrics = { text: string | null; timingsMs: number[] | null; endsMs: number[] | null; version: string | null };
 const lyricsCache = new Map<string, Promise<LoadedLyrics>>();
 
 /** A released song's lyrics and version, once per song per page view (public read, no sign-in needed). */
@@ -405,8 +416,13 @@ function loadLyrics(trackId: string): Promise<LoadedLyrics> {
   let hit = lyricsCache.get(trackId);
   if (!hit) {
     hit = fetchTrack(trackId, { skipAuth: true })
-      .then((t) => ({ text: t.lyrics ?? null, timingsMs: t.lyrics_timings_ms ?? null, version: t.version_title ?? null }))
-      .catch(() => ({ text: null, timingsMs: null, version: null }));
+      .then((t) => ({
+        text: t.lyrics ?? null,
+        timingsMs: t.lyrics_timings_ms ?? null,
+        endsMs: t.lyrics_line_ends_ms ?? null,
+        version: t.version_title ?? null,
+      }))
+      .catch(() => ({ text: null, timingsMs: null, endsMs: null, version: null }));
     lyricsCache.set(trackId, hit);
   }
   return hit;
@@ -440,7 +456,9 @@ function useRoomLyrics(trackId: string | null): RoomLyrics {
   const timingsMs = mine?.timingsMs ?? null;
   const lines = useMemo(() => lyricLines(text), [text]);
   const times = useMemo(() => lyricTimes(lines.length, timingsMs), [lines, timingsMs]);
-  return { trackId, loaded: mine !== null, lines, times, on, toggle };
+  const endsMs = mine?.endsMs ?? null;
+  const ends = useMemo(() => lyricEnds(times, endsMs), [times, endsMs]);
+  return { trackId, loaded: mine !== null, lines, times, ends, on, toggle };
 }
 
 /** The lyrics toggle beside the close button, on the room's one lyrics state. */
@@ -509,7 +527,9 @@ const TAP_HOLD_MS = 2600;
  * Motion: React renders only when the line on show changes. One animation frame loop moves the
  * (at most four) lines with transform and opacity, timing them between the player's progress
  * reports; it stops when playback pauses and the lines have settled, and the browser stops it in
- * a hidden tab. Pointing at a line (or tapping it) holds it in place and lights it.
+ * a hidden tab. Pointing at a line lights it and leans it towards the pointer while the ring keeps
+ * turning (owner, 2026-11-21: the ring never stops under the mouse); tapping one on a touch screen
+ * holds it in place for a moment so it can be read.
  */
 function LyricOrbit({ axis }: { axis: RingAxis | "auto" }) {
   const lyrics = useContext(LyricsContext);
@@ -517,6 +537,7 @@ function LyricOrbit({ axis }: { axis: RingAxis | "auto" }) {
   const compact = useCompactRoom();
   const count = lyrics.lines.length;
   const times = lyrics.times;
+  const ends = lyrics.ends;
   const index = useSyncExternalStore(
     p.progress.subscribe,
     () => lyricIndexAt(count, p.progress.get().position, p.progress.get().duration, times),
@@ -573,7 +594,9 @@ function LyricOrbit({ axis }: { axis: RingAxis | "auto" }) {
         // Reduced motion: only the line now, still, where it is sung.
         const at = reduced ? 0.5 : (st.held ?? age);
         const pose = ringPose(key, at, shape, { cover: coverW, coverHeight: coverH, lineWidth: st.w, lineHeight: st.h });
-        const opacity = reduced ? (key === index ? 1 : 0) : pose.opacity;
+        // D-LYRICS-05: once its singing ends, a line goes quiet until the next one comes in.
+        const voice = lyricVoice(times, ends, key, t);
+        const opacity = (reduced ? (key === index ? 1 : 0) : pose.opacity) * voice;
         const k = fresh || reduced ? 1 : ease;
         st.x += (pose.x - st.x) * k;
         st.y += (pose.y - st.y) * k;
@@ -617,7 +640,7 @@ function LyricOrbit({ axis }: { axis: RingAxis | "auto" }) {
       unsubscribe();
       resize?.disconnect();
     };
-  }, [show, index, playing, shape, count, times, lyrics.trackId, p.progress]);
+  }, [show, index, playing, shape, count, times, ends, lyrics.trackId, p.progress]);
 
   if (!show) return null;
 
@@ -625,6 +648,10 @@ function LyricOrbit({ axis }: { axis: RingAxis | "auto" }) {
     const st = lines.current.get(el.dataset.line ?? "");
     const { position, duration } = p.progress.get();
     if (st && st.held === null) st.held = lyricAgeAt(Number(el.dataset.index), count, position, duration, times);
+    el.dataset.focus = "";
+  };
+  // Mouse: lit only, the line rides on round the ring.
+  const light = (el: HTMLElement) => {
     el.dataset.focus = "";
   };
   const release = (el: HTMLElement) => {
@@ -647,7 +674,7 @@ function LyricOrbit({ axis }: { axis: RingAxis | "auto" }) {
             className="lr-lyric"
             style={{ opacity: 0 }}
             onPointerEnter={(e) => {
-              if (e.pointerType === "mouse") hold(e.currentTarget);
+              if (e.pointerType === "mouse") light(e.currentTarget);
             }}
             onPointerLeave={(e) => {
               if (e.pointerType === "mouse") release(e.currentTarget);

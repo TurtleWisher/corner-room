@@ -137,6 +137,13 @@ describe("storyFrame", () => {
     expect(f.sung).toBeCloseTo(0.375, 3);
   });
 
+  it("lights a line across its sung time when its end was tapped (D-LYRICS-05)", () => {
+    // "two" is sung from 14 s to 16 s: at 15.5 s it is three quarters lit, after 16 s fully.
+    const ended = { ...base, lyricsEndsMs: [12_000, 16_000, 20_000, 25_000] };
+    expect(storyFrame(ended, 6.5).sung).toBeCloseTo(0.75, 3);
+    expect(storyFrame(ended, 7.5).sung).toBe(1);
+  });
+
   it("glides the stack up as a new line starts", () => {
     const f = storyFrame(base, 5.05); // 14.05 s, just after "two" starts
     const two = f.lines.find((l) => l.text === "two");

@@ -65,7 +65,7 @@ const PREVIEW_SCALE = 0.5;
 const STILL_AT = 1.4;
 const LOGO = "/brand/logo/corner-room-logo-mono-light.svg";
 
-type Loaded = { song: AudioBuffer; gainDb: number; assets: StoryAssets; lyrics: string | null; timings: number[] | null; songMs: number };
+type Loaded = { song: AudioBuffer; gainDb: number; assets: StoryAssets; lyrics: string | null; timings: number[] | null; ends: number[] | null; songMs: number };
 type Made = { url: string; file: File; mp4: boolean };
 
 async function loadImage(src: string): Promise<HTMLImageElement | null> {
@@ -153,7 +153,8 @@ function Composer({ track, check, onClose }: { track: PlayerTrack; check: StoryC
       const timings = info?.lyrics_timings_ms ?? null;
       const songMs = Math.round(song.song.duration * 1000);
       setStartMs(defaultStartMs(songMs, check.clip_max_ms, timings));
-      setLoaded({ song: song.song, gainDb: song.gainDb, assets: storyAssets(cover, logo, fonts), lyrics: info?.lyrics ?? null, timings, songMs });
+      const ends = info?.lyrics_line_ends_ms ?? null;
+      setLoaded({ song: song.song, gainDb: song.gainDb, assets: storyAssets(cover, logo, fonts), lyrics: info?.lyrics ?? null, timings, ends, songMs });
     })().catch((err) => live && setProblem(friendlyError(err, "We couldn't get the song ready. Please try again.")));
     return () => {
       live = false;
@@ -175,6 +176,7 @@ function Composer({ track, check, onClose }: { track: PlayerTrack; check: StoryC
       artist,
       lyrics: loaded.lyrics,
       lyricsTimingsMs: loaded.timings,
+      lyricsEndsMs: loaded.ends,
       songMs: loaded.songMs,
       startMs: window_.startMs,
       endMs: window_.endMs,

@@ -47,12 +47,86 @@ export function carryTimes(before: readonly string[], after: readonly string[], 
 
 export type SongMark = { label: string; tone: "ok" | "todo" | "wait" | "none" };
 
-/** One short state for a song in the search list. */
-export function songMark(song: Pick<LyricSong, "lines" | "timed" | "lyrics_waiting">): SongMark {
+/** One short state for a song in the search list. A song synced before line ends existed
+ * (D-LYRICS-05) still needs its ends. */
+export function songMark(song: Pick<LyricSong, "lines" | "timed" | "lyrics_waiting"> & { line_ends?: boolean }): SongMark {
   if (song.lyrics_waiting) return { label: "Change waiting", tone: "wait" };
   if (song.lines === 0) return { label: "No lyrics", tone: "none" };
+  if (song.timed && song.line_ends === false) return { label: "Needs line ends", tone: "todo" };
   if (song.timed) return { label: "Synced", tone: "ok" };
   return { label: "Not synced", tone: "todo" };
+}
+
+/*
+ * Line ends (owner, 2026-11-21, D-LYRICS-05). Staff hold the tap key while a line is sung: pressing
+ * starts the line, letting go ends it. A quick tap instead leaves the line open, and it ends when
+ * the next line starts (one more tap after the last line ends the song's last line). `ends` is
+ * always as long as `times`, or one shorter while the last tapped line is still open.
+ */
+export type Taps = { times: number[]; ends: number[] };
+
+/** Shorter than this a press is a tap, not a hold: the line stays open until the next press. */
+export const HOLD_MS = 220;
+
+/** The last tapped line has no end yet. */
+export function isOpen(t: Taps): boolean {
+  return t.ends.length < t.times.length;
+}
+
+/** The ends a song loaded with start times only gets: each line until the next one starts, the
+ * last one open for one more tap. Kept ends are used as they are. */
+export function loadTaps(times: readonly number[] | null, ends: readonly number[] | null): Taps {
+  const t = [...(times ?? [])];
+  if (ends && ends.length === t.length) return { times: t, ends: [...ends] };
+  return { times: t, ends: t.slice(1) };
+}
+
+/** A press of the tap key: ends the open line here, then starts the next untimed line (never
+ * before the line before it ended). */
+export function pressTap(t: Taps, atMs: number, lineCount: number): Taps {
+  const at = Math.round(Math.max(0, atMs));
+  const ends = [...t.ends];
+  if (isOpen(t)) ends.push(Math.max(t.times[t.times.length - 1] + 1, at));
+  if (t.times.length >= lineCount) return { times: [...t.times], ends };
+  const floor = Math.max(t.times[t.times.length - 1] ?? 0, ends[ends.length - 1] ?? 0);
+  return { times: [...t.times, Math.max(floor, at)], ends };
+}
+
+/** Letting go: a hold ends the line it started; a quick tap leaves it open. */
+export function releaseTap(t: Taps, pressedAtMs: number, atMs: number): Taps {
+  if (!isOpen(t) || atMs - pressedAtMs < HOLD_MS) return t;
+  const start = t.times[t.times.length - 1];
+  return { times: t.times, ends: [...t.ends, Math.max(start + 1, Math.round(atMs))] };
+}
+
+/** Taps can be pressed now: a line still to start, or the last one still to end. */
+export function canPress(t: Taps, lineCount: number): boolean {
+  return lineCount > 0 && (t.times.length < lineCount || isOpen(t));
+}
+
+/** Every line has its start and its end. */
+export function tapsDone(t: Taps, lineCount: number): boolean {
+  return lineCount > 0 && t.times.length === lineCount && t.ends.length === lineCount;
+}
+
+/** Back to before line `i` (a retake, or undo of the last line). */
+export function tapsBefore(t: Taps, i: number): Taps {
+  const n = Math.max(0, i);
+  return { times: t.times.slice(0, n), ends: t.ends.slice(0, n) };
+}
+
+/** Every start and end moved by `deltaMs`, never before the song starts and never ending at or
+ * before its own start. */
+export function shiftTaps(t: Taps, deltaMs: number): Taps {
+  const times = t.times.map((v) => Math.max(0, Math.round(v + deltaMs)));
+  return { times, ends: t.ends.map((v, i) => Math.max(times[i] + 1, Math.round(v + deltaMs))) };
+}
+
+/** Where each line is sung along the song, 0 to 1 (`to` null while it is still open). */
+export function tapSpans(t: Taps, durationS: number): { from: number; to: number | null }[] {
+  if (!(durationS > 0)) return [];
+  const at = (ms: number) => Math.min(1, Math.max(0, ms / 1000 / durationS));
+  return t.times.map((s, i) => ({ from: at(s), to: t.ends[i] === undefined ? null : at(t.ends[i]) }));
 }
 
 /** "Artist · Release" under a song's title, skipping what is unknown or the same as the title. */
@@ -74,14 +148,19 @@ export function saveAction(o: {
   times: readonly number[];
   stored: readonly number[] | null;
   approvesAtOnce: boolean;
+  /** D-LYRICS-05: each line's end; every line needs one before the times are saved. */
+  ends?: readonly number[];
+  storedEnds?: readonly number[] | null;
 }): SaveAction {
   const lines = lyricLines(tidyLyrics(o.draft));
-  const allTimed = lines.length > 0 && o.times.length === lines.length;
+  const allTimed = lines.length > 0 && o.times.length === lines.length && (o.ends === undefined || o.ends.length === lines.length);
   if (wordsChanged(o.draft, o.live)) {
     if (!o.approvesAtOnce) return { label: "Send words for approval", words: true, times: false };
     return { label: allTimed ? "Save words and timings" : "Save words", words: true, times: allTimed };
   }
-  const timesChanged = JSON.stringify(o.times) !== JSON.stringify(o.stored ?? []);
+  const timesChanged =
+    JSON.stringify(o.times) !== JSON.stringify(o.stored ?? []) ||
+    (o.ends !== undefined && JSON.stringify(o.ends) !== JSON.stringify(o.storedEnds ?? []));
   if (allTimed && timesChanged) return { label: "Save timings", words: false, times: true };
   return null;
 }
@@ -110,12 +189,6 @@ export function matchParts(text: string, q: string): MatchPart[] {
     else parts.push({ text: text[i], hit: hit[i] });
   }
   return parts;
-}
-
-/** Where each tap sits along the song, 0 to 1, for the marks on the sync page's timeline. */
-export function tapMarks(timesMs: readonly number[], durationS: number): number[] {
-  if (!(durationS > 0)) return [];
-  return timesMs.map((t) => Math.min(1, Math.max(0, t / 1000 / durationS)));
 }
 
 /** The line before, the one on show and the next, for the sync page's three-line view. */

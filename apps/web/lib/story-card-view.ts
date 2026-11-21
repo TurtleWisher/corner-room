@@ -7,7 +7,7 @@
  * time, so the preview and the video are the same frames.
  */
 
-import { lyricAgeAt, lyricIndexAt, lyricLines, lyricTimes } from "@/lib/lyrics-view";
+import { lyricAgeAt, lyricEnds, lyricIndexAt, lyricLines, lyricSungShare, lyricTimes } from "@/lib/lyrics-view";
 
 export const STORY_W = 1080;
 export const STORY_H = 1920;
@@ -114,6 +114,8 @@ export type StoryInput = {
   /** The song's own lyrics text, null without lyrics. */
   lyrics: string | null;
   lyricsTimingsMs: readonly number[] | null;
+  /** D-LYRICS-05: when each line ends; the line then lights from its start to its end. */
+  lyricsEndsMs?: readonly number[] | null;
   songMs: number;
   startMs: number;
   endMs: number;
@@ -164,7 +166,9 @@ export function storyFrame(input: StoryInput, t: number): StoryFrame {
       if (i < 0 || i >= lines.length || (index < 0 && i < now)) continue;
       out.push({ text: lines[i], age: i - now + glide });
     }
-    if (times && index >= 0 && Number.isFinite(ageNow)) sung = Math.min(1, Math.max(0, ageNow));
+    if (times && index >= 0 && Number.isFinite(ageNow)) {
+      sung = lyricSungShare(times, lyricEnds(times, input.lyricsEndsMs), now, songS) ?? Math.min(1, Math.max(0, ageNow));
+    }
   }
   const levels = input.levels;
   const glow = levels && levels.length > 0 ? levels[Math.min(levels.length - 1, Math.floor(time * STORY_FPS))] : 0.4;

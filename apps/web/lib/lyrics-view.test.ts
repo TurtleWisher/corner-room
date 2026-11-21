@@ -195,3 +195,35 @@ describe("timed lines (D-LYRICS-03)", () => {
     expect(lyricLrc(["One", "Two", "Three"], [5000, 65400])).toBe("[00:05.00]One\n[01:05.40]Two");
   });
 });
+
+describe("line ends (D-LYRICS-05)", () => {
+  const times = [10, 14, 20];
+
+  it("takes the ends only when they fit the starts", async () => {
+    const { lyricEnds } = await import("./lyrics-view");
+    expect(lyricEnds(times, [12000, 16000, 23000])).toEqual([12, 16, 23]);
+    expect(lyricEnds(times, [15000, 16000, 23000])).toBeNull();
+    expect(lyricEnds(times, [10000, 16000, 23000])).toBeNull();
+    expect(lyricEnds(times, [12000, 14000])).toBeNull();
+    expect(lyricEnds(times, null)).toBeNull();
+    expect(lyricEnds(null, [12000, 14000, 23000])).toBeNull();
+  });
+
+  it("a line goes quiet once its singing ends, and lights only across its sung time", async () => {
+    const { lyricVoice, lyricSungShare, QUIET_LINE } = await import("./lyrics-view");
+    const ends = [12, 16, 23];
+    expect(lyricVoice(times, ends, 0, 11)).toBe(1);
+    expect(lyricVoice(times, ends, 0, 12)).toBe(1);
+    expect(lyricVoice(times, ends, 0, 13)).toBeCloseTo(QUIET_LINE);
+    expect(lyricVoice(times, null, 0, 13)).toBe(1);
+    expect(lyricSungShare(times, ends, 0, 11)).toBe(0.5);
+    expect(lyricSungShare(times, ends, 0, 13)).toBe(1);
+    expect(lyricSungShare(times, null, 0, 11)).toBeNull();
+  });
+
+  it("marks a pause in the lyric file with an empty line", async () => {
+    const { lyricLrc } = await import("./lyrics-view");
+    expect(lyricLrc(["One", "Two"], [5000, 8000], [8000, 9500])).toBe("[00:05.00]One\n[00:08.00]Two\n[00:09.50]");
+    expect(lyricLrc(["One", "Two"], [5000, 8000], [6000])).toBe("[00:05.00]One\n[00:06.00]\n[00:08.00]Two");
+  });
+});

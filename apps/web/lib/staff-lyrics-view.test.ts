@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { carryTimes, lineWindow, matchParts, saveAction, searchWords, songContext, songIdIn, songMark, tapMarks, tidyLyrics, wordsChanged } from "./staff-lyrics-view";
+import { carryTimes, lineWindow, matchParts, saveAction, searchWords, songContext, songIdIn, songMark, tidyLyrics, wordsChanged } from "./staff-lyrics-view";
 
 describe("staff lyrics sync helpers", () => {
   it("reads a song id out of a pasted address", () => {
@@ -64,14 +64,70 @@ describe("finder and sync page helpers (owner, 2026-11-21)", () => {
     expect(matchParts("", "x")).toEqual([]);
   });
 
-  it("places taps along the song and keeps them on it", () => {
-    expect(tapMarks([0, 30000, 90000], 60)).toEqual([0, 0.5, 1]);
-    expect(tapMarks([1000], 0)).toEqual([]);
-  });
-
   it("gives the line before, on show and next", () => {
     expect(lineWindow(["a", "b", "c"], 1)).toEqual({ before: "a", now: "b", after: "c" });
     expect(lineWindow(["a", "b"], 0)).toEqual({ before: null, now: "a", after: "b" });
     expect(lineWindow(["a"], -1)).toEqual({ before: null, now: null, after: "a" });
+  });
+});
+
+describe("line ends (D-LYRICS-05)", () => {
+  it("a hold starts the line on press and ends it on letting go", async () => {
+    const { pressTap, releaseTap, tapsDone, canPress } = await import("./staff-lyrics-view");
+    let t = pressTap({ times: [], ends: [] }, 1000.4, 2);
+    expect(t).toEqual({ times: [1000], ends: [] });
+    t = releaseTap(t, 1000, 2600);
+    expect(t).toEqual({ times: [1000], ends: [2600] });
+    t = releaseTap(pressTap(t, 3000, 2), 3000, 4100);
+    expect(t).toEqual({ times: [1000, 3000], ends: [2600, 4100] });
+    expect(tapsDone(t, 2)).toBe(true);
+    expect(canPress(t, 2)).toBe(false);
+  });
+
+  it("a quick tap leaves the line open until the next press, and one more tap ends the last line", async () => {
+    const { pressTap, releaseTap, isOpen, tapsDone, canPress } = await import("./staff-lyrics-view");
+    let t = releaseTap(pressTap({ times: [], ends: [] }, 1000, 2), 1000, 1080);
+    expect(isOpen(t)).toBe(true);
+    t = releaseTap(pressTap(t, 3000, 2), 3000, 3050);
+    expect(t).toEqual({ times: [1000, 3000], ends: [3000] });
+    expect(canPress(t, 2)).toBe(true);
+    t = pressTap(t, 5200, 2);
+    expect(t).toEqual({ times: [1000, 3000], ends: [3000, 5200] });
+    expect(tapsDone(t, 2)).toBe(true);
+  });
+
+  it("never starts a line before the one before it ended", async () => {
+    const { pressTap } = await import("./staff-lyrics-view");
+    expect(pressTap({ times: [1000], ends: [2600] }, 2500, 3)).toEqual({ times: [1000, 2600], ends: [2600] });
+    expect(pressTap({ times: [1000], ends: [] }, 1000, 3)).toEqual({ times: [1000, 1001], ends: [1001] });
+  });
+
+  it("loads start-only songs as lines that end when the next starts, the last one open", async () => {
+    const { loadTaps } = await import("./staff-lyrics-view");
+    expect(loadTaps([1000, 3000, 5000], null)).toEqual({ times: [1000, 3000, 5000], ends: [3000, 5000] });
+    expect(loadTaps([1000, 3000], [2000, 4000])).toEqual({ times: [1000, 3000], ends: [2000, 4000] });
+    expect(loadTaps(null, null)).toEqual({ times: [], ends: [] });
+  });
+
+  it("retakes, nudges and draws the sung spans", async () => {
+    const { tapsBefore, shiftTaps, tapSpans } = await import("./staff-lyrics-view");
+    const t = { times: [1000, 3000, 5000], ends: [2000, 4000] };
+    expect(tapsBefore(t, 1)).toEqual({ times: [1000], ends: [2000] });
+    expect(shiftTaps({ times: [50, 3000], ends: [60, 4000] }, -100)).toEqual({ times: [0, 2900], ends: [1, 3900] });
+    expect(tapSpans(t, 10)).toEqual([
+      { from: 0.1, to: 0.2 },
+      { from: 0.3, to: 0.4 },
+      { from: 0.5, to: null },
+    ]);
+  });
+
+  it("saves the times only once every line has its end, and an end change is a change", () => {
+    const base = { draft: "a\nb", live: "a\nb", stored: [1, 5], approvesAtOnce: true };
+    expect(saveAction({ ...base, times: [1, 5], ends: [3], storedEnds: null })).toBeNull();
+    expect(saveAction({ ...base, times: [1, 5], ends: [3, 7], storedEnds: null })?.label).toBe("Save timings");
+    expect(saveAction({ ...base, times: [1, 5], ends: [3, 7], storedEnds: [3, 7] })).toBeNull();
+    expect(saveAction({ ...base, times: [1, 5], ends: [4, 7], storedEnds: [3, 7] })?.label).toBe("Save timings");
+    expect(songMark({ lines: 4, timed: true, line_ends: false, lyrics_waiting: false }).label).toBe("Needs line ends");
+    expect(songMark({ lines: 4, timed: true, line_ends: true, lyrics_waiting: false }).label).toBe("Synced");
   });
 });

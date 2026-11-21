@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from cornerroom.api.deps import get_auth_context, get_optional_auth_context, music_service
 from cornerroom.kernel.auth_context import AuthContext
-from cornerroom.modules.music.application.lyrics import timings_for
+from cornerroom.modules.music.application.lyrics import ends_for, timings_for
 from cornerroom.modules.music.application.service import MusicService
 from cornerroom.modules.music.domain.models import Credit, Track, TrackVersion
 
@@ -35,6 +35,8 @@ class TrackOut(BaseModel):
     lyrics: str | None = None
     # D-LYRICS-03: when each sung line starts (ms), with the lyrics; null when not timed.
     lyrics_timings_ms: list[int] | None = None
+    # D-LYRICS-05: when each of those lines ends (ms); null when only the starts were tapped.
+    lyrics_line_ends_ms: list[int] | None = None
     # D-VERSION-01: the song's version ("Acoustic Demo"), single-track reads only; the song page and
     # the listening room show it in brackets after the title.
     version_title: str | None = None
@@ -58,6 +60,8 @@ class PublicTrackOut(BaseModel):
     lyrics: str | None = None
     # D-LYRICS-03: when each sung line starts (ms), with the lyrics; null when not timed.
     lyrics_timings_ms: list[int] | None = None
+    # D-LYRICS-05: when each of those lines ends (ms); null when only the starts were tapped.
+    lyrics_line_ends_ms: list[int] | None = None
     # D-VERSION-01: the song's version, single-track reads only (see TrackOut).
     version_title: str | None = None
 
@@ -248,6 +252,7 @@ async def get_track(
     out.listens = await _listen_count(svc, row.id)
     out.lyrics = row.lyrics if row.status == "RELEASED" else None
     out.lyrics_timings_ms = timings_for(row.lyrics, row.lyrics_timings) if out.lyrics else None
+    out.lyrics_line_ends_ms = ends_for(row.lyrics, row.lyrics_timings, row.lyrics_line_ends) if out.lyrics else None
     out.version_title = (row.version_title or "").strip() or None
     return out
 

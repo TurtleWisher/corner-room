@@ -416,7 +416,7 @@ describe("ListeningRoom", () => {
     expect(document.querySelector(".lr-focus-cover .lr-orbit[data-axis=over] .lr-lyric")).toBeTruthy();
   });
 
-  it("holds and lights a pointed line, and turning lyrics off takes every line away", async () => {
+  it("lights a pointed line while the ring keeps turning, and turning lyrics off takes every line away", async () => {
     await renderSung("t-held");
     await lyricsShown();
     await frames();
@@ -425,6 +425,11 @@ describe("ListeningRoom", () => {
     Object.defineProperty(enter, "pointerType", { value: "mouse" });
     await act(async () => fireEvent(now, enter));
     expect(now.hasAttribute("data-focus")).toBe(true);
+    // Owner, 2026-11-21: the ring never stops under the mouse; once the song moves on past the
+    // pointed line, it leaves like any other line instead of staying where it was pointed at.
+    await act(async () => setMedia(18.5, 20));
+    for (let i = 0; i < 12; i += 1) await frames();
+    expect(Number(now.style.opacity)).toBeLessThan(0.5);
     const leave = new MouseEvent("pointerout", { bubbles: true });
     Object.defineProperty(leave, "pointerType", { value: "mouse" });
     await act(async () => fireEvent(now, leave));

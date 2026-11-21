@@ -38,6 +38,42 @@ export function lyricTimes(count: number, timingsMs?: readonly number[] | null):
   return timingsMs.map((t) => t / 1000);
 }
 
+/**
+ * When each timed line's singing ends, in seconds (D-LYRICS-05), or null when the song has start
+ * times only or the ends don't fit them (one per line, after its start, not after the next one).
+ */
+export function lyricEnds(times: readonly number[] | null, endsMs?: readonly number[] | null): number[] | null {
+  if (!times || !endsMs || endsMs.length !== times.length) return null;
+  const out: number[] = [];
+  for (let i = 0; i < times.length; i++) {
+    const e = endsMs[i] / 1000;
+    if (!Number.isFinite(e) || e <= times[i] || (i + 1 < times.length && e > times[i + 1] + 0.0005)) return null;
+    out.push(e);
+  }
+  return out;
+}
+
+/** How bright a line still is once its singing has ended (D-LYRICS-05), and how fast it gets there. */
+export const QUIET_LINE = 0.4;
+const QUIET_FADE_S = 0.35;
+
+/**
+ * 1 while line `index` is being sung; after its end it settles to QUIET_LINE, so a pause in the
+ * singing reads as a pause. Always 1 for songs without line ends.
+ */
+export function lyricVoice(times: readonly number[] | null, ends: readonly number[] | null, index: number, positionS: number): number {
+  if (!times || !ends || index < 0 || index >= ends.length || !Number.isFinite(positionS)) return 1;
+  const past = positionS - ends[index];
+  if (past <= 0 || positionS < times[index]) return 1;
+  return 1 - (1 - QUIET_LINE) * Math.min(1, past / QUIET_FADE_S);
+}
+
+/** How much of line `index` has been sung, 0 to 1, from its start to its end; null without ends. */
+export function lyricSungShare(times: readonly number[] | null, ends: readonly number[] | null, index: number, positionS: number): number | null {
+  if (!times || !ends || index < 0 || index >= ends.length) return null;
+  return Math.min(1, Math.max(0, (positionS - times[index]) / (ends[index] - times[index])));
+}
+
 /** The shortest time a timed line is given to be sung, so two taps together don't flash. */
 const MIN_LINE_S = 0.25;
 
@@ -247,17 +283,27 @@ export function lyricStamp(ms: number): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}.${String(hundredths).padStart(2, "0")}`;
 }
 
-/** The timed lines as an LRC lyric file, "[01:05.40]Line", for checking or keeping a copy. */
-export function lyricLrc(lines: readonly string[], timesMs: readonly number[]): string {
-  return lines
-    .map((line, i) => {
-      const t = timesMs[i];
-      if (t === undefined) return null;
-      const stamp = lyricStamp(t);
-      return `[${stamp.length < 8 ? "0" : ""}${stamp}]${line}`;
-    })
-    .filter((row): row is string => row !== null)
-    .join("\n");
+function lrcStamp(ms: number): string {
+  const stamp = lyricStamp(ms);
+  return `[${stamp.length < 8 ? "0" : ""}${stamp}]`;
+}
+
+/**
+ * The timed lines as an LRC lyric file, "[01:05.40]Line", for checking or keeping a copy. A line
+ * that ends before the next one starts (D-LYRICS-05) is followed by an empty "[01:08.20]" line,
+ * as lyric files mark a pause.
+ */
+export function lyricLrc(lines: readonly string[], timesMs: readonly number[], endsMs: readonly number[] = []): string {
+  const rows: string[] = [];
+  lines.forEach((line, i) => {
+    const t = timesMs[i];
+    if (t === undefined) return;
+    rows.push(`${lrcStamp(t)}${line}`);
+    const end = endsMs[i];
+    const next = timesMs[i + 1];
+    if (end !== undefined && (next === undefined || end < next)) rows.push(lrcStamp(end));
+  });
+  return rows.join("\n");
 }
 
 /** A tap for the next untimed line; a tap earlier than the line before counts as the same time. */

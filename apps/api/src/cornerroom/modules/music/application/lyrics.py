@@ -10,6 +10,10 @@ Lyric timings (owner, 2026-11-01, D-LYRICS-03): staff tap along to a released so
 line, and `lyrics_timings` keeps when each line starts (milliseconds). They belong to the text:
 when the number of sung lines changes, the timings are dropped and the room paces the lines again.
 
+Line ends (owner, 2026-11-21, D-LYRICS-05): staff hold the tap key while a line is sung, so each
+line also gets the moment its singing ends (`lyrics_line_ends`, milliseconds, one per line, after
+its start and never after the next line's start). They live and go with the start times.
+
 Staff lyrics sync (owner, 2026-11-21, D-LYRICS-04): staff find a released song by its title or its
 act's name, and on the same page fix its words (wording, spacing, lines) while they time them. The
 words are the song's own `lyrics`, so the song page, the listening room and Studio all show the fix.
@@ -79,6 +83,30 @@ def timings_for(lyrics: str | None, timings: Any) -> list[int] | None:
     return [int(t) for t in timings]
 
 
+def ends_for(lyrics: str | None, timings: Any, ends: Any) -> list[int] | None:
+    """The stored line ends when they still fit the start times (one per line, each after its
+    line's start and not after the next one's), else None."""
+    starts = timings_for(lyrics, timings)
+    if starts is None or not isinstance(ends, list) or len(ends) != len(starts):
+        return None
+    try:
+        return clean_ends([int(e) for e in ends], starts)
+    except AppError:
+        return None
+
+
+def clean_ends(ends: list[int], starts: list[int]) -> list[int]:
+    """One end per line, after the line's start and at or before the next line's start."""
+    if len(ends) != len(starts):
+        raise AppError("VALIDATION_ERROR", f"Give one end for each of the {len(starts)} lines", 422)
+    for i, (start, end) in enumerate(zip(starts, ends)):
+        if end <= start or end > _TIMING_MAX_MS:
+            raise AppError("VALIDATION_ERROR", "Each line must end after it starts", 422)
+        if i + 1 < len(starts) and end > starts[i + 1]:
+            raise AppError("VALIDATION_ERROR", "A line must end before the next one starts", 422)
+    return list(ends)
+
+
 def clean_timings(times: list[int], lyrics: str | None) -> list[int]:
     """One start per sung line, in milliseconds, never going backwards."""
     count = len(sung_lines(lyrics))
@@ -99,6 +127,8 @@ def clean_timings(times: list[int], lyrics: str | None) -> list[int]:
 def _drop_stale_timings(track: Track) -> None:
     if track.lyrics_timings is not None and timings_for(track.lyrics, track.lyrics_timings) is None:
         track.lyrics_timings = None
+    if track.lyrics_timings is None:
+        track.lyrics_line_ends = None
 
 
 def lyrics_view(track: Track) -> dict[str, Any]:
@@ -272,22 +302,37 @@ class LyricsService:
             raise NotFoundError("Track not found")
         return track
 
-    async def save_timings(self, ctx: AuthContext, track_id: UUID, times: list[int] | None) -> dict[str, Any]:
-        """Staff (music.approve): when each line of a released song's lyrics starts, or None to go
-        back to pacing the lines across the song (D-LYRICS-03). The words themselves don't change."""
+    async def save_timings(
+        self, ctx: AuthContext, track_id: UUID, times: list[int] | None, ends: list[int] | None = None
+    ) -> dict[str, Any]:
+        """Staff (music.approve): when each line of a released song's lyrics starts, and when it
+        ends (D-LYRICS-05; None: starts only), or None to go back to pacing the lines across the
+        song (D-LYRICS-03). The words themselves don't change."""
         track = await self._staff_track(ctx, track_id)
         if track.status != "RELEASED":
             raise AppError("INVALID_TRANSITION", "Only songs that are out can have their lyrics timed", 409)
-        track.lyrics_timings = None if times is None else clean_timings(times, track.lyrics)
+        self._set_times(track, None if times is None else clean_timings(times, track.lyrics), ends)
         track.updated_by = ctx.user_id
         await self.music._flush_versioned()
         await self._audit_timed(ctx, track)
-        return {"track_id": track.id, "lyrics": track.lyrics, "lyrics_timings_ms": track.lyrics_timings}
+        return {
+            "track_id": track.id,
+            "lyrics": track.lyrics,
+            "lyrics_timings_ms": track.lyrics_timings,
+            "lyrics_line_ends_ms": track.lyrics_line_ends,
+        }
+
+    @staticmethod
+    def _set_times(track: Track, starts: list[int] | None, ends: list[int] | None) -> None:
+        """Starts and ends go together: new starts never keep ends tapped for other starts."""
+        track.lyrics_timings = starts
+        track.lyrics_line_ends = None if starts is None or ends is None else clean_ends(ends, starts)
 
     async def _audit_timed(self, ctx: AuthContext, track: Track) -> None:
         await self.audit.record_from_auth(
             ctx, action="track.lyrics_timed", entity_type="Track", entity_id=track.id,
-            new_state={"lines_timed": len(track.lyrics_timings or [])}, organization_id=track.primary_org_id,
+            new_state={"lines_timed": len(track.lyrics_timings or []), "line_ends": track.lyrics_line_ends is not None},
+            organization_id=track.primary_org_id,
         )
 
     # --- staff lyrics sync (D-LYRICS-04) --------------------------------------------------------
@@ -330,6 +375,7 @@ class LyricsService:
                 "release_title": releases.get(t.id),
                 "lines": len(sung_lines(t.lyrics)),
                 "timed": timings_for(t.lyrics, t.lyrics_timings) is not None,
+                "line_ends": ends_for(t.lyrics, t.lyrics_timings, t.lyrics_line_ends) is not None,
                 "lyrics_waiting": t.lyrics_pending_at is not None,
             }
             for t in tracks
@@ -372,6 +418,7 @@ class LyricsService:
             "profile_name": names.get(act) if act else None,
             "lyrics": track.lyrics,
             "lyrics_timings_ms": timings_for(track.lyrics, track.lyrics_timings),
+            "lyrics_line_ends_ms": ends_for(track.lyrics, track.lyrics_timings, track.lyrics_line_ends),
             "lyrics_waiting": waiting,
             "lyrics_pending": track.lyrics_pending if waiting else None,
             "waiting_from_me": waiting and track.lyrics_pending_by == ctx.user_id,
@@ -379,7 +426,8 @@ class LyricsService:
         }
 
     async def staff_edit(
-        self, ctx: AuthContext, track_id: UUID, lyrics: str | None, times: list[int] | None
+        self, ctx: AuthContext, track_id: UUID, lyrics: str | None, times: list[int] | None,
+        ends: list[int] | None = None,
     ) -> dict[str, Any]:
         """Staff change a released song's words, and with them its timings when every line is
         timed (`times`; None keeps the stored times while they still fit the words). Staff outside
@@ -396,13 +444,15 @@ class LyricsService:
             )
         text = clean_lyrics(lyrics)
         timed = None if times is None else clean_timings(times, text)
+        if timed is not None and ends is not None:
+            clean_ends(ends, timed)
         if text == track.lyrics:
             # The words listeners already see: only the times can change.
             track.lyrics_pending = None
             track.lyrics_pending_at = None
             track.lyrics_pending_by = None
             if timed is not None:
-                track.lyrics_timings = timed
+                self._set_times(track, timed, ends)
             track.updated_by = ctx.user_id
             await self.music._flush_versioned()
             if timed is not None:
@@ -427,7 +477,7 @@ class LyricsService:
             ctx=ctx, act_id=track.primary_artist_id or track.primary_band_id, settings=self.settings,
         )
         if approved and timed is not None:
-            track.lyrics_timings = timed
+            self._set_times(track, timed, ends)
             track.updated_by = ctx.user_id
             await self.music._flush_versioned()
             await self._audit_timed(ctx, track)

@@ -180,6 +180,8 @@ class Track(UUIDPrimaryKeyMixin, TimestampMixin, ActorMixin, SoftDeleteMixin, Ba
     lyrics_review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     # D-LYRICS-03: when each sung line of `lyrics` starts, in ms; set by staff, null = not timed.
     lyrics_timings: Mapped[list[int] | None] = mapped_column(JSONB, nullable=True)
+    # D-LYRICS-05: when each of those lines ends, in ms, one per start; null = starts only.
+    lyrics_line_ends: Mapped[list[int] | None] = mapped_column(JSONB, nullable=True)
     # D-LISTEN-02: plays before listen counting started, set by staff; shown plus counted listens.
     listens_before_counting: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
