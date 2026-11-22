@@ -73,11 +73,17 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+/** Presses only count once the song is playing: wait for the Hold button to wake (slow under load). */
+async function ready() {
+  await waitFor(() => expect((document.querySelector(".st-tap") as HTMLButtonElement | null)?.disabled).toBe(false), { timeout: 5000 });
+}
+
 describe("lyrics sync, line ends (owner, 2026-11-21, D-LYRICS-05)", () => {
   it("a hold marks a line's start and end; a quick tap runs on to the next press; then it saves both", async () => {
     api.fetchStaffLyrics.mockResolvedValue(SONG);
     render(<LyricsTimingPage />);
     await screen.findByText("Last Stop");
+    await ready();
 
     // Line 1: held from 1.0 s to 2.5 s.
     space("keydown", 1);
@@ -102,6 +108,7 @@ describe("lyrics sync, line ends (owner, 2026-11-21, D-LYRICS-05)", () => {
     api.fetchStaffLyrics.mockResolvedValue({ ...SONG, lyrics_timings_ms: [1000, 3000] });
     render(<LyricsTimingPage />);
     expect(await screen.findByText("Needs line ends")).toBeTruthy();
+    await ready();
     expect(screen.getByText("to 0:03.00")).toBeTruthy();
     expect(screen.getByText(/synced with start times only/)).toBeTruthy();
     space("keydown", 6);

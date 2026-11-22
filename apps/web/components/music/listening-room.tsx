@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -31,14 +31,16 @@ import { playerStatusText, RepeatButton, ShuffleButton, usePlayer, usePlayerProg
 import { TrackActions } from "@/components/music/track-actions";
 import { useAsync } from "@/components/use-async";
 import {
-  carouselTurn,
   carouselWindow,
   edgeZone,
   isVisibleOffset,
   leaveTarget,
   nowPlayingAnnouncement,
+  pointerSpin,
   queuePositionLabel,
   roomEyebrow,
+  slotPose,
+  springStep,
   swipeDirection,
   titleAtoms,
 } from "@/lib/listening-room-view";
@@ -800,23 +802,90 @@ function ProblemActions({ track }: { track: PlayerTrack }) {
   );
 }
 
+/** Whether the browser asks for less motion (false where it can't tell, as in tests). */
+function reducedMotion(): boolean {
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 /**
  * The centred 3D carousel. Choosing a side card plays it; choosing the front card opens focus.
- * A mouse over it turns the whole carousel toward the pointer, in 3D, and it settles back when the
- * mouse leaves (owner, 2026-11-22); it never changes the song. Still under reduced motion.
+ * It spins on one spring (owner, 2026-11-22): a mouse beside the front card draws the next card on
+ * that side toward the front, flowing and settling back when the mouse leaves, and a song change
+ * glides the whole ring on to its new place from wherever it is. Hovering never changes the song.
+ * One rAF loop runs only while it moves and writes each card's place as CSS variables (maths in
+ * `slotPose`, `pointerSpin`, `springStep`); React renders only when the cards change. Reduced
+ * motion: no spin, cards jump to their places.
  */
 function Carousel({ onFocus, frontRef }: { onFocus: () => void; frontRef: React.Ref<HTMLButtonElement> }) {
   const p = usePlayer();
   const touch = useRef<{ x: number; y: number } | null>(null);
-  const turnFrame = useRef(0);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const spin = useRef({ pos: { x: p.index, v: 0 }, base: p.index, hover: 0, frame: 0, last: 0 });
   const items = carouselWindow(p.queue, p.index);
-  useEffect(() => () => window.cancelAnimationFrame(turnFrame.current), []);
-  const setTurn = (stage: HTMLElement, turn: number, lean: number) => {
-    stage.style.setProperty("--lr-turn", `${turn}deg`);
-    stage.style.setProperty("--lr-lean", `${lean}deg`);
+
+  const draw = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const wide = typeof window.matchMedia === "function" ? window.matchMedia("(min-width: 768px)").matches : true;
+    const at = spin.current.pos.x;
+    for (const slot of stage.querySelectorAll<HTMLElement>(".lr-slot")) {
+      const pose = slotPose(Number(slot.dataset.queue) - at, wide);
+      // The front card keeps full opacity: anything less flattens its 3D space (the lyric ring).
+      const o = slot.dataset.offset === "0" ? 1 : pose.o;
+      slot.style.setProperty("--tx", String(pose.tx));
+      slot.style.setProperty("--tz", `${pose.tz}px`);
+      slot.style.setProperty("--ry", `${pose.ry}deg`);
+      slot.style.setProperty("--s", String(pose.s));
+      slot.style.setProperty("--o", String(o));
+      slot.style.setProperty("--dim", String(pose.dim));
+      slot.style.visibility = o < 0.01 ? "hidden" : "visible";
+    }
+  }, []);
+
+  const run = useCallback(() => {
+    const s = spin.current;
+    const target = s.base + s.hover;
+    if (reducedMotion()) {
+      window.cancelAnimationFrame(s.frame);
+      s.frame = 0;
+      s.pos = { x: target, v: 0 };
+      draw();
+      return;
+    }
+    if (s.frame) return;
+    s.last = 0;
+    const tick = (now: number) => {
+      const dt = s.last ? (now - s.last) / 1000 : 1 / 60;
+      s.last = now;
+      const next = springStep(s.pos, s.base + s.hover, dt);
+      s.pos = { x: next.x, v: next.v };
+      draw();
+      s.frame = next.rest ? 0 : window.requestAnimationFrame(tick);
+    };
+    s.frame = window.requestAnimationFrame(tick);
+  }, [draw]);
+
+  // A new song: glide on from wherever the ring is (a far jump starts a card and a half away).
+  useLayoutEffect(() => {
+    const s = spin.current;
+    const gap = p.index - s.pos.x;
+    if (Math.abs(gap) > 2) s.pos = { x: p.index - Math.sign(gap) * 1.5, v: 0 };
+    s.base = p.index;
+    run();
+  }, [p.index, run]);
+  // Every render (new cards come in): draw them in place at once.
+  useLayoutEffect(() => draw());
+  useEffect(() => () => window.cancelAnimationFrame(spin.current.frame), []);
+
+  const setHover = (hover: number) => {
+    if (hover === spin.current.hover) return;
+    spin.current.hover = hover;
+    run();
   };
+
   return (
     <div
+      ref={stageRef}
       className="lr-stage"
       role="group"
       aria-roledescription="carousel"
@@ -831,20 +900,17 @@ function Carousel({ onFocus, frontRef }: { onFocus: () => void; frontRef: React.
         }
       }}
       onPointerMove={(e) => {
-        if (e.pointerType !== "mouse") return;
+        if (e.pointerType !== "mouse" || reducedMotion()) return;
         const stage = e.currentTarget;
-        const { clientX, clientY } = e;
-        // One write per frame, however fast the mouse moves; the cards' own transition eases it.
-        window.cancelAnimationFrame(turnFrame.current);
-        turnFrame.current = window.requestAnimationFrame(() => {
-          const { turn, lean } = carouselTurn(clientX, clientY, stage.getBoundingClientRect());
-          setTurn(stage, turn, lean);
-        });
+        const box = stage.getBoundingClientRect();
+        const card = stage.querySelector<HTMLElement>(".lr-slot")?.offsetWidth ?? 0;
+        let hover = pointerSpin(e.clientX, box.left + box.width / 2, card);
+        // No card on that side: nothing to draw in.
+        if ((hover > 0 && !p.hasNext) || (hover < 0 && p.index <= 0)) hover = 0;
+        setHover(hover);
       }}
       onPointerLeave={(e) => {
-        if (e.pointerType !== "mouse") return;
-        window.cancelAnimationFrame(turnFrame.current);
-        setTurn(e.currentTarget, 0, 0);
+        if (e.pointerType === "mouse") setHover(0);
       }}
       onPointerDown={(e) => {
         if (e.pointerType !== "mouse") touch.current = { x: e.clientX, y: e.clientY };
@@ -866,7 +932,7 @@ function Carousel({ onFocus, frontRef }: { onFocus: () => void; frontRef: React.
         const title = titleOf(item);
         const front = offset === 0;
         return (
-          <div key={queueIndex} data-offset={offset} aria-hidden={shown ? undefined : true} className="lr-slot">
+          <div key={queueIndex} data-offset={offset} data-queue={queueIndex} aria-hidden={shown ? undefined : true} className="lr-slot">
             {/* The card floats while music plays; the lyric ring floats with it. */}
             <div className="lr-bob">
               <button
