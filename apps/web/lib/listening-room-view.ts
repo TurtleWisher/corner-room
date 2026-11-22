@@ -58,21 +58,30 @@ export function slotPose(d: number, wide: boolean): SlotPose {
   return { tx: r(sign * mix("tx")), tz: r(mix("tz")), ry: r(-sign * mix("ry")), s: r(mix("s")), o: r(o), dim: r(mix("dim")) };
 }
 
-/** How far, in cards, the carousel spins toward a mouse beside the front card. */
-export const SPIN_MAX = 0.42;
+/** Spin speed, in cards a second, just outside the front card and at a card and a half out. */
+export const SPIN_SPEED_MIN = 1.2;
+export const SPIN_SPEED_MAX = 3.5;
+/** How long, in ms, the carousel waits after the mouse leaves before gliding back to the playing song. */
+export const SPIN_RETURN_MS = 1200;
 
 /**
- * How far the carousel spins toward a mouse at `x` (owner, 2026-11-22): nothing over the middle of
- * the front card, then easing in from 30 % of a card beside its centre to the full `SPIN_MAX` a
- * card further out. Right is +, so the next card on that side comes toward the front. It never
- * changes the song; choosing the card still does.
+ * How fast the carousel spins for a mouse at `x` (owner, 2026-11-22: it spins through its cards
+ * toward the pointer, each next one coming to the front, to the last card). Nothing while the
+ * mouse is over the front card; beside it, from `SPIN_SPEED_MIN` rising to `SPIN_SPEED_MAX` a card
+ * further out. In cards a second, right is + (toward the later songs).
  */
-export function pointerSpin(x: number, centre: number, cardWidth: number): number {
+export function pointerDrive(x: number, centre: number, cardWidth: number): number {
   if (!Number.isFinite(x) || !Number.isFinite(centre) || !(cardWidth > 0)) return 0;
   const away = (x - centre) / cardWidth;
-  const t = Math.max(0, Math.min(1, Math.abs(away) - 0.3));
-  const eased = t * t * (3 - 2 * t);
-  return Math.round(Math.sign(away) * eased * SPIN_MAX * 10000) / 10000 || 0;
+  const beyond = Math.abs(away) - 0.45;
+  if (beyond <= 0) return 0;
+  const t = Math.min(1, beyond);
+  return Math.sign(away) * Math.round((SPIN_SPEED_MIN + (SPIN_SPEED_MAX - SPIN_SPEED_MIN) * t * t) * 1000) / 1000;
+}
+
+/** Where the carousel is heading after `dt` seconds of spinning at `drive`, kept between the first and last card. */
+export function spinTarget(target: number, drive: number, dt: number, last: number): number {
+  return Math.max(0, Math.min(Math.max(0, last), target + drive * Math.max(0, dt)));
 }
 
 /** The carousel's spring: a little under critical, so it flows in and settles without a wobble. */

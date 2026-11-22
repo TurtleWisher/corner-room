@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { SPIN_MAX, carouselWindow, edgeZone, isVisibleOffset, leaveTarget, nowPlayingAnnouncement, queuePositionLabel, pointerSpin, roomEyebrow, slotPose, springStep, swipeDirection, titleAtoms } from "./listening-room-view";
+import { SPIN_SPEED_MAX, SPIN_SPEED_MIN, carouselWindow, edgeZone, isVisibleOffset, leaveTarget, nowPlayingAnnouncement, queuePositionLabel, pointerDrive, roomEyebrow, slotPose, spinTarget, springStep, swipeDirection, titleAtoms } from "./listening-room-view";
 
 describe("carousel", () => {
   const q = ["a", "b", "c", "d", "e", "f", "g", "h"];
@@ -134,17 +134,25 @@ describe("the spinning carousel (owner, 2026-11-22: it spins toward the mouse)",
     expect(slotPose(Number.NaN, true)).toEqual(slotPose(3, true));
   });
 
-  it("spins toward the side the mouse is on, eased, never past SPIN_MAX", () => {
-    expect(pointerSpin(500, 500, 300)).toBe(0);
-    // Over the middle of the front card it stays still.
-    expect(pointerSpin(500 + 0.3 * 300, 500, 300)).toBe(0);
-    const near = pointerSpin(500 + 0.6 * 300, 500, 300);
-    expect(near).toBeGreaterThan(0);
-    expect(near).toBeLessThan(SPIN_MAX);
-    expect(pointerSpin(500 + 1.3 * 300, 500, 300)).toBe(SPIN_MAX);
-    expect(pointerSpin(5000, 500, 300)).toBe(SPIN_MAX);
-    expect(pointerSpin(-5000, 500, 300)).toBe(-SPIN_MAX);
-    expect(pointerSpin(500, 500, 0)).toBe(0);
+  it("spins toward the side the mouse is on, faster further out, and not over the front card", () => {
+    expect(pointerDrive(500, 500, 300)).toBe(0);
+    expect(pointerDrive(500 + 0.4 * 300, 500, 300)).toBe(0);
+    const near = pointerDrive(500 + 0.5 * 300, 500, 300);
+    expect(near).toBeGreaterThanOrEqual(SPIN_SPEED_MIN);
+    expect(near).toBeLessThan(SPIN_SPEED_MAX);
+    expect(pointerDrive(500 + 1.45 * 300, 500, 300)).toBe(SPIN_SPEED_MAX);
+    expect(pointerDrive(5000, 500, 300)).toBe(SPIN_SPEED_MAX);
+    expect(pointerDrive(-5000, 500, 300)).toBe(-SPIN_SPEED_MAX);
+    expect(pointerDrive(500, 500, 0)).toBe(0);
+  });
+
+  it("keeps spinning to the last card and no further, and back to the first", () => {
+    let target = 0;
+    for (let i = 0; i < 300; i += 1) target = spinTarget(target, 2, 1 / 60, 7);
+    expect(target).toBe(7);
+    for (let i = 0; i < 300; i += 1) target = spinTarget(target, -3, 1 / 60, 7);
+    expect(target).toBe(0);
+    expect(spinTarget(2, 1, 0.5, 7)).toBe(2.5);
   });
 
   it("springs to its target smoothly and comes to rest exactly on it", () => {

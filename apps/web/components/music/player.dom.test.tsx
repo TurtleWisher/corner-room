@@ -17,7 +17,6 @@ vi.mock("@/lib/api", async (orig) => ({ ...(await orig<typeof import("@/lib/api"
 
 import { ListeningRoom } from "./listening-room";
 import { PlayerBar, PlayerProvider, usePlayer, type PlayerTrack } from "./player";
-import { SPIN_MAX } from "@/lib/listening-room-view";
 
 const QUEUE: PlayerTrack[] = [
   { id: "t1", title: "Last Stop", artist: "Kaal Bela" },
@@ -357,34 +356,50 @@ describe("ListeningRoom", () => {
     expect(audioEl().src).toContain("tok-t3");
   });
 
-  it("spins the next card toward a mouse beside the front card and back when it leaves, without changing the song", async () => {
+  it("spins through its cards toward a mouse beside the front one, to the last, and back after it leaves, without changing the song", async () => {
     renderRoom();
     await act(async () => screen.getByText("start t2").click());
     const stage = document.querySelector(".lr-stage") as HTMLElement;
     stage.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 500, right: 1000, bottom: 500, x: 0, y: 0, toJSON: () => ({}) });
-    const slots = Array.from(stage.querySelectorAll<HTMLElement>(".lr-slot"));
-    for (const slot of slots) Object.defineProperty(slot, "offsetWidth", { configurable: true, value: 300 });
-    const front = stage.querySelector<HTMLElement>('.lr-slot[data-offset="0"]')!;
-    const next = stage.querySelector<HTMLElement>('.lr-slot[data-offset="1"]')!;
-    const tx = (el: HTMLElement) => Number(el.style.getPropertyValue("--tx"));
-    expect(tx(front)).toBe(0);
-    expect(tx(next)).toBe(0.6);
-    const src = audioEl().src;
-    // Right of the front card: the next card glides toward the front, the front one aside.
-    await act(async () => pointerMove(stage, 900, "mouse"));
-    await waitFor(() => expect(tx(front)).toBeCloseTo(-0.6 * SPIN_MAX, 2), { timeout: 3000 });
-    expect(tx(next)).toBeLessThan(0.6);
-    expect(front.style.getPropertyValue("--o")).toBe("1");
-    // Touch never spins it (a swipe changes the song instead).
-    await act(async () => pointerMove(stage, 100, "touch"));
-    await frames();
-    expect(tx(front)).toBeLessThan(0);
-    const leave = new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body });
-    Object.defineProperty(leave, "pointerType", { value: "mouse" });
-    await act(async () => fireEvent(stage, leave));
-    await waitFor(() => expect(tx(front)).toBe(0), { timeout: 3000 });
-    expect(tx(next)).toBe(0.6);
-    expect(audioEl().src).toBe(src);
+    const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 300 });
+    try {
+      const card = (queue: number) => stage.querySelector<HTMLElement>(`.lr-slot[data-queue="${queue}"]`)!;
+      const front = () => stage.querySelector<HTMLElement>('.lr-slot[data-offset="0"]')!;
+      const tx = (el: HTMLElement) => Number(el.style.getPropertyValue("--tx"));
+      expect(front().dataset.queue).toBe("1");
+      expect(tx(card(2))).toBe(0.6);
+      const src = audioEl().src;
+      // Right of the front card: it spins on until the last card is at the front.
+      await act(async () => pointerMove(stage, 900, "mouse"));
+      await waitFor(() => expect(front().dataset.queue).toBe("2"), { timeout: 3000 });
+      await waitFor(() => expect(tx(card(2))).toBe(0), { timeout: 3000 });
+      expect(tx(card(1))).toBe(-0.6);
+      // The playing card is now beside it, and still the one that is playing.
+      expect(card(1).hasAttribute("data-now")).toBe(true);
+      expect(audioEl().src).toBe(src);
+      // Back over the front card it stays where it is; touch never spins it.
+      await act(async () => pointerMove(stage, 500, "mouse"));
+      await act(async () => pointerMove(stage, 0, "touch"));
+      await frames();
+      expect(front().dataset.queue).toBe("2");
+      // Once the mouse leaves, it glides back to the playing song.
+      const leave = new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body });
+      Object.defineProperty(leave, "pointerType", { value: "mouse" });
+      await act(async () => fireEvent(stage, leave));
+      await waitFor(() => expect(front().dataset.queue).toBe("1"), { timeout: 5000 });
+      await waitFor(() => expect(tx(card(1))).toBe(0), { timeout: 3000 });
+      expect(audioEl().src).toBe(src);
+      // Left of it: it spins back to the first card; choosing that card there plays it.
+      await act(async () => pointerMove(stage, 100, "mouse"));
+      await waitFor(() => expect(front().dataset.queue).toBe("0"), { timeout: 3000 });
+      await act(async () => pointerMove(stage, 500, "mouse"));
+      await act(async () => (front().querySelector("button") as HTMLButtonElement).click());
+      await waitFor(() => expect(card(0).hasAttribute("data-now")).toBe(true));
+      expect(audioEl().src).not.toBe(src);
+    } finally {
+      if (width) Object.defineProperty(HTMLElement.prototype, "offsetWidth", width);
+    }
   });
 
   /** Two animation frames: the lyric ring moves its lines once a frame. */
