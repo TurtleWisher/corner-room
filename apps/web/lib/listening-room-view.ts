@@ -29,26 +29,73 @@ export function carouselWindow<T>(queue: readonly T[], index: number): CarouselI
   return out;
 }
 
-/** How far the carousel turns and leans toward the mouse at the stage's edges (owner, 2026-11-22). */
-export const CAROUSEL_TURN_DEG = 12;
-export const CAROUSEL_LEAN_DEG = 5;
+/**
+ * Where a card sits at a distance `d` (in cards, may be fractional) from the front, for the
+ * spinning carousel (owner, 2026-11-22). The same places as the stylesheet's per-offset rules,
+ * blended between them so a card glides continuously: `tx` in card widths (right is +), `tz` in px,
+ * `ry` in degrees, `s` scale, `o` opacity, `dim` the dark veil. Narrow rooms show one card a side.
+ */
+export type SlotPose = { tx: number; tz: number; ry: number; s: number; o: number; dim: number };
+
+const POSES: readonly SlotPose[] = [
+  { tx: 0, tz: 0, ry: 0, s: 1, o: 1, dim: 0 },
+  { tx: 0.6, tz: -120, ry: 16, s: 0.84, o: 1, dim: 0.3 },
+  { tx: 1.05, tz: -240, ry: 24, s: 0.7, o: 1, dim: 0.55 },
+  { tx: 1.4, tz: -340, ry: 28, s: 0.58, o: 0, dim: 0.55 },
+];
+
+export function slotPose(d: number, wide: boolean): SlotPose {
+  const a = Number.isFinite(d) ? Math.min(Math.abs(d), POSES.length - 1) : POSES.length - 1;
+  const i = Math.min(Math.floor(a), POSES.length - 2);
+  const f = a - i;
+  const lo = POSES[i];
+  const hi = POSES[i + 1];
+  const mix = (k: keyof SlotPose) => lo[k] + (hi[k] - lo[k]) * f;
+  const sign = d < 0 ? -1 : 1;
+  // Narrow rooms: the second card a side is never seen, so it fades out between places 1 and 2.
+  const o = wide ? mix("o") : a <= 1 ? 1 : Math.max(0, 2 - a);
+  const r = (v: number) => Math.round(v * 1000) / 1000 || 0;
+  return { tx: r(sign * mix("tx")), tz: r(mix("tz")), ry: r(-sign * mix("ry")), s: r(mix("s")), o: r(o), dim: r(mix("dim")) };
+}
+
+/** How far, in cards, the carousel spins toward a mouse beside the front card. */
+export const SPIN_MAX = 0.42;
 
 /**
- * The carousel's turn toward a mouse at (x, y) over a stage box, in degrees: right of centre turns
- * it right (its face follows the pointer), above centre leans it up. 0 and 0 at the centre, outside
- * the box held at the edge, and for an empty box.
+ * How far the carousel spins toward a mouse at `x` (owner, 2026-11-22): nothing over the middle of
+ * the front card, then easing in from 30 % of a card beside its centre to the full `SPIN_MAX` a
+ * card further out. Right is +, so the next card on that side comes toward the front. It never
+ * changes the song; choosing the card still does.
  */
-export function carouselTurn(
-  x: number,
-  y: number,
-  box: { left: number; top: number; width: number; height: number },
-): { turn: number; lean: number } {
-  if (!(box.width > 0) || !(box.height > 0) || !Number.isFinite(x) || !Number.isFinite(y)) return { turn: 0, lean: 0 };
-  const clamp = (v: number) => Math.max(-1, Math.min(1, v));
-  const nx = clamp(((x - box.left) / box.width) * 2 - 1);
-  const ny = clamp(((y - box.top) / box.height) * 2 - 1);
-  const round = (v: number) => Math.round(v * 100) / 100 || 0;
-  return { turn: round(nx * CAROUSEL_TURN_DEG), lean: round(-ny * CAROUSEL_LEAN_DEG) };
+export function pointerSpin(x: number, centre: number, cardWidth: number): number {
+  if (!Number.isFinite(x) || !Number.isFinite(centre) || !(cardWidth > 0)) return 0;
+  const away = (x - centre) / cardWidth;
+  const t = Math.max(0, Math.min(1, Math.abs(away) - 0.3));
+  const eased = t * t * (3 - 2 * t);
+  return Math.round(Math.sign(away) * eased * SPIN_MAX * 10000) / 10000 || 0;
+}
+
+/** The carousel's spring: a little under critical, so it flows in and settles without a wobble. */
+export const SPIN_STIFFNESS = 150;
+export const SPIN_DAMPING = 21;
+
+export type Spring = { x: number; v: number };
+
+/**
+ * One step of the spring toward `target` over `dt` seconds, in small fixed steps so a slow frame
+ * never overshoots. Comes to rest exactly on the target once it is close and slow.
+ */
+export function springStep(state: Spring, target: number, dt: number): Spring & { rest: boolean } {
+  let { x, v } = state;
+  let left = Math.max(0, Math.min(dt, 1 / 20));
+  while (left > 0) {
+    const h = Math.min(left, 1 / 240);
+    v += (-SPIN_STIFFNESS * (x - target) - SPIN_DAMPING * v) * h;
+    x += v * h;
+    left -= h;
+  }
+  const rest = Math.abs(x - target) < 0.0005 && Math.abs(v) < 0.005;
+  return rest ? { x: target, v: 0, rest } : { x, v, rest };
 }
 
 /** How close to a side, in px, a mouse must come before the focus view shows that neighbour. */

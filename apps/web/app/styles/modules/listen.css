@@ -345,26 +345,16 @@ html:has([data-module="music"] .lr) {
   top: 0;
   width: var(--card);
   margin-left: calc(var(--card) / -2);
-  /* The whole carousel turns toward the mouse (--lr-turn, --lr-lean on the stage, owner
-     2026-11-22): every slot rotates about the same point, the stage's centre, before taking its
-     own place, so the side cards swing round the front one like one carousel. */
-  transform: rotateX(var(--lr-lean, 0deg)) rotateY(var(--lr-turn, 0deg)) translate3d(calc(var(--card) * var(--tx)), 0, var(--tz))
-    rotateY(var(--ry)) scale(var(--s));
+  /* The room's spring writes each card's place (--tx, --tz, --ry, --s, --o, --dim) every frame
+     while the carousel moves (owner, 2026-11-22, `Carousel` in listening-room.tsx), so there is no
+     transition here to lag behind it; the per-offset rules below are the places before it runs. */
+  transform: translate3d(calc(var(--card) * var(--tx)), 0, var(--tz)) rotateY(var(--ry)) scale(var(--s));
   opacity: var(--o);
-  transition:
-    transform var(--lr-move) var(--lr-ease),
-    opacity var(--lr-move) var(--lr-ease),
-    visibility 0s linear var(--lr-move);
   /* Transform only: a hint for opacity could flatten the front card's 3D space. */
   will-change: transform;
 }
 [data-module="music"] .lr-slot[data-offset="0"] {
   transform-style: preserve-3d;
-}
-@starting-style {
-  [data-module="music"] .lr-slot {
-    opacity: 0;
-  }
 }
 [data-module="music"] .lr-slot[data-offset="0"] {
   z-index: 10;
@@ -442,7 +432,8 @@ html:has([data-module="music"] .lr) {
   clip-path: polygon(var(--cut) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cut));
   opacity: var(--dim, 0);
   pointer-events: none;
-  transition: opacity var(--lr-move) var(--lr-ease);
+  /* Short: the spring already moves --dim smoothly; this only softens the hover lift. */
+  transition: opacity 180ms var(--lr-ease);
 }
 [data-module="music"] .lr-slot:not([data-offset="0"]) .lr-card:hover .lr-dim,
 [data-module="music"] .lr-slot:not([data-offset="0"]) .lr-card:focus-visible .lr-dim {
@@ -1110,10 +1101,5 @@ html:has([data-module="music"] .lr) {
   }
   [data-module="music"] .lr-slot {
     will-change: auto;
-  }
-  /* The carousel never turns toward the mouse. */
-  [data-module="music"] .lr-stage {
-    --lr-turn: 0deg !important;
-    --lr-lean: 0deg !important;
   }
 }
