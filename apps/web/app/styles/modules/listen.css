@@ -353,7 +353,10 @@ html:has([data-module="music"] .lr) {
   /* Transform only: a hint for opacity could flatten the front card's 3D space. */
   will-change: transform;
 }
-[data-module="music"] .lr-slot[data-offset="0"] {
+/* The front card, and the playing one while the carousel is spun away from it, hold 3D space for
+   the lyric ring. */
+[data-module="music"] .lr-slot[data-offset="0"],
+[data-module="music"] .lr-slot[data-now] {
   transform-style: preserve-3d;
 }
 [data-module="music"] .lr-slot[data-offset="0"] {
@@ -460,7 +463,7 @@ html:has([data-module="music"] .lr) {
   position: relative;
   transform-style: preserve-3d;
 }
-[data-module="music"] .lr[data-playing] .lr-slot[data-offset="0"] .lr-bob {
+[data-module="music"] .lr[data-playing] .lr-slot[data-now] .lr-bob {
   animation: lr-float 7s ease-in-out infinite;
 }
 @keyframes lr-float {
