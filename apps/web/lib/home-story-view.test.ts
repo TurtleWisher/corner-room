@@ -2,18 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import {
   doorAngle,
-  easeInOutCubic,
-  easeOutExpo,
-  faceFor,
+  enterProgress,
+  followTarget,
   faceLight,
   frontFace,
+  glide,
   leanToward,
   prismTurn,
   sceneProgress,
   scrollForFace,
-  shouldShow,
+  settleFace,
+  settleK,
   smoothstep,
-  tween,
 } from "./home-story-view";
 
 describe("sceneProgress", () => {
@@ -30,44 +30,52 @@ describe("sceneProgress", () => {
   });
 });
 
-describe("shouldShow (owner, 2026-11-27: entrances play through wherever the reader stops)", () => {
-  it("comes in once the top rises into the window", () => {
-    expect(shouldShow(1200, 1000, false)).toBe(false);
-    expect(shouldShow(870, 1000, false)).toBe(true);
-    expect(shouldShow(-4000, 1000, false)).toBe(true);
+describe("following the scroll (owner, 2026-11-27)", () => {
+  it("comes in with the scroll and goes back with it", () => {
+    expect(enterProgress(1200, 1000)).toBe(0);
+    expect(enterProgress(980, 1000)).toBe(0);
+    const half = enterProgress(980 - 210, 1000);
+    expect(half).toBeCloseTo(0.5);
+    expect(enterProgress(0, 1000)).toBe(1);
+    expect(enterProgress(5000, 0)).toBe(1);
   });
-  it("goes back only when it drops out at the bottom edge", () => {
-    expect(shouldShow(900, 1000, true)).toBe(true);
-    expect(shouldShow(990, 1000, true)).toBe(false);
-  });
-  it("keeps what it had between the two lines, so it never flickers", () => {
-    expect(shouldShow(930, 1000, false)).toBe(false);
-    expect(shouldShow(930, 1000, true)).toBe(true);
-  });
-  it("shows everything without a window", () => {
-    expect(shouldShow(5000, 0, false)).toBe(true);
+  it("glides toward where the scroll puts it and lands exactly", () => {
+    const a = glide(0, 1, 1 / 60, 14);
+    expect(a).toBeGreaterThan(0);
+    expect(a).toBeLessThan(1);
+    let v = 0;
+    for (let i = 0; i < 300; i++) v = glide(v, 1, 1 / 60, 5);
+    expect(v).toBe(1);
+    expect(glide(Number.NaN, 0.3, 0.016, 5)).toBe(0.3);
   });
 });
 
-describe("tween", () => {
-  it("runs from start to end over its time and then rests at the end", () => {
-    expect(tween(0, 1, -50, 1000)).toBe(0);
-    expect(tween(0, 1, 0, 1000)).toBe(0);
-    const mid = tween(0, 1, 500, 1000);
-    expect(mid).toBeGreaterThan(0.9); // fast away, long soft landing
-    expect(mid).toBeLessThan(1);
-    expect(tween(0, 1, 1000, 1000)).toBe(1);
-    expect(tween(0.4, 0, 9999, 500)).toBe(0);
+describe("settling once the reader stops", () => {
+  it("finishes any block that shows on screen, and only empties those below the fold", () => {
+    expect(settleK(900, 1000)).toBe(1);
+    expect(settleK(-3000, 1000)).toBe(1);
+    expect(settleK(990, 1000)).toBe(0);
+    expect(settleK(10, 0)).toBe(1);
   });
-  it("turns back from wherever it is", () => {
-    expect(tween(0.6, 0, 0, 500)).toBe(0.6);
-    expect(tween(0.6, 0, 250, 500)).toBeLessThan(0.6);
+  it("keeps what settled until the scroll catches up, and reverses when the reader goes back", () => {
+    // A block finished on screen does not fold back while scrolling on down.
+    expect(followTarget(0.6, 1, 1)).toEqual({ target: 1, held: 1 });
+    // Scrolling up from there follows the scroll back.
+    expect(followTarget(0.6, 1, -1)).toEqual({ target: 0.6, held: null });
+    // The prism finished its turn to face 1; scrolling on down holds it until the scroll gets there.
+    expect(followTarget(0.4, 1, 1)).toEqual({ target: 1, held: 1 });
+    expect(followTarget(1.2, 1, 1)).toEqual({ target: 1.2, held: null });
+    // Nothing held: just follow.
+    expect(followTarget(0.3, null, 1)).toEqual({ target: 0.3, held: null });
   });
-  it("eases both curves from 0 to 1", () => {
-    expect(easeOutExpo(0)).toBe(0);
-    expect(easeOutExpo(1)).toBe(1);
-    expect(easeInOutCubic(0.5)).toBe(0.5);
-    expect(easeInOutCubic(2)).toBe(1);
+  it("finishes the prism's turn in the way the reader was scrolling", () => {
+    expect(settleFace(0.3, 1, 3)).toBe(1);
+    expect(settleFace(0.3, -1, 3)).toBe(0);
+    expect(settleFace(1.7, -1, 3)).toBe(1);
+    expect(settleFace(1.7, 1, 3)).toBe(2);
+    expect(settleFace(1.01, 1, 3)).toBe(1);
+    expect(settleFace(2, 1, 3)).toBe(2);
+    expect(settleFace(-0.4, -1, 3)).toBe(0);
   });
 });
 
@@ -94,14 +102,6 @@ describe("prismTurn", () => {
 });
 
 describe("faces", () => {
-  it("always picks a whole face for the prism to turn to", () => {
-    expect(faceFor(0, 3)).toBe(0);
-    expect(faceFor(0.2, 3)).toBe(0);
-    expect(faceFor(0.3, 3)).toBe(1);
-    expect(faceFor(0.5, 3)).toBe(1);
-    expect(faceFor(0.8, 3)).toBe(2);
-    expect(faceFor(1, 3)).toBe(2);
-  });
   it("lights the face in front and darkens the others", () => {
     expect(faceLight(0, 0, 3)).toBeCloseTo(1);
     expect(faceLight(1, 0, 3)).toBe(0);
