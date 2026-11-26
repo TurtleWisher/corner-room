@@ -555,6 +555,12 @@ FEATURES: Final[list[dict]] = [
         ),
         "updates": [
             {
+                "date": "2026-11-27",
+                "kind": "FIXED",
+                "title": "The 3D parts finish wherever you stop scrolling",
+                "details": "Stopping part-way left cards half-arrived and hard to read until you scrolled on. Now each part plays its whole entrance once it is on screen, wherever you stop, and the turning block always comes to rest on a whole side. Scroll back up past a part and it goes back, ready to play again.",
+            },
+            {
                 "date": "2026-11-26",
                 "kind": "IMPROVED",
                 "title": "The explanations move to the end, in 3D",
