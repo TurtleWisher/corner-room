@@ -1,7 +1,8 @@
 /*
  * The home page's closing story (owner, 2026-11-26): the parts that explain Corner Room sit at the
- * end of the page, after the music, and move in 3D as you scroll. Nothing moves by itself: every
- * value here comes from the scroll position or the pointer (brand section 10, no ambient motion).
+ * end of the page, after the music, and move in 3D. Scrolling or the pointer starts every movement
+ * (brand section 10, no ambient motion), and since 2026-11-27 each one plays through to its finished
+ * frame by itself, so wherever the reader stops, everything on screen is whole and readable.
  * Pure maths only; components/home/story-motion.tsx writes the results as CSS variables.
  */
 
@@ -25,12 +26,50 @@ export function sceneProgress(top: number, height: number, vh: number): number {
 }
 
 /**
- * How far a block has come in: 0 while its top is still `start` window heights from the top (below
- * the fold), 1 once it has risen `range` window heights more. Blocks fold in as k goes from 0 to 1.
+ * Whether a block should be shown (owner, 2026-11-27: an entrance never stops half-way where the
+ * reader stops scrolling). It comes in once its top rises above `enter` of the window and then plays
+ * through by itself; it goes back only when its top drops below `leave` of the window again (scrolling
+ * up, at the bottom edge where it is no longer read). Between the two lines it keeps what it had, so
+ * it never flickers on the line. Blocks scrolled up past the top stay shown.
  */
-export function enterProgress(top: number, vh: number, range = 0.45, start = 0.98): number {
-  if (!(vh > 0)) return 1;
-  return clamp01((start * vh - top) / (range * vh));
+export function shouldShow(top: number, vh: number, shown: boolean, enter = 0.88, leave = 0.97): boolean {
+  if (!(vh > 0)) return true;
+  if (top < enter * vh) return true;
+  if (top > leave * vh) return false;
+  return shown;
+}
+
+/** The entrance curve: fast away, a long soft landing (like the logo's corner turning). */
+export function easeOutExpo(t: number): number {
+  const k = clamp01(t);
+  return k === 1 ? 1 : 1 - Math.pow(2, -10 * k);
+}
+
+/** Smooth both ends, for the prism turning from one face to the next. */
+export function easeInOutCubic(t: number): number {
+  const k = clamp01(t);
+  return k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+}
+
+/** A value moving from `from` to `to` over `durationMs`, `elapsedMs` after it started (eased). */
+export function tween(from: number, to: number, elapsedMs: number, durationMs: number, ease: (t: number) => number = easeOutExpo): number {
+  if (!(durationMs > 0) || elapsedMs >= durationMs) return to;
+  if (elapsedMs <= 0) return from;
+  return from + (to - from) * ease(elapsedMs / durationMs);
+}
+
+/** How long an entrance takes: in, and the quicker way back out. */
+export const ENTER_MS = 1100;
+export const LEAVE_MS = 520;
+/** How long the prism takes to turn from one face to the next. */
+export const TURN_MS = 1050;
+
+/**
+ * The face the prism should show for scene progress `p`: the face whose resting stretch the reader
+ * is in, so the prism always turns all the way to a face and never stops between two.
+ */
+export function faceFor(p: number, n: number): number {
+  return frontFace(prismTurn(p, n), n);
 }
 
 /**
@@ -75,17 +114,6 @@ export function scrollForFace(i: number, n: number, sceneTop: number, height: nu
   const run = Math.max(height - vh, 0);
   const p = n > 1 ? Math.min(Math.max(i, 0), n - 1) / (n - 1) : 0;
   return Math.round(sceneTop + p * run);
-}
-
-/**
- * Moves `current` toward `target` by an exponential step over `dt` seconds, so scrolling feels like
- * gliding rather than jumping; `rate` is how quickly (higher is snappier).
- */
-export function glide(current: number, target: number, dt: number, rate = 9): number {
-  if (!Number.isFinite(current)) return target;
-  const k = 1 - Math.exp(-Math.max(dt, 0) * rate);
-  const next = current + (target - current) * k;
-  return Math.abs(target - next) < 1e-4 ? target : next;
 }
 
 /** The closing door: closed at k = 0, swung open (the given degrees) by k = 1, eased out. */

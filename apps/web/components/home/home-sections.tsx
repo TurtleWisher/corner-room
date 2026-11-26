@@ -60,7 +60,7 @@ export function RoomFaces() {
             ))}
           </ol>
         </div>
-        <div className="home-prism-view" data-k="" data-k-range="0.6">
+        <div className="home-prism-view" data-k="">
           <SpotlightRegion as="ul" className="home-faces home-prism">
             {FACES.map((face, i) => {
               const Icon = FACE_ICONS[face.key];
@@ -104,7 +104,7 @@ export function HowListeningWorks() {
   return (
     <section aria-labelledby="home-how" className="home-block mx-auto max-w-[90rem] px-4 md:px-6">
       <Lead id="home-how" eyebrow="How it works" title="From first listen to yours for good." />
-      <div className="home-steps-wrap mt-12" data-k="" data-k-range="0.6">
+      <div className="home-steps-wrap mt-12" data-k="">
         <span aria-hidden="true" className="home-steps-line" />
         <ol className="home-steps">
           {LISTEN_STEPS.map((step, i) => (
@@ -129,7 +129,7 @@ export function HowListeningWorks() {
 export function ForArtists() {
   return (
     <section aria-labelledby="home-artists" className="home-block home-artists-scene mx-auto max-w-[90rem] px-4 md:px-6">
-      <div className="home-artists-rise" data-k="" data-k-range="0.55">
+      <div className="home-artists-rise" data-k="">
         <SpotlightRegion className="home-artists cr-cut cr-glass-card cr-spot" data-spot data-tilt="4">
           <div className="home-artists-lead">
             <p className="flex items-center gap-2">
@@ -204,7 +204,7 @@ export function ClosingCall() {
   const signedIn = status === "authenticated";
   return (
     <section aria-labelledby="home-closing" className="home-closing mx-auto max-w-[90rem] px-4 md:px-6">
-      <div className="home-closing-stage" data-k="" data-door="" data-k-range="0.7">
+      <div className="home-closing-stage" data-k="" data-door="">
         <div aria-hidden="true" className="home-door-light" />
         <div className="home-closing-inner">
           <Display as="h2" id="home-closing" size="lg" className="leading-[0.9]">

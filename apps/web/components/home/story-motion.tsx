@@ -2,18 +2,20 @@
 
 /*
  * The closing story's motion (owner, 2026-11-26): one scroll listener for the whole end of the home
- * page. It measures, at most once a frame, how far each moving block has come in and how far the
- * reader is through the pinned prism scene, glides toward those values, and writes them as CSS
- * variables (--k, --turn, --lit, --door). The styles in app/styles/modules/home-story.css turn them
- * into transforms and opacity. React never re-renders for motion.
+ * page. Scrolling decides what should show; each movement then plays through on its own clock to its
+ * finished frame (owner, 2026-11-27: stopping mid-scroll must never leave a block half-arrived). A
+ * block comes in once its top rises into the window and goes back only when it drops out at the
+ * bottom edge (scrolling up); the prism turns all the way to the face for where the reader is. The
+ * values are written as CSS variables (--k, --turn, --lit, --door); the styles in
+ * app/styles/modules/home-story.css turn them into transforms and opacity. React never re-renders.
  *
- * Nothing moves by itself: the loop runs only while a value is still gliding after a scroll, a
- * resize or a pointer move. Without JavaScript, under reduced motion, or before this runs, every
+ * Nothing moves by itself: the loop runs only while a movement that scrolling, a resize or a pointer
+ * move started is still playing. Without JavaScript, under reduced motion, or before this runs, every
  * block is simply shown as it is (data-story is set only once the engine is live).
  *
  * Hooks in the markup:
- *   [data-k]              comes in as the page scrolls (--k 0 to 1); data-k-lag delays it a little
- *                         (a fraction of the window), data-k-range sets how long it takes.
+ *   [data-k]              comes in once on screen (--k 0 to 1, timed); data-k-lag delays its start
+ *                         a little (lag x 2 s), so rows arrive one after another.
  *   [data-door]           also gets --door, the closing door's swing in degrees.
  *   [data-prism-scene]    a pinned scene whose [data-face] children turn as a prism (wide screens).
  *   [data-face-go="i"]    a button that brings face i to the front.
@@ -23,16 +25,25 @@
 import * as React from "react";
 
 import {
+  ENTER_MS,
+  LEAVE_MS,
+  TURN_MS,
   doorAngle,
-  enterProgress,
+  easeInOutCubic,
+  faceFor,
   faceLight,
   frontFace,
-  glide,
   leanToward,
-  prismTurn,
   sceneProgress,
   scrollForFace,
+  shouldShow,
+  tween,
 } from "@/lib/home-story-view";
+
+/** One block's entrance: whether it is shown, and the timed move toward that. */
+type Entrance = { shown: boolean; from: number; to: number; start: number; dur: number; value: number };
+/** The prism's turn: which face it is going to, and the timed move there. */
+type Turn = { face: number; from: number; start: number; value: number };
 
 /** Wide enough, and tall enough, for the pinned prism; smaller screens get the cards stacked. */
 const PRISM_QUERY = "(min-width: 900px) and (min-height: 600px)";
@@ -48,36 +59,37 @@ export function StoryEnd({ children, className }: { children: React.ReactNode; c
 
     const blocks = Array.from(root.querySelectorAll<HTMLElement>("[data-k]"));
     const scenes = Array.from(root.querySelectorAll<HTMLElement>("[data-prism-scene]"));
-    const kNow = new Map<HTMLElement, number>();
-    const turnNow = new Map<HTMLElement, number>();
+    const kNow = new Map<HTMLElement, Entrance>();
+    const turnNow = new Map<HTMLElement, Turn>();
     let raf = 0;
-    let last = 0;
     let destroyed = false;
 
     const prismOn = () => !reduced && wide.matches;
 
-    function frame(t: number) {
+    function frame() {
       raf = 0;
       if (destroyed) return;
-      const dt = last ? Math.min((t - last) / 1000, 0.1) : 1 / 60;
-      last = t;
+      const now = performance.now();
       const vh = window.innerHeight;
       // At the very end of the page everything has arrived, however short the space below it.
       const atEnd = window.scrollY + vh >= document.documentElement.scrollHeight - 2;
       let moving = false;
 
       for (const el of blocks) {
-        const r = el.getBoundingClientRect();
-        const lag = Number(el.dataset.kLag) || 0;
-        const range = Number(el.dataset.kRange) || 0.45;
-        const target = atEnd ? 1 : enterProgress(r.top + lag * vh, vh, range);
-        const cur = kNow.get(el);
-        const next = cur === undefined ? target : glide(cur, target, dt, 7.5);
-        if (next !== target) moving = true;
-        if (next === cur) continue;
-        kNow.set(el, next);
-        el.style.setProperty("--k", next.toFixed(4));
-        if (el.dataset.door !== undefined) el.style.setProperty("--door", `${doorAngle(next).toFixed(2)}deg`);
+        const st = kNow.get(el) ?? { shown: false, from: 0, to: 0, start: now, dur: 0, value: 0 };
+        const shown = atEnd || shouldShow(el.getBoundingClientRect().top, vh, st.shown);
+        if (shown !== st.shown || !kNow.has(el)) {
+          // Start from wherever it is now, so turning back mid-way never jumps.
+          const lagMs = shown ? (Number(el.dataset.kLag) || 0) * 2000 : 0;
+          Object.assign(st, { shown, from: st.value, to: shown ? 1 : 0, start: now + lagMs, dur: shown ? ENTER_MS : LEAVE_MS });
+          kNow.set(el, st);
+        }
+        const value = tween(st.from, st.to, now - st.start, st.dur);
+        if (value !== st.to) moving = true;
+        if (value === st.value && el.style.getPropertyValue("--k")) continue;
+        st.value = value;
+        el.style.setProperty("--k", value.toFixed(4));
+        if (el.dataset.door !== undefined) el.style.setProperty("--door", `${doorAngle(value).toFixed(2)}deg`);
       }
 
       if (prismOn()) {
@@ -85,25 +97,32 @@ export function StoryEnd({ children, className }: { children: React.ReactNode; c
           const faces = Array.from(scene.querySelectorAll<HTMLElement>("[data-face]"));
           const n = faces.length;
           const r = scene.getBoundingClientRect();
-          const target = prismTurn(sceneProgress(r.top, r.height, vh), n);
-          const cur = turnNow.get(scene);
-          const next = cur === undefined ? target : glide(cur, target, dt, 6.5);
-          if (next !== target) moving = true;
-          if (next === cur) continue;
-          turnNow.set(scene, next);
-          scene.style.setProperty("--turn", next.toFixed(4));
-          const front = frontFace(next, n);
+          const face = faceFor(sceneProgress(r.top, r.height, vh), n);
+          let st = turnNow.get(scene);
+          if (!st) {
+            st = { face, from: face, start: now, value: face };
+            turnNow.set(scene, st);
+          } else if (face !== st.face) {
+            Object.assign(st, { face, from: st.value, start: now });
+          }
+          // A longer way round (two faces at once) takes a little longer.
+          const dur = TURN_MS * Math.min(1.6, Math.max(1, Math.abs(st.face - st.from)));
+          const value = tween(st.from, st.face, now - st.start, dur, easeInOutCubic);
+          if (value !== st.face) moving = true;
+          if (value === st.value && scene.style.getPropertyValue("--turn")) continue;
+          st.value = value;
+          scene.style.setProperty("--turn", value.toFixed(4));
+          const front = frontFace(value, n);
           if (scene.dataset.front !== String(front)) {
             scene.dataset.front = String(front);
             faces.forEach((f, i) => (i === front ? (f.dataset.front = "") : delete f.dataset.front));
-            scene.querySelectorAll<HTMLElement>("[data-face-go]").forEach((b) => b.setAttribute("aria-current", b.dataset.faceGo === String(front) ? "true" : "false"));
           }
-          faces.forEach((f, i) => f.style.setProperty("--lit", faceLight(i, next, n).toFixed(3)));
+          scene.querySelectorAll<HTMLElement>("[data-face-go]").forEach((b) => b.setAttribute("aria-current", b.dataset.faceGo === String(st.face) ? "true" : "false"));
+          faces.forEach((f, i) => f.style.setProperty("--lit", faceLight(i, value, n).toFixed(3)));
         }
       }
 
       if (moving) raf = requestAnimationFrame(frame);
-      else last = 0;
     }
     const schedule = () => {
       if (!raf && !destroyed) raf = requestAnimationFrame(frame);
@@ -179,8 +198,8 @@ export function StoryEnd({ children, className }: { children: React.ReactNode; c
     window.addEventListener("resize", schedule);
     wide.addEventListener?.("change", setPrism);
     setPrism();
-    // Measure once before the styles switch on, so blocks already on screen never blink.
-    frame(performance.now());
+    // Measure once before the styles switch on; blocks already on screen then play in.
+    frame();
     root.dataset.story = "live";
 
     return () => {
