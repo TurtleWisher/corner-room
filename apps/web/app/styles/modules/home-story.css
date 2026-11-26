@@ -1,0 +1,344 @@
+/* The home page's closing story (owner, 2026-11-26): what Corner Room is, how it works, artists,
+   questions and the way in, at the end of the page, moving in 3D as the reader scrolls.
+   components/home/story-motion.tsx writes the values; these rules only turn them into transform and
+   opacity. Every rule that moves anything waits for [data-story="live"], which the engine sets only
+   with motion allowed, so without it (no script, reduced motion) everything stands as it is.
+
+   Values: --k (0 to 1, how far a block has come in), --turn (the prism's face position), --lit (how
+   lit a prism face is), --door (the closing door's swing), --rx / --ry (a card's lean). Nothing here
+   loops or moves by itself (brand section 10). The 3D chains keep no opacity, filter, overflow or
+   isolation on their containers, which would flatten them. */
+
+/* ---------- Pinned scenes need the Sky band to clip without becoming a scroll box ---------- */
+[data-module="home"] .home-sky {
+  overflow: clip;
+}
+
+/* ---------- Opening lines: they arrive along the logo's depth axis (up-left to down-right) ---------- */
+.home-story[data-story="live"] .home-lead > * {
+  --kk: clamp(0, calc(var(--k, 1) * 1.35 - var(--lag, 0)), 1);
+  transform: translate3d(calc((1 - var(--kk)) * -1.5rem), calc((1 - var(--kk)) * 2.25rem), 0);
+  opacity: var(--kk);
+  will-change: transform, opacity;
+}
+.home-story[data-story="live"] .home-lead > :nth-child(2) {
+  --lag: 0.12;
+  transform-origin: 0 100%;
+  transform: perspective(900px) translate3d(calc((1 - var(--kk)) * -1.5rem), calc((1 - var(--kk)) * 2.75rem), 0) rotateX(calc((1 - var(--kk)) * 42deg));
+}
+.home-story[data-story="live"] .home-lead > :nth-child(3) {
+  --lag: 0.24;
+}
+
+/* ---------- The three sides of the room ---------- */
+.home-story .home-faces-scene {
+  padding-block: clamp(2.5rem, 7vh, 5rem);
+}
+.home-story .home-faces-pin {
+  max-width: 90rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+@media (min-width: 768px) {
+  .home-story .home-faces-pin {
+    padding-inline: 1.5rem;
+  }
+}
+.home-story .home-faces-rail {
+  display: none;
+}
+.home-story .home-prism-shade {
+  display: none;
+}
+.home-story .home-faces {
+  margin-top: 2.5rem;
+}
+
+/* Stacked (phones, short windows): each card stands up off the floor, turning in from the left. */
+.home-story[data-story="live"]:not([data-prism]) .home-faces > li {
+  transform-origin: 50% 100%;
+  transform: perspective(1400px) translate3d(calc((1 - var(--k, 1)) * -2rem), calc((1 - var(--k, 1)) * 3rem), calc((1 - var(--k, 1)) * -220px)) rotateY(calc((1 - var(--k, 1)) * 16deg)) rotateX(calc((1 - var(--k, 1)) * 24deg));
+  opacity: clamp(0, calc(var(--k, 1) * 1.5 - 0.2), 1);
+  will-change: transform, opacity;
+}
+
+/* Wide screens: one turning prism, pinned while the reader scrolls through its three faces. */
+.home-story[data-prism] .home-faces-scene {
+  position: relative;
+  height: 340vh;
+  height: 340svh;
+  padding-block: 0;
+}
+.home-story[data-prism] .home-faces-pin {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  align-items: center;
+  gap: clamp(2rem, 5vw, 5rem);
+  padding-top: 4.5rem;
+}
+.home-story[data-prism] .home-faces-rail {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 2.5rem;
+  max-width: 24rem;
+}
+.home-story .home-rail-go {
+  display: grid;
+  grid-template-columns: 2.75rem 1.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.625rem 0.25rem;
+  text-align: left;
+  color: var(--cr-fg-muted);
+  transition: color var(--cr-dur-interaction) var(--ease-corner);
+}
+.home-story .home-rail-go:hover,
+.home-story .home-rail-go[aria-current="true"] {
+  color: var(--cr-fg);
+}
+.home-story .home-rail-mark {
+  height: 1px;
+  background: var(--cr-line-strong);
+  transform-origin: left;
+  transform: scaleX(0.45);
+  transition: transform var(--cr-dur-component) var(--ease-corner), background-color var(--cr-dur-interaction) var(--ease-corner);
+}
+.home-story .home-rail-go[aria-current="true"] .home-rail-mark {
+  background: var(--cr-highlight);
+  transform: scaleX(1);
+}
+.home-story .home-rail-n {
+  font-size: 0.8125rem;
+  letter-spacing: 0.12em;
+  color: var(--cr-highlight);
+}
+.home-story .home-rail-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.home-story[data-prism] .home-prism-view {
+  display: flex;
+  justify-content: center;
+  perspective: 1700px;
+  perspective-origin: 50% 35%;
+}
+.home-story[data-prism][data-story="live"] .home-prism-view {
+  transform: translate3d(0, calc((1 - var(--k, 1)) * 4rem), 0) scale(calc(0.9 + var(--k, 1) * 0.1));
+  opacity: clamp(0, calc(var(--k, 1) * 1.4), 1);
+}
+.home-story[data-prism] .home-prism {
+  /* Three faces of width w meet at 120 degrees: the prism's centre stands w / (2 tan 60) behind each. */
+  --w: min(26rem, 36vw);
+  --h: min(31rem, calc(100svh - 11rem));
+  --apo: calc(var(--w) * 0.2887);
+  position: relative;
+  display: block;
+  width: var(--w);
+  height: var(--h);
+  margin: 0;
+  transform-style: preserve-3d;
+  transform: translateZ(calc(var(--apo) * -1)) rotateX(-6deg) rotateY(calc(var(--turn, 0) * -120deg));
+}
+.home-story[data-prism] .home-prism > li {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  transform: rotateY(calc(var(--i, 0) * 120deg)) translateZ(var(--apo));
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  opacity: 1;
+}
+/* A turning block needs solid sides: the faces drop their frosting for a deep Sky fill. */
+.home-story[data-prism] .home-prism .home-face {
+  --cut-fill: linear-gradient(160deg, color-mix(in srgb, var(--cr-surface-raised, var(--cr-surface)) 96%, transparent), color-mix(in srgb, var(--cr-surface) 98%, transparent));
+  --cut-blur: none;
+  width: 100%;
+  height: 100%;
+  justify-content: flex-start;
+  box-shadow: none;
+}
+.home-story[data-prism] .home-prism .home-face:hover,
+.home-story[data-prism] .home-prism .home-face:focus-visible {
+  transform: none;
+}
+.home-story[data-prism] .home-prism > li[data-front] .home-face {
+  --cut-border: linear-gradient(135deg, color-mix(in srgb, var(--cr-highlight) 70%, transparent), var(--cr-glass-edge) 45%);
+}
+/* The faces turned from the light go dark (the cosine of their angle, from story-motion). */
+.home-story[data-prism] .home-prism-shade {
+  display: block;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, #07061a, #0d0b22);
+  clip-path: polygon(var(--cr-cut) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cr-cut));
+  opacity: calc((1 - var(--lit, 1)) * 0.9);
+}
+.home-story[data-prism] .home-prism > li:not([data-front]) .home-face {
+  pointer-events: none;
+}
+/* Its shadow on the floor, under the block (dark, never a glow). */
+.home-story[data-prism] .home-prism-view::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: max(1.5rem, calc(50svh - var(--h, 31rem) / 2 - 3.5rem));
+  width: min(30rem, 42vw);
+  height: 3rem;
+  translate: -50% 0;
+  background: radial-gradient(closest-side, rgb(0 0 0 / 0.55), transparent);
+  pointer-events: none;
+}
+.home-story[data-prism] .home-faces-pin {
+  position: sticky;
+}
+.home-story[data-prism] .home-prism-view {
+  position: relative;
+  height: 100%;
+  align-items: center;
+}
+
+/* ---------- Steps: they stand up off the floor in turn, joined by a line of light ---------- */
+.home-story .home-steps-wrap {
+  position: relative;
+}
+.home-story .home-steps-line {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .home-story[data-story="live"] .home-steps-line {
+    display: block;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(clamp(2.5rem, 4.2vw, 3.75rem) + 1rem);
+    height: 1px;
+    background: linear-gradient(90deg, var(--cr-highlight), color-mix(in srgb, var(--cr-highlight) 30%, transparent) 70%, transparent);
+    transform-origin: left;
+    transform: scaleX(var(--k, 1));
+  }
+}
+.home-story[data-story="live"] .home-step {
+  transform-origin: 50% 100%;
+  transform: perspective(1100px) translate3d(0, calc((1 - var(--k, 1)) * 2.5rem), 0) rotateX(calc((1 - var(--k, 1)) * 72deg));
+  opacity: clamp(0, calc(var(--k, 1) * 1.6 - 0.25), 1);
+  will-change: transform, opacity;
+}
+.home-story[data-story="live"] .home-step-n {
+  transform: translate3d(calc((1 - var(--k, 1)) * -1rem), 0, 0);
+}
+.home-story[data-story="live"] .home-step-rule {
+  transform: scaleX(var(--k, 1));
+}
+
+/* ---------- For artists: the card rises out of the room and leans toward the pointer ---------- */
+.home-story .home-artists-scene {
+  perspective: 1600px;
+}
+.home-story[data-story="live"] .home-artists-rise {
+  transform-origin: 50% 100%;
+  transform: translate3d(0, calc((1 - var(--k, 1)) * 4rem), calc((1 - var(--k, 1)) * -240px)) rotateX(calc((1 - var(--k, 1)) * 18deg));
+  opacity: clamp(0, calc(var(--k, 1) * 1.5 - 0.15), 1);
+  perspective: 1400px;
+  will-change: transform, opacity;
+}
+.home-story[data-story="live"] .home-artists {
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.home-story[data-story="live"] .home-artists[data-tilting] {
+  transition-duration: 260ms;
+}
+.home-story[data-story="live"] .home-artists-point {
+  transform: translate3d(0, calc((1 - var(--k, 1)) * 1.5rem), 0);
+  opacity: clamp(0, calc(var(--k, 1) * 1.4 - 0.2), 1);
+}
+
+/* ---------- Questions: they slide in from the right, one after another; answers open smoothly ---------- */
+.home-story[data-story="live"] .home-faq-item {
+  transform: translate3d(calc((1 - var(--k, 1)) * 3rem), 0, 0);
+  opacity: clamp(0, calc(var(--k, 1) * 1.4 - 0.15), 1);
+}
+@supports selector(::details-content) {
+  .home-story[data-story="live"] .home-faq {
+    interpolate-size: allow-keywords;
+  }
+  .home-story[data-story="live"] .home-faq-item::details-content {
+    block-size: 0;
+    overflow: clip;
+    transition:
+      block-size 420ms cubic-bezier(0.16, 1, 0.3, 1),
+      content-visibility 420ms allow-discrete;
+  }
+  .home-story[data-story="live"] .home-faq-item[open]::details-content {
+    block-size: auto;
+  }
+}
+
+/* ---------- The way in: two doors swing inward and the room's light spills through ---------- */
+.home-story .home-closing-stage {
+  position: relative;
+  padding-block: 2rem;
+  perspective: 1400px;
+}
+.home-story .home-closing-inner {
+  position: relative;
+}
+.home-story .home-door,
+.home-story .home-door-light {
+  display: none;
+}
+.home-story[data-story="live"] .home-door-light {
+  display: block;
+  position: absolute;
+  inset: -2rem 18%;
+  pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--cr-highlight) 18%, transparent), color-mix(in srgb, var(--cr-highlight) 6%, transparent) 55%, transparent);
+  clip-path: polygon(var(--cr-cut) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cr-cut));
+  transform: scaleX(var(--k, 1));
+  opacity: var(--k, 1);
+}
+.home-story[data-story="live"] .home-door {
+  display: block;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--cr-highlight) 8%, transparent), transparent 30%),
+    linear-gradient(180deg, #1a1638, #0d0b22);
+  border: 1px solid var(--cr-line);
+  opacity: clamp(0, calc(1.15 - var(--k, 1) * 0.9), 1);
+  will-change: transform, opacity;
+}
+.home-story[data-story="live"] .home-door-l {
+  left: 0;
+  transform-origin: 0 50%;
+  transform: rotateY(var(--door, 84deg));
+  clip-path: polygon(var(--cr-cut) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cr-cut));
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--cr-highlight) 55%, transparent);
+}
+.home-story[data-story="live"] .home-door-r {
+  right: 0;
+  transform-origin: 100% 50%;
+  transform: rotateY(calc(var(--door, 84deg) * -1));
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--cr-highlight) 55%, transparent);
+}
+.home-story[data-story="live"] .home-closing-line {
+  transform: translate3d(0, calc((1 - var(--k, 1)) * 2rem), 0) scale(calc(0.9 + var(--k, 1) * 0.1));
+  opacity: clamp(0, calc(var(--k, 1) * 1.6 - 0.3), 1);
+}
+.home-story[data-story="live"] .home-closing-line + .home-closing-line {
+  opacity: clamp(0, calc(var(--k, 1) * 1.8 - 0.65), 1);
+}
+.home-story[data-story="live"] .home-closing-actions {
+  transform: translate3d(0, calc((1 - var(--k, 1)) * 1.5rem), 0);
+  opacity: clamp(0, calc(var(--k, 1) * 2 - 0.95), 1);
+}
