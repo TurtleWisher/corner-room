@@ -15,7 +15,6 @@ import { useOptionalPlayer, usePlayerProgress, type PlayerTrack } from "@/compon
 import type { TrendingItem } from "@/features/trending/api";
 import type { SceneEngine, TrendingScene } from "@/components/home/trending-gl";
 import { coverUrl } from "@/lib/cover-view";
-import { formatCount } from "@/lib/format/count";
 import { creditName } from "@/lib/music-view";
 import { clock } from "@/lib/player-model";
 import { teaserKey } from "@/lib/teaser-room-view";
@@ -679,6 +678,10 @@ function MiniRoom({
   const href = itemHref(item);
   const src = cover(item);
   const duration = itemDurationMs(item);
+  const meta = [
+    item.kind === "TRACK" && item.release_title && item.release_title !== item.title ? `from ${item.release_title}` : null,
+    item.tracks.length > 1 ? `${item.tracks.length} songs` : null,
+  ].filter((part): part is string => !!part);
 
   const start = () => {
     if (!player || !access) return;
@@ -726,11 +729,8 @@ function MiniRoom({
             {item.title}
           </Link>
           {artist ? <p className="tc-room-artist">{artist}</p> : null}
-          <p className="tc-room-meta">
-            <span className="cr-num">{formatCount(item.listens)}</span> {item.listens === 1 ? "listen" : "listens"}
-            {item.kind === "TRACK" && item.release_title && item.release_title !== item.title ? <span> · from {item.release_title}</span> : null}
-            {item.tracks.length > 1 ? <span> · {item.tracks.length} songs</span> : null}
-          </p>
+          {/* The listen count is shown only as the large figure in the room behind (owner, 2026-11-26). */}
+          {meta.length ? <p className="tc-room-meta">{meta.join(" · ")}</p> : null}
 
           <div className="tc-controls">
             <button type="button" className="tc-key" aria-label="Previous" disabled={count < 2} onClick={() => onStep(-1)}>

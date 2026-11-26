@@ -555,6 +555,18 @@ FEATURES: Final[list[dict]] = [
         ),
         "updates": [
             {
+                "date": "2026-11-26",
+                "kind": "IMPROVED",
+                "title": "The explanations move to the end, in 3D",
+                "details": "What Corner Room is, how it works, what artists get, the questions and the way in now close the home page, after the music. They move as you scroll: the three sides of the room turn as one block that rests on each side, the steps stand up off the floor one by one, the artists card leans toward the mouse, answers open smoothly and two doors swing open on the way in. Nothing moves by itself, and people who ask for less motion see it all still.",
+            },
+            {
+                "date": "2026-11-26",
+                "kind": "IMPROVED",
+                "title": "Trending Corner: listens only in the big figure",
+                "details": "The small listen count under the title is gone; the listens show only as the large figure behind the discs. That figure now has real depth: each numeral is a solid block with layered red sides that shift as you move the mouse, a brushed face, and a band of light that crosses it when the number rolls.",
+            },
+            {
                 "date": "2026-11-18",
                 "kind": "IMPROVED",
                 "title": "Trending Corner as one card, with listens in millions",

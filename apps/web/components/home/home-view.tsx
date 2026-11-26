@@ -15,6 +15,7 @@ import { FeaturedCarousel } from "@/components/home/featured-carousel";
 import { ClosingCall, ForArtists, HowListeningWorks, Questions, RoomFaces, WorldShift } from "@/components/home/home-sections";
 import { MissionBand } from "@/components/home/mission-band";
 import { PosterTilt } from "@/components/home/poster-tilt";
+import { StoryEnd } from "@/components/home/story-motion";
 import { TrendingCorner } from "@/components/home/trending-corner";
 import { Reveal } from "@/components/ds/reveal";
 import { useCredits } from "@/components/music/credits";
@@ -312,11 +313,16 @@ function SkyWorld() {
   return (
     <LitSurface as="div" theme="sky" className="home-sky border-b border-cr-sky/60">
       <NewReleases />
-      <HowListeningWorks />
       <MissionBand />
-      <ForArtists />
-      <Questions />
-      <ClosingCall />
+      {/* What Corner Room is and how it works close the page, after the music (owner, 2026-11-26),
+          moving in 3D as the reader scrolls (story-motion). */}
+      <StoryEnd>
+        <RoomFaces />
+        <HowListeningWorks />
+        <ForArtists />
+        <Questions />
+        <ClosingCall />
+      </StoryEnd>
     </LitSurface>
   );
 }
@@ -420,7 +426,6 @@ export function HomeView() {
         <div id="welcome" className="scroll-mt-24">
           <YouPanel />
         </div>
-        <RoomFaces />
         <Trending />
         <Upcoming state={events} />
       </div>
