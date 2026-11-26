@@ -556,6 +556,12 @@ FEATURES: Final[list[dict]] = [
         "updates": [
             {
                 "date": "2026-11-27",
+                "kind": "IMPROVED",
+                "title": "The 3D parts follow your scrolling, then finish when you stop",
+                "details": "The parts at the end of the home page now move with your scrolling, forward and back at your own speed, like turning a dial. When you stop, whatever was part-way finishes by itself: everything on screen settles into its finished, readable frame, and the turning block finishes its turn in the way you were going.",
+            },
+            {
+                "date": "2026-11-27",
                 "kind": "FIXED",
                 "title": "The 3D parts finish wherever you stop scrolling",
                 "details": "Stopping part-way left cards half-arrived and hard to read until you scrolled on. Now each part plays its whole entrance once it is on screen, wherever you stop, and the turning block always comes to rest on a whole side. Scroll back up past a part and it goes back, ready to play again.",
