@@ -13,7 +13,7 @@ import { AccountPage } from "@/components/shell/account-page";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { loadErrorMessage, useAsync } from "@/components/use-async";
 import { fetchMyFanGifts, fetchMyGiftCredit } from "@/features/fan-gifts/api";
-import { GIVER_STATE, giftStatusLine } from "@/lib/fan-gift-view";
+import { GIVER_STATE, giftHref, giftStatusLine } from "@/lib/fan-gift-view";
 
 function Gifts() {
   const data = useAsync(async () => {
@@ -41,7 +41,9 @@ function Gifts() {
                 <p className="mt-1">
                   <Money value={c.balance} minorDigits="always" variant="display" className="text-2xl text-highlight" />
                 </p>
-                <p className="mt-2 text-xs text-fg-muted">Choose Pay with my gift credit at checkout on any of their songs or releases.</p>
+                <p className="mt-2 text-xs text-fg-muted">
+                  Spend it on any of their songs or releases, for you or as a gift: tick Pay with my gift credit at checkout.
+                </p>
               </li>
             ))}
           </ul>
@@ -85,6 +87,10 @@ function Gifts() {
                     {g.status === "PENDING_PAYMENT" ? (
                       <ButtonLink href={`/checkout?order=${g.order_id}&world=sky`} size="sm" variant="secondary">
                         Pay now
+                      </ButtonLink>
+                    ) : g.send_again_offer_id ? (
+                      <ButtonLink href={`${giftHref(g.send_again_offer_id)}&credit=1&world=sky`} size="sm" variant="secondary">
+                        <Gift aria-hidden="true" /> Send it again
                       </ButtonLink>
                     ) : null}
                   </div>

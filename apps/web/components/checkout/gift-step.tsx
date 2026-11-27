@@ -113,7 +113,20 @@ export function GiftStep({
   );
 }
 
-export function CreditStep({ offerId, on, onChange }: { offerId: string; on: boolean; onChange: (on: boolean) => void }) {
+export function CreditStep({
+  offerId,
+  on,
+  onChange,
+  giving = false,
+  people = 1,
+}: {
+  offerId: string;
+  on: boolean;
+  onChange: (on: boolean) => void;
+  /** Giving it as a gift: the credit pays for the gift instead (owner, 2026-11-27, D-GIFT-FAN-03). */
+  giving?: boolean;
+  people?: number;
+}) {
   const credit = useAsync(() => fetchOfferCredit(offerId).catch(() => null), [offerId]);
   const data = credit.status === "ok" ? credit.data : null;
   if (!data?.balance) return null;
@@ -128,11 +141,14 @@ export function CreditStep({ offerId, on, onChange }: { offerId: string; on: boo
       {data.usable ? (
         <label className="mt-3 flex cursor-pointer items-center gap-3 text-sm font-semibold text-fg">
           <input type="checkbox" className="size-4 accent-[var(--color-highlight)]" checked={on} onChange={(e) => onChange(e.target.checked)} />
-          Pay with my gift credit (nothing to pay now)
+          {giving ? "Pay for this gift with my gift credit (nothing to pay now)" : "Pay with my gift credit (nothing to pay now)"}
         </label>
       ) : (
         <p className="mt-2 text-sm text-fg-muted">It doesn&apos;t cover this one, so it stays for something else.</p>
       )}
+      {giving && data.usable && people > 1 ? (
+        <p className="mt-2 text-sm text-fg-muted">Credit pays for the whole gift, one copy for each person, so it needs to cover all {people} of them.</p>
+      ) : null}
     </Card>
   );
 }

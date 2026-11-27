@@ -194,18 +194,32 @@ class FanGiftService:
         idempotency_key: str,
         chosen_amount_minor: int | None = None,
         design: dict[str, Any] | None = None,
+        use_credit: bool = False,
     ):
         """The giver's order: one line per person, paid like any order. Nothing about the people is
-        looked up before paying (whether they have an account or own the music stays private)."""
+        looked up before paying (whether they have an account or own the music stays private).
+
+        Owner, 2026-11-27 (D-GIFT-FAN-03): the giver's gift credit for this act may pay for the gift
+        (for example a gift that came back unclaimed, sent again). Same rules as any credit order:
+        released music only, the credit covers the whole order, no new money (a ৳0 order; the sale
+        counted when the credit was first paid for)."""
         from cornerroom.modules.commerce.application.service import ORDER_PLACED_EVENT, CheckoutService
         from cornerroom.modules.commerce.domain.lifecycle import assert_sellable_type
         from cornerroom.modules.commerce.domain.open_price import amount_to_charge
         from cornerroom.modules.identity.domain.models import User
 
         checkout = CheckoutService(self.session, settings=self.settings, clock=self.clock)
-        found = await checkout._existing_order(ctx, idempotency_key)
-        if found is not None:
-            return found
+        if use_credit:
+            # A credit-paid gift has no payment row, so a repeat of the same request finds the order alone.
+            existing = (await self.session.execute(select(Order).where(Order.idempotency_key == idempotency_key))).scalar_one_or_none()
+            if existing is not None:
+                if existing.user_id != ctx.user_id:
+                    raise AppError("CONFLICT", "Idempotency-Key reused", 409)
+                return existing, None
+        else:
+            found = await checkout._existing_order(ctx, idempotency_key)
+            if found is not None:
+                return found
         offer = await self.session.get(Offer, offer_id)
         if offer is None or offer.deleted_at is not None or offer.status != "ACTIVE":
             raise NotFoundError("Offer not found")
@@ -255,16 +269,29 @@ class FanGiftService:
         )
         if unit <= 0:
             raise AppError("GIFT_NOT_POSSIBLE", "Free music can't be given as a paid gift", 409)
+        is_test = await checkout.is_test_buyer(ctx)
+        credit_minor = 0
+        if use_credit:
+            if preorder:
+                raise AppError("CREDIT_NOT_USABLE", "Gift credit pays for music that is out", 409)
+            if is_test:
+                raise AppError("TEST_BUY", "A test buy doesn't use gift credit", 422)
+            credit_minor = unit * len(people_rows)
+            if await self.balance(ctx.user_id, act_id, offer.currency_code) < credit_minor:
+                raise AppError("NOT_ENOUGH_CREDIT", "Your gift credit doesn't cover this", 409)
+        # With credit, nothing new is charged: each line is ৳0 and the credit pays the whole order.
+        line_minor = 0 if use_credit else unit
         order = Order(
             user_id=ctx.user_id,
             status="PENDING_PAYMENT",
-            total_amount_minor=unit * len(people_rows),
+            total_amount_minor=line_minor * len(people_rows),
+            paid_with_credit_minor=credit_minor,
             currency_code=offer.currency_code,
             idempotency_key=idempotency_key,
             purpose="RELEASE" if kind == "RELEASE" else "TRACK",
             is_presale=preorder,
             # A platform admin's gift is a test buy too (D-TEST-BUY-01): no money, never counted.
-            is_test=await checkout.is_test_buyer(ctx),
+            is_test=is_test,
             created_by=ctx.user_id,
             updated_by=ctx.user_id,
         )
@@ -287,7 +314,7 @@ class FanGiftService:
         for person in people_rows:
             item = OrderItem(
                 order_id=order.id, item_type=kind, ref_id=work.id, product_id=product.id, quantity=1,
-                unit_amount_minor=unit, amount_minor=unit, currency_code=offer.currency_code,
+                unit_amount_minor=line_minor, amount_minor=line_minor, currency_code=offer.currency_code,
             )
             self.session.add(item)
             await self.session.flush()
@@ -296,6 +323,14 @@ class FanGiftService:
             )
         await self.session.flush()
         checkout._add_tax_line(order)
+        if use_credit:
+            await self.audit.record_from_auth(
+                ctx, action="fan_gift.placed", entity_type="FanGift", entity_id=gift.id,
+                new_state={"people": len(people_rows), "note": bool(note_text), "files": len(files), "look": gift.look, "credit": True},
+                organization_id=product.organization_id,
+            )
+            # Spends the credit, marks the order paid and hands the gift to delivery (on_paid).
+            return await checkout._pay_with_credit(ctx, order, product, act_id, credit_minor)
         if order.is_test:
             await self.audit.record_from_auth(
                 ctx, action="fan_gift.test_placed", entity_type="FanGift", entity_id=gift.id,
@@ -889,7 +924,22 @@ class FanGiftService:
                 for p in await self._recipients(gift.id)
                 if p.passed_from_id is None
             ]
+            # Owner, 2026-11-27 (D-GIFT-FAN-03): a gift someone didn't claim can be sent again, with
+            # the credit it left; the music's current normal price, if it is still on sale.
+            send_again = None
+            if any(p["state"] == "NOT_CLAIMED" for p in people):
+                send_again = (
+                    await self.session.execute(
+                        select(Offer.id).where(
+                            Offer.product_id == gift.product_id,
+                            Offer.status == "ACTIVE",
+                            Offer.audience == "EVERYONE",
+                            Offer.deleted_at.is_(None),
+                        ).limit(1)
+                    )
+                ).scalar_one_or_none()
             out.append({
+                "send_again_offer_id": send_again,
                 "id": gift.id, "order_id": gift.order_id, "work_type": gift.work_type, "work_id": gift.work_id,
                 "title": await self._title(gift), "act_name": await self._act_name(gift.act_id),
                 "status": gift.status, "note_state": gift.note_state, "created_at": gift.created_at,
@@ -952,9 +1002,12 @@ CLAIM_EVENTS = {USER_VERIFIED, USER_REGISTERED, USER_ACTIVATED}
 def returned_email(*, title: str, act: str, status: str, amount: str, link: str) -> tuple[str, str]:
     what = "wasn't claimed in time" if status == "EXPIRED" else "was declined"
     subject = f"Your gift of {title} {what}"
+    # Owner, 2026-11-27 (D-GIFT-FAN-03): credit can pay for a gift, so an unclaimed one can go again.
+    again = ["You can send it again with this credit: open your gifts and press Send it again."] if status == "EXPIRED" else []
     body = "\n".join([
         f"One of the gifts you sent of {title} by {act} {what}.",
         f"{amount} is back with you as gift credit to spend on {act}'s music on Corner Room.",
+        *again,
         "",
         link,
     ])

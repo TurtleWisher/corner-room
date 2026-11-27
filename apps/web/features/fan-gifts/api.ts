@@ -67,6 +67,8 @@ export type MyGift = {
   note_state: "NONE" | "WAITING" | "APPROVED" | "REMOVED";
   created_at: string | null;
   each: MoneyValue;
+  /** Someone didn't claim it: send it again, with credit (D-GIFT-FAN-03). */
+  send_again_offer_id?: string | null;
   people: { email: string; name: string | null; state: GiverState }[];
 };
 
@@ -92,11 +94,18 @@ export async function createGiftOrder(
   idempotencyKey: string,
   gift: { people: GiftPerson[]; note: string | null; subject?: string | null; look?: GiftLook; show_cover?: boolean; file_ids?: string[] },
   amountMinor?: number,
+  /** Pay for the gift with the giver's gift credit for this act (owner, 2026-11-27, D-GIFT-FAN-03). */
+  useCredit = false,
 ): Promise<OrderRecord> {
   return apiFetch<OrderRecord>("/api/v1/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-    body: JSON.stringify({ offer_id: offerId, gift, ...(amountMinor === undefined ? {} : { amount_minor: amountMinor }) }),
+    body: JSON.stringify({
+      offer_id: offerId,
+      gift,
+      ...(useCredit ? { use_credit: true } : {}),
+      ...(amountMinor === undefined ? {} : { amount_minor: amountMinor }),
+    }),
     retry: false,
   });
 }

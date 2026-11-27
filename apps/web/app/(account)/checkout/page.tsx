@@ -375,7 +375,8 @@ function NewCheckout() {
   // D-GIFT-FAN-01: buy it for other people, or pay with gift credit for the artist's music.
   // "Give as a gift" on song and release pages opens checkout with it ticked (?gift=1).
   const [gift, setGift] = useState<GiftDraft>(() => (params.get("gift") === "1" ? { ...NO_GIFT, on: true } : NO_GIFT));
-  const [useCredit, setUseCredit] = useState(false);
+  // "Send it again" on a gift that came back opens with the credit ticked (?credit=1).
+  const [useCredit, setUseCredit] = useState(() => params.get("credit") === "1");
   const { user } = useAuth();
   // Platform admins buy as a test (owner, 2026-11-21, D-TEST-BUY-01); the server decides.
   const access = useAsync(
@@ -431,7 +432,8 @@ function NewCheckout() {
   const creditable = giftable && !presale && !testBuyer;
   const giving = giftable && gift.on;
   const gifted = giving ? readGift(gift, user?.email) : null;
-  const paying = creditable && !giving && useCredit;
+  // Credit can pay for the buyer's own copy, or for a gift (owner, 2026-11-27, D-GIFT-FAN-03).
+  const paying = creditable && useCredit;
 
   async function place() {
     if (!item) return;
@@ -453,6 +455,7 @@ function NewCheckout() {
             file_ids: gifted.design.file_ids,
           },
           chosen?.minor ?? undefined,
+          paying,
         );
       else if (item.kind === "offer" && paying) order = await createCreditOrder(item.id, key, addressConfirmed, chosen?.minor ?? undefined);
       else if (item.kind === "offer") order = await createCatalogOrder(item.id, key, addressConfirmed, chosen?.minor ?? undefined);
@@ -559,7 +562,9 @@ function NewCheckout() {
         </Card>
       ) : summary.status === "ok" && summary.data ? (
         <>
-          {creditable && !giving ? <CreditStep offerId={item.id} on={useCredit} onChange={setUseCredit} /> : null}
+          {creditable ? (
+            <CreditStep offerId={item.id} on={useCredit} onChange={setUseCredit} giving={giving} people={gifted?.people.length ?? 1} />
+          ) : null}
           {/* A gift's giver gets no collectible from it, so a gift needs no delivery address. */}
           {/* Test buys earn no collectible either, so no address (D-TEST-BUY-01). */}
           {giving || testBuyer ? null : <DeliveryAddressStep confirmed={addressConfirmed} onConfirmedChange={setAddressConfirmed} />}
@@ -570,7 +575,7 @@ function NewCheckout() {
               disabled={(giving ? Boolean(gifted?.problem) : !testBuyer && !addressConfirmed) || Boolean(chosen && chosen.minor === null)}
               onClick={() => void place()}
             >
-              {item.kind === "tickets" ? "Reserve and pay" : paying ? "Get it with credit" : "Continue to payment"}
+              {item.kind === "tickets" ? "Reserve and pay" : paying ? (giving ? "Send the gift with credit" : "Get it with credit") : "Continue to payment"}
             </Button>
             <Link href="/store" className="cr-focus text-sm font-semibold text-fg-muted hover:text-fg">
               Cancel
