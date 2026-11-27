@@ -115,6 +115,8 @@ def test_gift_emails_say_what_happens_next() -> None:
     assert owned.subject == "For there" and "Rumi passed on a gift" in owned.text and "already" not in owned.text
     assert 'src="cid:file-1"' in owned.html and "Download zine.pdf" in owned.html and "#17142e" in owned.html
     _s, back = returned_email(title="T", act="A", status="EXPIRED", amount="BDT 30.00", link="L")
+    assert "Send it again" in back
+    assert "Send it again" not in returned_email(title="T", act="A", status="DECLINED", amount="BDT 30.00", link="L")[1]
     assert "wasn't claimed in time" in back and "BDT 30.00" in back and "credit" in back
     assert mask_email("samiul@example.com") == "s•••@example.com"
 
@@ -282,12 +284,36 @@ async def test_a_fan_gift_from_payment_to_credit(client: AsyncClient) -> None:
     assert await _owns(giver["user"]["id"], release_id)
     left = (await client.get("/api/v1/me/gift-credit", headers=bearer(gtoken))).json()[0]["balance"]["amount_minor"]
     assert left == offer["amount_minor"]
-    # Credit can't pay for a gift, and someone without credit can't use it.
-    mixed = await client.post(
-        "/api/v1/orders", headers={**bearer(gtoken), "Idempotency-Key": f"m-{uuid4()}"},
-        json={"offer_id": offer["id"], "use_credit": True, "gift": {"people": [{"email": "x@example.com"}]}},
+    # Owner, 2026-11-27 (D-GIFT-FAN-03): the gift nobody claimed can be sent again with its credit.
+    sent_again = (await client.get("/api/v1/me/fan-gifts", headers=bearer(gtoken))).json()[0]
+    assert sent_again["send_again_offer_id"] == offer["id"]
+    # The credit pays for the whole gift, one copy per person: two people need twice the credit.
+    short = await client.post(
+        "/api/v1/orders", headers={**bearer(gtoken), "Idempotency-Key": f"s-{uuid4()}"},
+        json={"offer_id": offer["id"], "use_credit": True, "gift": {"people": [{"email": "fg-never@example.com"}, {"email": "x@example.com"}]}},
     )
-    assert mixed.status_code == 422
+    assert short.status_code == 409 and short.json()["code"] == "NOT_ENOUGH_CREDIT"
+    regift_key = f"r-{uuid4()}"
+    regift = await client.post(
+        "/api/v1/orders", headers={**bearer(gtoken), "Idempotency-Key": regift_key},
+        json={"offer_id": offer["id"], "use_credit": True, "gift": {"people": [{"email": "fg-never@example.com"}]}},
+    )
+    assert regift.status_code == 201, regift.text
+    regifted = regift.json()
+    # No new money: a ৳0 order paid with credit, already on its way to the person.
+    assert regifted["is_gift"] is True and regifted["status"] == "FULFILLED" and regifted["payment"] is None
+    assert regifted["total_amount_minor"] == 0 and regifted["paid_with_credit_minor"] == offer["amount_minor"]
+    assert (await client.get("/api/v1/me/gift-credit", headers=bearer(gtoken))).json() == []
+    newest = (await client.get("/api/v1/me/fan-gifts", headers=bearer(gtoken))).json()[0]
+    assert newest["status"] == "DELIVERED" and [p["state"] for p in newest["people"]] == ["DELIVERED"]
+    assert newest["each"]["amount_minor"] == offer["amount_minor"]  # unclaimed again, it comes back in full
+    # The same request again returns the same order and spends nothing more.
+    replay = await client.post(
+        "/api/v1/orders", headers={**bearer(gtoken), "Idempotency-Key": regift_key},
+        json={"offer_id": offer["id"], "use_credit": True, "gift": {"people": [{"email": "fg-never@example.com"}]}},
+    )
+    assert replay.json()["id"] == regifted["id"]
+    # Someone without credit can't use it.
     none = await client.post(
         "/api/v1/orders", headers={**bearer(friend["access_token"]), "Idempotency-Key": f"n-{uuid4()}"},
         json={"offer_id": offer["id"], "use_credit": True, "delivery_address_confirmed": True},
@@ -297,7 +323,7 @@ async def test_a_fan_gift_from_payment_to_credit(client: AsyncClient) -> None:
     # Studio Sales marks gift sales and credit sales (owner, 2026-11-20).
     lines = (await client.get(f"/api/v1/studio/profiles/artist/{artist_id}/sales/lines", headers=bearer(owner["access_token"]))).json()["items"]
     hows = [line.get("how") for line in lines]
-    assert hows.count("GIFT") == 5 and hows.count("CREDIT") == 1 and None in hows
+    assert hows.count("GIFT") == 6 and hows.count("CREDIT") == 1 and None in hows
 
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64

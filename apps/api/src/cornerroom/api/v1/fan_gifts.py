@@ -92,6 +92,8 @@ class MyGiftOut(BaseModel):
     created_at: datetime | None = None
     each: MoneyOut
     people: list[GivenPersonOut]
+    # Set when someone didn't claim it and the music is still on sale: checkout opens on it.
+    send_again_offer_id: UUID | None = None
 
 
 class CreditOut(BaseModel):

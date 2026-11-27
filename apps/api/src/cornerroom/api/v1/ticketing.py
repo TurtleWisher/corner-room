@@ -487,8 +487,6 @@ async def create_order(
     if body.use_credit or body.gift is not None:
         if body.offer_id is None:
             raise AppError("VALIDATION_ERROR", "Only music takes a gift or gift credit", 422)
-        if body.use_credit and body.gift is not None:
-            raise AppError("VALIDATION_ERROR", "Gift credit can't pay for a gift", 422)
         fingerprint["use_credit"] = body.use_credit
         fingerprint["gift"] = body.gift.model_dump(mode="json") if body.gift is not None else None
     started = await begin_idempotent(
@@ -522,6 +520,7 @@ async def create_order(
                 },
                 idempotency_key=f"{ctx.user_id}:{idempotency_key}",
                 chosen_amount_minor=body.amount_minor,
+                use_credit=body.use_credit,
             )
         else:
             order, payment = await svc.checkout_from_offer(
