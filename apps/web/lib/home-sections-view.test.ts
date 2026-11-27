@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ARTIST_POINTS, FACES, LISTEN_STEPS, QUESTIONS, curtainEdge, worldCurtain, worldLayers, worldProgress } from "./home-sections-view";
+import { ARTIST_POINTS, CURTAIN_BAND, CURTAIN_SPAN, FACES, LISTEN_STEPS, QUESTIONS, curtainEdge, worldCurtain, worldLayers, worldProgress } from "./home-sections-view";
 
 describe("home copy", () => {
   it("links only to pages that exist", () => {
@@ -71,10 +71,11 @@ describe("worldCurtain (owner, 2026-11-28)", () => {
     expect(worldCurtain(0.5)).toEqual({ curtain: 1, drawing: false, veil: 1, sky: 0 });
     expect(worldCurtain(0.75)).toEqual({ curtain: 1, drawing: false, veil: 1, sky: 0.5 });
   });
-  it("starts below the window and ends above it, band and all", () => {
-    expect(curtainEdge(0)).toBeCloseTo(-0.22);
-    expect(curtainEdge(1)).toBeCloseTo(1.22);
-    expect(curtainEdge(0.5)).toBeCloseTo(0.5);
-    expect(curtainEdge(9)).toBeCloseTo(1.22);
+  it("starts with nothing drawn and ends a whole band past the top", () => {
+    expect(curtainEdge(0)).toBe(0);
+    expect(curtainEdge(1)).toBeCloseTo(CURTAIN_SPAN + CURTAIN_BAND);
+    expect(curtainEdge(0.5)).toBeCloseTo((CURTAIN_SPAN + CURTAIN_BAND) / 2);
+    expect(curtainEdge(9)).toBeCloseTo(CURTAIN_SPAN + CURTAIN_BAND);
+    expect(curtainEdge(-1)).toBe(0);
   });
 });
