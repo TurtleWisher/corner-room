@@ -11,14 +11,16 @@
  * the reason given and when, so a payment never disappears once it has been checked.
  */
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { DateTime, Field, Input, Money } from "@/components/ds";
-import { Button, Card, EmptyState, ErrorState, LoadingState } from "@/components/staff/kit";
+import { Button, EmptyState, ErrorState, LoadingState } from "@/components/staff/kit";
 import { useAsync } from "@/components/use-async";
 import { confirmSubmission, fetchStaffSubmissions, rejectSubmission, type StaffSubmission, type SubmissionQueue } from "@/features/commerce/api";
 import { ApiError } from "@/lib/api/client";
 import { paidWithLabel } from "@/lib/checkout-view";
+import { profileHref } from "@/lib/customer-profile-view";
 import { orderReferenceOf } from "@/lib/refund-view";
 
 function CheckRow({ row, onDone, decided = false }: { row: StaffSubmission; onDone: () => void; decided?: boolean }) {
@@ -59,7 +61,15 @@ function CheckRow({ row, onDone, decided = false }: { row: StaffSubmission; onDo
         </div>
         <div>
           <dt className="inline text-fg-muted">Buyer </dt>
-          <dd className="inline text-fg">{row.buyer_email ?? "Not available"}</dd>
+          <dd className="inline text-fg">
+            {row.buyer_user_id ? (
+              <Link href={profileHref(row.buyer_user_id)} className="cr-focus font-semibold text-link underline-offset-2 hover:underline">
+                {row.buyer_email ?? "Open buyer"}
+              </Link>
+            ) : (
+              (row.buyer_email ?? "Not available")
+            )}
+          </dd>
         </div>
         <div>
           <dt className="inline text-fg-muted">Sent </dt>
@@ -130,7 +140,7 @@ export function PaymentChecks() {
         Find each payment on the bKash, Nagad, Rocket, Upay or bank statement before confirming. Confirming completes the order; a rejection shows your reason
         to the buyer, who can send the details again.
       </p>
-      <div role="tablist" aria-label="Payment checks" className="flex gap-1 border-b border-line">
+      <div role="tablist" aria-label="Payment checks" className="cx-chips">
         {TABS.map((t) => (
           <button
             key={t.value}
@@ -138,13 +148,13 @@ export function PaymentChecks() {
             role="tab"
             aria-selected={tab === t.value}
             onClick={() => setTab(t.value)}
-            className={`cr-focus -mb-px border-b-2 px-3 py-2 text-sm font-semibold ${tab === t.value ? "border-accent text-fg" : "border-transparent text-fg-muted hover:text-fg"}`}
+            className="cx-chip cr-cut cr-focus"
           >
             {t.label}
           </button>
         ))}
       </div>
-      <Card>
+      <div>
         {queue.status === "loading" ? (
           <LoadingState label="Loading payment checks" />
         ) : queue.status === "error" ? (
@@ -160,7 +170,7 @@ export function PaymentChecks() {
             ))}
           </ul>
         )}
-      </Card>
+      </div>
     </section>
   );
 }

@@ -21,6 +21,7 @@ from cornerroom.modules.artists.application.service import ArtistService
 from cornerroom.modules.authorization.application.service import AuthorizationService
 from cornerroom.modules.campaigns.application.service import CampaignService
 from cornerroom.modules.commerce.application.catalog import CatalogCommerceService
+from cornerroom.modules.commerce.application.customer_profile import CustomerProfileService
 from cornerroom.modules.commerce.application.customers import CustomerService
 from cornerroom.modules.commerce.application.presales import PresaleService
 from cornerroom.modules.commerce.application.service import CheckoutService
@@ -177,6 +178,10 @@ async def checkout_service(
 
 async def customer_service(session: AsyncSession = Depends(db_session)) -> CustomerService:
     return CustomerService(session)
+
+
+async def customer_profile_service(session: AsyncSession = Depends(db_session)) -> CustomerProfileService:
+    return CustomerProfileService(session)
 
 
 async def presale_service(

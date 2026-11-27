@@ -6,7 +6,7 @@ from datetime import date, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Path, Query
 from pydantic import BaseModel, EmailStr, Field
 
 from cornerroom.api.deps import (
@@ -15,6 +15,7 @@ from cornerroom.api.deps import (
     get_auth_context,
     get_optional_auth_context,
     payment_service,
+    customer_profile_service,
     customer_service,
     presale_service,
 )
@@ -22,6 +23,7 @@ from cornerroom.infra.errors import AppError
 from cornerroom.infra.settings import get_settings
 from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.commerce.application.catalog import CatalogCommerceService
+from cornerroom.modules.commerce.application.customer_profile import CustomerProfileService
 from cornerroom.modules.commerce.application.customers import CustomerService
 from cornerroom.modules.commerce.application.presales import MAX_NAME_LENGTH, MAX_ROWS_PER_UPLOAD, PresaleService
 from cornerroom.modules.commerce.application.service import CheckoutService
@@ -493,6 +495,7 @@ class StaffSubmissionOut(BaseModel):
     buyer_email: str | None
     submitted_at: datetime
     decided_at: datetime | None = None
+    buyer_user_id: UUID | None = None
 
 
 class SubmissionRejectIn(BaseModel):
@@ -713,6 +716,11 @@ class CustomerOut(BaseModel):
     # The most telling status across their orders (PAID first); null when they never ordered.
     payment_status: str | None = None
     payments: list[CustomerPaymentOut] = []
+    # What they did last and when (owner, 2026-11-27): CHECKOUT_OPENED, PAYMENT_SENT, PAID,
+    # PAYMENT_REJECTED, CHECKOUT_EXPIRED, REFUNDED, SIGNED_UP or PRESALE_PAID. The list is newest first.
+    last_activity: str | None = None
+    last_activity_at: datetime | None = None
+    last_activity_items: list[str] = []
 
 
 class CustomerListOut(BaseModel):
@@ -740,6 +748,201 @@ async def staff_customers(
         ctx, q=q, profile_kind=profile_kind, profile_id=profile_id, scope=scope, scope_id=scope_id
     )
     return CustomerListOut(**data)
+
+
+class ProfilePersonOut(BaseModel):
+    key: str
+    user_id: UUID | None
+    name: str | None
+    email: str | None
+    phone: str | None
+    address: str | None
+    account_status: str | None
+    email_verified: bool
+    verified_at: datetime | None
+    joined_at: datetime | None
+    account_types: list[str]
+    manages: list[str]
+    sources: list[str]
+    # PASSWORD and any linked sign-in (GOOGLE).
+    sign_in_methods: list[str]
+    locale: str | None
+    security_locked: bool
+
+
+class ProfileSummaryOut(BaseModel):
+    """Counted and added up by the server; the page only formats them."""
+
+    spent: dict[str, int]
+    refunded: dict[str, int]
+    credit: dict[str, int]
+    payment_status: str | None
+    orders_paid: int
+    waiting: int
+    rejected: int
+    unfinished: int
+    refunds: int
+    owned: int
+    listens: int
+    follows: int
+    gifts_given: int
+    gifts_received: int
+    presales: int
+    last_seen_at: datetime | None
+    last_activity_at: datetime | None
+
+
+class ProfileMomentOut(BaseModel):
+    at: datetime
+    # SIGNED_UP, EMAIL_VERIFIED, CHECKOUT_OPENED, PAYMENT_SENT, PAID, PAYMENT_REJECTED,
+    # CHECKOUT_EXPIRED, REFUND, PRESALE_PAID, PRESALE_CLAIMED, LISTENED, FOLLOWED, GIFT_GIVEN,
+    # GIFT_RECEIVED, EMAIL_FROM_ACT or ACCOUNT_ACTION (title is then the recorded action).
+    kind: str
+    title: str
+    detail: str | None = None
+    amount_minor: int | None = None
+    currency_code: str | None = None
+    order_id: UUID | None = None
+    count: int | None = None
+
+
+class ProfileOrderItemOut(BaseModel):
+    name: str
+    kind: str
+    quantity: int
+    amount_minor: int
+    currency_code: str
+
+
+class ProfileSubmissionOut(BaseModel):
+    status: str
+    transaction_ref: str
+    paid_from: str
+    paid_with: str
+    sent_at: datetime
+    decided_at: datetime | None
+    decision_note: str | None
+
+
+class ProfileRefundOut(BaseModel):
+    status: str
+    amount_minor: int
+    currency_code: str
+    reason_code: str
+    requested_at: datetime
+
+
+class ProfileOrderOut(BaseModel):
+    order_id: UUID
+    status: str
+    order_status: str
+    purpose: str
+    is_presale: bool
+    is_gift: bool
+    is_music_gift: bool
+    paid_with_credit_minor: int
+    amount_minor: int
+    currency_code: str
+    created_at: datetime
+    updated_at: datetime | None
+    items: list[ProfileOrderItemOut]
+    submissions: list[ProfileSubmissionOut]
+    refunds: list[ProfileRefundOut]
+    delivery_address: str | None
+
+
+class ProfilePresaleOut(BaseModel):
+    product: str | None
+    amount_minor: int
+    currency_code: str
+    paid_on: date | None
+    status: str
+    claimed_at: datetime | None
+    listed_at: datetime
+
+
+class ProfileOwnedOut(BaseModel):
+    title: str
+    kind: str
+    status: str
+    source: str | None
+    since: datetime
+
+
+class ProfileSongOut(BaseModel):
+    title: str
+    listens: int
+    last_at: datetime | None
+
+
+class ProfileFollowOut(BaseModel):
+    name: str
+    kind: str
+    since: datetime
+    active: bool
+
+
+class ProfileGiftGivenOut(BaseModel):
+    music: str
+    status: str
+    people: int
+    people_states: list[str]
+    amount_minor: int
+    currency_code: str
+    at: datetime
+
+
+class ProfileGiftReceivedOut(BaseModel):
+    music: str | None
+    from_: str | None = Field(default=None, alias="from", serialization_alias="from")
+    kind: str
+    status: str
+    at: datetime
+
+    model_config = {"populate_by_name": True}
+
+
+class ProfileEmailOut(BaseModel):
+    from_name: str
+    subject: str
+    kind: str
+    status: str
+    at: datetime
+
+
+class ProfileSignInOut(BaseModel):
+    signed_in_at: datetime
+    last_used_at: datetime | None
+    device: str | None
+    active: bool
+
+
+class CustomerProfileOut(BaseModel):
+    person: ProfilePersonOut
+    summary: ProfileSummaryOut
+    timeline: list[ProfileMomentOut]
+    timeline_truncated: bool
+    orders: list[ProfileOrderOut]
+    presales: list[ProfilePresaleOut]
+    library: list[ProfileOwnedOut]
+    top_songs: list[ProfileSongOut]
+    follows: list[ProfileFollowOut]
+    gifts_given: list[ProfileGiftGivenOut]
+    gifts_received: list[ProfileGiftReceivedOut]
+    emails: list[ProfileEmailOut]
+    sign_ins: list[ProfileSignInOut]
+
+
+@router.get("/staff/customers/{key}", response_model=CustomerProfileOut, response_model_by_alias=True)
+async def staff_customer_profile(
+    ctx: Annotated[AuthContext, Depends(get_auth_context)],
+    svc: Annotated[CustomerProfileService, Depends(customer_profile_service)],
+    key: str = Path(max_length=80, pattern=r"^(presale-)?[0-9a-fA-F-]{36}$"),
+) -> CustomerProfileOut:
+    """One person's whole story with Corner Room, for the same staff as the list (owner,
+    2026-11-27, D-CUSTOMERS-03): orders and payments, music owned, listening, follows, gifts,
+    emails from acts, sign-ins and their own account actions. Audited; read only."""
+    return CustomerProfileOut.model_validate(await svc.profile(ctx, key))
 
 
 class FollowerOut(BaseModel):
