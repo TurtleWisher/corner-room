@@ -280,6 +280,7 @@ export type StaffSubmission = {
   decided_at?: string | null;
   /** Opens the buyer's page in Customers and users (D-CUSTOMERS-03). */
   buyer_user_id?: string | null;
+  buyer_picture_url?: string | null;
 };
 
 export type SubmissionQueue = "SUBMITTED" | "CONFIRMED" | "REJECTED";

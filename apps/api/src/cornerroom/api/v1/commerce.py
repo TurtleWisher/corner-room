@@ -496,6 +496,7 @@ class StaffSubmissionOut(BaseModel):
     submitted_at: datetime
     decided_at: datetime | None = None
     buyer_user_id: UUID | None = None
+    buyer_picture_url: str | None = None
 
 
 class SubmissionRejectIn(BaseModel):
@@ -696,6 +697,8 @@ class CustomerPaymentOut(BaseModel):
 
 class CustomerOut(BaseModel):
     key: str
+    # The person's own picture, else their act's approved one; a signed link (owner, 2026-11-27).
+    picture_url: str | None = None
     name: str | None
     email: str | None
     phone: str | None
@@ -750,8 +753,17 @@ async def staff_customers(
     return CustomerListOut(**data)
 
 
+class ProfileActOut(BaseModel):
+    id: UUID
+    name: str
+    picture_url: str | None
+
+
 class ProfilePersonOut(BaseModel):
     key: str
+    picture_url: str | None = None
+    # The artists and bands this account runs, with their approved pictures.
+    acts: list[ProfileActOut] = []
     user_id: UUID | None
     name: str | None
     email: str | None
@@ -877,6 +889,7 @@ class ProfileSongOut(BaseModel):
 
 class ProfileFollowOut(BaseModel):
     name: str
+    picture_url: str | None = None
     kind: str
     since: datetime
     active: bool
@@ -895,6 +908,7 @@ class ProfileGiftGivenOut(BaseModel):
 class ProfileGiftReceivedOut(BaseModel):
     music: str | None
     from_: str | None = Field(default=None, alias="from", serialization_alias="from")
+    from_picture_url: str | None = None
     kind: str
     status: str
     at: datetime
@@ -904,6 +918,7 @@ class ProfileGiftReceivedOut(BaseModel):
 
 class ProfileEmailOut(BaseModel):
     from_name: str
+    from_picture_url: str | None = None
     subject: str
     kind: str
     status: str
@@ -947,6 +962,7 @@ async def staff_customer_profile(
 
 class FollowerOut(BaseModel):
     user_id: UUID
+    picture_url: str | None = None
     name: str | None
     email: str | None
     phone: str | None

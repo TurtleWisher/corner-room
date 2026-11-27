@@ -674,6 +674,17 @@ FEATURES: Final[list[dict]] = [
             {
                 "date": "2026-11-27",
                 "kind": "IMPROVED",
+                "title": "Real pictures and a tidier customer list",
+                "details": (
+                    "People's own pictures (or their artist's or band's picture) now show in Customers and "
+                    "users, each person's page, payment checks and Users; acts they run, follow or got emails "
+                    "from show theirs too. Payment labels are shorter and never run into the next column, and "
+                    "each day on a person's timeline has a Corner Room yellow heading."
+                ),
+            },
+            {
+                "date": "2026-11-27",
+                "kind": "IMPROVED",
                 "title": "A page for every customer",
                 "details": (
                     "Customers and users puts whoever did something last at the top and says what it was, with "

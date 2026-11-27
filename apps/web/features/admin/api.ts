@@ -11,6 +11,8 @@ export type AdminUserRecord = {
   email_verified: boolean;
   security_locked: boolean;
   created_at?: string | null;
+  /** Own picture, else their act's approved one (signed link). */
+  picture_url?: string | null;
 };
 
 export type AdminUserInspect = AdminUserRecord & {

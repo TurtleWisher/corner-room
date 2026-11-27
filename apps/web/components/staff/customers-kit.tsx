@@ -9,6 +9,7 @@ import * as React from "react";
 import { Check, Copy } from "lucide-react";
 
 import { monogram } from "@/components/ds/avatar";
+import { coverUrl } from "@/lib/cover-view";
 import type { StatusTone } from "@/lib/format/status";
 import { cn } from "@/lib/utils";
 
@@ -19,25 +20,35 @@ function hue(seed: string): number {
   return h % 6;
 }
 
-export function PersonMark({ name, seed, size }: { name: string; seed: string; size?: string }) {
+/**
+ * A person's or act's square: their real picture when there is one (a signed link from the API,
+ * owner 2026-11-27), else their initials. A picture that fails to load falls back to the initials.
+ */
+export function PersonMark({ name, seed, size, src }: { name: string; seed: string; size?: string; src?: string | null }) {
+  const url = coverUrl({ signed: src });
+  const [failed, setFailed] = React.useState<string | null>(null);
+  const style = size ? ({ "--cx-av": size } as React.CSSProperties) : undefined;
+  if (url && failed !== url) {
+    return (
+      <span className="cx-avatar cr-cut" data-photo style={style}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- signed media links from the API */}
+        <img src={url} alt="" loading="lazy" decoding="async" onError={() => setFailed(url)} />
+      </span>
+    );
+  }
   return (
-    <span
-      className="cx-avatar cr-cut"
-      data-hue={hue(seed) || undefined}
-      style={size ? ({ "--cx-av": size } as React.CSSProperties) : undefined}
-      aria-hidden="true"
-    >
+    <span className="cx-avatar cr-cut" data-hue={hue(seed) || undefined} style={style} aria-hidden="true">
       {monogram(name) || "?"}
     </span>
   );
 }
 
 /** A dot and a word; the word carries the meaning. */
-export function TonePill({ tone, children, className }: { tone: StatusTone; children: React.ReactNode; className?: string }) {
+export function TonePill({ tone, children, className, title }: { tone: StatusTone; children: React.ReactNode; className?: string; title?: string }) {
   return (
-    <span className={cn("cx-pill cr-cut", className)} data-tone={tone}>
+    <span className={cn("cx-pill cr-cut", className)} data-tone={tone} title={title}>
       <span className="cx-dot" data-tone={tone} aria-hidden="true" />
-      {children}
+      <span className="cx-pill-text">{children}</span>
     </span>
   );
 }

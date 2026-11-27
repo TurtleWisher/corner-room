@@ -49,6 +49,8 @@ export function paymentLine(p: CustomerPayment): string {
 
 export type CustomerRow = {
   key: string;
+  /** Own picture, else their act's approved one (a signed link, D-CUSTOMERS-03). */
+  picture_url?: string | null;
   name: string | null;
   email: string | null;
   phone: string | null;
@@ -74,7 +76,7 @@ export type CustomerRow = {
   last_activity_items?: string[];
 };
 
-export type FollowerRow = { user_id: string; name: string | null; email: string | null; phone: string | null; followed_at: string | null };
+export type FollowerRow = { user_id: string; picture_url?: string | null; name: string | null; email: string | null; phone: string | null; followed_at: string | null };
 
 export type CustomerFilters = {
   /** "any", website account holders, pre-sale buyers, or people who are both. */

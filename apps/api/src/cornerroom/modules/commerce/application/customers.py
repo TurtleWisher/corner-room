@@ -103,6 +103,70 @@ def _address_text(row: Any) -> str:
     return ", ".join(p.strip() for p in parts if p and p.strip())
 
 
+async def act_pictures(session: AsyncSession, act_ids: set[UUID]) -> dict[UUID, str]:
+    """Signed links to the staff-approved pictures of artists and bands (a band's artist row mirrors
+    the band, D-ARTIST-UNIFY-01; a picture still waiting for staff never shows)."""
+    from cornerroom.modules.artists.domain.models import Artist, Band
+    from cornerroom.modules.documents.application.covers import CoverService
+
+    if not act_ids:
+        return {}
+    covers = CoverService(session)
+    out: dict[UUID, str] = {}
+    for aid, asset in (
+        await session.execute(select(Artist.id, Artist.portrait_asset_id).where(Artist.id.in_(act_ids), Artist.portrait_asset_id.is_not(None)))
+    ).all():
+        out[aid] = covers.signed_path(asset, 480)
+    missing = act_ids - set(out)
+    if missing:
+        for bid, asset in (
+            await session.execute(select(Band.id, Band.portrait_asset_id).where(Band.id.in_(missing), Band.portrait_asset_id.is_not(None)))
+        ).all():
+            out[bid] = covers.signed_path(asset, 480)
+    return out
+
+
+async def user_pictures(session: AsyncSession, user_ids: list[UUID]) -> dict[UUID, str]:
+    """Each account's picture for staff (owner, 2026-11-27: admins see people's real pictures):
+    the person's own picture, else the approved picture of the first act they run (the same rule
+    as the account chip, `act_picture_url` on /me). Signed links that expire within the hour."""
+    from cornerroom.modules.artists.domain.models import Artist, ArtistTeamMember
+    from cornerroom.modules.documents.application.covers import CoverService
+
+    if not user_ids:
+        return {}
+    covers = CoverService(session)
+    out: dict[UUID, str] = {}
+    for uid, asset in (
+        await session.execute(
+            select(CustomerProfile.user_id, CustomerProfile.avatar_asset_id).where(
+                CustomerProfile.user_id.in_(user_ids),
+                CustomerProfile.avatar_asset_id.is_not(None),
+                CustomerProfile.deleted_at.is_(None),
+            )
+        )
+    ).all():
+        out[uid] = covers.signed_path(asset, 480)
+    missing = [u for u in user_ids if u not in out]
+    if missing:
+        for uid, asset in (
+            await session.execute(
+                select(ArtistTeamMember.user_id, Artist.portrait_asset_id)
+                .join(Artist, Artist.id == ArtistTeamMember.artist_id)
+                .where(
+                    ArtistTeamMember.user_id.in_(missing),
+                    ArtistTeamMember.status == "ACTIVE",
+                    Artist.deleted_at.is_(None),
+                    Artist.portrait_asset_id.is_not(None),
+                )
+                .order_by(ArtistTeamMember.created_at.asc())
+            )
+        ).all():
+            if uid not in out:
+                out[uid] = covers.signed_path(asset, 480)
+    return out
+
+
 class CustomerService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -207,9 +271,11 @@ class CustomerService:
                 await self.session.execute(select(CustomerProfile).where(CustomerProfile.user_id.in_(list(users) or [UUID(int=0)])))
             ).scalars()
         }
+        pictures = await user_pictures(self.session, list(users))
         items = [
             {
                 "user_id": f.user_id,
+                "picture_url": pictures.get(f.user_id),
                 "name": names.get(f.user_id),
                 "email": users[f.user_id].email,
                 "phone": users[f.user_id].phone,
@@ -382,6 +448,7 @@ class CustomerService:
             ).scalars()
         }
         manages, account_types = await self._profiles_and_types(user_ids)
+        pictures = await user_pictures(self.session, user_ids)
 
         def moment(order: Order) -> tuple[str, datetime]:
             sub = latest_submission.get(order.id)
@@ -478,6 +545,7 @@ class CustomerService:
             rows.append(
                 {
                     "key": str(user.id),
+                    "picture_url": pictures.get(user.id),
                     "last_activity": last[0],
                     "last_activity_at": last[1],
                     "last_activity_items": [i for i in last[2] if i],
@@ -512,6 +580,7 @@ class CustomerService:
                 {
                     # The key opens the person's page, so it never carries their email (owner, 2026-11-27).
                     "key": f"presale-{first.id}",
+                    "picture_url": None,
                     "last_activity": "PRESALE_PAID",
                     "last_activity_at": newest.created_at,
                     "last_activity_items": [n for n in [product_names.get(newest.product_id)] if n],

@@ -12,6 +12,7 @@ import {
   matchesChip,
   momentWords,
   orderSteps,
+  paymentShort,
   profileHref,
   searchRows,
   statusCounts,
@@ -125,6 +126,12 @@ describe("the list", () => {
     expect(freshKeys(null, rows).size).toBe(0);
     const later = [row({ key: "a", last_activity_at: "2026-11-27T11:58:00Z" }), rows[1], rows[2]];
     expect([...freshKeys(rows, later)]).toEqual(["a"]);
+  });
+
+  it("keeps the status pill short so it fits its column", () => {
+    expect(paymentShort("NOT_SENT")).toBe("Opened, not paid");
+    expect(paymentShort(null)).toBe("Never ordered");
+    for (const s of ["PAID", "WAITING", "REJECTED", "EXPIRED", "NOT_SENT", "REFUNDED"]) expect(paymentShort(s).length).toBeLessThanOrEqual(17);
   });
 
   it("opens a person by key, never by email", () => {

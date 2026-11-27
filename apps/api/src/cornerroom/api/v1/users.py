@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from cornerroom.api.deps import get_auth_context, identity_service, require_permission
 from cornerroom.kernel.auth_context import AuthContext
+from cornerroom.modules.commerce.application.customers import user_pictures
 from cornerroom.modules.identity.application.services import IdentityService
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -28,6 +29,8 @@ class UserAdminOut(BaseModel):
     email_verified: bool
     security_locked: bool
     created_at: datetime | None = None
+    # The person's own picture, else their act's approved one (owner, 2026-11-27).
+    picture_url: str | None = None
 
 
 class UserAdminPage(BaseModel):
@@ -40,8 +43,9 @@ class UserInspectOut(UserAdminOut):
     memberships: list[dict[str, Any]]
 
 
-def _user_out(user) -> UserAdminOut:
+def _user_out(user, picture_url: str | None = None) -> UserAdminOut:
     return UserAdminOut(
+        picture_url=picture_url,
         id=user.id,
         email=user.email,
         phone=user.phone,
@@ -72,7 +76,8 @@ async def list_users(
         limit=limit,
         organization_id=ctx.organization_id,
     )
-    return UserAdminPage(items=[_user_out(row) for row in rows], next_cursor=next_cursor)
+    pictures = await user_pictures(svc.session, [row.id for row in rows])
+    return UserAdminPage(items=[_user_out(row, pictures.get(row.id)) for row in rows], next_cursor=next_cursor)
 
 
 @router.get(
@@ -89,7 +94,7 @@ async def inspect_user(
         user_id,
         organization_id=ctx.organization_id,
     )
-    base = _user_out(user)
+    base = _user_out(user, (await user_pictures(svc.session, [user.id])).get(user.id))
     return UserInspectOut(**base.model_dump(), assignments=assignments, memberships=memberships)
 
 

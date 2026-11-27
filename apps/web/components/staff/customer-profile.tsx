@@ -29,6 +29,7 @@ import {
   orderSteps,
   paidWithLabel,
   paymentLabel,
+  paymentShort,
   paymentTone,
   refundReason,
   timeAgo,
@@ -79,12 +80,25 @@ function Hero({ data, now }: { data: CustomerProfile; now: Date }) {
       <div className="grid min-w-0 gap-4">
       <div className="cx-glass cr-cut cx-pad cx-rise" data-spot>
         <div className="cx-id">
-          <PersonMark name={name} seed={p.key} />
+          <PersonMark name={name} seed={p.key} src={p.picture_url} />
           <div className="min-w-0 flex-1">
             <h1 className="cx-id-name">{name}</h1>
-            {p.manages.length ? <p className="cx-quiet mt-1">Runs {p.manages.join(", ")}</p> : null}
+            {p.acts?.length ? (
+              <ul className="cx-acts" aria-label="Runs">
+                {p.acts.map((a) => (
+                  <li key={a.id}>
+                    <PersonMark name={a.name} seed={a.id} src={a.picture_url} size="1.5rem" />
+                    {a.name}
+                  </li>
+                ))}
+              </ul>
+            ) : p.manages.length ? (
+              <p className="cx-quiet mt-1">Runs {p.manages.join(", ")}</p>
+            ) : null}
             <div className="cx-tags">
-              <TonePill tone={paymentTone(data.summary.payment_status)}>{paymentLabel(data.summary.payment_status)}</TonePill>
+              <TonePill tone={paymentTone(data.summary.payment_status)} title={paymentLabel(data.summary.payment_status)}>
+                {paymentShort(data.summary.payment_status)}
+              </TonePill>
               {status ? <TonePill tone={status.tone}>{status.label}</TonePill> : <TonePill tone="neutral">No account yet</TonePill>}
               {p.account_types.map((t) => (
                 <TonePill key={t} tone={t === "staff" ? "accent" : t === "artist" ? "info" : "neutral"}>
@@ -202,7 +216,7 @@ function Timeline({ data, now }: { data: CustomerProfile; now: Date }) {
         <ol className="cx-tl">
           {days.map(({ day, moments: list }) => (
             <li key={day} className="cx-tl-day">
-              <h3 className="cx-tl-dayhead">
+              <h3 className="cx-tl-dayhead cr-cut">
                 {dayWord(day, now) ?? <DateTime value={`${day}T12:00:00+06:00`} format="date" />}
                 <span className="font-normal normal-case tracking-normal">
                   {formatCount(list.length)} {list.length === 1 ? "thing" : "things"}
@@ -253,7 +267,9 @@ function OrderCard({ o, now }: { o: ProfileOrder; now: Date }) {
         </div>
         <div className="grid justify-items-end gap-1">
           <Money className="cx-order-amount" value={{ amount_minor: o.amount_minor, currency_code: o.currency_code }} minorDigits="always" />
-          <TonePill tone={paymentTone(o.status)}>{paymentLabel(o.status)}</TonePill>
+          <TonePill tone={paymentTone(o.status)} title={paymentLabel(o.status)}>
+            {paymentShort(o.status)}
+          </TonePill>
         </div>
       </div>
       <ol className="cx-steps" aria-label="How this order went">
@@ -427,8 +443,11 @@ function Music({ data }: { data: CustomerProfile }) {
             <ul className="cx-mini">
               {data.follows.map((f, n) => (
                 <li key={n}>
-                  <span>
-                    {f.name} <span className="cx-quiet">· {f.kind === "BAND" ? "band" : "artist"}{f.active ? "" : " · unfollowed"}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <PersonMark name={f.name} seed={f.name} src={f.picture_url} size="1.75rem" />
+                    <span className="min-w-0">
+                      {f.name} <span className="cx-quiet">· {f.kind === "BAND" ? "band" : "artist"}{f.active ? "" : " · unfollowed"}</span>
+                    </span>
                   </span>
                   <span className="cx-quiet">
                     <DateTime value={f.since} format="date" />
@@ -477,11 +496,14 @@ function Gifts({ data }: { data: CustomerProfile }) {
             <ul className="cx-mini">
               {data.gifts_received.map((g, n) => (
                 <li key={n}>
-                  <span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <PersonMark name={g.from ?? "?"} seed={g.from ?? g.at} src={g.from_picture_url} size="1.75rem" />
+                    <span className="min-w-0">
                     {g.music ?? "Music"}{" "}
                     <span className="cx-quiet">
                       · {g.kind === "MUSIC_GIFT" ? "from the act" : "from a fan"}
                       {g.from ? ` ${g.from}` : ""} · {giftState(g.status)}
+                    </span>
                     </span>
                   </span>
                   <span className="cx-quiet">
@@ -508,10 +530,13 @@ function Gifts({ data }: { data: CustomerProfile }) {
           <ul className="cx-mini">
             {data.emails.map((m, n) => (
               <li key={n}>
-                <span className="min-w-0">
+                <span className="flex min-w-0 items-center gap-2">
+                  <PersonMark name={m.from_name} seed={m.from_name} src={m.from_picture_url} size="1.75rem" />
+                  <span className="min-w-0">
                   <span className="block truncate">{m.subject}</span>
                   <span className="cx-quiet">
                     {m.from_name} · {m.status === "SENT" ? "Sent" : humanizeStatus(m.status)}
+                  </span>
                   </span>
                 </span>
                 <span className="cx-quiet shrink-0">
