@@ -116,6 +116,7 @@ FEATURES: Final[list[dict]] = [
             "gift went to as buyers. The person a gift went to earns the artist's collectible."
         ),
         "updates": [
+            {"date": "2026-11-28", "kind": "IMPROVED", "title": "Send it again, as it was", "details": "Send it again fills the gift in for you: the people who didn't claim it, your same words, subject, look, cover choice and pictures or PDFs. Change anything before you send."},
             {"date": "2026-11-27", "kind": "IMPROVED", "title": "Send a gift with your gift credit", "details": "Gift credit now pays for a gift too, so a gift nobody claimed can go again without paying twice: Your gifts shows Send it again on it, and checkout has Pay for this gift with my gift credit. The credit covers the whole gift, one copy for each person."},
             {"date": "2026-11-21", "kind": "IMPROVED", "title": "A small glass button", "details": "Give it to someone is one small liquid glass button under an owner's buttons, without a card or extra words; the artist's collectible is one quiet line at the end of the page."},
             {"date": "2026-11-21", "kind": "IMPROVED", "title": "Give it to someone", "details": "If you already own a song or release, Give it to someone sits in the gift section under its buttons instead of beside Play, on song and release pages."},

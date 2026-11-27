@@ -179,6 +179,28 @@ def _file_response(found: tuple[bytes, str, str, str]) -> Response:
     )
 
 
+class SendAgainPersonOut(BaseModel):
+    email: str
+    name: str | None = None
+
+
+class SendAgainOut(BaseModel):
+    offer_id: UUID
+    people: list[SendAgainPersonOut]
+    note: str
+    subject: str
+    look: str
+    show_cover: bool
+    files: list[GiftFileOut]
+
+
+@router.post("/me/fan-gifts/{gift_id}/send-again", response_model=SendAgainOut)
+async def send_gift_again(gift_id: UUID, svc: Svc, ctx: Ctx) -> dict[str, Any]:
+    """Everything to send a gift again as it was: the people who didn't claim it, the words, look,
+    cover and copies of its files (owner, 2026-11-27, D-GIFT-FAN-03). Sends nothing itself."""
+    return await svc.send_again(ctx, gift_id)
+
+
 @router.post("/me/fan-gift-files", response_model=GiftFileOut, status_code=201)
 async def add_gift_file(
     svc: Svc, ctx: Ctx, settings: Annotated[Settings, Depends(settings_dep)],

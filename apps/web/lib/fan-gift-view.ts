@@ -83,6 +83,17 @@ export function parsePeople(text: string): GiftPerson[] {
     });
 }
 
+/** People back as the text a giver types ("Rumi Das <rumi@example.com>", one per line), so a gift
+ * sent again fills the box the same way; characters that would split a name are left out. */
+export function peopleTextOf(people: readonly GiftPerson[]): string {
+  return people
+    .map((p) => {
+      const name = (p.name ?? "").replace(/[<>,;\n\r"]+/g, " ").replace(/\s+/g, " ").trim();
+      return name ? `${name} <${p.email}>` : p.email;
+    })
+    .join("\n");
+}
+
 /** What stops a gift going to these people, in the words the server uses; null when fine. */
 export function peopleProblem(people: GiftPerson[], ownEmail: string | null | undefined, max = MAX_PEOPLE): string | null {
   if (!people.length) return "Add at least one email address.";

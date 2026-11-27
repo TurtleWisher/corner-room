@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { CalendarClock, CircleCheck, Gift, LogIn } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -21,7 +21,8 @@ import { Button, ButtonLink, Card, DateTime, ErrorState, Field, Input, Money, Sk
 import { useCredits } from "@/components/music/credits";
 import { RetryButton } from "@/components/shell/staff-panel";
 import { fetchPresale } from "@/features/catalog/api";
-import { createCreditOrder, createGiftOrder } from "@/features/fan-gifts/api";
+import { createCreditOrder, createGiftOrder, prepareSendAgain, type GiftFile } from "@/features/fan-gifts/api";
+import { peopleTextOf } from "@/lib/fan-gift-view";
 import { giftPaidLine } from "@/lib/fan-gift-view";
 import { maybeCoverUrl, offerCoverSource } from "@/lib/cover-view";
 import { amountAsTyped, amountProblemWords, lowestFor, readChosenAmount, type ChosenAmount } from "@/lib/open-price-view";
@@ -377,6 +378,34 @@ function NewCheckout() {
   const [gift, setGift] = useState<GiftDraft>(() => (params.get("gift") === "1" ? { ...NO_GIFT, on: true } : NO_GIFT));
   // "Send it again" on a gift that came back opens with the credit ticked (?credit=1).
   const [useCredit, setUseCredit] = useState(() => params.get("credit") === "1");
+  // "Send it again" fills the gift form from that gift (?again=<gift id>; never an email in the
+  // link): the people who didn't claim it, the same words, look, cover and files.
+  const againId = params.get("again");
+  const [againFiles, setAgainFiles] = useState<GiftFile[] | undefined>(undefined);
+  useEffect(() => {
+    if (!againId || status !== "authenticated") return;
+    let live = true;
+    prepareSendAgain(againId)
+      .then((again) => {
+        if (!live) return;
+        setGift({
+          on: true,
+          peopleText: peopleTextOf(again.people),
+          design: {
+            note: again.note,
+            subject: again.subject,
+            look: again.look,
+            show_cover: again.show_cover,
+            file_ids: again.files.map((f) => f.id),
+          },
+        });
+        setAgainFiles(again.files);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [againId, status]);
   const { user } = useAuth();
   // Platform admins buy as a test (owner, 2026-11-21, D-TEST-BUY-01); the server decides.
   const access = useAsync(
@@ -543,6 +572,8 @@ function NewCheckout() {
           offerId={item.id}
           title={summary.data.title}
           each={open && chosen?.minor ? { amount_minor: chosen.minor, currency_code: open.currency_code } : summary.data.price}
+          seedFiles={againFiles}
+          sentAgainFrom={againFiles !== undefined}
         />
       ) : null}
 

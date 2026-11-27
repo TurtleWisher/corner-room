@@ -399,3 +399,26 @@ async def test_a_designed_gift_email_with_files(client: AsyncClient) -> None:
             gift, person, status=person.status, link="L", file_url=lambda f: f"/files/{f.id}",
         )
     assert mail.subject == "For Nila" and "Dear Nila" in mail.html and f"/files/{pic['id']}" in mail.html
+
+    # Owner, 2026-11-27 (D-GIFT-FAN-03): a gift sent again comes back as it was. Nothing to send
+    # again while everyone claimed it; once someone hasn't, their address, the words, look and a
+    # fresh copy of each file (the sent gift keeps its own).
+    nothing = await client.post(f"/api/v1/me/fan-gifts/{item['id']}/send-again", headers=g)
+    assert nothing.status_code == 409 and nothing.json()["code"] == "NOTHING_TO_SEND_AGAIN"
+    async with get_session_factory()() as session:
+        row = (await session.execute(select(FanGiftRecipient).where(FanGiftRecipient.gift_id == UUID(item["id"])))).scalar_one()
+        row.status = "EXPIRED"
+        await session.commit()
+    again = await client.post(f"/api/v1/me/fan-gifts/{item['id']}/send-again", headers=g)
+    assert again.status_code == 200, again.text
+    body = again.json()
+    assert body["offer_id"] == offer["id"]
+    assert body["people"] == [{"email": "fd-friend@example.com", "name": "Nila Akter"}]
+    assert (body["note"], body["subject"], body["look"], body["show_cover"]) == (design["note"], design["subject"], "EMBER", False)
+    copy = body["files"][0]
+    assert copy["id"] != pic["id"] and copy["name"] == "card.png"
+    assert (await client.get(f"/api/v1/me/fan-gift-files/{copy['id']}", headers=g)).content == PNG
+    # Asking again reuses the same unsent copy; nobody else can ask.
+    assert (await client.post(f"/api/v1/me/fan-gifts/{item['id']}/send-again", headers=g)).json()["files"][0]["id"] == copy["id"]
+    other = await client.post(f"/api/v1/me/fan-gifts/{item['id']}/send-again", headers=bearer(friend["access_token"]))
+    assert other.status_code == 404

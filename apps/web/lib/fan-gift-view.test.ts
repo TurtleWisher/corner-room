@@ -18,6 +18,7 @@ import {
   withPictures,
   parsePeople,
   peopleProblem,
+  peopleTextOf,
   recipientLine,
   signInHref,
 } from "./fan-gift-view";
@@ -30,6 +31,18 @@ describe("fan gifts (owner, 2026-11-20, D-GIFT-FAN-01)", () => {
       { email: "tushar@example.com", name: null },
     ]);
     expect(parsePeople("  \n , ")).toEqual([]);
+  });
+
+  it("writes people back the way a giver types them, for a gift sent again (D-GIFT-FAN-03)", () => {
+    const people = [
+      { email: "rumi@example.com", name: "Das, Rumi <R>" },
+      { email: "nila@example.com", name: null },
+    ];
+    expect(peopleTextOf(people)).toBe("Das Rumi R <rumi@example.com>\nnila@example.com");
+    expect(parsePeople(peopleTextOf(people))).toEqual([
+      { email: "rumi@example.com", name: "Das Rumi R" },
+      { email: "nila@example.com", name: null },
+    ]);
   });
 
   it("names what stops a gift, as the server does", () => {
