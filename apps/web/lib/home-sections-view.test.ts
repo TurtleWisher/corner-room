@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ARTIST_POINTS, FACES, LISTEN_STEPS, QUESTIONS, worldLayers, worldProgress } from "./home-sections-view";
+import { ARTIST_POINTS, FACES, LISTEN_STEPS, QUESTIONS, curtainEdge, worldCurtain, worldLayers, worldProgress } from "./home-sections-view";
 
 describe("home copy", () => {
   it("links only to pages that exist", () => {
@@ -59,5 +59,22 @@ describe("worldLayers", () => {
   it("stays inside its range", () => {
     expect(worldLayers(-3)).toEqual({ veil: 0, sky: 0 });
     expect(worldLayers(9)).toEqual({ veil: 1, sky: 1 });
+  });
+});
+
+describe("worldCurtain (owner, 2026-11-28)", () => {
+  it("draws the dithered curtain only between the two worlds", () => {
+    expect(worldCurtain(0)).toEqual({ curtain: 0, drawing: false, veil: 0, sky: 0 });
+    expect(worldCurtain(0.25)).toEqual({ curtain: 0.5, drawing: true, veil: 0, sky: 0 });
+  });
+  it("hands over to the solid veil at the moment the curtain is whole, then the Sky light comes", () => {
+    expect(worldCurtain(0.5)).toEqual({ curtain: 1, drawing: false, veil: 1, sky: 0 });
+    expect(worldCurtain(0.75)).toEqual({ curtain: 1, drawing: false, veil: 1, sky: 0.5 });
+  });
+  it("starts below the window and ends above it, band and all", () => {
+    expect(curtainEdge(0)).toBeCloseTo(-0.22);
+    expect(curtainEdge(1)).toBeCloseTo(1.22);
+    expect(curtainEdge(0.5)).toBeCloseTo(0.5);
+    expect(curtainEdge(9)).toBeCloseTo(1.22);
   });
 });

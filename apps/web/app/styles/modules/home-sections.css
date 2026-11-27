@@ -360,6 +360,46 @@
 }
 [data-module="home"] .home-world-sky {
   opacity: var(--hw-sky, 0);
+  /* The Sky light settles into place as it comes up, from a little below and a little larger. */
+  transform-origin: 0 0;
+  transform: translate3d(0, calc((1 - var(--hw-sky, 0)) * 6%), 0) scale(calc(1.1 - var(--hw-sky, 0) * 0.1));
+}
+
+/* ---------- The dithered curtain (owner, 2026-11-28, D-WORLD-02) ----------
+   components/home/world-curtain.ts draws the Sky night rising over Ember pixel by pixel on this
+   canvas, only while between the worlds (--hw-draw); the solid veil takes over once it is whole. */
+[data-module="home"] .home-world-curtain {
+  display: none;
+}
+[data-module="home"][data-world-curtain] .home-world-curtain {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: var(--hw-draw, 0);
+  image-rendering: pixelated;
+}
+
+/* The Ember room folds back into depth as the night rises over it (the last Ember section, hinged
+   at its top), and New releases rises out of the Sky room as its light comes up. Transform and
+   opacity only, both driven by the scroll; nothing moves on its own. */
+[data-module="home"][data-world-live] .home-below {
+  perspective: 1600px;
+  perspective-origin: 50% 0%;
+}
+[data-module="home"][data-world-live] .home-below > :last-child {
+  transform-origin: 50% 0%;
+  transform: translate3d(0, calc(var(--hw-out, 0) * -2rem), calc(var(--hw-out, 0) * -160px)) rotateX(calc(var(--hw-out, 0) * 18deg));
+  opacity: calc(1 - var(--hw-out, 0) * 0.6);
+}
+[data-module="home"][data-world-live] .home-sky > div > section:first-of-type {
+  transform-origin: 50% 100%;
+  transform: perspective(1400px) translate3d(0, calc((1 - var(--hw-sky, 1)) * 3rem), 0) rotateX(calc((1 - var(--hw-sky, 1)) * -10deg));
+}
+/* Reveal's own fade timing would make the fold trail the scroll; while folding it follows exactly. */
+[data-module="home"][data-world-live] .home-below > :last-child[data-reveal] {
+  transition: none;
 }
 /* With the window itself carrying the change, the strip and the Sky band stop painting their own
    bases: one continuous world from edge to edge, no band line. */
@@ -397,5 +437,5 @@
 /* The page's Ember pointer light is drawn after the world layers, so it would glow red over the Sky
    night. It leaves with Ember; the Sky band carries its own pointer light from there on. */
 [data-module="home"][data-world-live] > .cr-pl-clip.cr-pl-page {
-  opacity: calc(1 - var(--hw-veil, 0));
+  opacity: calc(1 - var(--hw-out, var(--hw-veil, 0)));
 }
