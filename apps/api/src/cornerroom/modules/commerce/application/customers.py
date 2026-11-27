@@ -63,6 +63,37 @@ def overall_status(statuses: list[str]) -> str | None:
     return found[0] if found else None
 
 
+def _naive(at: datetime | None) -> datetime | None:
+    return at.replace(tzinfo=None) if at else None
+
+
+def order_moment(
+    *,
+    order_status: str,
+    created_at: datetime,
+    updated_at: datetime | None,
+    sub_status: str | None,
+    sub_created_at: datetime | None,
+    sub_decided_at: datetime | None,
+) -> tuple[str, datetime]:
+    """What last happened to one order, and when (owner, 2026-11-27): the list puts the person who
+    did something most recently at the top and says what it was. CHECKOUT_OPENED (opened the
+    payment page), PAYMENT_SENT (sent a payment for staff to check), PAID, PAYMENT_REJECTED,
+    CHECKOUT_EXPIRED or REFUNDED."""
+    status = payment_status(order_status, sub_status)
+    if status == "PAID":
+        return "PAID", sub_decided_at or updated_at or created_at
+    if status == "REFUNDED":
+        return "REFUNDED", updated_at or created_at
+    if status == "REJECTED":
+        return "PAYMENT_REJECTED", sub_decided_at or updated_at or created_at
+    if status == "EXPIRED":
+        return "CHECKOUT_EXPIRED", updated_at or created_at
+    if status == "WAITING":
+        return "PAYMENT_SENT", sub_created_at or created_at
+    return "CHECKOUT_OPENED", created_at
+
+
 def _address_text(row: Any) -> str:
     from cornerroom.modules.identity.domain.countries import country_name
 
@@ -352,6 +383,17 @@ class CustomerService:
         }
         manages, account_types = await self._profiles_and_types(user_ids)
 
+        def moment(order: Order) -> tuple[str, datetime]:
+            sub = latest_submission.get(order.id)
+            return order_moment(
+                order_status=order.status,
+                created_at=order.created_at,
+                updated_at=order.updated_at,
+                sub_status=sub.status if sub else None,
+                sub_created_at=sub.created_at if sub else None,
+                sub_decided_at=sub.decided_at if sub else None,
+            )
+
         def payment_view(order: Order) -> dict[str, Any]:
             sub = latest_submission.get(order.id)
             return {
@@ -423,9 +465,22 @@ class CustomerService:
                 reverse=True,
             )
             statuses = [p["status"] for p in payments] + (["PAID"] if claims else [])
+            moments: list[tuple[str, datetime | None, list[str]]] = [
+                (*moment(o), payment_view(o)["items"]) for o in [*orders, *attempts_by_user.get(user.id, [])]
+            ]
+            moments.append(("SIGNED_UP", user.created_at, []))
+            moments += [("PRESALE_PAID", c.created_at, [product_names.get(c.product_id) or ""]) for c in claims]
+            last = max(
+                (m for m in moments if m[1] is not None),
+                key=lambda m: _naive(m[1]) or datetime.min,
+                default=(None, None, []),
+            )
             rows.append(
                 {
                     "key": str(user.id),
+                    "last_activity": last[0],
+                    "last_activity_at": last[1],
+                    "last_activity_items": [i for i in last[2] if i],
                     "name": names.get(user.id) or (address.recipient_name if address else None)
                     or next((c.buyer_name for c in claims if c.buyer_name), None)
                     or next(iter(manages.get(user.id, [])), None),
@@ -452,9 +507,14 @@ class CustomerService:
             if email in seen_emails:
                 continue
             first = claims[0]
+            newest = max(claims, key=lambda c: _naive(c.created_at) or datetime.min)
             rows.append(
                 {
-                    "key": f"presale:{email}",
+                    # The key opens the person's page, so it never carries their email (owner, 2026-11-27).
+                    "key": f"presale-{first.id}",
+                    "last_activity": "PRESALE_PAID",
+                    "last_activity_at": newest.created_at,
+                    "last_activity_items": [n for n in [product_names.get(newest.product_id)] if n],
                     "name": next((c.buyer_name for c in claims if c.buyer_name), None),
                     "email": email,
                     "phone": next((c.phone for c in claims if c.phone), None),
@@ -489,10 +549,11 @@ class CustomerService:
             ]
 
         def sort_key(r: dict[str, Any]) -> datetime:
-            when = r["last_order_at"] or r["joined_at"] or r.get("_first_paid")
+            when = r.get("last_activity_at") or r["last_order_at"] or r["joined_at"] or r.get("_first_paid")
             return when.replace(tzinfo=None) if when else datetime.min
 
-        # Most recent activity first.
+        # Most recent activity first: opening the payment page, sending a payment, being paid or
+        # refunded, signing up (owner, 2026-11-27).
         rows.sort(key=sort_key, reverse=True)
         for r in rows:
             r.pop("_first_paid", None)

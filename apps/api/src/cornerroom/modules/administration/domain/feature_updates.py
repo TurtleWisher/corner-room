@@ -666,9 +666,26 @@ FEATURES: Final[list[dict]] = [
         "description": (
             "The black staff console: Live, Catalog, Money, Marketing, Insight and Admin. Catalog > Releases "
             "holds every review queue (releases, pre-sales, gift campaigns, artist emails, music gifts). "
-            "Money > Customers and users lists every account and order with its payment status and a CSV."
+            "Money > Customers and users lists everyone newest activity first, saying in plain words what "
+            "each person did last (opened the payment page, sent a payment, paid), and opens each person on "
+            "their own page with their whole history."
         ),
         "updates": [
+            {
+                "date": "2026-11-27",
+                "kind": "IMPROVED",
+                "title": "A page for every customer",
+                "details": (
+                    "Customers and users puts whoever did something last at the top and says what it was, with "
+                    "tiles and chips for each payment state, instant search (names, phones, transaction IDs) and "
+                    "a dot for people active in the last half hour. Open anyone to see who they are and how to "
+                    "reach them, what they spent and own, every order with each payment they sent and how staff "
+                    "decided it, refunds, what they listen to, follows, gifts, emails from acts, where they "
+                    "signed in and their own account actions, on one timeline. Payment checks link to the "
+                    "buyer's page. Commerce and Finance have the same calmer glass look, with counts that jump "
+                    "to each queue."
+                ),
+            },
             {
                 "date": "2026-11-21",
                 "kind": "IMPROVED",

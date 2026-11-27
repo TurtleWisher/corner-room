@@ -68,6 +68,10 @@ export type CustomerRow = {
   /** The most telling status across their orders; null when they never ordered. */
   payment_status?: PaymentStatus | null;
   payments?: CustomerPayment[];
+  /** What they did last and when (D-CUSTOMERS-03); the list comes newest first. */
+  last_activity?: string | null;
+  last_activity_at?: string | null;
+  last_activity_items?: string[];
 };
 
 export type FollowerRow = { user_id: string; name: string | null; email: string | null; phone: string | null; followed_at: string | null };

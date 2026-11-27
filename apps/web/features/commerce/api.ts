@@ -278,6 +278,8 @@ export type StaffSubmission = {
   buyer_email: string | null;
   submitted_at: string;
   decided_at?: string | null;
+  /** Opens the buyer's page in Customers and users (D-CUSTOMERS-03). */
+  buyer_user_id?: string | null;
 };
 
 export type SubmissionQueue = "SUBMITTED" | "CONFIRMED" | "REJECTED";
@@ -376,4 +378,9 @@ export async function fetchCustomers(scope: CustomerScope, q?: string): Promise<
 export async function fetchFollowers(kind: "artist" | "band", id: string): Promise<{ items: import("@/lib/customers-view").FollowerRow[]; total: number }> {
   const params = new URLSearchParams({ kind, target_id: id });
   return apiFetch(`/api/v1/staff/followers?${params.toString()}`, { retry: false });
+}
+
+/** One person's whole story for staff (D-CUSTOMERS-03). The key is an account id or "presale-<id>". */
+export async function fetchCustomerProfile(key: string): Promise<import("@/lib/customer-profile-view").CustomerProfile> {
+  return apiFetch(`/api/v1/staff/customers/${encodeURIComponent(key)}`, { retry: false });
 }

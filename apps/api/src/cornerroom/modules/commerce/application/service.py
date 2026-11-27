@@ -1621,6 +1621,9 @@ class CheckoutService:
                     "status": sub.status,
                     "decision_note": sub.decision_note,
                     "buyer_email": mask_email(email) if email else None,
+                    # Opens the buyer's page in Customers and users (D-CUSTOMERS-03; that page
+                    # decides who may see it).
+                    "buyer_user_id": order.user_id,
                     "submitted_at": sub.created_at,
                     "decided_at": sub.decided_at,
                 }
