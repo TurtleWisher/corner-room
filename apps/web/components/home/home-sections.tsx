@@ -241,12 +241,11 @@ export function ClosingCall() {
 
 /**
  * Ember hands over to Sky across the whole window, not only inside the hand-over strip, fixed to the
- * window beneath all content. Since 2026-11-28 (owner, D-WORLD-02) the Sky night rises as a dithered
- * curtain drawn by a small WebGL shader (components/home/world-curtain.ts): every pixel is either
- * Ember or Sky night, never a mix, with a faint line of light on its rising edge. Once it covers the
- * window the plain veil takes over and the Sky corner light comes up (worldCurtain; the two lights
- * never overlap). Around it the Ember room folds back into depth and the Sky light settles into place
- * (--hw-out, --hw-sky in home-sections.css). Without WebGL the veil simply fades, as before.
+ * window beneath all content. Since 2026-11-28 (owner, D-WORLD-02) the Sky night rises as a soft
+ * curtain of fine grain drawn by a small WebGL shader (components/home/world-curtain.ts): no edge
+ * line, every pixel Ember or Sky night. Once it covers the window the plain veil takes over and the
+ * Sky corner light settles in (worldCurtain, --hw-sky; the two lights never overlap). The sections
+ * themselves stay still. Without WebGL the veil simply fades, as before.
  *
  * The scroll handler only measures the strip and writes CSS variables on <main>, at most once a
  * frame; React never re-renders. Reduced motion keeps the still strip (no listener, no layers).

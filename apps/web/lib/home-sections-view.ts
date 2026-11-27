@@ -118,12 +118,17 @@ export function worldCurtain(progress: number): { curtain: number; drawing: bool
   return { curtain: veil, drawing: veil > 0 && !whole, veil: whole ? 1 : 0, sky };
 }
 
+/** How tall the curtain's soft grain is, as a share of the window (owner: no hard edge, no line). */
+export const CURTAIN_BAND = 0.6;
+/** How far the field runs: the window's height plus the arc by which the middle leads the sides. */
+export const CURTAIN_SPAN = 1.06;
+
 /**
- * Where the curtain's rising edge stands for `curtain` (0 to 1), in the shader's field units: it
- * starts below the window and ends above it, with room for the dithered band (`band`) at both ends,
- * so the first and last frames are wholly Ember and wholly night.
+ * Where the curtain stands for `curtain` (0 to 1), in the shader's field units: from the foot of the
+ * window (nothing drawn) to a whole band past the top of the field (every pixel night), so the first
+ * and last frames are wholly Ember and wholly night and the hand-off to the veil can't show.
  */
-export function curtainEdge(curtain: number, band = 0.22): number {
+export function curtainEdge(curtain: number, band = CURTAIN_BAND, span = CURTAIN_SPAN): number {
   const c = Math.min(1, Math.max(0, curtain));
-  return -band + c * (1 + 2 * band);
+  return c * (span + band);
 }
