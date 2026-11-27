@@ -13,7 +13,7 @@ import { Gift, Wallet } from "lucide-react";
 import { Card, Field, Money, Textarea } from "@/components/ds";
 import { GiftEmailEditor, NO_DESIGN } from "@/components/fan-gifts/gift-email-editor";
 import { useAsync } from "@/components/use-async";
-import { fetchOfferCredit, type GiftDesign, type GiftPerson } from "@/features/fan-gifts/api";
+import { fetchOfferCredit, type GiftDesign, type GiftFile, type GiftPerson } from "@/features/fan-gifts/api";
 import { giftPromise, MAX_PEOPLE, noteProblem, parsePeople, peopleLine, peopleProblem, subjectProblem } from "@/lib/fan-gift-view";
 
 export type GiftDraft = { on: boolean; peopleText: string; design: GiftDesign };
@@ -39,6 +39,8 @@ export function GiftStep({
   each,
   offerId,
   title,
+  seedFiles,
+  sentAgainFrom,
 }: {
   draft: GiftDraft;
   onChange: (next: GiftDraft) => void;
@@ -48,6 +50,10 @@ export function GiftStep({
   title: string;
   /** The price per person, as the offer states it (the server decides the total). */
   each: { amount_minor: number; currency_code: string } | null;
+  /** Files of a gift being sent again (D-GIFT-FAN-03). */
+  seedFiles?: GiftFile[];
+  /** Set when the form was filled from a gift being sent again. */
+  sentAgainFrom?: boolean;
 }) {
   const read = readGift(draft, ownEmail);
   const typed = draft.peopleText.trim().length > 0;
@@ -69,6 +75,12 @@ export function GiftStep({
       </label>
       {draft.on ? (
         <div className="mt-5 grid gap-4">
+          {sentAgainFrom ? (
+            <p className="text-sm text-fg" role="status">
+              Filled in from your earlier gift: the people who didn&apos;t claim it, with your same words, look and files. Change anything before you
+              send.
+            </p>
+          ) : null}
           <Field
             label="Their email addresses"
             hint={`One per line, up to ${MAX_PEOPLE}. Add a name like this: Rumi Das <rumi@example.com>`}
@@ -94,6 +106,7 @@ export function GiftStep({
               people={read.people}
               design={draft.design}
               onChange={(design) => onChange({ ...draft, design })}
+              seedFiles={seedFiles}
             />
           </div>
           {read.people.length && !read.problem && each ? (

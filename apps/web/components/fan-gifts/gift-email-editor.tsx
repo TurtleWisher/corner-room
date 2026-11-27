@@ -15,7 +15,7 @@ import { FileText, ImageIcon, Paperclip, ShieldCheck, Trash2 } from "lucide-reac
 import { RichEditor } from "@/components/artist-mail/rich-editor";
 import { EmailFrame } from "@/components/fan-gifts/email-frame";
 import { Button, Field, Input, Select } from "@/components/ds";
-import { deleteGiftFile, previewGiftEmail, uploadGiftFile, type GiftDesign, type GiftFile, type GiftPerson, type GiftPreview } from "@/features/fan-gifts/api";
+import { deleteGiftFile, fetchMyGiftFile, previewGiftEmail, uploadGiftFile, type GiftDesign, type GiftFile, type GiftPerson, type GiftPreview } from "@/features/fan-gifts/api";
 import { friendlyError } from "@/lib/error-copy";
 import {
   FILE_ACCEPT,
@@ -40,6 +40,7 @@ export function GiftEmailEditor({
   people,
   design,
   onChange,
+  seedFiles,
 }: {
   offerId: string;
   /** The song or release, for the {music} fill-in. */
@@ -47,6 +48,8 @@ export function GiftEmailEditor({
   people: GiftPerson[];
   design: GiftDesign;
   onChange: (next: GiftDesign) => void;
+  /** Files already attached (a gift sent again): shown and previewed like new ones. */
+  seedFiles?: GiftFile[];
 }) {
   const [files, setFiles] = useState<Local[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -82,6 +85,20 @@ export function GiftEmailEditor({
 
   // Free this page's picture copies when it goes.
   const urls = useRef<string[]>([]);
+
+  // A gift sent again brings its files: fetch each once so the list and the preview show it.
+  const seeded = useRef(new Set<string>());
+  useEffect(() => {
+    for (const f of seedFiles ?? []) {
+      if (seeded.current.has(f.id)) continue;
+      seeded.current.add(f.id);
+      void fetchMyGiftFile(f.id).then((blob) => {
+        const url = blob ? URL.createObjectURL(blob) : "";
+        if (url) urls.current.push(url);
+        setFiles((now) => (now.some((x) => x.id === f.id) ? now : [...now, { ...f, url }]));
+      });
+    }
+  }, [seedFiles]);
   useEffect(() => () => urls.current.forEach((u) => URL.revokeObjectURL(u)), []);
 
   async function attach(list: FileList | null) {

@@ -89,7 +89,7 @@ function Gifts() {
                         Pay now
                       </ButtonLink>
                     ) : g.send_again_offer_id ? (
-                      <ButtonLink href={`${giftHref(g.send_again_offer_id)}&credit=1&world=sky`} size="sm" variant="secondary">
+                      <ButtonLink href={`${giftHref(g.send_again_offer_id)}&credit=1&again=${g.id}&world=sky`} size="sm" variant="secondary">
                         <Gift aria-hidden="true" /> Send it again
                       </ButtonLink>
                     ) : null}

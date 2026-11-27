@@ -196,6 +196,36 @@ export async function fetchStaffGiftFile(fileId: string): Promise<Blob | null> {
   }
 }
 
+/** Everything to send a gift again as it was: the people who didn't claim it, its words, look,
+ * cover and fresh copies of its files (owner, 2026-11-27, D-GIFT-FAN-03). */
+export type SendAgain = {
+  offer_id: string;
+  people: GiftPerson[];
+  note: string;
+  subject: string;
+  look: GiftLook;
+  show_cover: boolean;
+  files: GiftFile[];
+};
+
+export async function prepareSendAgain(giftId: string): Promise<SendAgain> {
+  return apiFetch<SendAgain>(`/api/v1/me/fan-gifts/${encodeURIComponent(giftId)}/send-again`, { method: "POST", retry: false });
+}
+
+/** The giver's own attached file, as a blob for the email preview (the token stays in memory). */
+export async function fetchMyGiftFile(fileId: string): Promise<Blob | null> {
+  const token = getAccessToken();
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/api/v1/me/fan-gift-files/${fileId}`, {
+      credentials: "omit",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    return res.ok ? await res.blob() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** A file's address for the person a gift is for, through their own gift link. */
 export function giftFileUrl(token: string, fileId: string): string {
   return `${getApiBaseUrl()}/api/v1/gifts/${encodeURIComponent(token)}/files/${fileId}`;

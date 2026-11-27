@@ -926,18 +926,7 @@ class FanGiftService:
             ]
             # Owner, 2026-11-27 (D-GIFT-FAN-03): a gift someone didn't claim can be sent again, with
             # the credit it left; the music's current normal price, if it is still on sale.
-            send_again = None
-            if any(p["state"] == "NOT_CLAIMED" for p in people):
-                send_again = (
-                    await self.session.execute(
-                        select(Offer.id).where(
-                            Offer.product_id == gift.product_id,
-                            Offer.status == "ACTIVE",
-                            Offer.audience == "EVERYONE",
-                            Offer.deleted_at.is_(None),
-                        ).limit(1)
-                    )
-                ).scalar_one_or_none()
+            send_again = await self._send_again_offer(gift) if any(p["state"] == "NOT_CLAIMED" for p in people) else None
             out.append({
                 "send_again_offer_id": send_again,
                 "id": gift.id, "order_id": gift.order_id, "work_type": gift.work_type, "work_id": gift.work_id,
@@ -947,6 +936,71 @@ class FanGiftService:
                 "people": people,
             })
         return out
+
+    async def _send_again_offer(self, gift: FanGift) -> UUID | None:
+        return (
+            await self.session.execute(
+                select(Offer.id).where(
+                    Offer.product_id == gift.product_id,
+                    Offer.status == "ACTIVE",
+                    Offer.audience == "EVERYONE",
+                    Offer.deleted_at.is_(None),
+                ).limit(1)
+            )
+        ).scalar_one_or_none()
+
+    async def send_again(self, ctx: AuthContext, gift_id: UUID) -> dict[str, Any]:
+        """Everything to send a gift again as it was (owner, 2026-11-27, D-GIFT-FAN-03): the people
+        who didn't claim it (only them), the giver's words, subject, look and cover switch, and
+        fresh copies of its pictures and PDFs as unsent attachments (a sent gift's own files stay
+        with it). The giver's own gift only; others get 404. Nothing is sent here: checkout sends."""
+        gift = await self.session.get(FanGift, gift_id)
+        if gift is None or gift.giver_user_id != ctx.user_id:
+            raise NotFoundError("Gift not found")
+        offer_id = await self._send_again_offer(gift)
+        people = [
+            {"email": p.email, "name": p.name}
+            for p in await self._recipients(gift.id)
+            if giver_state(p.status) == "NOT_CLAIMED"
+        ]
+        if not people or offer_id is None:
+            raise AppError("NOTHING_TO_SEND_AGAIN", "This gift has nobody left to send it to again", 409)
+        # Reuse copies made by an earlier Send it again (same stored file, still unsent), else copy.
+        pending = {
+            row.object_key: row
+            for row in (
+                await self.session.execute(
+                    select(FanGiftFile).where(
+                        FanGiftFile.owner_user_id == ctx.user_id,
+                        FanGiftFile.gift_id.is_(None),
+                        FanGiftFile.deleted_at.is_(None),
+                    )
+                )
+            ).scalars()
+        }
+        files = []
+        for old in await self._gift_files(gift.id):
+            row = pending.get(old.object_key)
+            if row is None:
+                if len(pending) >= PENDING_FILES_MAX:
+                    break
+                row = FanGiftFile(
+                    owner_user_id=ctx.user_id, kind=old.kind, name=old.name, object_key=old.object_key,
+                    content_type=old.content_type, byte_size=old.byte_size,
+                )
+                self.session.add(row)
+                await self.session.flush()
+                pending[row.object_key] = row
+            files.append(self.file_out(row))
+        return {
+            "offer_id": offer_id,
+            "people": people,
+            "note": gift.note or "",
+            "subject": gift.subject or "",
+            "look": gift.look,
+            "show_cover": gift.show_cover,
+            "files": files,
+        }
 
     # ---- staff: the giver's note ---------------------------------------------------------------
 
