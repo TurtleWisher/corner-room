@@ -193,6 +193,21 @@ export function paymentTone(status: string | null | undefined): StatusTone {
   return (status && PAYMENT_TONE[status as PaymentStatus]) || "neutral";
 }
 
+/** Short words for the small status pill, so it never runs into the next column. */
+const PAYMENT_SHORT: Record<PaymentStatus, string> = {
+  PAID: "Paid",
+  WAITING: "Waiting for check",
+  REJECTED: "Rejected",
+  EXPIRED: "Expired",
+  NOT_SENT: "Opened, not paid",
+  REFUNDED: "Refunded",
+};
+
+export function paymentShort(status: string | null | undefined): string {
+  if (!status) return "Never ordered";
+  return PAYMENT_SHORT[status as PaymentStatus] ?? paymentLabel(status);
+}
+
 export function paymentLabel(status: string | null | undefined): string {
   if (!status) return "Never ordered";
   return PAYMENT_STATUS_LABEL[status as PaymentStatus] ?? status;
@@ -407,6 +422,9 @@ export type MoneyMap = Record<string, number>;
 export type CustomerProfile = {
   person: {
     key: string;
+    picture_url?: string | null;
+    /** Artists and bands this account runs, with their approved pictures. */
+    acts?: { id: string; name: string; picture_url: string | null }[];
     user_id: string | null;
     name: string | null;
     email: string | null;
@@ -448,10 +466,10 @@ export type CustomerProfile = {
   presales: { product: string | null; amount_minor: number; currency_code: string; paid_on: string | null; status: string; claimed_at: string | null; listed_at: string }[];
   library: { title: string; kind: string; status: string; source: string | null; since: string }[];
   top_songs: { title: string; listens: number; last_at: string | null }[];
-  follows: { name: string; kind: string; since: string; active: boolean }[];
+  follows: { name: string; picture_url?: string | null; kind: string; since: string; active: boolean }[];
   gifts_given: { music: string; status: string; people: number; people_states: string[]; amount_minor: number; currency_code: string; at: string }[];
-  gifts_received: { music: string | null; from: string | null; kind: string; status: string; at: string }[];
-  emails: { from_name: string; subject: string; kind: string; status: string; at: string }[];
+  gifts_received: { music: string | null; from: string | null; from_picture_url?: string | null; kind: string; status: string; at: string }[];
+  emails: { from_name: string; from_picture_url?: string | null; subject: string; kind: string; status: string; at: string }[];
   sign_ins: { signed_in_at: string; last_used_at: string | null; device: string | null; active: boolean }[];
 };
 

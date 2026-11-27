@@ -24,6 +24,7 @@ import {
   lastActivityLine,
   matchesChip,
   paymentLabel,
+  paymentShort,
   paymentTone,
   profileHref,
   searchRows,
@@ -167,7 +168,7 @@ function PersonRow({ row, now, fresh, i }: { row: CustomerRow; now: Date; fresh:
       aria-label={`${name}: ${lastActivityLine(row.last_activity, row.last_activity_items)}`}
     >
       <div className="cx-who">
-        <PersonMark name={name} seed={row.key} />
+        <PersonMark name={name} seed={row.key} src={row.picture_url} />
         <div className="cx-who-text">
           <span className="cx-name">
             {name}
@@ -181,7 +182,9 @@ function PersonRow({ row, now, fresh, i }: { row: CustomerRow; now: Date; fresh:
         </div>
       </div>
       <div className="cx-col">
-        <TonePill tone={paymentTone(row.payment_status)}>{paymentLabel(row.payment_status)}</TonePill>
+        <TonePill tone={paymentTone(row.payment_status)} title={paymentLabel(row.payment_status)}>
+          {paymentShort(row.payment_status)}
+        </TonePill>
         <span className="cx-sub">
           {row.user_id ? (row.account_types ?? []).map((t) => ACCOUNT_TYPE_LABEL[t] ?? t).join(", ") : "Pre-sale sheet"}
         </span>
@@ -207,7 +210,9 @@ function PersonRow({ row, now, fresh, i }: { row: CustomerRow; now: Date; fresh:
       </div>
       <ChevronRight aria-hidden="true" className="cx-chev hidden md:block" />
       <div className="cx-mobile-meta">
-        <TonePill tone={paymentTone(row.payment_status)}>{paymentLabel(row.payment_status)}</TonePill>
+        <TonePill tone={paymentTone(row.payment_status)} title={paymentLabel(row.payment_status)}>
+          {paymentShort(row.payment_status)}
+        </TonePill>
         <span>{lastActivityLine(row.last_activity, row.last_activity_items)}</span>
         {when ? (
           <span className="cx-when">
@@ -400,7 +405,7 @@ export function CustomersBoard({
               {followers.map((f) => (
                 <Link key={f.user_id} href={profileHref(f.user_id)} className="cx-person">
                   <div className="cx-who">
-                    <PersonMark name={f.name ?? f.email ?? "?"} seed={f.user_id} />
+                    <PersonMark name={f.name ?? f.email ?? "?"} seed={f.user_id} src={f.picture_url} />
                     <div className="cx-who-text">
                       <span className="cx-name">{f.name ?? "No name"}</span>
                       <span className="cx-sub">{f.email}</span>

@@ -1628,6 +1628,12 @@ class CheckoutService:
                     "decided_at": sub.decided_at,
                 }
             )
+        # The buyer's picture beside each check (owner, 2026-11-27).
+        from cornerroom.modules.commerce.application.customers import user_pictures
+
+        pictures = await user_pictures(self.session, list({row["buyer_user_id"] for row in out if row["buyer_user_id"]}))
+        for row in out:
+            row["buyer_picture_url"] = pictures.get(row["buyer_user_id"])
         return out
 
     async def grant_staff_entitlement(

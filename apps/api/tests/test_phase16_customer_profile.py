@@ -84,11 +84,14 @@ async def test_staff_open_a_person_and_see_their_whole_story(client: AsyncClient
     assert moments == sorted(moments, reverse=True)
     mine = next(r for r in listing["items"] if r["email"] == "profile-fan@example.com")
     assert mine["last_activity"] == "CHECKOUT_OPENED" and mine["last_activity_items"]
+    # No picture uploaded: the key is there and empty, so the page draws initials.
+    assert "picture_url" in mine and mine["picture_url"] is None
 
     page = await client.get(f"/api/v1/staff/customers/{fan['user']['id']}", headers=bearer(admin))
     assert page.status_code == 200, page.text
     body = page.json()
     assert body["person"]["email"] == "profile-fan@example.com" and body["person"]["sign_in_methods"] == ["PASSWORD"]
+    assert body["person"]["picture_url"] is None and body["person"]["acts"] == []
     assert body["summary"]["rejected"] == 1 and body["summary"]["unfinished"] == 1
     rejected = next(o for o in body["orders"] if o["order_id"] == first["id"])
     assert rejected["status"] == "REJECTED"

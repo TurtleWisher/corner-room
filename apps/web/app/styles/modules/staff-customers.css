@@ -429,7 +429,9 @@ main[data-theme="staff"] .cx-search input {
 @media (min-width: 900px) {
   .cx-list-head,
   .cx-person {
-    grid-template-columns: minmax(14rem, 1.35fr) minmax(9rem, 0.7fr) minmax(14rem, 1.4fr) minmax(6rem, 0.55fr) 1.25rem;
+    /* Every column may shrink (min 0) and its content truncates, so nothing runs into the next. */
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1.55fr) minmax(0, 0.6fr) 1.25rem;
+    column-gap: 1.5rem;
   }
 }
 .cx-list-head {
@@ -450,7 +452,7 @@ main[data-theme="staff"] .cx-search input {
 }
 .cx-person {
   position: relative;
-  padding: 0.75rem 1rem;
+  padding: 0.625rem 1rem;
   color: var(--cr-fg);
   text-decoration: none;
   border-top: 1px solid rgb(246 236 230 / 0.07);
@@ -962,4 +964,79 @@ main[data-theme="staff"] .cx-id-name {
 .cx-well > section > div > h2:first-child {
   font-size: 1rem;
   letter-spacing: -0.005em;
+}
+
+/* ---------- round 2 (owner, 2026-11-27): no collisions, real pictures, Lamp day headers ---------- */
+
+/* A pill never grows past its column; long words end in an ellipsis (the full words are its title). */
+.cx-pill {
+  max-width: 100%;
+  min-width: 0;
+}
+.cx-pill-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cx-col > * {
+  max-width: 100%;
+}
+.cx-activity {
+  min-width: 0;
+}
+.cx-person-plain {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+@media (min-width: 900px) {
+  .cx-person-plain {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+/* Real pictures fill the square and follow its cut corner exactly. */
+.cx-avatar[data-photo] {
+  overflow: visible;
+  --cut-fill: #1a1617;
+}
+.cx-avatar[data-photo] > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cut));
+}
+.cx-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem 0.875rem;
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--cr-fg-muted);
+}
+.cx-acts > li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.cx-acts .cx-avatar {
+  --cut: 5px;
+}
+
+/* Day headers: a Lamp glow on the left fading through ash into the panel, brand cut corner. */
+.cx-tl-dayhead {
+  --cut: 10px;
+  --cut-fill:
+    radial-gradient(14rem 120% at 0% 50%, rgb(252 244 117 / 0.22), transparent 70%),
+    linear-gradient(90deg, rgb(252 244 117 / 0.16), rgb(120 116 60 / 0.12) 22%, rgb(59 59 59 / 0.3) 48%, rgb(26 22 23 / 0.94) 82%),
+    #171314;
+  --cut-border: linear-gradient(90deg, rgb(252 244 117 / 0.55), rgb(252 244 117 / 0.12) 35%, rgb(246 236 230 / 0.05) 70%, transparent);
+  background: none;
+  padding: 0.5rem 0.875rem;
+  margin-bottom: 0.25rem;
+  color: var(--cr-highlight);
+  text-shadow: 0 0 18px rgb(252 244 117 / 0.25);
+  box-shadow: 0 12px 22px -18px rgb(0 0 0 / 0.95);
+}
+.cx-tl-dayhead > span {
+  color: color-mix(in srgb, var(--cr-fg) 72%, transparent);
+  text-shadow: none;
 }

@@ -7,7 +7,9 @@ import { useEffect, useState } from "react";
 import { useWorkspace } from "@/components/workspace-provider";
 import { ApiError, applyUserLifecycle, fetchAdminUser, type AdminUserInspect } from "@/lib/api";
 import { adminErrorKind, canSuspend, canUnsuspend, userStatusLabel } from "@/lib/admin-view";
+import { PersonMark } from "@/components/staff/customers-kit";
 import { Button, Card, EmptyState, ErrorState, LoadingState, Protected } from "@/components/staff/kit";
+import { profileHref } from "@/lib/customer-profile-view";
 import { StatusChip } from "@/components/ds";
 
 function StaffUserDetailBody() {
@@ -81,12 +83,18 @@ function StaffUserDetailBody() {
           All users
         </Link>
       </p>
-      <div>
-        <h1 className="text-2xl font-semibold">{row.email ?? row.phone ?? row.id}</h1>
-        <p className="text-sm text-fg-muted">{userStatusLabel(row.status)}</p>
-        <p className="text-sm text-fg-muted">
-          Verified {row.email_verified ? "yes" : "no"} · Locked {row.security_locked ? "yes" : "no"}
-        </p>
+      <div className="cx flex flex-wrap items-center gap-4">
+        <PersonMark name={row.email ?? row.phone ?? "?"} seed={row.id} src={row.picture_url} size="3.5rem" />
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold">{row.email ?? row.phone ?? row.id}</h1>
+          <p className="text-sm text-fg-muted">{userStatusLabel(row.status)}</p>
+          <p className="text-sm text-fg-muted">
+            Verified {row.email_verified ? "yes" : "no"} · Locked {row.security_locked ? "yes" : "no"} ·{" "}
+            <Link href={profileHref(row.id)} className="cr-focus text-link underline">
+              Purchase and activity history
+            </Link>
+          </p>
+        </div>
       </div>
       {error ? <ErrorState message={error} /> : null}
       <section className="flex flex-wrap gap-2">

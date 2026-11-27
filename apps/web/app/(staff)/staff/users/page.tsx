@@ -6,7 +6,9 @@ import { FormEvent, useEffect, useState } from "react";
 import { useWorkspace } from "@/components/workspace-provider";
 import { ApiError, fetchAdminUsers, type AdminUserRecord } from "@/lib/api";
 import { WORKSPACE_REQUIRED_COPY, adminErrorKind, userStatusLabel } from "@/lib/admin-view";
-import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
+import { PersonMark } from "@/components/staff/customers-kit";
+import { Button, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
+import { profileHref } from "@/lib/customer-profile-view";
 
 function StaffUsersBody() {
   const { currentOrg } = useWorkspace();
@@ -73,17 +75,31 @@ function StaffUsersBody() {
         <Button type="submit">Search</Button>
       </form>
       {items.length === 0 ? <EmptyState message="No users in this page" /> : null}
-      {items.map((row) => (
-        <Card key={row.id}>
-          <p className="font-medium">{row.email ?? row.phone ?? row.id}</p>
-          <p className="text-sm text-fg-muted">{userStatusLabel(row.status)}</p>
-          <p className="text-sm">
-            <Link href={`/staff/users/${row.id}`} className="underline">
-              Inspect
-            </Link>
-          </p>
-        </Card>
-      ))}
+      {items.length ? (
+        <div className="cx">
+          <div className="cx-glass cr-cut cx-list">
+            {items.map((row) => (
+              <div key={row.id} className="cx-person cx-person-plain">
+                <div className="cx-who">
+                  <PersonMark name={row.email ?? row.phone ?? "?"} seed={row.id} src={row.picture_url} />
+                  <div className="cx-who-text">
+                    <span className="cx-name">{row.email ?? row.phone ?? row.id}</span>
+                    <span className="cx-sub">{userStatusLabel(row.status)}</span>
+                  </div>
+                </div>
+                <span className="flex flex-wrap justify-end gap-3 text-xs font-semibold">
+                  <Link href={profileHref(row.id)} className="cr-focus text-link underline-offset-2 hover:underline">
+                    History
+                  </Link>
+                  <Link href={`/staff/users/${row.id}`} className="cr-focus text-link underline-offset-2 hover:underline">
+                    Roles and controls
+                  </Link>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

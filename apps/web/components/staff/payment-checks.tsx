@@ -15,6 +15,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { DateTime, Field, Input, Money } from "@/components/ds";
+import { PersonMark } from "@/components/staff/customers-kit";
 import { Button, EmptyState, ErrorState, LoadingState } from "@/components/staff/kit";
 import { useAsync } from "@/components/use-async";
 import { confirmSubmission, fetchStaffSubmissions, rejectSubmission, type StaffSubmission, type SubmissionQueue } from "@/features/commerce/api";
@@ -63,7 +64,8 @@ function CheckRow({ row, onDone, decided = false }: { row: StaffSubmission; onDo
           <dt className="inline text-fg-muted">Buyer </dt>
           <dd className="inline text-fg">
             {row.buyer_user_id ? (
-              <Link href={profileHref(row.buyer_user_id)} className="cr-focus font-semibold text-link underline-offset-2 hover:underline">
+              <Link href={profileHref(row.buyer_user_id)} className="cr-focus inline-flex items-center gap-2 align-middle font-semibold text-link underline-offset-2 hover:underline">
+                <PersonMark name={row.buyer_email ?? "?"} seed={row.buyer_user_id} src={row.buyer_picture_url} size="1.5rem" />
                 {row.buyer_email ?? "Open buyer"}
               </Link>
             ) : (

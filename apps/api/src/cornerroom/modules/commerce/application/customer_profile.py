@@ -30,6 +30,8 @@ from cornerroom.kernel.auth_context import AuthContext
 from cornerroom.modules.commerce.application.customers import (
     CustomerService,
     _address_text,
+    act_pictures,
+    user_pictures,
     order_moment,
     overall_status,
     payment_status,
@@ -189,6 +191,21 @@ class CustomerProfileService:
             names.setdefault(b.id, b.name)
         return names
 
+    async def _acts_run_by(self, uid: UUID) -> list[dict[str, Any]]:
+        """The artists and bands this account owns or manages, with their approved pictures."""
+        from cornerroom.modules.artists.domain.models import Artist, ArtistTeamMember
+
+        rows = (
+            await self.session.execute(
+                select(Artist.id, Artist.stage_name)
+                .join(ArtistTeamMember, ArtistTeamMember.artist_id == Artist.id)
+                .where(ArtistTeamMember.user_id == uid, ArtistTeamMember.status == "ACTIVE", Artist.deleted_at.is_(None))
+                .order_by(ArtistTeamMember.created_at.asc())
+            )
+        ).all()
+        pictures = await act_pictures(self.session, {r[0] for r in rows})
+        return [{"id": aid, "name": name, "picture_url": pictures.get(aid)} for aid, name in rows]
+
     # ---------- the page ----------
     async def profile(self, ctx: AuthContext, key: str) -> dict[str, Any]:
         await self.customers._check_access(ctx)
@@ -228,6 +245,8 @@ class CustomerProfileService:
             first = claims[0]
             person = {
                 "key": key,
+                "picture_url": None,
+                "acts": [],
                 "user_id": None,
                 "name": next((c.buyer_name for c in claims if c.buyer_name), None),
                 "email": first.email,
@@ -277,6 +296,7 @@ class CustomerProfileService:
             }
         )
         manages, types = await self.customers._profiles_and_types([uid])
+        acts = await self._acts_run_by(uid)
 
         # ---------- orders and payments ----------
         orders = (
@@ -524,8 +544,15 @@ class CustomerProfileService:
             )
         ).scalars().all()
         act_names = await self._act_names({f.target_id for f in follows})
+        follow_pictures = await act_pictures(self.session, {f.target_id for f in follows})
         follow_views = [
-            {"name": act_names.get(f.target_id) or "Not available", "kind": f.target_type, "since": f.created_at, "active": f.status == "ACTIVE"}
+            {
+                "name": act_names.get(f.target_id) or "Not available",
+                "picture_url": follow_pictures.get(f.target_id),
+                "kind": f.target_type,
+                "since": f.created_at,
+                "active": f.status == "ACTIVE",
+            }
             for f in follows
         ]
         for f in follows:
@@ -571,6 +598,7 @@ class CustomerProfileService:
                 )
             ).scalars()
         }
+        giver_pictures = await user_pictures(self.session, list({g.giver_user_id for g in received_gifts.values()}))
         gifts_given = [
             {
                 "music": gift_titles.get(g.product_id) or "Not available",
@@ -587,6 +615,7 @@ class CustomerProfileService:
             {
                 "music": gift_titles.get(received_gifts[r.gift_id].product_id) if r.gift_id in received_gifts else None,
                 "from": giver_names.get(received_gifts[r.gift_id].giver_user_id) if r.gift_id in received_gifts else None,
+                "from_picture_url": giver_pictures.get(received_gifts[r.gift_id].giver_user_id) if r.gift_id in received_gifts else None,
                 "kind": "FAN_GIFT",
                 "status": r.status,
                 "at": r.resolved_at or r.emailed_at or r.created_at,
@@ -603,7 +632,14 @@ class CustomerProfileService:
         ).all():
             act = (await self._act_names({mg.profile_id})).get(mg.profile_id)
             gifts_received.append(
-                {"music": mg.title, "from": act, "kind": "MUSIC_GIFT", "status": r.status, "at": r.given_at or r.emailed_at or r.created_at}
+                {
+                    "music": mg.title,
+                    "from": act,
+                    "from_picture_url": (await act_pictures(self.session, {mg.profile_id})).get(mg.profile_id),
+                    "kind": "MUSIC_GIFT",
+                    "status": r.status,
+                    "at": r.given_at or r.emailed_at or r.created_at,
+                }
             )
         gifts_received.sort(key=lambda g: g["at"], reverse=True)
         for g in gifts_given:
@@ -626,8 +662,16 @@ class CustomerProfileService:
                 select(ArtistMailMessage).where(or_(*mail_filter)).order_by(ArtistMailMessage.created_at.desc()).limit(MAX_EMAILS)
             )
         ).scalars().all()
+        mail_pictures = await act_pictures(self.session, {m.profile_id for m in mails})
         email_views = [
-            {"from_name": m.from_name, "subject": m.subject, "kind": m.kind, "status": m.status, "at": m.sent_at or m.created_at}
+            {
+                "from_name": m.from_name,
+                "from_picture_url": mail_pictures.get(m.profile_id),
+                "subject": m.subject,
+                "kind": m.kind,
+                "status": m.status,
+                "at": m.sent_at or m.created_at,
+            }
             for m in mails
         ]
         for m in email_views:
@@ -669,6 +713,8 @@ class CustomerProfileService:
             )
         person = {
             "key": str(uid),
+            "picture_url": (await user_pictures(self.session, [uid])).get(uid),
+            "acts": acts,
             "user_id": uid,
             "name": (profile.display_name if profile else None)
             or (saved_address.recipient_name if saved_address else None)
