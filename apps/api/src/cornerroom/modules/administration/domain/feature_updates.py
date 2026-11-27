@@ -557,6 +557,12 @@ FEATURES: Final[list[dict]] = [
         ),
         "updates": [
             {
+                "date": "2026-11-28",
+                "kind": "IMPROVED",
+                "title": "A smoother change from the red room to the blue one",
+                "details": "The band between Upcoming and New releases is gone. As you scroll, the blue room's night now rises over the red one in a fine dotted edge with a thin line of light, the events part folds back into the distance, and the blue light settles in as New releases comes up. It moves only with your scrolling.",
+            },
+            {
                 "date": "2026-11-27",
                 "kind": "IMPROVED",
                 "title": "The 3D parts follow your scrolling, then finish when you stop",

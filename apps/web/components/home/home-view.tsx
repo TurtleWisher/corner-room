@@ -298,13 +298,12 @@ function NewReleases() {
   );
 }
 
-/** Ember hands over to Sky as you scroll (owner decision D1, brand v1.3): Night in between, never purple. */
+/** Ember hands over to Sky as you scroll (owner decision D1, brand v1.3; a dithered curtain since 2026-11-28, D-WORLD-02): Night in between, never purple. */
 function WorldHandover() {
   return (
     <WorldShift>
       <div className="home-handover-ember" />
       <div className="home-handover-sky" />
-      <div className="home-handover-beam" />
     </WorldShift>
   );
 }

@@ -531,40 +531,6 @@
     }
   }
 }
-/* A band of light travels across the hand-over as you scroll, along the 117 degree depth axis: the
-   light carried from the events room into the listening room. Near-neutral cream, never a red-blue mix. */
-[data-module="home"] .home-handover-beam {
-  position: absolute;
-  inset: -40% -60%;
-  pointer-events: none;
-  background: linear-gradient(117deg, transparent 38%, rgb(246 236 230 / 0.07) 47%, rgb(246 236 230 / 0.16) 50%, rgb(246 236 230 / 0.07) 53%, transparent 62%);
-  opacity: 0;
-}
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    [data-module="home"] .home-handover-beam {
-      animation: home-beam linear both;
-      animation-timeline: --home-handover;
-      animation-range: entry 0% exit 100%;
-    }
-  }
-}
-@keyframes home-beam {
-  0% {
-    opacity: 0;
-    transform: translateX(-38%);
-  }
-  25% {
-    opacity: 1;
-  }
-  75% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(38%);
-  }
-}
 @keyframes home-ember-out {
   from {
     opacity: 1;

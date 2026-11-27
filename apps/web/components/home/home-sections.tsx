@@ -16,7 +16,8 @@ import { useAuth } from "@/components/auth-provider";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { ButtonLink } from "@/components/ds";
 import { SpotlightRegion } from "@/components/ds/spotlight";
-import { ARTIST_POINTS, FACES, LISTEN_STEPS, QUESTIONS, worldLayers, worldProgress, type Face } from "@/lib/home-sections-view";
+import { createWorldCurtain, type WorldCurtain } from "@/components/home/world-curtain";
+import { ARTIST_POINTS, FACES, LISTEN_STEPS, QUESTIONS, worldCurtain, worldLayers, worldProgress, type Face } from "@/lib/home-sections-view";
 
 const FACE_ICONS: Record<Face["key"], LucideIcon> = { live: Ticket, listen: Headphones, own: Disc3 };
 
@@ -239,47 +240,81 @@ export function ClosingCall() {
 /* ---------- The whole screen changes world as you scroll (brand D1, made full-screen 2026-11-15) ---------- */
 
 /**
- * Ember hands over to Sky across the whole window, not only inside the hand-over strip: a dark veil
- * rises first, then the Sky corner light, both fixed to the window beneath all content. The two
- * lights never overlap (worldLayers). The scroll handler only measures the strip and writes two CSS
- * variables on <main>, at most once a frame; React never re-renders. Reduced motion keeps the
- * still strip the page already had (no listener, no layers).
+ * Ember hands over to Sky across the whole window, not only inside the hand-over strip, fixed to the
+ * window beneath all content. Since 2026-11-28 (owner, D-WORLD-02) the Sky night rises as a dithered
+ * curtain drawn by a small WebGL shader (components/home/world-curtain.ts): every pixel is either
+ * Ember or Sky night, never a mix, with a faint line of light on its rising edge. Once it covers the
+ * window the plain veil takes over and the Sky corner light comes up (worldCurtain; the two lights
+ * never overlap). Around it the Ember room folds back into depth and the Sky light settles into place
+ * (--hw-out, --hw-sky in home-sections.css). Without WebGL the veil simply fades, as before.
+ *
+ * The scroll handler only measures the strip and writes CSS variables on <main>, at most once a
+ * frame; React never re-renders. Reduced motion keeps the still strip (no listener, no layers).
  */
 export function WorldShift({ children }: { children: React.ReactNode }) {
   const zone = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const el = zone.current;
     const main = el?.closest<HTMLElement>("main");
     if (!el || !main || typeof window.matchMedia !== "function") return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const canvas = canvasRef.current;
+    let curtain: WorldCurtain | null = null;
     let frame = 0;
     const measure = () => {
       frame = 0;
       const r = el.getBoundingClientRect();
-      const { veil, sky } = worldLayers(worldProgress(r.top, r.bottom, window.innerHeight));
-      main.style.setProperty("--hw-veil", veil.toFixed(3));
-      main.style.setProperty("--hw-sky", sky.toFixed(3));
+      const progress = worldProgress(r.top, r.bottom, window.innerHeight);
+      if (curtain) {
+        const w = worldCurtain(progress);
+        if (w.drawing) curtain.set(w.curtain);
+        main.style.setProperty("--hw-draw", w.drawing ? "1" : "0");
+        main.style.setProperty("--hw-veil", String(w.veil));
+        main.style.setProperty("--hw-sky", w.sky.toFixed(3));
+        main.style.setProperty("--hw-out", w.curtain.toFixed(3));
+      } else {
+        const { veil, sky } = worldLayers(progress);
+        main.style.setProperty("--hw-veil", veil.toFixed(3));
+        main.style.setProperty("--hw-sky", sky.toFixed(3));
+        main.style.setProperty("--hw-out", veil.toFixed(3));
+      }
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(measure);
     };
+    const onResize = () => {
+      curtain?.resize();
+      onScroll();
+    };
+    // The curtain where WebGL draws it (never in tests: jsdom has no canvas).
+    if (canvas && !/jsdom/i.test(navigator.userAgent)) {
+      curtain = createWorldCurtain(canvas, () => {
+        curtain = null;
+        delete main.dataset.worldCurtain;
+        onScroll();
+      });
+      if (curtain) main.dataset.worldCurtain = "";
+    }
     main.dataset.worldLive = "";
     measure();
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("resize", onResize);
       if (frame) cancelAnimationFrame(frame);
+      curtain?.destroy();
       delete main.dataset.worldLive;
-      main.style.removeProperty("--hw-veil");
-      main.style.removeProperty("--hw-sky");
+      delete main.dataset.worldCurtain;
+      for (const v of ["--hw-veil", "--hw-sky", "--hw-out", "--hw-draw"]) main.style.removeProperty(v);
     };
   }, []);
   return (
     <>
       <div aria-hidden="true" className="home-world">
         <div className="home-world-veil" />
+        <canvas ref={canvasRef} className="home-world-curtain" />
         <div className="home-world-sky" data-theme="sky">
           <div className="cr-light" />
         </div>

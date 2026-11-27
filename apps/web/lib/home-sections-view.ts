@@ -104,3 +104,26 @@ export function worldLayers(progress: number): { veil: number; sky: number } {
   const p = Math.min(1, Math.max(0, progress));
   return { veil: Math.min(1, p * 2), sky: Math.max(0, p * 2 - 1) };
 }
+
+/**
+ * The hand-over as a dithered curtain (owner, 2026-11-28, D-WORLD-02): where WebGL draws it, the Sky
+ * night rises over the Ember room pixel by pixel instead of fading as one sheet. Every pixel is fully
+ * Ember or fully Sky night, never a mix (brand D1: no purple between). `curtain` is how far it has
+ * risen (0 to 1, drawn while between); once it has covered the window, the plain veil takes over at
+ * full (`veil` jumps to 1 at the exact moment the curtain is whole, so the hand-off can't show).
+ */
+export function worldCurtain(progress: number): { curtain: number; drawing: boolean; veil: number; sky: number } {
+  const { veil, sky } = worldLayers(progress);
+  const whole = veil >= 1;
+  return { curtain: veil, drawing: veil > 0 && !whole, veil: whole ? 1 : 0, sky };
+}
+
+/**
+ * Where the curtain's rising edge stands for `curtain` (0 to 1), in the shader's field units: it
+ * starts below the window and ends above it, with room for the dithered band (`band`) at both ends,
+ * so the first and last frames are wholly Ember and wholly night.
+ */
+export function curtainEdge(curtain: number, band = 0.22): number {
+  const c = Math.min(1, Math.max(0, curtain));
+  return -band + c * (1 + 2 * band);
+}
