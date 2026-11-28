@@ -160,9 +160,13 @@ from cornerroom.modules.analytics.domain.models import (
     DailyEventMetrics,
     DailyTrackMetrics,
 )
+from cornerroom.modules.analytics.domain.wraps import WrapCount, WrapSeason, WrapSnapshot
 
 __all__ = [
     "AnalyticsEvent",
+    "WrapCount",
+    "WrapSeason",
+    "WrapSnapshot",
     "Artist",
     "ArtistApplication",
     "ArtistJoinLink",

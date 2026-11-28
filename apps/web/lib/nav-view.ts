@@ -141,6 +141,8 @@ export function menuSections(signedIn: boolean, flags: NavFlags = {}): NavSectio
         { href: "/library", label: "Library" },
         { href: "/playlists", label: "Playlists" },
         { href: "/history", label: "History" },
+        // Each listener's own look back (owner, 2026-11-28, D-WRAP-01); the page says when none is open.
+        { href: "/wrap", label: "Your Wrap" },
       ],
     },
   ];
@@ -184,7 +186,14 @@ export function staffNavSections(permissions: string[] | undefined): NavSection[
       ],
     },
     { label: "Money", items: money },
-    { label: "Marketing", items: [{ href: "/staff/campaigns", label: "Campaigns" }] },
+    {
+      label: "Marketing",
+      items: [
+        { href: "/staff/campaigns", label: "Campaigns" },
+        // Corner Room Wrap (owner, 2026-11-28, D-WRAP-01): platform admins only; the API decides.
+        ...(flags.showOrgs || flags.showUsers ? [{ href: "/staff/wrap", label: "Corner Room Wrap" }] : []),
+      ],
+    },
   ];
   if (flags.showAnalytics) sections.push({ label: "Insight", items: [{ href: "/staff/analytics", label: "Analytics" }] });
   // Every Corner Room feature with its updates and fixes, for every staff member (owner, 2026-11-06, D-UPDATES-01).
