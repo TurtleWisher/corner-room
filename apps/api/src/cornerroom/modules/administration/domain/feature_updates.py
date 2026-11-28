@@ -558,6 +558,12 @@ FEATURES: Final[list[dict]] = [
         "updates": [
             {
                 "date": "2026-11-28",
+                "kind": "IMPROVED",
+                "title": "The whole home page moves in depth",
+                "details": "Every section now rises into place as you scroll and finishes when you stop. Cards, release covers, event rows, buttons and the Trending Corner case lean toward your mouse, lift a little and catch the light, and the top of the page drifts apart in layers under it. Between the red room and the blue one, the whole screen now turns like a cube: the red room tips away and the lit blue room swings up from below.",
+            },
+            {
+                "date": "2026-11-28",
                 "kind": "FIXED",
                 "title": "A calm change from the red room to the blue one",
                 "details": "The dotted edge and its wavy line of light are gone, and the sections no longer tilt. The blue room's night now rises from below as one tall, soft fade with a fine grain, and the blue light settles in once it has covered the screen. It moves only with your scrolling.",

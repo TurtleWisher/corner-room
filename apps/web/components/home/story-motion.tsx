@@ -59,8 +59,9 @@ export function StoryEnd({ children, className }: { children: React.ReactNode; c
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const wide = window.matchMedia(PRISM_QUERY);
 
-    const blocks = Array.from(root.querySelectorAll<HTMLElement>("[data-k]"));
-    const scenes = Array.from(root.querySelectorAll<HTMLElement>("[data-prism-scene]"));
+    // Sections that load later (rows, tiles, the trending stage) join as they appear.
+    let blocks = Array.from(root.querySelectorAll<HTMLElement>("[data-k]"));
+    let scenes = Array.from(root.querySelectorAll<HTMLElement>("[data-prism-scene]"));
     const kNow = new Map<HTMLElement, Motion>();
     const turnNow = new Map<HTMLElement, Motion>();
     let raf = 0;
@@ -227,6 +228,16 @@ export function StoryEnd({ children, className }: { children: React.ReactNode; c
       };
     }
 
+    // Only a change in which blocks exist starts a frame (a player's ticking clock does not).
+    const found = new MutationObserver(() => {
+      const nextBlocks = Array.from(root.querySelectorAll<HTMLElement>("[data-k]"));
+      const nextScenes = Array.from(root.querySelectorAll<HTMLElement>("[data-prism-scene]"));
+      const same = nextBlocks.length === blocks.length && nextBlocks.every((el, i) => el === blocks[i]) && nextScenes.length === scenes.length;
+      blocks = nextBlocks;
+      scenes = nextScenes;
+      if (!same) schedule();
+    });
+    found.observe(root, { childList: true, subtree: true });
     root.addEventListener("pointermove", onPointerMove);
     root.addEventListener("pointerout", onPointerOut);
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -240,6 +251,7 @@ export function StoryEnd({ children, className }: { children: React.ReactNode; c
 
     return () => {
       destroyed = true;
+      found.disconnect();
       if (raf) cancelAnimationFrame(raf);
       root.removeEventListener("click", onClick);
       root.removeEventListener("focusin", onFocusIn);

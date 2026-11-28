@@ -5,7 +5,6 @@ import { ArrowRight } from "lucide-react";
 
 import { Display } from "@/components/brand/display";
 import { ButtonLink, DateTime, Money } from "@/components/ds";
-import { Reveal } from "@/components/ds/reveal";
 import { useAsync } from "@/components/use-async";
 import { OfferPrice } from "@/components/music/offer-price";
 import { PresaleCover } from "@/components/music/presale-cover";
@@ -35,8 +34,8 @@ export function MissionBand() {
   const presales = soon.status === "ok" ? soon.data.filter((p) => p.open !== false) : [];
 
   return (
-    <Reveal as="section" aria-labelledby="home-mission" className="mx-auto max-w-[90rem] px-4 pb-16 pt-4 md:px-6 md:pb-20">
-      <div className="cr-cut cr-glass-card grid gap-8 p-6 md:p-10 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-center">
+    <section data-k aria-labelledby="home-mission" className="home-arrive mx-auto max-w-[90rem] px-4 pb-16 pt-4 md:px-6 md:pb-20">
+      <div data-lean="1.5" data-spot className="cr-cut cr-glass-card cr-spot grid gap-8 p-6 md:p-10 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-center">
         <div>
           <p className="flex items-baseline gap-3">
             <span aria-hidden="true" className="cr-num text-sm text-highlight">
@@ -75,7 +74,7 @@ export function MissionBand() {
           </ul>
         ) : null}
       </div>
-    </Reveal>
+    </section>
   );
 }
 
