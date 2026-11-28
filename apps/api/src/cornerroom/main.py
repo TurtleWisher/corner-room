@@ -42,6 +42,7 @@ from cornerroom.api.v1.gifts import router as gifts_router
 from cornerroom.api.v1.music_gifts import router as music_gifts_router
 from cornerroom.api.v1.fan_gifts import router as fan_gifts_router
 from cornerroom.api.v1.feature_updates import router as feature_updates_router
+from cornerroom.api.v1.staff_portal import router as staff_portal_router
 from cornerroom.api.v1.artist_mail import router as artist_mail_router
 from cornerroom.api.v1.profiles import router as profiles_router
 from cornerroom.api.v1.team import router as team_router
@@ -178,6 +179,8 @@ def create_app(settings: Settings | None = None, *, enable_lifespan: bool = True
     app.include_router(music_gifts_router, prefix="/api/v1")
     app.include_router(fan_gifts_router, prefix="/api/v1")
     app.include_router(feature_updates_router, prefix="/api/v1")
+    # Staff accounts, staff activity, the one-page overview, artists' royalty rates (2026-11-28).
+    app.include_router(staff_portal_router, prefix="/api/v1")
     app.include_router(artist_mail_router, prefix="/api/v1")
     app.include_router(covers_router, prefix="/api/v1")
     app.include_router(presale_campaigns_router, prefix="/api/v1")

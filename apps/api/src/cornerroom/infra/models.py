@@ -147,6 +147,8 @@ from cornerroom.modules.identity.domain.models import (
     Session,
     User,
 )
+from cornerroom.modules.identity.domain.staff_invites import StaffInvite
+from cornerroom.modules.royalties.domain.artist_rates import ArtistRoyaltyRate
 from cornerroom.modules.notifications.domain.models import (
     Notification,
     NotificationDelivery,
@@ -165,6 +167,7 @@ __all__ = [
     "AnalyticsEvent",
     "Artist",
     "ArtistApplication",
+    "ArtistRoyaltyRate",
     "ArtistJoinLink",
     "ArtistTeamMember",
     "ProfileChangeRequest",
@@ -292,6 +295,7 @@ __all__ = [
     "SearchDocument",
     "Settlement",
     "SettlementLine",
+    "StaffInvite",
     "ResourceGrant",
     "Role",
     "RoleAssignment",

@@ -39,6 +39,10 @@ from cornerroom.modules.authorization.domain.models import (
 from cornerroom.modules.identity.domain.models import OrganizationMembership
 
 
+# Roles only the owner (unscoped `role.admin`) may give: the owner's own and the portal's Admin.
+OWNER_ONLY_ROLES = frozenset({"super_admin", "staff_admin"})
+
+
 class AuthorizationService:
     def __init__(
         self,
@@ -180,6 +184,9 @@ class AuthorizationService:
         role = await self.session.get(Role, role_id)
         if role is None or role.deleted_at is not None:
             raise NotFoundError("Role not found")
+        if role.key in OWNER_ONLY_ROLES and "role.admin" not in await self.permission_keys(granter_id, None):
+            # D-STAFF-ACCOUNTS-01 (owner, 2026-11-28): only the owner makes admins, anywhere.
+            raise AppError("ROLE_NOT_GRANTABLE", "Only the owner can give this role", 403)
         needed = await self.role_permission_keys(role_id)
         missing = needed - await self.permission_keys(granter_id, organization_id)
         if missing:
@@ -194,8 +201,11 @@ class AuthorizationService:
     async def grantable_roles(self, granter_id: UUID, organization_id: UUID) -> list[Role]:
         """Staff roles (with at least one permission) this person may give in this workspace."""
         held = await self.permission_keys(granter_id, organization_id)
+        owner = "role.admin" in await self.permission_keys(granter_id, None)
         out = []
         for role in await self.list_roles():
+            if role.key in OWNER_ONLY_ROLES and not owner:
+                continue
             needed = await self.role_permission_keys(role.id)
             if needed and needed <= held:
                 out.append(role)

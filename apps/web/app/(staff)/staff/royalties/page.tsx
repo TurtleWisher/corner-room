@@ -1,6 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+/*
+ * Staff > Money > Royalties. Two parts (owner, 2026-11-28): Artist rates, each act's royalty
+ * percentage applied to every sale (D-ROYALTY-RATE-01, `components/staff/artist-rates.tsx`), and
+ * Royalty runs, the period-pool engine of Phase 10 (rules, recognized revenue, pools, runs).
+ */
+
+import { FormEvent, Suspense, useEffect, useState } from "react";
 
 import { useWorkspace } from "@/components/workspace-provider";
 import {
@@ -19,8 +25,10 @@ import {
 } from "@/lib/api";
 import { Button, Card, EmptyState, ErrorState, Input, LoadingState, Protected } from "@/components/staff/kit";
 import { Money, StatusChip } from "@/components/ds";
+import { Tabs } from "@/components/ds/tabs";
+import { ArtistRates } from "@/components/staff/artist-rates";
 
-function StaffRoyaltiesBody() {
+function RoyaltyRuns() {
   const { currentOrg } = useWorkspace();
   const [rules, setRules] = useState<RoyaltyRuleRecord[]>([]);
   const [pools, setPools] = useState<RevenuePoolRecord[]>([]);
@@ -118,7 +126,6 @@ function StaffRoyaltiesBody() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Royalty operations</h1>
       <p className="text-sm text-fg-muted">
         Shares, rates, and eligibility are staff-entered data. The UI does not invent splits or stream rates.
       </p>
@@ -186,10 +193,39 @@ function StaffRoyaltiesBody() {
   );
 }
 
+function RoyaltiesHome() {
+  return (
+    <div className="space-y-6">
+      <div className="st-pagehead">
+        <div>
+          <h1 className="st-h1">Royalties</h1>
+          <p className="st-sub">Each artist&rsquo;s royalty percentage, what it earns them on every sale, and the royalty runs.</p>
+        </div>
+      </div>
+      <Tabs
+        label="Royalties"
+        keepMounted
+        items={[
+          {
+            id: "rates",
+            label: "Artist rates",
+            content: (
+              <Suspense fallback={<LoadingState label="Loading artist rates" />}>
+                <ArtistRates />
+              </Suspense>
+            ),
+          },
+          { id: "runs", label: "Royalty runs", content: <RoyaltyRuns /> },
+        ]}
+      />
+    </div>
+  );
+}
+
 export default function StaffRoyaltiesPage() {
   return (
     <Protected>
-      <StaffRoyaltiesBody />
+      <RoyaltiesHome />
     </Protected>
   );
 }

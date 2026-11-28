@@ -64,6 +64,8 @@ def test_phase13_uses_existing_outbox_only() -> None:
         "consume_music_gift_event",
         # Fan gifts claimed on verification, and their emails (D-GIFT-FAN-01, 2026-11-20).
         "consume_fan_gift_event",
+        # Staff invites picked up on verification, and their emails (D-STAFF-ACCOUNTS-01, 2026-11-28).
+        "consume_staff_account_event",
     }
 
 

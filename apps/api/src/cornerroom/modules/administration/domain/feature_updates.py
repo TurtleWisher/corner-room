@@ -686,6 +686,20 @@ FEATURES: Final[list[dict]] = [
         ),
         "updates": [
             {
+                "date": "2026-11-28",
+                "kind": "NEW",
+                "title": "Staff accounts, staff activity and one page for everything",
+                "details": (
+                    "Admins add staff by email on Admin > Staff accounts, as an Admin (the whole portal) or as "
+                    "staff with chosen areas such as Music review, Events or Money and royalties. Only the owner "
+                    "adds or removes admins. Staff sign in with Continue with Google using that email; if they "
+                    "already have a Corner Room fan account with it, the same account becomes their staff "
+                    "account and keeps everything. Admin > Staff activity shows who did what, by person and by "
+                    "area, and the staff home page now shows sales, people, music, events, royalties and staff "
+                    "at a glance, what is waiting, the latest staff actions and every page of the portal."
+                ),
+            },
+            {
                 "date": "2026-11-27",
                 "kind": "IMPROVED",
                 "title": "Real pictures and a tidier customer list",
@@ -757,8 +771,27 @@ FEATURES: Final[list[dict]] = [
         "area": "Money",
         "audience": ["Staff", "Artists"],
         "summary": "Double-entry ledger, settlements, payouts and the royalty engine.",
-        "description": "Every payment is booked in a double-entry ledger; royalty runs, statements, settlements and payouts are run by finance staff.",
+        "description": (
+            "Every payment is booked in a double-entry ledger; royalty runs, statements, settlements and payouts "
+            "are run by finance staff. Each artist or band can have its own royalty percentage, set by staff as "
+            "agreed with the artist: it is a share of what fans paid for that act's music and applies to every "
+            "sale, and each sale keeps the percentage it was made at."
+        ),
         "updates": [
+            {
+                "date": "2026-11-28",
+                "kind": "NEW",
+                "title": "Royalty percentage for each artist",
+                "details": (
+                    "Staff > Money > Royalties > Artist rates lists every artist and band with its percentage, its "
+                    "sales and what it has earned. Admins set a percentage as agreed with the artist, with a note "
+                    "about the agreement; it applies to every song, release, pre-order and gift bought from then "
+                    "on. Sales made before a percentage existed show as No rate yet, and when saving a rate the "
+                    "admin can choose to give those earlier sales the new percentage too. Changing a percentage "
+                    "later never changes earlier sales, and every change is kept in the rate's history. Artists "
+                    "see their percentage and what it earned on their Royalties page."
+                ),
+            },
             {"date": "2026-09-12", "kind": "IMPROVED", "title": "Admin operations", "details": "Phase 14 admin operations hardening."},
             {"date": "2026-09-11", "kind": "NEW", "title": "Finance and royalties", "details": "Ledger, royalty engine and payouts in the first platform build."},
         ],

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cornerroom.infra.outbox import OutboxEvent
 from cornerroom.kernel.events import DomainEvent
+from cornerroom.modules.administration.application.staff_accounts import consume_staff_account_event
 from cornerroom.modules.analytics.application.consumers import consume_analytics_event
 from cornerroom.modules.commerce.application.artist_mail import consume_artist_mail_event
 from cornerroom.modules.commerce.application.payment_alerts import consume_payment_alert_event
@@ -47,6 +48,9 @@ SIDE_CONSUMERS: list[OutboxHandler] = [
     consume_music_gift_event,
     # Fan gifts: claimed by a newly verified account, and their emails (D-GIFT-FAN-01).
     consume_fan_gift_event,
+    # Staff accounts: a verified account picks up its waiting staff invite; invite emails go out
+    # (D-STAFF-ACCOUNTS-01).
+    consume_staff_account_event,
 ]
 
 

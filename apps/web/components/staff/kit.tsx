@@ -16,6 +16,7 @@ import {
   buttonVariants,
   controlClasses,
 } from "@/components/ds";
+import { claimStaffInvite } from "@/features/staff-portal/api";
 import { resolveProtectedView } from "@/lib/auth-view";
 import { choiceLabel, choicesFrom, fieldWords } from "@/lib/staff-console-view";
 import { cn } from "@/lib/utils";
@@ -123,10 +124,24 @@ export function EmptyState({ message }: { message: string }) {
 
 /** Same contract as components/protected: sign-in and permission gates, UX only. */
 export function Protected({ children, permission }: { children: React.ReactNode; permission?: string }) {
-  const { status, user } = useAuth();
+  const { status, user, refreshUser } = useAuth();
   const pathname = usePathname();
   const view = resolveProtectedView(status, user, permission);
-  if (view.kind === "loading") return <LoadingState label="Checking your session" />;
+  const [claiming, setClaiming] = React.useState<"idle" | "busy" | "done">("idle");
+  // D-STAFF-ACCOUNTS-01: an admin may have added this person by email. Pick the invite up now
+  // (the worker would too, a little later), then read the account again with its staff access.
+  const userId = user?.id;
+  React.useEffect(() => {
+    if (view.kind !== "not_staff" || !userId || claiming !== "idle") return;
+    setClaiming("busy");
+    claimStaffInvite()
+      .then(async (res) => {
+        if (res.claimed) await refreshUser();
+      })
+      .catch(() => undefined)
+      .finally(() => setClaiming("done"));
+  }, [view.kind, userId, claiming, refreshUser]);
+  if (view.kind === "loading" || (view.kind === "not_staff" && claiming !== "done")) return <LoadingState label="Checking your session" />;
   if (view.kind === "unauthenticated") {
     return (
       <DsCard className="max-w-xl p-6">
@@ -142,7 +157,7 @@ export function Protected({ children, permission }: { children: React.ReactNode;
       <DsCard className="max-w-xl p-6">
         <p className="text-lg font-bold text-fg">This is the staff console</p>
         <p className="mt-2 text-sm text-fg-muted">
-          It is only for Corner Room staff. Staff accounts come from an invitation; if you have one, open its link or sign in with the invited account.
+          It is only for Corner Room staff. An admin adds staff by email: sign in with Continue with Google using the address they added, or open an invitation link if you have one.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <ButtonLink href={`/staff/sign-in?next=${encodeURIComponent(pathname ?? "/staff")}`} variant="secondary">
