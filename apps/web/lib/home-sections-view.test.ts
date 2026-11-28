@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ARTIST_POINTS, BLOOM_WHOLE, FACES, LISTEN_STEPS, QUESTIONS, settleTurn, worldProgress, worldStages, worldTurn } from "./home-sections-view";
+import { ARTIST_POINTS, FACES, LISTEN_STEPS, QUESTIONS, worldProgress } from "./home-sections-view";
 
 describe("home copy", () => {
   it("links only to pages that exist", () => {
@@ -45,52 +45,5 @@ describe("worldProgress", () => {
   });
   it("survives a window with no height", () => {
     expect(worldProgress(10, 20, 0)).toBe(0);
-  });
-});
-
-describe("worldTurn (owner, 2026-11-28)", () => {
-  it("starts on Ember, ends on Sky, eased at both ends", () => {
-    expect(worldTurn(0)).toBe(0);
-    expect(worldTurn(1)).toBe(1);
-    expect(worldTurn(0.5)).toBeCloseTo(0.5);
-    expect(worldTurn(0.1)).toBeLessThan(0.1);
-    expect(worldTurn(0.9)).toBeGreaterThan(0.9);
-  });
-  it("holds outside the hand-over and ignores nonsense", () => {
-    expect(worldTurn(-2)).toBe(0);
-    expect(worldTurn(7)).toBe(1);
-    expect(worldTurn(Number.NaN)).toBe(0);
-  });
-});
-
-describe("worldStages (owner, 2026-11-28, D-WORLD-04)", () => {
-  it("is plain Ember at the start and plain Sky with its light at the end", () => {
-    expect(worldStages(0)).toEqual({ cover: 0, drawing: false, veil: 0, sky: 0 });
-    expect(worldStages(1)).toEqual({ cover: 1, drawing: false, veil: 1, sky: 1 });
-  });
-  it("draws the bloom in between, and the plain night takes over only once it is whole", () => {
-    const mid = worldStages(0.4);
-    expect(mid.drawing).toBe(true);
-    expect(mid.veil).toBe(0);
-    expect(mid.cover).toBeCloseTo(0.4 / BLOOM_WHOLE);
-    expect(worldStages(BLOOM_WHOLE)).toMatchObject({ cover: 1, drawing: false, veil: 1, sky: 0 });
-  });
-  it("brings the Sky light up only after the bloom is whole", () => {
-    expect(worldStages(BLOOM_WHOLE - 0.01).sky).toBe(0);
-    expect(worldStages((BLOOM_WHOLE + 1) / 2).sky).toBeCloseTo(0.5);
-    expect(worldStages(Number.NaN)).toEqual(worldStages(0));
-  });
-});
-
-describe("settleTurn", () => {
-  it("finishes a part-way turn in the way the reader was going", () => {
-    expect(settleTurn(0.3, 1)).toBe(1);
-    expect(settleTurn(0.7, -1)).toBe(0);
-  });
-  it("leaves a room that is square on alone", () => {
-    expect(settleTurn(0, 1)).toBe(0);
-    expect(settleTurn(1, -1)).toBe(1);
-    expect(settleTurn(0.001, 1)).toBe(0);
-    expect(settleTurn(0.9995, -1)).toBe(1);
   });
 });

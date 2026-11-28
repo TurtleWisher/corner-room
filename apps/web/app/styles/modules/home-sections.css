@@ -336,10 +336,13 @@
   align-items: center;
 }
 
-/* ---------- The whole window changes world: the night blooms (brand D1; owner, 2026-11-28, D-WORLD-04) ----------
-   WorldShift (home-sections.tsx) writes --hw-draw (the bloom is between), --hw-veil (the plain Sky
-   night, 1 once the bloom is whole), --hw-sky (the Sky light, after it). The bloom itself is drawn
-   by components/home/world-bloom.ts on the canvas; every layer here only fades. */
+/* ---------- The whole window changes world: the night blooms (brand D1; owner, 2026-11-28, D-WORLD-05) ----------
+   One wide, soft dome of Sky night rises from below the window, dark at its edge, and the plain
+   night and the Sky light take over once it fills the window. A CSS scroll-driven animation on the
+   hand-over strip's own view timeline (--hw) runs it on the compositor, one to one with the scroll:
+   nothing to lag, run ahead or flicker. Only transform and opacity move; the layers never switch on
+   or off mid-scroll. Range: from the strip's top at 90 % of the window to its bottom at 35 %.
+   Without scroll-driven animations the same keyframes are paused and stepped by --hw-p. */
 [data-module="home"] .home-world {
   display: none;
 }
@@ -348,32 +351,135 @@
   position: fixed;
   inset: 0;
   z-index: -1;
+  overflow: hidden;
   pointer-events: none;
 }
+[data-module="home"] .home-world-bloom,
 [data-module="home"] .home-world-veil,
 [data-module="home"] .home-world-sky {
   position: absolute;
   inset: 0;
 }
+/* The dome: Sky night at its heart, falling through near-black to clear at its rim, so the way from
+   Ember is always dark, never purple. Many stops keep the fall-off even. */
+[data-module="home"] .home-world-bloom {
+  transform-origin: 50% 100%;
+  background: radial-gradient(
+    ellipse 62% 58% at 50% 100%,
+    #120f26 0%,
+    #120f26 46%,
+    #0e0b1d 54%,
+    #09070f 62%,
+    #060409 70%,
+    rgb(6 4 9 / 0.82) 77%,
+    rgb(6 4 9 / 0.5) 85%,
+    rgb(6 4 9 / 0.2) 93%,
+    rgb(6 4 9 / 0) 100%
+  );
+  opacity: 0;
+  will-change: transform, opacity;
+}
 /* Sky's own night. Ember's Night and this are both near black, so the way between is dark, never purple. */
 [data-module="home"] .home-world-veil {
   background: #120f26;
-  opacity: var(--hw-veil, 0);
+  opacity: 0;
 }
 [data-module="home"] .home-world-sky {
-  opacity: var(--hw-sky, 0);
+  opacity: 0;
 }
-[data-module="home"] .home-world-bloom {
-  display: none;
+
+@keyframes hw-bloom {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 38%, 0) scale(0.6);
+    animation-timing-function: cubic-bezier(0.55, 0, 0.7, 1);
+  }
+  10% {
+    opacity: 1;
+  }
+  80%,
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(4.4);
+  }
 }
-[data-module="home"][data-world-bloom] .home-world-bloom {
-  display: block;
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: var(--hw-draw, 0);
+@keyframes hw-veil {
+  0%,
+  74% {
+    opacity: 0;
+  }
+  84%,
+  100% {
+    opacity: 1;
+  }
 }
+@keyframes hw-sky {
+  0%,
+  82% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+/* The page's Ember pointer light leaves with Ember. */
+@keyframes hw-ember-out {
+  0% {
+    opacity: 1;
+  }
+  45%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Scroll-driven: the strip names its view timeline, <main> lets the fixed layers see it. */
+@supports (animation-timeline: view()) {
+  [data-module="home"][data-world-timeline] {
+    timeline-scope: --hw;
+  }
+  [data-module="home"][data-world-timeline] .home-handover {
+    view-timeline: --hw block;
+  }
+  [data-module="home"][data-world-timeline] .home-world-bloom {
+    animation: hw-bloom linear both;
+  }
+  [data-module="home"][data-world-timeline] .home-world-veil {
+    animation: hw-veil linear both;
+  }
+  [data-module="home"][data-world-timeline] .home-world-sky {
+    animation: hw-sky linear both;
+  }
+  [data-module="home"][data-world-timeline] > .cr-pl-clip.cr-pl-page {
+    animation: hw-ember-out linear both;
+  }
+  [data-module="home"][data-world-timeline] .home-world-bloom,
+  [data-module="home"][data-world-timeline] .home-world-veil,
+  [data-module="home"][data-world-timeline] .home-world-sky,
+  [data-module="home"][data-world-timeline] > .cr-pl-clip.cr-pl-page {
+    animation-timeline: --hw;
+    animation-range: cover 10vh cover calc(100% - 35vh);
+  }
+}
+
+/* Older browsers: the same keyframes, paused, stepped by --hw-p from the scroll. */
+[data-module="home"][data-world-live]:not([data-world-timeline]) .home-world-bloom {
+  animation: hw-bloom 1s linear both paused;
+}
+[data-module="home"][data-world-live]:not([data-world-timeline]) .home-world-veil {
+  animation: hw-veil 1s linear both paused;
+}
+[data-module="home"][data-world-live]:not([data-world-timeline]) .home-world-sky {
+  animation: hw-sky 1s linear both paused;
+}
+[data-module="home"][data-world-live]:not([data-world-timeline]) > .cr-pl-clip.cr-pl-page {
+  animation: hw-ember-out 1s linear both paused;
+}
+[data-module="home"][data-world-live]:not([data-world-timeline]) :is(.home-world-bloom, .home-world-veil, .home-world-sky),
+[data-module="home"][data-world-live]:not([data-world-timeline]) > .cr-pl-clip.cr-pl-page {
+  animation-delay: calc(var(--hw-p, 0) * -1s);
+}
+
 /* The Sky band's own grain and pointer light began at its top edge, a hard line across the bloom;
    with the window carrying the change they fade in over the band's first stretch instead. */
 [data-module="home"][data-world-live] .home-sky > .cr-pl-grain,
@@ -381,12 +487,6 @@
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 min(36rem, 75vh));
   mask-image: linear-gradient(to bottom, transparent 0, #000 min(36rem, 75vh));
 }
-/* While the change moves, the glass cards stop re-blurring the background every frame (it is one
-   soft gradient there, so nothing visible is lost); they frost again the moment it rests. */
-[data-module="home"][data-world-moving] .cr-glass-card {
-  --cut-blur: none;
-}
-
 /* With the window itself carrying the change, the strip and the Sky band stop painting their own
    bases: one continuous world from edge to edge, no band line. */
 [data-module="home"][data-world-live] .home-handover {
@@ -418,10 +518,4 @@
   [data-module="home"] .home-faq-item[open] .home-faq-answer {
     animation: none;
   }
-}
-
-/* The page's Ember pointer light is drawn after the world layers, so it would glow red over the Sky
-   night. It leaves with Ember; the Sky band carries its own pointer light from there on. */
-[data-module="home"][data-world-live] > .cr-pl-clip.cr-pl-page {
-  opacity: calc(1 - min(1, var(--hw-turn, 0) * 1.6));
 }
