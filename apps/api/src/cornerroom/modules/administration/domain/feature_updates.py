@@ -37,6 +37,18 @@ FEATURES: Final[list[dict]] = [
         "updates": [
             {
                 "date": "2026-11-28",
+                "kind": "IMPROVED",
+                "title": "Your whole Wrap as a story video, your name on it, and a year that celebrates",
+                "details": (
+                    "Sharing to a story now makes a video of your whole Wrap, every card animated, with your top song "
+                    "playing underneath, made on your device. Pictures are still there for anywhere else. Your Wrap and "
+                    "what you share say your own name (\"Samiul's 2026 Corner Room Wrap\"); when the first word of a name "
+                    "has a number in it, the next word is used. The year now stands out as a lit fairground sign with "
+                    "running bulbs and sparkles."
+                ),
+            },
+            {
+                "date": "2026-11-28",
                 "kind": "NEW",
                 "title": "Corner Room Wrap",
                 "details": (

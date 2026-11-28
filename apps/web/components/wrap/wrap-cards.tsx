@@ -10,6 +10,7 @@ import { Play } from "lucide-react";
 import type * as React from "react";
 
 import { CoverArt } from "@/components/brand/cover-art";
+import { YEAR_PATTERN, YearMark } from "@/components/wrap/year-mark";
 import type { MyWrap, WrapAct, WrapCard, WrapSong, WrapStats } from "@/features/wraps/api";
 import { coverUrl } from "@/lib/cover-view";
 import { formatCount } from "@/lib/format/count";
@@ -26,13 +27,16 @@ import {
   type FillContext,
 } from "@/lib/wrap-view";
 
-/** Display words in Sikat with any numerals set in Archivo (Sikat never draws numerals). */
+/** Display words in Sikat with any numerals set in Archivo (Sikat never draws numerals); a year
+ * becomes the lit celebration mark (owner, 2026-11-28). */
 export function Words({ text }: { text: string }) {
   const parts = text.split(/(\d[\d,.]*)/);
   return (
     <>
       {parts.map((p, i) =>
-        /^\d/.test(p) ? (
+        YEAR_PATTERN.test(p) ? (
+          <YearMark key={i} year={p} />
+        ) : /^\d/.test(p) ? (
           <span key={i} className="wr-num-inline">
             {p}
           </span>

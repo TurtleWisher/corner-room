@@ -36,10 +36,13 @@ def _day_start(d: date) -> datetime:
 
 
 def first_name(display_name: str | None) -> str | None:
-    if not display_name:
-        return None
-    parts = display_name.split()
-    return parts[0] if parts else None
+    """The name a Wrap calls the person by (owner, 2026-11-28): the first word of their name, or the
+    next one when it holds a digit ("Mizuls1 Samiul" is Samiul). None when no word fits."""
+    for word in (display_name or "").split():
+        word = word.strip(".,;:!?()[]{}\"'")
+        if word and not any(ch.isdigit() for ch in word):
+            return word
+    return None
 
 
 class WrapService:

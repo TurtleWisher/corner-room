@@ -48,6 +48,16 @@ export const CARD_WORDS: Record<WrapCardKey, { name: string; headline: string; a
   SUMMARY: { name: "Your Wrap", headline: "{first_name}'s {year} Wrap", about: "Everything on one card, ready to share." },
 };
 
+/** The name a Wrap calls someone by (owner, 2026-11-28): the first word of their name, or the next
+ * one when it holds a digit ("Mizuls1 Samiul" is Samiul), the same rule as the server. */
+export function firstNameOf(displayName: string | null | undefined): string | null {
+  for (const raw of (displayName ?? "").split(/\s+/)) {
+    const word = raw.replace(/^[.,;:!?()[\]{}"']+|[.,;:!?()[\]{}"']+$/g, "");
+    if (word && !/\d/.test(word)) return word;
+  }
+  return null;
+}
+
 export type FillContext = {
   firstName: string | null;
   name: string | null;
@@ -236,4 +246,49 @@ export function isoToDhakaInput(iso: string | null): string {
   const d = new Date(t + 6 * 3600_000);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+// --- the story video (owner, 2026-11-28: the whole Wrap is what goes to a story) -----------------
+
+/** Stories take up to a minute; the Wrap video stays well inside it. */
+export const VIDEO_MAX_S = 45;
+export const VIDEO_FPS = 30;
+const VIDEO_BASE_S: Partial<Record<WrapCardKey, number>> = { INTRO: 3.4, SUMMARY: 5 };
+const VIDEO_CARD_S = 3;
+const VIDEO_MIN_CARD_S = 2.2;
+
+export type VideoSegment = { key: WrapCardKey; start: number; end: number };
+
+/** Each card's time in the video, in order: the opening and the summary a little longer; the cards
+ * between share what is left when there are many, never under VIDEO_MIN_CARD_S. */
+export function videoTimeline(keys: WrapCardKey[]): { segments: VideoSegment[]; total: number } {
+  const fixed = keys.reduce((s, k) => s + (VIDEO_BASE_S[k] ?? 0), 0);
+  const middle = keys.filter((k) => VIDEO_BASE_S[k] === undefined).length;
+  const each = middle ? Math.max(VIDEO_MIN_CARD_S, Math.min(VIDEO_CARD_S, (VIDEO_MAX_S - fixed) / middle)) : 0;
+  let at = 0;
+  const segments = keys.map((key) => {
+    const len = VIDEO_BASE_S[key] ?? each;
+    const seg = { key, start: at, end: at + len };
+    at += len;
+    return seg;
+  });
+  return { segments, total: at };
+}
+
+/** The card on screen at `t` seconds and how far into it (seconds). Holds on the last card. */
+export function segmentAt(segments: VideoSegment[], t: number): { index: number; local: number } {
+  if (!segments.length) return { index: 0, local: 0 };
+  const i = segments.findIndex((s) => t < s.end);
+  const index = i === -1 ? segments.length - 1 : i;
+  return { index, local: Math.max(0, t - segments[index].start) };
+}
+
+export function easeOut(x: number): number {
+  const c = Math.max(0, Math.min(1, x));
+  return 1 - Math.pow(1 - c, 3);
+}
+
+/** A number counting up from 0 over `dur` seconds, landing exactly on the real value. */
+export function countUp(value: number, local: number, dur = 1.1): number {
+  return Math.round(value * easeOut(local / dur));
 }

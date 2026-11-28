@@ -122,3 +122,35 @@ describe("staff", () => {
     expect(dhakaInputToIso("")).toBeNull();
   });
 });
+
+import { countUp, firstNameOf, segmentAt, videoTimeline } from "@/lib/wrap-view";
+
+describe("names", () => {
+  it("skips a first word with digits", () => {
+    expect(firstNameOf("Samiul Islam")).toBe("Samiul");
+    expect(firstNameOf("Mizuls1 Samiul")).toBe("Samiul");
+    expect(firstNameOf("R2D2")).toBeNull();
+    expect(firstNameOf(null)).toBeNull();
+  });
+});
+
+describe("story video", () => {
+  it("times every card and stays inside a story's length", () => {
+    const few = videoTimeline(["INTRO", "MINUTES", "SUMMARY"]);
+    few.segments.forEach((s, i) => expect(s.end - s.start).toBeCloseTo([3.4, 3, 5][i]));
+    expect(few.total).toBeCloseTo(11.4);
+    const many = videoTimeline(["INTRO", ...Array(14).fill("MINUTES"), "SUMMARY"]);
+    expect(many.total).toBeLessThanOrEqual(45 + 1e-9);
+    expect(many.segments[1].end - many.segments[1].start).toBeGreaterThanOrEqual(2.2);
+  });
+  it("finds the card on screen and holds on the last", () => {
+    const { segments } = videoTimeline(["INTRO", "MINUTES", "SUMMARY"]);
+    expect(segmentAt(segments, 0)).toEqual({ index: 0, local: 0 });
+    expect(segmentAt(segments, 4).index).toBe(1);
+    expect(segmentAt(segments, 99).index).toBe(2);
+  });
+  it("counts up to the exact number", () => {
+    expect(countUp(2436, 0)).toBe(0);
+    expect(countUp(2436, 5)).toBe(2436);
+  });
+});

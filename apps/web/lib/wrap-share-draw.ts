@@ -5,7 +5,7 @@
  * fetched as bytes so the canvas stays exportable. Sikat only for words, Archivo for numerals. */
 
 import type { MyWrap } from "@/features/wraps/api";
-import { DAY_PART_WORDS, WORLD_TONES, backdropLight, bayerAt, shareTitle, toneAt, type WrapWorld } from "@/lib/wrap-view";
+import { DAY_PART_WORDS, WORLD_TONES, backdropLight, bayerAt, hexToRgb, shareTitle, toneAt, type WrapWorld } from "@/lib/wrap-view";
 import { formatCount } from "@/lib/format/count";
 
 export const SHARE_W = 1080;
@@ -20,44 +20,58 @@ export type ShareAssets = {
 
 const CELL = 12;
 
-function backdrop(ctx: CanvasRenderingContext2D, world: WrapWorld, seed: number): void {
+let small: HTMLCanvasElement | null = null;
+let smallImg: ImageData | null = null;
+const TONES: Record<WrapWorld, number[][]> = {
+  ember: WORLD_TONES.ember.map(hexToRgb),
+  sky: WORLD_TONES.sky.map(hexToRgb),
+};
+
+/** The dithered carnival light at time `t`. While `sweep` is under 1 the card's world rises from the
+ * bottom over `previous`, each cell flipping on its own threshold: every cell is one world's tone. */
+export function backdrop(ctx: CanvasRenderingContext2D, world: WrapWorld, t: number, previous: WrapWorld = world, sweep = 1): void {
   const cols = SHARE_W / CELL;
   const rows = SHARE_H / CELL;
-  const small = document.createElement("canvas");
-  small.width = cols;
-  small.height = rows;
-  const sctx = small.getContext("2d")!;
-  const img = sctx.createImageData(cols, rows);
-  const tones = WORLD_TONES[world].map((hex) => {
-    const n = Number.parseInt(hex.slice(1), 16);
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  });
+  if (!small || !smallImg) {
+    small = document.createElement("canvas");
+    small.width = cols;
+    small.height = rows;
+    smallImg = small.getContext("2d")!.createImageData(cols, rows);
+  }
+  const data = smallImg.data;
+  const pointer: [number, number] = [0.84 - 0.08 * Math.sin(t * 0.3), 0.12 + 0.05 * Math.cos(t * 0.23)];
   for (let y = 0; y < rows; y++) {
+    const v = (y + 0.5) / rows;
+    const reach = Math.max(0, Math.min(1, sweep * 1.6 - (1 - v) * 0.6));
     for (let x = 0; x < cols; x++) {
-      const v = backdropLight((x + 0.5) / cols, (y + 0.5) / rows, seed, [0.84, 0.12]);
-      const c = tones[toneAt(v, bayerAt(x, y))];
+      const th = bayerAt(x, y);
+      const tones = reach > th ? TONES[world] : TONES[previous];
+      const c = tones[toneAt(backdropLight((x + 0.5) / cols, v, t, pointer), th)];
       const o = (y * cols + x) * 4;
-      img.data[o] = c[0];
-      img.data[o + 1] = c[1];
-      img.data[o + 2] = c[2];
-      img.data[o + 3] = 255;
+      data[o] = c[0];
+      data[o + 1] = c[1];
+      data[o + 2] = c[2];
+      data[o + 3] = 255;
     }
   }
-  sctx.putImageData(img, 0, 0);
+  small.getContext("2d")!.putImageData(smallImg, 0, 0);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(small, 0, 0, SHARE_W, SHARE_H);
   ctx.imageSmoothingEnabled = true;
 }
 
-function bulbs(ctx: CanvasRenderingContext2D, world: WrapWorld): void {
+/** Marquee bulbs round the edge; `phase` steps the chase (the video moves it, the picture doesn't). */
+export function bulbs(ctx: CanvasRenderingContext2D, world: WrapWorld, phase = 0): void {
   const glow = world === "ember" ? "#fcf475" : "#bbedfe";
   const inset = 36;
   const gap = 60;
   const at: [number, number][] = [];
-  for (let x = inset; x <= SHARE_W - inset; x += gap) at.push([x, inset], [x, SHARE_H - inset]);
-  for (let y = inset + gap; y < SHARE_H - inset; y += gap) at.push([inset, y], [SHARE_W - inset, y]);
+  for (let x = inset; x <= SHARE_W - inset; x += gap) at.push([x, inset]);
+  for (let y = inset + gap; y < SHARE_H - inset; y += gap) at.push([SHARE_W - inset, y]);
+  for (let x = SHARE_W - inset; x >= inset; x -= gap) at.push([x, SHARE_H - inset]);
+  for (let y = SHARE_H - inset - gap; y > inset; y -= gap) at.push([inset, y]);
   at.forEach(([x, y], i) => {
-    const on = i % 3 !== 0;
+    const on = (i + phase) % 3 !== 0;
     ctx.beginPath();
     ctx.arc(x, y, on ? 9 : 7, 0, Math.PI * 2);
     ctx.fillStyle = on ? glow : "rgba(255,255,255,0.18)";
@@ -69,7 +83,181 @@ function bulbs(ctx: CanvasRenderingContext2D, world: WrapWorld): void {
   ctx.shadowColor = "transparent";
 }
 
-function cutRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, cut: number): void {
+const YEAR_RE = /^(19|20)\d{2}$/;
+const YEAR_FACE: Record<WrapWorld, [string, string, string, string]> = {
+  ember: ["#ffffff", "#fcf475", "#ffd24a", "#ff5a4e"],
+  sky: ["#ffffff", "#bbedfe", "#8fe0f7", "#53c8ea"],
+};
+const YEAR_SIDE: Record<WrapWorld, [string, string]> = { ember: ["#b21f24", "#831515"], sky: ["#4f4789", "#2e2860"] };
+
+function setStretch(ctx: CanvasRenderingContext2D, stretch: CanvasFontStretch): void {
+  // Canvas font stretch (Chrome, Edge, Safari 17+); elsewhere the digits are simply narrower.
+  try {
+    ctx.fontStretch = stretch;
+  } catch {
+    /* not supported */
+  }
+}
+
+/** The year lit like a fairground sign (owner, 2026-11-28), the same treatment as YearMark: wide
+ * heavy Archivo, a stacked extrusion, a face of light, bulbs chasing round the outlines, a sheen
+ * and sparkles. Draws with its left edge at x on the baseline y; returns its width. */
+export function drawYear(ctx: CanvasRenderingContext2D, year: string, x: number, y: number, size: number, world: WrapWorld, ui: string, t = 0): number {
+  ctx.save();
+  setStretch(ctx, "ultra-expanded");
+  ctx.font = `900 ${size}px ${ui}`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  const w = ctx.measureText(year).width;
+  const depth = Math.max(4, Math.round(size / 18));
+  const [front, back] = YEAR_SIDE[world];
+  for (let d = depth; d >= 1; d--) {
+    ctx.fillStyle = d > depth / 2 ? back : front;
+    ctx.fillText(year, x + d * 1.1, y + d * 1.4);
+  }
+  const f = YEAR_FACE[world];
+  const face = ctx.createLinearGradient(0, y - size * 0.75, 0, y);
+  face.addColorStop(0, f[0]);
+  face.addColorStop(0.48, f[1]);
+  face.addColorStop(0.52, f[2]);
+  face.addColorStop(1, f[3]);
+  ctx.shadowColor = f[1];
+  ctx.shadowBlur = size * 0.25;
+  ctx.fillStyle = face;
+  ctx.fillText(year, x, y);
+  ctx.shadowBlur = 0;
+  // A sheen sweeping across every few seconds, only over the digits' face.
+  const p = (t % 3.6) / 1.6;
+  if (p <= 1) {
+    const sx = x - size + p * (w + size * 2);
+    const sheen = ctx.createLinearGradient(sx - size * 0.4, 0, sx + size * 0.4, 0);
+    sheen.addColorStop(0, "rgba(255,255,255,0)");
+    sheen.addColorStop(0.5, "rgba(255,255,255,0.75)");
+    sheen.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(sx - size * 0.4, y - size, size * 0.8, size * 1.2);
+    ctx.clip();
+    ctx.fillStyle = sheen;
+    ctx.fillText(year, x, y);
+    ctx.restore();
+  }
+  // Bulbs: round dots of light running along the outlines.
+  const gap = size * 0.1;
+  ctx.setLineDash([0.01, gap]);
+  ctx.lineDashOffset = -(t * gap * 1.2);
+  ctx.lineCap = "round";
+  ctx.lineWidth = size * 0.04;
+  ctx.strokeStyle = f[0];
+  ctx.shadowColor = f[1];
+  ctx.shadowBlur = size * 0.06;
+  ctx.strokeText(year, x, y);
+  ctx.setLineDash([]);
+  ctx.shadowBlur = 0;
+  // Sparkles twinkling round it.
+  const sparks: [number, number, number, number][] = [
+    [-0.04, -0.82, 0.13, 0],
+    [1.02, -0.88, 0.16, 0.6],
+    [0.95, 0.12, 0.1, 1.1],
+    [0.06, 0.14, 0.09, 1.6],
+    [0.5, -1.0, 0.08, 0.9],
+  ];
+  for (const [sx, sy, r, delay] of sparks) {
+    const k = 0.5 + 0.5 * Math.sin((t - delay) * 2.6);
+    const rr = size * r * (0.4 + 0.7 * k);
+    const cx = x + sx * w;
+    const cy = y + sy * size;
+    ctx.globalAlpha = 0.15 + 0.85 * k;
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + t * 0.8;
+      const rad = i % 2 === 0 ? rr : rr * 0.28;
+      ctx.lineTo(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad);
+    }
+    ctx.closePath();
+    ctx.fillStyle = f[0];
+    ctx.fill();
+  }
+  ctx.restore();
+  return w + depth * 1.1;
+}
+
+export type MixedStyle = { display: string; ui: string; world: WrapWorld; ink: string; shadow?: string; t?: number; lineGap?: number };
+
+function isYear(w: string): boolean {
+  return YEAR_RE.test(w);
+}
+
+/** Display words in Sikat, numbers in Archivo and a year as the lit mark, wrapped to `maxW`.
+ * Returns the baseline of the last line. With `shadow` set, words get the misregistered print
+ * shadow (brand print detail). */
+export function drawMixed(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, size: number, o: MixedStyle): number {
+  const space = size * 0.28;
+  // The year stands on its own line, about twice the words' size (owner, 2026-11-28).
+  const yearSize = size * 1.9;
+  const words = text.split(/\s+/).filter(Boolean);
+  const font = (w: string) => (/\d/.test(w) ? `800 ${size * 0.92}px ${o.ui}` : `400 ${size}px ${o.display}`);
+  const measure = (w: string): number => {
+    if (isYear(w)) {
+      ctx.save();
+      setStretch(ctx, "ultra-expanded");
+      ctx.font = `900 ${yearSize}px ${o.ui}`;
+      const m = ctx.measureText(w).width + yearSize * 0.12;
+      ctx.restore();
+      return m;
+    }
+    ctx.font = font(w);
+    return ctx.measureText(w).width;
+  };
+  const lines: string[][] = [[]];
+  let width = 0;
+  for (const w of words) {
+    const mw = measure(w);
+    const line = lines[lines.length - 1];
+    if (isYear(w)) {
+      if (line.length) lines.push([w]);
+      else line.push(w);
+      lines.push([]);
+      width = 0;
+      continue;
+    }
+    if (line.length && width + space + mw > maxW) {
+      lines.push([w]);
+      width = mw;
+    } else {
+      width += (line.length ? space : 0) + mw;
+      line.push(w);
+    }
+  }
+  let base = y;
+  const kept = lines.filter((l) => l.length);
+  kept.forEach((line, li) => {
+    const yearLine = line.length === 1 && isYear(line[0]);
+    const prevYear = li > 0 && kept[li - 1].length === 1 && isYear(kept[li - 1][0]);
+    if (li > 0) base += yearLine ? yearSize * 0.98 : prevYear ? size * 1.25 : size * (o.lineGap ?? 1.08);
+    else if (yearLine) base += yearSize * 0.4;
+    let cx = x;
+    for (const w of line) {
+      if (isYear(w)) {
+        cx += drawYear(ctx, w, cx, base, yearSize, o.world, o.ui, o.t ?? 0) + space;
+        continue;
+      }
+      ctx.font = font(w);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      if (o.shadow) {
+        ctx.fillStyle = o.shadow;
+        ctx.fillText(w, cx + 3, base + 3);
+      }
+      ctx.fillStyle = o.ink;
+      ctx.fillText(w, cx, base);
+      cx += ctx.measureText(w).width + space;
+    }
+  });
+  return base;
+}
+
+export function cutRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, cut: number): void {
   ctx.beginPath();
   ctx.moveTo(x + cut, y);
   ctx.lineTo(x + w, y);
@@ -79,7 +267,7 @@ function cutRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
   ctx.closePath();
 }
 
-function glass(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, world: WrapWorld): void {
+export function glass(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, world: WrapWorld): void {
   ctx.save();
   // A lift under the card (offset down, so nothing shows at the cut corner).
   ctx.shadowColor = "rgba(0,0,0,0.55)";
@@ -110,14 +298,14 @@ function glass(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h
   ctx.stroke();
 }
 
-function fit(ctx: CanvasRenderingContext2D, text: string, max: number): string {
+export function fit(ctx: CanvasRenderingContext2D, text: string, max: number): string {
   if (ctx.measureText(text).width <= max) return text;
   let t = text;
   while (t.length > 1 && ctx.measureText(`${t}…`).width > max) t = t.slice(0, -1);
   return `${t.trimEnd()}…`;
 }
 
-function wrapLines(ctx: CanvasRenderingContext2D, text: string, max: number, lines: number): string[] {
+export function wrapLines(ctx: CanvasRenderingContext2D, text: string, max: number, lines: number): string[] {
   const words = text.split(/\s+/);
   const out: string[] = [];
   let line = "";
@@ -138,7 +326,7 @@ function wrapLines(ctx: CanvasRenderingContext2D, text: string, max: number, lin
   return out;
 }
 
-function cover(ctx: CanvasRenderingContext2D, img: CanvasImageSource | undefined, x: number, y: number, s: number, label: string, world: WrapWorld, font: string): void {
+export function cover(ctx: CanvasRenderingContext2D, img: CanvasImageSource | undefined, x: number, y: number, s: number, label: string, world: WrapWorld, font: string): void {
   ctx.save();
   cutRect(ctx, x, y, s, s, Math.round(s * 0.09));
   ctx.clip();
@@ -167,11 +355,6 @@ export function drawWrapShare(ctx: CanvasRenderingContext2D, wrap: MyWrap, desig
 
   const logo = a.logos[world];
   if (logo) ctx.drawImage(logo, 90, 78, 144, 120);
-  ctx.textAlign = "right";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = ink;
-  ctx.font = `700 40px ${ui}`;
-  ctx.fillText(String(wrap.season.year), SHARE_W - 96, 158);
 
   const cx = 90;
   const cy = 260;
@@ -186,23 +369,23 @@ export function drawWrapShare(ctx: CanvasRenderingContext2D, wrap: MyWrap, desig
   ctx.font = `700 32px ${ui}`;
   ctx.fillText(design === "songs" ? "MY TOP SONGS" : "MY YEAR IN MUSIC", cx + pad, y);
   y += 30;
-  ctx.font = `400 92px ${display}`;
-  const title = shareTitle(wrap.person.first_name, wrap.season.year, wrap.season.sharing.show_name).replace(/\d+/g, "").replace(/\s+/g, " ").trim();
-  for (const line of wrapLines(ctx, title, cw - pad * 2, 2)) {
-    y += 96;
-    // The misregistered print shadow on big display words (brand print detail).
-    ctx.fillStyle = world === "ember" ? "#b21f24" : "#4f4789";
-    ctx.fillText(line, cx + pad + 3, y + 3);
-    ctx.fillStyle = ink;
-    ctx.fillText(line, cx + pad, y);
-  }
-  y += 60;
+  // "Samiul's 2026 Corner Room Wrap": the person's own name, the year as the lit mark.
+  const title = shareTitle(wrap.person.first_name, wrap.season.year, wrap.season.sharing.show_name);
+  y = drawMixed(ctx, title, cx + pad, y + 96, cw - pad * 2, 72, {
+    display,
+    ui,
+    world,
+    ink,
+    shadow: world === "ember" ? "#b21f24" : "#4f4789",
+    t: 0.8,
+  });
+  y += 56;
 
   if (design === "songs") {
     const rows = s.top_songs.slice(0, 5);
-    const size = 150;
+    const size = 128;
     for (const [i, song] of rows.entries()) {
-      const top = y + i * (size + 42);
+      const top = y + i * (size + 40);
       ctx.fillStyle = accent;
       ctx.font = `800 64px ${ui}`;
       ctx.textAlign = "left";
@@ -212,10 +395,10 @@ export function drawWrapShare(ctx: CanvasRenderingContext2D, wrap: MyWrap, desig
       const tw = cx + cw - pad - tx;
       ctx.fillStyle = ink;
       ctx.font = `700 46px ${ui}`;
-      ctx.fillText(fit(ctx, song.title ?? "Not available", tw), tx, top + 66);
+      ctx.fillText(fit(ctx, song.title ?? "Not available", tw), tx, top + 58);
       ctx.fillStyle = muted;
       ctx.font = `500 34px ${ui}`;
-      ctx.fillText(fit(ctx, song.act ?? "", tw), tx, top + 116);
+      ctx.fillText(fit(ctx, song.act ?? "", tw), tx, top + 104);
     }
     if (!rows.length) {
       ctx.fillStyle = muted;

@@ -10,6 +10,7 @@ import { WrapEditor } from "@/components/staff/wrap-editor";
 import { useAsync } from "@/components/use-async";
 import { fetchStaffWrap, fetchStaffWraps } from "@/features/wraps/api";
 import { friendlyError } from "@/lib/error-copy";
+import { firstNameOf } from "@/lib/wrap-view";
 
 function Editor({ id }: { id: string }) {
   const auth = useAuth();
@@ -17,7 +18,7 @@ function Editor({ id }: { id: string }) {
   if (data.status === "loading") return <LoadingState />;
   if (data.status === "error") return <ErrorState message={friendlyError(data.error, "This Wrap couldn't be loaded. Wraps are for platform admins.")} />;
   const [wrap, list] = data.data;
-  const first = auth.user?.display_name?.split(/\s+/)[0] ?? null;
+  const first = firstNameOf(auth.user?.display_name);
   return <WrapEditor initial={wrap} options={list.options} staffFirstName={first} />;
 }
 

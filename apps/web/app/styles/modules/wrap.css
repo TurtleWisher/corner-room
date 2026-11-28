@@ -1391,3 +1391,135 @@
     transition: none;
   }
 }
+
+/* ---------- the year as a celebration (owner, 2026-11-28; components/wrap/year-mark.tsx) ---------- */
+/* The year stands on its own line, about twice the words' size: the focus of the line. */
+.wr-year {
+  display: block;
+  height: 2.3em;
+  width: auto;
+  max-width: 100%;
+  aspect-ratio: 400 / 140;
+  margin: 0.14em 0 0.1em -0.04em;
+  overflow: visible;
+  --wr-y0: #ffffff;
+  --wr-y1: #fcf475;
+  --wr-y2: #ffd24a;
+  --wr-y3: #ff5a4e;
+  --wr-yside: #831515;
+  --wr-yside-front: #b21f24;
+  filter: drop-shadow(0 0 14px var(--wr-glow));
+}
+.wr-root[data-world="sky"] .wr-year {
+  --wr-y0: #ffffff;
+  --wr-y1: #bbedfe;
+  --wr-y2: #8fe0f7;
+  --wr-y3: #53c8ea;
+  --wr-yside: #2e2860;
+  --wr-yside-front: #4f4789;
+}
+.wr-year-text {
+  font-family: var(--font-ui);
+  font-weight: 900;
+  font-stretch: 125%;
+  font-size: 118px;
+  letter-spacing: 0;
+}
+.wr-year-f0 {
+  stop-color: var(--wr-y0);
+}
+.wr-year-f1 {
+  stop-color: var(--wr-y1);
+}
+.wr-year-f2 {
+  stop-color: var(--wr-y2);
+}
+.wr-year-f3 {
+  stop-color: var(--wr-y3);
+}
+.wr-year-side {
+  fill: color-mix(in srgb, var(--wr-yside-front) calc(100% - var(--d) * 12%), var(--wr-yside));
+}
+.wr-year-face {
+  stroke: rgb(255 255 255 / 0.55);
+  stroke-width: 1.2;
+  paint-order: stroke;
+}
+.wr-year-bulbs {
+  fill: none;
+  stroke: var(--wr-y0);
+  stroke-width: 4.2;
+  stroke-linecap: round;
+  stroke-dasharray: 0 11;
+  filter: drop-shadow(0 0 3px var(--wr-y1));
+  opacity: 0.95;
+}
+.wr-year-sheen {
+  opacity: 0;
+}
+.wr-year-spark {
+  fill: var(--wr-y0);
+  filter: drop-shadow(0 0 4px var(--wr-y1));
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wr-year-bulbs {
+    animation: wr-year-chase 0.9s linear infinite;
+  }
+  .wr-year-sheen {
+    animation: wr-year-sheen 3.6s var(--ease-corner) 0.6s infinite;
+  }
+  .wr-year-spark {
+    animation: wr-year-twinkle 2.4s ease-in-out infinite both;
+  }
+  .wr-slot > .wr-card .wr-year {
+    animation: wr-year-in 0.9s cubic-bezier(0.2, 1.5, 0.4, 1) 0.2s both;
+  }
+}
+@keyframes wr-year-chase {
+  to {
+    stroke-dashoffset: -11;
+  }
+}
+@keyframes wr-year-sheen {
+  0% {
+    opacity: 0.9;
+    transform: skewX(-18deg) translateX(0);
+  }
+  45%,
+  100% {
+    opacity: 0.9;
+    transform: skewX(-18deg) translateX(620px);
+  }
+}
+@keyframes wr-year-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.4) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1) rotate(45deg);
+  }
+}
+@keyframes wr-year-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5) rotate(-6deg);
+  }
+}
+.wr-share-making {
+  position: absolute;
+  inset: auto 0.5rem 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #140707;
+  background: #fcf475;
+}

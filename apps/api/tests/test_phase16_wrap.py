@@ -25,6 +25,16 @@ def _row(track: UUID, act: UUID | None, day: date, hour: int = 12, ms: int = 180
 # --- pure rules -------------------------------------------------------------------------------------
 
 
+def test_the_wrap_calls_people_by_a_name_without_digits() -> None:
+    from cornerroom.modules.analytics.application.wraps import first_name
+
+    assert first_name("Samiul Islam") == "Samiul"
+    assert first_name("Mizuls1 Samiul") == "Samiul"
+    assert first_name("2026 fan") == "fan"
+    assert first_name("R2D2") is None
+    assert first_name(None) is None and first_name("   ") is None
+
+
 def test_longest_streak_finds_the_first_longest_run() -> None:
     d = date(2026, 3, 1)
     days = [d, d + timedelta(1), d + timedelta(2), d + timedelta(5), d + timedelta(6), d + timedelta(7)]
