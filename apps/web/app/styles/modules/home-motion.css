@@ -1,0 +1,226 @@
+/* The home page's depth (owner, 2026-11-28): every section arrives with the scroll and settles when
+   the reader stops, and cards, tiles, buttons and the trending case lean toward a mouse.
+
+   Two engines write the values; these rules only turn them into transform, opacity and light:
+   - components/home/story-motion.tsx (the closing story's engine, also wrapping the sections above
+     it): --k on each [data-k], 0 to 1, under [data-story="live"].
+   - components/home/home-motion.ts: --lx / --ly (lean, degrees), --lh (lift, 0 to 1), --mx / --my
+     (where the light is) on leaning elements, --px / --py (-1 to 1) on [data-parallax] regions,
+     under [data-motion="live"] on <main> (mice only).
+   Without either (no script, touch for the hover, reduced motion) everything stands as it is.
+   Nothing loops or moves by itself (brand section 10). Arrivals use the separate translate / rotate
+   properties where an element also leans, so the two compose. */
+
+/* ======================= Arrivals with the scroll ======================= */
+
+/* A block rises out of the floor: tipped back, lower and further away, then square on. */
+[data-story="live"] .home-arrive {
+  transform-origin: 50% 0%;
+  transform: perspective(1600px) translate3d(0, calc((1 - var(--k, 1)) * 3.5rem), calc((1 - var(--k, 1)) * -180px)) rotateX(calc((1 - var(--k, 1)) * 14deg));
+  opacity: calc(0.08 + var(--k, 1) * 0.92);
+}
+
+/* Lists stand up one after another (--n: each item's place; set inline, or below for the rows). */
+[data-story="live"] .home-stagger {
+  perspective: 1400px;
+}
+[data-story="live"] .home-stagger > * {
+  --kk: clamp(0, calc(var(--k, 1) * 1.6 - var(--n, 0) * 0.12), 1);
+  transform-origin: 50% 100%;
+  translate: 0 calc((1 - var(--kk)) * 2.5rem) calc((1 - var(--kk)) * -140px);
+  rotate: x calc((1 - var(--kk)) * 20deg);
+  opacity: var(--kk);
+}
+.home-rows > :nth-child(2) { --n: 1; }
+.home-rows > :nth-child(3) { --n: 2; }
+.home-rows > :nth-child(4) { --n: 3; }
+.home-rows > :nth-child(5) { --n: 4; }
+.home-rows > :nth-child(n + 6) { --n: 5; }
+
+/* Section heads: the title stands up out of the floor, its number and link follow, the rule draws. */
+.home-head-line {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 1px;
+  transform-origin: 0 50%;
+}
+[data-story="live"] .home-head .home-head-t,
+[data-story="live"] .home-head .home-head-n {
+  display: inline-block;
+}
+[data-story="live"] .home-head .home-head-t {
+  --kk: clamp(0, calc(var(--k, 1) * 1.35), 1);
+  transform-origin: 0 100%;
+  transform: perspective(800px) translate3d(calc((1 - var(--kk)) * -1rem), calc((1 - var(--kk)) * 1.25rem), 0) rotateX(calc((1 - var(--kk)) * 58deg));
+  opacity: var(--kk);
+}
+[data-story="live"] .home-head .home-head-n {
+  --kk: clamp(0, calc(var(--k, 1) * 1.35 - 0.12), 1);
+  transform: translate3d(0, calc((1 - var(--kk)) * 0.9rem), 0) scale(calc(0.6 + var(--kk) * 0.4));
+  opacity: var(--kk);
+}
+[data-story="live"] .home-head .home-head-link {
+  --kk: clamp(0, calc(var(--k, 1) * 1.35 - 0.3), 1);
+  translate: calc((1 - var(--kk)) * 1.25rem) 0;
+  opacity: var(--kk);
+}
+[data-story="live"] .home-head .home-head-line {
+  scale: clamp(0, calc(var(--k, 1) * 1.4 - 0.2), 1) 1;
+}
+
+/* Trending Corner: the stage's floor tips up into place as it arrives, then the player comes in. */
+[data-story="live"] .home-arrive-stage .tc-stage {
+  transform-origin: 50% 100%;
+  transform: perspective(1200px) rotateX(calc((1 - var(--k, 1)) * 24deg));
+}
+[data-story="live"] .home-arrive-stage .tc-room {
+  --kk: clamp(0, calc(var(--k, 1) * 1.7 - 0.7), 1);
+  translate: 0 calc((1 - var(--kk)) * 1.75rem);
+  opacity: var(--kk);
+}
+
+/* ======================= The hero under the mouse ======================= */
+
+/* Its layers drift apart: the words one way, the cover the other, the light furthest. */
+[data-module="home"][data-motion="live"] .home-hero .home-depth-near {
+  translate: calc(var(--px, 0) * -10px) calc(var(--py, 0) * -6px);
+}
+[data-module="home"][data-motion="live"] .home-hero .home-depth-far {
+  translate: calc(var(--px, 0) * 16px) calc(var(--py, 0) * 10px);
+}
+[data-module="home"][data-motion="live"] .home-hero .home-title > :nth-child(2) {
+  translate: calc(var(--px, 0) * -8px) 0;
+}
+[data-module="home"][data-motion="live"] .home-hero .home-feature-glow {
+  translate: calc(-50% + var(--px, 0) * 38px) calc(-50% + var(--py, 0) * 26px);
+}
+/* And as the page scrolls on, the words tip back and the cover turns away a little. */
+@keyframes home-drift-near {
+  to {
+    transform: perspective(1000px) translateY(-36px) rotateX(9deg);
+    opacity: 0.55;
+  }
+}
+@keyframes home-drift-far {
+  to {
+    transform: perspective(1000px) translateY(-56px) rotateY(-7deg) scale(0.97);
+  }
+}
+
+/* ======================= Leaning toward the mouse ======================= */
+
+[data-module="home"][data-motion="live"] :is([data-lean], .home-rows > li) {
+  --lean-z: 10px;
+  --lean-up: -3px;
+  transform: perspective(900px) translate3d(0, calc(var(--lh, 0) * var(--lean-up)), calc(var(--lh, 0) * var(--lean-z))) rotateX(var(--ly, 0deg)) rotateY(var(--lx, 0deg));
+}
+[data-module="home"][data-motion="live"] :is([data-lean], .home-rows > li)[data-leaning] {
+  will-change: transform;
+}
+/* Pressed: it gives under the click, then comes back. */
+[data-module="home"][data-motion="live"] :is([data-lean], .home-rows > li)[data-pressed] {
+  --lean-z: -5px;
+  --lean-up: 0px;
+}
+/* The keyboard gets the lift without the lean. */
+[data-module="home"][data-motion="live"] :is([data-lean]:focus-visible, .home-tile:focus-within, .home-rows > li:focus-within) {
+  --lh: 1;
+}
+
+/* Buttons and the explore links: a small lean, a little lift. */
+[data-module="home"][data-motion="live"] .home-cta-go {
+  --lean-z: 8px;
+  --lean-up: -2px;
+}
+[data-module="home"][data-motion="live"] .home-chip {
+  --lean-z: 9px;
+}
+
+/* Your shortcuts: they lift further and their icon swells toward you. */
+[data-module="home"][data-motion="live"] .home-shortcut {
+  --lean-z: 14px;
+}
+[data-module="home"] .home-shortcut > svg:first-child {
+  scale: calc(1 + var(--lh, 0) * 0.16);
+  translate: calc(var(--lh, 0) * 2px) 0;
+}
+
+/* Upcoming rows: a gentle lean; the poster steps forward. */
+[data-module="home"][data-motion="live"] .home-rows > li {
+  --lean-z: 6px;
+  --lean-up: 0px;
+}
+[data-module="home"] .home-rows .ev-cube {
+  scale: calc(1 + var(--lh, 0) * 0.09);
+  translate: calc(var(--lh, 0) * 4px) 0;
+}
+
+/* New releases: the tile lifts toward you and the cover's edge catches the light where the mouse is
+   (a ring around the art, never across it). */
+[data-module="home"][data-motion="live"] .home-tile {
+  --lean-z: 26px;
+  --lean-up: -6px;
+  transition: none;
+}
+[data-module="home"] .home-tiles .home-tile::after {
+  content: "";
+  position: absolute;
+  inset: -1px -1px auto -1px;
+  aspect-ratio: 1;
+  padding: 1px;
+  pointer-events: none;
+  background: radial-gradient(70% 70% at var(--mx, 30%) var(--my, 20%), color-mix(in srgb, var(--cr-accent) 85%, white), transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: var(--lh, 0);
+}
+
+/* ======================= Trending Corner, nearer ======================= */
+
+/* The jewel case turns toward the mouse from where it stands, straightening as it lifts. */
+[data-module="home"][data-motion="live"] .tc-box[data-lean] {
+  transform: none;
+}
+[data-module="home"][data-motion="live"] .tc-box .tc-box-case {
+  transform: translate3d(0, calc(var(--lh, 0) * -4px), calc(var(--lh, 0) * 18px)) rotateY(calc(-14deg + var(--lh, 0) * 10deg + var(--lx, 0deg))) rotateX(calc(3deg - var(--lh, 0) * 2deg + var(--ly, 0deg)));
+  transition: none;
+}
+/* Its glossy front catches the light where the mouse is. */
+[data-module="home"] .tc-box .tc-box-gloss {
+  background:
+    radial-gradient(55% 55% at var(--mx, 30%) var(--my, 20%), rgb(255 255 255 / calc(var(--lh, 0) * 0.28)), transparent 70%),
+    linear-gradient(115deg, rgb(255 255 255 / 0.24), transparent 34%, transparent 70%, rgb(255 255 255 / 0.08));
+}
+/* It stands on the stage's floor: a faint reflection below it. */
+@supports (-webkit-box-reflect: below 0) {
+  [data-module="home"] .tc-box {
+    -webkit-box-reflect: below 6px linear-gradient(transparent 62%, rgb(255 255 255 / 0.16));
+  }
+}
+/* The player's layers drift apart under the mouse anywhere on the card. */
+[data-module="home"][data-motion="live"] .tc[data-parallax] .tc-room-body {
+  translate: calc(var(--px, 0) * -6px) calc(var(--py, 0) * -3px);
+}
+[data-module="home"][data-motion="live"] .tc[data-parallax] .tc-box {
+  translate: calc(var(--px, 0) * 9px) calc(var(--py, 0) * 5px);
+}
+/* The card catches the lamp's light, Lamp yellow, where the mouse is. */
+[data-module="home"] .tc.cr-spot {
+  --spot-tint: var(--cr-highlight);
+}
+/* A new front arrives from the depth instead of only rising. */
+@keyframes tc-body-in {
+  from {
+    opacity: 0;
+    transform: perspective(700px) translate3d(0, 12px, -40px) rotateX(18deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-module="home"] .home-shortcut > svg:first-child,
+  [data-module="home"] .home-rows .ev-cube {
+    scale: none;
+    translate: none;
+  }
+}

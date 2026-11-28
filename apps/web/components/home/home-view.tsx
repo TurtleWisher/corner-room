@@ -12,12 +12,12 @@ import { ButtonLink, Card, DateTime, Skeleton } from "@/components/ds";
 import { EventMedia } from "@/components/events/event-media";
 import { EventRow } from "@/components/events/event-row";
 import { FeaturedCarousel } from "@/components/home/featured-carousel";
+import { useHomeMotion } from "@/components/home/home-motion";
 import { ClosingCall, ForArtists, HowListeningWorks, Questions, RoomFaces, WorldShift } from "@/components/home/home-sections";
 import { MissionBand } from "@/components/home/mission-band";
 import { PosterTilt } from "@/components/home/poster-tilt";
 import { StoryEnd } from "@/components/home/story-motion";
 import { TrendingCorner } from "@/components/home/trending-corner";
-import { Reveal } from "@/components/ds/reveal";
 import { useCredits } from "@/components/music/credits";
 import { ReleaseCard } from "@/components/music/release-card";
 import { TAGLINE_BN } from "@/components/shell/site-footer";
@@ -140,7 +140,7 @@ function YouPanel() {
 
   if (status !== "authenticated" || !user) {
     return (
-      <Card className="flex flex-col gap-5 p-6 md:flex-row md:items-center md:justify-between md:p-8">
+      <Card data-lean="1.5" data-spot className="cr-spot flex flex-col gap-5 p-6 md:flex-row md:items-center md:justify-between md:p-8">
         <div>
           <Display as="h2" size="sm" className="md:text-[2.25rem]">
             Your tickets, library and playlists in one place
@@ -172,12 +172,14 @@ function YouPanel() {
           </ButtonLink>
         ) : null}
       </div>
-      <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {SHORTCUTS.map(({ href, label, icon: Icon }) => (
-          <li key={href}>
+      <ul data-k className="home-stagger grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {SHORTCUTS.map(({ href, label, icon: Icon }, i) => (
+          <li key={href} style={{ ["--n" as string]: i }}>
             <Link
               href={href}
-              className="cr-cut cr-focus flex h-14 items-center gap-3 px-4 text-sm font-semibold text-fg cr-glass-card cr-hover"
+              data-lean="9"
+              data-spot
+              className="home-shortcut cr-cut cr-focus flex h-14 items-center gap-3 px-4 text-sm font-semibold text-fg cr-glass-card cr-hover cr-spot"
             >
               <Icon aria-hidden="true" className="size-5 text-highlight" />
               <span className="flex-1">{label}</span>
@@ -194,17 +196,20 @@ function YouPanel() {
 
 function SectionHead({ id, index, title, href, link }: { id: string; index: string; title: string; href: string; link: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-line pb-4">
+    // The head arrives with the scroll (home-motion.css): the title stands up out of the floor, its
+    // number and link follow, and the rule under it draws across.
+    <div data-k className="home-head relative flex items-baseline justify-between gap-4 pb-4">
       <h2 id={id} className="flex items-baseline gap-3">
         {/* REF-003 index: a small numbered tag before each home section (Archivo: never Sikat numerals). */}
-        <span aria-hidden="true" className="cr-num text-sm text-highlight">
+        <span aria-hidden="true" className="home-head-n cr-num text-sm text-highlight">
           {index}
         </span>
-        <span className="cr-display text-[2rem] text-fg md:text-[2.5rem]">{title}</span>
+        <span className="home-head-t cr-display text-[2rem] text-fg md:text-[2.5rem]">{title}</span>
       </h2>
-      <Link href={href} className="cr-focus text-sm font-semibold text-highlight hover:underline">
+      <Link href={href} className="home-head-link cr-focus text-sm font-semibold text-highlight hover:underline">
         {link}
       </Link>
+      <span aria-hidden="true" className="home-head-line bg-line" />
     </div>
   );
 }
@@ -221,10 +226,8 @@ function Trending() {
   if (state.status === "error" || (state.status === "ok" && state.data.length === 0)) return null;
   return (
     <section id="trending" aria-labelledby="home-trending" className="scroll-mt-24">
-      <Reveal>
-        <SectionHead id="home-trending" index="01" title="Trending Corner" href="/releases" link="All releases" />
-      </Reveal>
-      <div className="pt-6">
+      <SectionHead id="home-trending" index="01" title="Trending Corner" href="/releases" link="All releases" />
+      <div data-k className="home-arrive home-arrive-stage pt-6">
         {state.status === "loading" ? <Skeleton className="h-[30rem] w-full" /> : <TrendingCorner items={state.data} />}
       </div>
     </section>
@@ -234,7 +237,7 @@ function Trending() {
 function Upcoming({ state }: { state: ReturnType<typeof useAsync<EventRecord[]>> }) {
   const rows = state.status === "ok" ? upcomingEvents(state.data) : [];
   return (
-    <Reveal as="section" aria-labelledby="home-upcoming">
+    <section aria-labelledby="home-upcoming">
       <SectionHead id="home-upcoming" index="02" title="Upcoming" href="/events" link="All events" />
       {state.status === "loading" ? (
         <div className="space-y-3 pt-4">
@@ -244,21 +247,24 @@ function Upcoming({ state }: { state: ReturnType<typeof useAsync<EventRecord[]>>
       ) : state.status === "error" ? (
         <p className="py-8 text-sm text-fg-muted">Events could not be loaded. Please try again later.</p>
       ) : rows.length === 0 ? (
-        <ComingSoon
-          as="h3"
-          eyebrow="Events"
-          title="Events coming soon"
-          body="The first shows will be announced here, with tickets on sale in the same place."
-          className="mt-4"
-        />
+        <div data-k className="home-arrive">
+          <ComingSoon
+            as="h3"
+            eyebrow="Events"
+            title="Events coming soon"
+            body="The first shows will be announced here, with tickets on sale in the same place."
+            className="mt-4"
+          />
+        </div>
       ) : (
-        <ul>
+        // Each row stands up in turn as the list comes in, and leans a little under a mouse.
+        <ul data-k className="home-rows home-stagger">
           {rows.map((event) => (
             <EventRow key={event.id} event={event} />
           ))}
         </ul>
       )}
-    </Reveal>
+    </section>
   );
 }
 
@@ -273,9 +279,7 @@ function NewReleases() {
   if (state.status === "ok" && state.data.length === 0) return null;
   return (
     <section aria-labelledby="home-releases" className="mx-auto max-w-[90rem] px-4 pb-10 pt-14 md:px-6">
-      <Reveal>
-        <SectionHead id="home-releases" index="03" title="New releases" href="/releases" link="All releases" />
-      </Reveal>
+      <SectionHead id="home-releases" index="03" title="New releases" href="/releases" link="All releases" />
       {state.status === "loading" ? (
         <div className="grid grid-cols-2 gap-6 pt-6 md:grid-cols-5">
           {Array.from({ length: NEW_RELEASES_SHOWN }, (_, i) => (
@@ -285,12 +289,17 @@ function NewReleases() {
       ) : state.status === "error" ? (
         <p className="py-8 text-sm text-fg">Releases could not be loaded. Please try again later.</p>
       ) : (
-        <ul className="grid grid-cols-2 gap-6 pt-6 md:grid-cols-5">
+        <ul data-k className="home-stagger home-tiles grid grid-cols-2 gap-6 pt-6 md:grid-cols-5">
           {state.data.map((release, i) => (
             // On phones the newest one takes the whole row, so five fill the two columns evenly.
-            <Reveal as="li" key={release.id} index={i} className={i === 0 && state.data.length % 2 === 1 ? "home-tile col-span-2 md:col-span-1" : "home-tile"}>
+            <li
+              key={release.id}
+              data-lean="8"
+              style={{ ["--n" as string]: i }}
+              className={i === 0 && state.data.length % 2 === 1 ? "home-tile col-span-2 md:col-span-1" : "home-tile"}
+            >
               <ReleaseCard release={release} artist={creditName(release, credits.artists, credits.bands)} />
-            </Reveal>
+            </li>
           ))}
         </ul>
       )}
@@ -311,8 +320,11 @@ function WorldHandover() {
 function SkyWorld() {
   return (
     <LitSurface as="div" theme="sky" className="home-sky border-b border-cr-sky/60">
-      <NewReleases />
-      <MissionBand />
+      {/* The Sky room's first sections arrive with the scroll, as the closing story does. */}
+      <StoryEnd>
+        <NewReleases />
+        <MissionBand />
+      </StoryEnd>
       {/* What Corner Room is and how it works close the page, after the music (owner, 2026-11-26),
           moving in 3D as the reader scrolls (story-motion). */}
       <StoryEnd>
@@ -360,6 +372,8 @@ function ServiceStatus() {
 /* ---------- Page ---------- */
 
 export function HomeView() {
+  // Hover depth across the page: leaning cards, the hero's drifting layers (home-motion.ts).
+  useHomeMotion();
   const events = useAsync(() => fetchPublicEvents().then((p) => p.items), []);
   const releases = useAsync(() => fetchReleases({ skipAuth: true }).then((p) => p.items), []);
   // Arriving at "/#welcome" after sign-in: Next's own hash scroll leaves the panel under the
@@ -374,7 +388,7 @@ export function HomeView() {
       <LitSurface as="section" theme="ember" aria-labelledby="home-title">
         {/* The whole hero fits the first screen, short laptop screens included (owner, 2026-11-01):
             spacing and the headline scale with the screen's height as well as its width (home.css). */}
-        <div className="home-hero mx-auto grid max-w-[96rem] items-center gap-10 px-4 md:px-6 lg:grid-cols-[auto_auto] lg:justify-center">
+        <div data-parallax className="home-hero mx-auto grid max-w-[96rem] items-center gap-10 px-4 md:px-6 lg:grid-cols-[auto_auto] lg:justify-center">
           <div className="home-depth-near">
             <Eyebrow className="home-in" style={{ ["--i" as string]: 0 }}>
               Events · Music · Store
@@ -391,10 +405,10 @@ export function HomeView() {
               {TAGLINE_BN}
             </p>
             <div className="home-in home-cta mt-8 flex flex-wrap gap-3" style={{ ["--i" as string]: 4 }}>
-              <ButtonLink href="/events" size="lg" className="home-cta-go">
+              <ButtonLink href="/events" size="lg" data-lean="10" className="home-cta-go">
                 See what&apos;s on <ArrowRight aria-hidden="true" />
               </ButtonLink>
-              <ButtonLink href="/listen" variant="secondary" size="lg" className="home-cta-go">
+              <ButtonLink href="/listen" variant="secondary" size="lg" data-lean="10" className="home-cta-go">
                 <Play aria-hidden="true" /> Start listening
               </ButtonLink>
             </div>
@@ -402,7 +416,7 @@ export function HomeView() {
             <nav aria-label="Explore" className="home-in home-explore mt-6 flex flex-wrap items-center gap-2" style={{ ["--i" as string]: 5 }}>
               <span className="cr-eyebrow mr-1 text-[0.6875rem] text-fg-muted">Explore</span>
               {EXPLORE.map(({ href, label }) => (
-                <Link key={href} href={href} className="home-chip cr-cut cr-cut-sm cr-focus">
+                <Link key={href} href={href} data-lean="12" className="home-chip cr-cut cr-cut-sm cr-focus">
                   {label} <ArrowUpRight aria-hidden="true" className="size-3.5" />
                 </Link>
               ))}
@@ -420,14 +434,16 @@ export function HomeView() {
         </div>
       </LitSurface>
 
-      <div className="home-below mx-auto max-w-[90rem] px-4 pb-14 pt-4 md:px-6">
+      {/* Below the hero every section arrives with the scroll and settles when the reader stops
+          (story-motion's engine; looks in home-motion.css). */}
+      <StoryEnd className="home-below mx-auto max-w-[90rem] px-4 pb-14 pt-4 md:px-6">
         {/* Sign-in lands here ("/#welcome", HOME_WELCOME). The wrapper exists while the panel loads. */}
-        <div id="welcome" className="scroll-mt-24">
+        <div id="welcome" data-k className="home-arrive scroll-mt-24">
           <YouPanel />
         </div>
         <Trending />
         <Upcoming state={events} />
-      </div>
+      </StoryEnd>
 
       <WorldHandover />
       <SkyWorld />

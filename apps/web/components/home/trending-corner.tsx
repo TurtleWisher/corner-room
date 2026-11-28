@@ -259,7 +259,9 @@ export function TrendingCorner({ items }: { items: TrendingItem[] }) {
   return (
     <div
       ref={sectionRef}
-      className="tc cr-cut cr-glass-card"
+      data-spot
+      data-parallax
+      className="tc cr-cut cr-glass-card cr-spot"
       onPointerEnter={(e) => e.pointerType !== "touch" && engine.current?.setHold("hover", true)}
       onPointerLeave={() => engine.current?.setHold("hover", false)}
       onFocus={() => engine.current?.setHold("focus", true)}
@@ -703,7 +705,7 @@ function MiniRoom({
   return (
     <div className="tc-room">
       <div key={item.id} className="tc-room-in">
-        <Link href={href} className="tc-box cr-focus" aria-label={`Open ${item.title}`}>
+        <Link href={href} data-lean="14" className="tc-box cr-focus" aria-label={`Open ${item.title}`}>
           <span className="tc-box-case">
             <CoverArt
               src={src}

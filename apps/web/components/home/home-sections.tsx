@@ -16,8 +16,8 @@ import { useAuth } from "@/components/auth-provider";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { ButtonLink } from "@/components/ds";
 import { SpotlightRegion } from "@/components/ds/spotlight";
-import { createWorldCurtain, type WorldCurtain } from "@/components/home/world-curtain";
-import { ARTIST_POINTS, FACES, LISTEN_STEPS, QUESTIONS, worldCurtain, worldLayers, worldProgress, type Face } from "@/lib/home-sections-view";
+import { ARTIST_POINTS, FACES, LISTEN_STEPS, QUESTIONS, settleTurn, worldProgress, worldTurn, type Face } from "@/lib/home-sections-view";
+import { FOLLOW_RATE, IDLE_MS, followTarget, glide } from "@/lib/home-story-view";
 
 const FACE_ICONS: Record<Face["key"], LucideIcon> = { live: Ticket, listen: Headphones, own: Disc3 };
 
@@ -239,83 +239,95 @@ export function ClosingCall() {
 
 /* ---------- The whole screen changes world as you scroll (brand D1, made full-screen 2026-11-15) ---------- */
 
+/** How fast a stopped turn finishes, per second: slow enough to be seen as the room turning. */
+const WORLD_SETTLE_RATE = 2.8;
+
 /**
- * Ember hands over to Sky across the whole window, not only inside the hand-over strip, fixed to the
- * window beneath all content. Since 2026-11-28 (owner, D-WORLD-02) the Sky night rises as a soft
- * curtain of fine grain drawn by a small WebGL shader (components/home/world-curtain.ts): no edge
- * line, every pixel Ember or Sky night. Once it covers the window the plain veil takes over and the
- * Sky corner light settles in (worldCurtain, --hw-sky; the two lights never overlap). The sections
- * themselves stay still. Without WebGL the veil simply fades, as before.
+ * Ember hands over to Sky across the whole window, fixed beneath all content. Since 2026-11-28
+ * (owner, D-WORLD-03) the window behind the page is a room cube: as the reader scrolls past
+ * Upcoming, its Ember face turns up and away into the dark while the Sky face swings up from below,
+ * lit, until it stands square on (worldTurn). Each face is one world only, so Ember and Sky never
+ * mix. It follows the scroll both ways; once the reader stops part-way, the turn finishes in the way
+ * they were going (settleTurn), never left half-turned. The sections themselves stay still.
  *
- * The scroll handler only measures the strip and writes CSS variables on <main>, at most once a
- * frame; React never re-renders. Reduced motion keeps the still strip (no listener, no layers).
+ * One CSS variable, --hw-turn on <main>, written at most once a frame while the scroll or a settle
+ * moves it; home-sections.css draws the cube. React never re-renders. Reduced motion keeps the still
+ * strip (no listener, no cube).
  */
 export function WorldShift({ children }: { children: React.ReactNode }) {
   const zone = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const el = zone.current;
     const main = el?.closest<HTMLElement>("main");
     if (!el || !main || typeof window.matchMedia !== "function") return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const canvas = canvasRef.current;
-    let curtain: WorldCurtain | null = null;
-    let frame = 0;
-    const measure = () => {
-      frame = 0;
+    const st: { value: number; held: number | null } = { value: Number.NaN, held: null };
+    let raf = 0;
+    let last = 0;
+    let scrolledAt = -Infinity;
+    let direction = 1;
+    let lastY = window.scrollY;
+    let destroyed = false;
+
+    function frame(t: number) {
+      raf = 0;
+      if (destroyed || !el || !main) return;
+      const dt = last ? Math.min((t - last) / 1000, 0.1) : 1 / 60;
+      last = t;
       const r = el.getBoundingClientRect();
-      const progress = worldProgress(r.top, r.bottom, window.innerHeight);
-      if (curtain) {
-        const w = worldCurtain(progress);
-        if (w.drawing) curtain.set(w.curtain);
-        main.style.setProperty("--hw-draw", w.drawing ? "1" : "0");
-        main.style.setProperty("--hw-veil", String(w.veil));
-        main.style.setProperty("--hw-sky", w.sky.toFixed(3));
-        main.style.setProperty("--hw-out", w.curtain.toFixed(3));
+      const scrub = worldTurn(worldProgress(r.top, r.bottom, window.innerHeight));
+      const scrolling = performance.now() - scrolledAt < IDLE_MS;
+      let target: number;
+      if (!Number.isFinite(st.value)) {
+        st.value = scrub;
+        target = scrub;
+      } else if (scrolling) {
+        const f = followTarget(scrub, st.held, direction);
+        st.held = f.held;
+        target = f.target;
       } else {
-        const { veil, sky } = worldLayers(progress);
-        main.style.setProperty("--hw-veil", veil.toFixed(3));
-        main.style.setProperty("--hw-sky", sky.toFixed(3));
-        main.style.setProperty("--hw-out", veil.toFixed(3));
+        if (st.held === null) st.held = settleTurn(scrub, direction);
+        target = st.held;
       }
+      const next = glide(st.value, target, dt, scrolling ? FOLLOW_RATE : WORLD_SETTLE_RATE);
+      st.value = next;
+      main.style.setProperty("--hw-turn", next.toFixed(4));
+      if (scrolling || next !== target) raf = requestAnimationFrame(frame);
+      else last = 0;
+    }
+    const schedule = () => {
+      if (!raf && !destroyed) raf = requestAnimationFrame(frame);
     };
     const onScroll = () => {
-      if (!frame) frame = requestAnimationFrame(measure);
+      const y = window.scrollY;
+      if (y !== lastY) direction = y > lastY ? 1 : -1;
+      lastY = y;
+      scrolledAt = performance.now();
+      schedule();
     };
-    const onResize = () => {
-      curtain?.resize();
-      onScroll();
-    };
-    // The curtain where WebGL draws it (never in tests: jsdom has no canvas).
-    if (canvas && !/jsdom/i.test(navigator.userAgent)) {
-      curtain = createWorldCurtain(canvas, () => {
-        curtain = null;
-        delete main.dataset.worldCurtain;
-        onScroll();
-      });
-      if (curtain) main.dataset.worldCurtain = "";
-    }
     main.dataset.worldLive = "";
-    measure();
+    frame(performance.now());
+    schedule();
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onResize);
+    window.addEventListener("resize", schedule);
     return () => {
+      destroyed = true;
+      if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onResize);
-      if (frame) cancelAnimationFrame(frame);
-      curtain?.destroy();
+      window.removeEventListener("resize", schedule);
       delete main.dataset.worldLive;
-      delete main.dataset.worldCurtain;
-      for (const v of ["--hw-veil", "--hw-sky", "--hw-out", "--hw-draw"]) main.style.removeProperty(v);
+      main.style.removeProperty("--hw-turn");
     };
   }, []);
   return (
     <>
       <div aria-hidden="true" className="home-world">
-        <div className="home-world-veil" />
-        <canvas ref={canvasRef} className="home-world-curtain" />
-        <div className="home-world-sky" data-theme="sky">
-          <div className="cr-light" />
+        <div className="home-world-cube">
+          <div className="home-world-face home-world-ember" />
+          <div className="home-world-face home-world-sky" data-theme="sky">
+            <div className="cr-light" />
+            <div className="home-world-sheen" />
+          </div>
         </div>
       </div>
       <div ref={zone} aria-hidden="true" className="home-handover">
