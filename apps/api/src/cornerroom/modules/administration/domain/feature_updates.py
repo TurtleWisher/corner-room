@@ -591,6 +591,12 @@ FEATURES: Final[list[dict]] = [
             {
                 "date": "2026-11-28",
                 "kind": "IMPROVED",
+                "title": "A soft glow carries you from the red room to the blue one",
+                "details": "The turning screen is gone. As you scroll past Upcoming, the blue room's night now spreads up from below like a soft glow, passing through dark on the way, with no line or band anywhere, and the blue light comes up once it fills the screen. It follows your scrolling both ways and finishes by itself when you stop.",
+            },
+            {
+                "date": "2026-11-28",
+                "kind": "IMPROVED",
                 "title": "The whole home page moves in depth",
                 "details": "Every section now rises into place as you scroll and finishes when you stop. Cards, release covers, event rows, buttons and the Trending Corner case lean toward your mouse, lift a little and catch the light, and the top of the page drifts apart in layers under it. Between the red room and the blue one, the whole screen now turns like a cube: the red room tips away and the lit blue room swings up from below.",
             },

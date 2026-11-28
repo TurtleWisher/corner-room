@@ -16,7 +16,8 @@ import { useAuth } from "@/components/auth-provider";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { ButtonLink } from "@/components/ds";
 import { SpotlightRegion } from "@/components/ds/spotlight";
-import { ARTIST_POINTS, FACES, LISTEN_STEPS, QUESTIONS, settleTurn, worldProgress, worldTurn, type Face } from "@/lib/home-sections-view";
+import { createWorldBloom, type WorldBloom } from "@/components/home/world-bloom";
+import { ARTIST_POINTS, FACES, LISTEN_STEPS, QUESTIONS, settleTurn, worldProgress, worldStages, worldTurn, type Face } from "@/lib/home-sections-view";
 import { FOLLOW_RATE, IDLE_MS, followTarget, glide } from "@/lib/home-story-view";
 
 const FACE_ICONS: Record<Face["key"], LucideIcon> = { live: Ticket, listen: Headphones, own: Disc3 };
@@ -244,23 +245,44 @@ const WORLD_SETTLE_RATE = 2.8;
 
 /**
  * Ember hands over to Sky across the whole window, fixed beneath all content. Since 2026-11-28
- * (owner, D-WORLD-03) the window behind the page is a room cube: as the reader scrolls past
- * Upcoming, its Ember face turns up and away into the dark while the Sky face swings up from below,
- * lit, until it stands square on (worldTurn). Each face is one world only, so Ember and Sky never
- * mix. It follows the scroll both ways; once the reader stops part-way, the turn finishes in the way
- * they were going (settleTurn), never left half-turned. The sections themselves stay still.
+ * (owner, D-WORLD-04) the Sky night blooms up from below the window as a wide, soft front drawn by a
+ * small WebGL shader (components/home/world-bloom.ts): no line anywhere, dark between the two
+ * worlds, dithered so the dark never bands; once it is whole the plain night takes over and the Sky
+ * light comes up (worldStages). It follows the scroll both ways; once the reader stops part-way the
+ * change finishes in the way they were going (settleTurn), never left half-done. While it moves, the
+ * glass cards stop re-blurring the background ([data-world-moving]), which keeps every frame light.
+ * The sections themselves stay still.
  *
- * One CSS variable, --hw-turn on <main>, written at most once a frame while the scroll or a settle
- * moves it; home-sections.css draws the cube. React never re-renders. Reduced motion keeps the still
- * strip (no listener, no cube).
+ * CSS variables on <main> (--hw-turn, --hw-veil, --hw-sky, --hw-draw), written at most once a frame
+ * while the scroll or a settle moves it. React never re-renders. Without WebGL the veil fades
+ * instead; reduced motion keeps the still strip (no listener, no layers).
  */
 export function WorldShift({ children }: { children: React.ReactNode }) {
   const zone = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const el = zone.current;
     const main = el?.closest<HTMLElement>("main");
     if (!el || !main || typeof window.matchMedia !== "function") return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let bloom: WorldBloom | null = null;
+    const write = (turn: number) => {
+      main.style.setProperty("--hw-turn", turn.toFixed(4));
+      if (bloom) {
+        const w = worldStages(turn);
+        if (w.drawing) bloom.set(w.cover);
+        main.style.setProperty("--hw-draw", w.drawing ? "1" : "0");
+        main.style.setProperty("--hw-veil", String(w.veil));
+        main.style.setProperty("--hw-sky", w.sky.toFixed(3));
+      } else {
+        // No WebGL: the plain night fades in, then the light.
+        const w = worldStages(turn);
+        main.style.setProperty("--hw-veil", w.cover.toFixed(3));
+        main.style.setProperty("--hw-sky", w.sky.toFixed(3));
+      }
+      if (turn > 0.001 && turn < 0.999) main.dataset.worldMoving = "";
+      else delete main.dataset.worldMoving;
+    };
     const st: { value: number; held: number | null } = { value: Number.NaN, held: null };
     let raf = 0;
     let last = 0;
@@ -291,7 +313,7 @@ export function WorldShift({ children }: { children: React.ReactNode }) {
       }
       const next = glide(st.value, target, dt, scrolling ? FOLLOW_RATE : WORLD_SETTLE_RATE);
       st.value = next;
-      main.style.setProperty("--hw-turn", next.toFixed(4));
+      write(next);
       if (scrolling || next !== target) raf = requestAnimationFrame(frame);
       else last = 0;
     }
@@ -305,29 +327,44 @@ export function WorldShift({ children }: { children: React.ReactNode }) {
       scrolledAt = performance.now();
       schedule();
     };
+    // The bloom where WebGL draws it (never in tests: jsdom has no canvas).
+    const canvas = canvasRef.current;
+    if (canvas && !/jsdom/i.test(navigator.userAgent)) {
+      bloom = createWorldBloom(canvas, () => {
+        bloom = null;
+        delete main.dataset.worldBloom;
+        schedule();
+      });
+      if (bloom) main.dataset.worldBloom = "";
+    }
+    const onResize = () => {
+      bloom?.resize();
+      schedule();
+    };
     main.dataset.worldLive = "";
     frame(performance.now());
     schedule();
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", schedule);
+    window.addEventListener("resize", onResize);
     return () => {
       destroyed = true;
       if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", schedule);
+      window.removeEventListener("resize", onResize);
+      bloom?.destroy();
       delete main.dataset.worldLive;
-      main.style.removeProperty("--hw-turn");
+      delete main.dataset.worldBloom;
+      delete main.dataset.worldMoving;
+      for (const v of ["--hw-turn", "--hw-veil", "--hw-sky", "--hw-draw"]) main.style.removeProperty(v);
     };
   }, []);
   return (
     <>
       <div aria-hidden="true" className="home-world">
-        <div className="home-world-cube">
-          <div className="home-world-face home-world-ember" />
-          <div className="home-world-face home-world-sky" data-theme="sky">
-            <div className="cr-light" />
-            <div className="home-world-sheen" />
-          </div>
+        <div className="home-world-veil" />
+        <canvas ref={canvasRef} className="home-world-bloom" />
+        <div className="home-world-sky" data-theme="sky">
+          <div className="cr-light" />
         </div>
       </div>
       <div ref={zone} aria-hidden="true" className="home-handover">
