@@ -110,6 +110,23 @@ export function worldTurn(progress: number): number {
   return p * p * (3 - 2 * p);
 }
 
+/** How far through the change the bloom has covered the whole window; the Sky light comes up after. */
+export const BLOOM_WHOLE = 0.82;
+
+/**
+ * The night bloom's stages for a change `turn` (0 Ember to 1 Sky; owner, 2026-11-28, D-WORLD-04):
+ * `cover`, how far the Sky night has spread (whole at BLOOM_WHOLE); `drawing`, whether the shader is
+ * between the two plain colours; `veil`, the plain Sky night under it (1 only once the bloom is
+ * whole, so the hand-off can't show); `sky`, the Sky corner light, which comes up only over Sky
+ * night, after the bloom is whole (brand D1: the lights never overlap).
+ */
+export function worldStages(turn: number): { cover: number; drawing: boolean; veil: number; sky: number } {
+  const t = Math.min(1, Math.max(0, Number.isFinite(turn) ? turn : 0));
+  const cover = Math.min(1, t / BLOOM_WHOLE);
+  const s = Math.max(0, (t - BLOOM_WHOLE) / (1 - BLOOM_WHOLE));
+  return { cover, drawing: cover > 0 && cover < 1, veil: cover >= 1 ? 1 : 0, sky: s * s * (3 - 2 * s) };
+}
+
 /**
  * Where a turn finishes once the reader stops scrolling: never left half-turned. Part-way, it carries
  * on in the way they were going (`direction` 1 down, -1 up); square on a face, it stays.

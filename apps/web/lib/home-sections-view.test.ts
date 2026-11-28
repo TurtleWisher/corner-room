@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ARTIST_POINTS, FACES, LISTEN_STEPS, QUESTIONS, settleTurn, worldProgress, worldTurn } from "./home-sections-view";
+import { ARTIST_POINTS, BLOOM_WHOLE, FACES, LISTEN_STEPS, QUESTIONS, settleTurn, worldProgress, worldStages, worldTurn } from "./home-sections-view";
 
 describe("home copy", () => {
   it("links only to pages that exist", () => {
@@ -60,6 +60,25 @@ describe("worldTurn (owner, 2026-11-28)", () => {
     expect(worldTurn(-2)).toBe(0);
     expect(worldTurn(7)).toBe(1);
     expect(worldTurn(Number.NaN)).toBe(0);
+  });
+});
+
+describe("worldStages (owner, 2026-11-28, D-WORLD-04)", () => {
+  it("is plain Ember at the start and plain Sky with its light at the end", () => {
+    expect(worldStages(0)).toEqual({ cover: 0, drawing: false, veil: 0, sky: 0 });
+    expect(worldStages(1)).toEqual({ cover: 1, drawing: false, veil: 1, sky: 1 });
+  });
+  it("draws the bloom in between, and the plain night takes over only once it is whole", () => {
+    const mid = worldStages(0.4);
+    expect(mid.drawing).toBe(true);
+    expect(mid.veil).toBe(0);
+    expect(mid.cover).toBeCloseTo(0.4 / BLOOM_WHOLE);
+    expect(worldStages(BLOOM_WHOLE)).toMatchObject({ cover: 1, drawing: false, veil: 1, sky: 0 });
+  });
+  it("brings the Sky light up only after the bloom is whole", () => {
+    expect(worldStages(BLOOM_WHOLE - 0.01).sky).toBe(0);
+    expect(worldStages((BLOOM_WHOLE + 1) / 2).sky).toBeCloseTo(0.5);
+    expect(worldStages(Number.NaN)).toEqual(worldStages(0));
   });
 });
 
