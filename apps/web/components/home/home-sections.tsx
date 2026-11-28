@@ -16,9 +16,7 @@ import { useAuth } from "@/components/auth-provider";
 import { Display, Eyebrow } from "@/components/brand/display";
 import { ButtonLink } from "@/components/ds";
 import { SpotlightRegion } from "@/components/ds/spotlight";
-import { createWorldBloom, type WorldBloom } from "@/components/home/world-bloom";
-import { ARTIST_POINTS, FACES, LISTEN_STEPS, QUESTIONS, settleTurn, worldProgress, worldStages, worldTurn, type Face } from "@/lib/home-sections-view";
-import { FOLLOW_RATE, IDLE_MS, followTarget, glide } from "@/lib/home-story-view";
+import { ARTIST_POINTS, FACES, LISTEN_STEPS, QUESTIONS, worldProgress, type Face } from "@/lib/home-sections-view";
 
 const FACE_ICONS: Record<Face["key"], LucideIcon> = { live: Ticket, listen: Headphones, own: Disc3 };
 
@@ -240,129 +238,61 @@ export function ClosingCall() {
 
 /* ---------- The whole screen changes world as you scroll (brand D1, made full-screen 2026-11-15) ---------- */
 
-/** How fast a stopped turn finishes, per second: slow enough to be seen as the room turning. */
-const WORLD_SETTLE_RATE = 2.8;
-
 /**
  * Ember hands over to Sky across the whole window, fixed beneath all content. Since 2026-11-28
- * (owner, D-WORLD-04) the Sky night blooms up from below the window as a wide, soft front drawn by a
- * small WebGL shader (components/home/world-bloom.ts): no line anywhere, dark between the two
- * worlds, dithered so the dark never bands; once it is whole the plain night takes over and the Sky
- * light comes up (worldStages). It follows the scroll both ways; once the reader stops part-way the
- * change finishes in the way they were going (settleTurn), never left half-done. While it moves, the
- * glass cards stop re-blurring the background ([data-world-moving]), which keeps every frame light.
- * The sections themselves stay still.
+ * (owner, D-WORLD-05) the Sky night blooms up from below the window as one wide, soft dome, dark at
+ * its edge (brand D1: Night between, never purple), and the plain night and then the Sky light take
+ * over once it fills the window.
  *
- * CSS variables on <main> (--hw-turn, --hw-veil, --hw-sky, --hw-draw), written at most once a frame
- * while the scroll or a settle moves it. React never re-renders. Without WebGL the veil fades
- * instead; reduced motion keeps the still strip (no listener, no layers).
+ * Smoothness first: the change is a CSS scroll-driven animation tied to this strip's own view
+ * timeline (`--hw`, home-sections.css), so the browser runs it on the compositor, one to one with
+ * the scroll, with no script on any frame: it can't lag behind a fast wheel, run ahead or flicker.
+ * Only transform and opacity move, on layers that never switch on or off mid-scroll. Browsers
+ * without scroll-driven animations get the same keyframes paused and stepped by one variable
+ * (--hw-p, worldProgress), written at most once a frame straight from the scroll position.
+ * React never re-renders. Reduced motion keeps the still strip (no layers).
  */
 export function WorldShift({ children }: { children: React.ReactNode }) {
   const zone = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const el = zone.current;
     const main = el?.closest<HTMLElement>("main");
     if (!el || !main || typeof window.matchMedia !== "function") return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    let bloom: WorldBloom | null = null;
-    const write = (turn: number) => {
-      main.style.setProperty("--hw-turn", turn.toFixed(4));
-      if (bloom) {
-        const w = worldStages(turn);
-        if (w.drawing) bloom.set(w.cover);
-        main.style.setProperty("--hw-draw", w.drawing ? "1" : "0");
-        main.style.setProperty("--hw-veil", String(w.veil));
-        main.style.setProperty("--hw-sky", w.sky.toFixed(3));
-      } else {
-        // No WebGL: the plain night fades in, then the light.
-        const w = worldStages(turn);
-        main.style.setProperty("--hw-veil", w.cover.toFixed(3));
-        main.style.setProperty("--hw-sky", w.sky.toFixed(3));
-      }
-      if (turn > 0.001 && turn < 0.999) main.dataset.worldMoving = "";
-      else delete main.dataset.worldMoving;
-    };
-    const st: { value: number; held: number | null } = { value: Number.NaN, held: null };
-    let raf = 0;
-    let last = 0;
-    let scrolledAt = -Infinity;
-    let direction = 1;
-    let lastY = window.scrollY;
-    let destroyed = false;
-
-    function frame(t: number) {
-      raf = 0;
-      if (destroyed || !el || !main) return;
-      const dt = last ? Math.min((t - last) / 1000, 0.1) : 1 / 60;
-      last = t;
-      const r = el.getBoundingClientRect();
-      const scrub = worldTurn(worldProgress(r.top, r.bottom, window.innerHeight));
-      const scrolling = performance.now() - scrolledAt < IDLE_MS;
-      let target: number;
-      if (!Number.isFinite(st.value)) {
-        st.value = scrub;
-        target = scrub;
-      } else if (scrolling) {
-        const f = followTarget(scrub, st.held, direction);
-        st.held = f.held;
-        target = f.target;
-      } else {
-        if (st.held === null) st.held = settleTurn(scrub, direction);
-        target = st.held;
-      }
-      const next = glide(st.value, target, dt, scrolling ? FOLLOW_RATE : WORLD_SETTLE_RATE);
-      st.value = next;
-      write(next);
-      if (scrolling || next !== target) raf = requestAnimationFrame(frame);
-      else last = 0;
+    main.dataset.worldLive = "";
+    const timeline = typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("animation-timeline: view()");
+    if (timeline) {
+      main.dataset.worldTimeline = "";
+      return () => {
+        delete main.dataset.worldLive;
+        delete main.dataset.worldTimeline;
+      };
     }
-    const schedule = () => {
-      if (!raf && !destroyed) raf = requestAnimationFrame(frame);
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const r = el.getBoundingClientRect();
+      main.style.setProperty("--hw-p", worldProgress(r.top, r.bottom, window.innerHeight).toFixed(4));
     };
     const onScroll = () => {
-      const y = window.scrollY;
-      if (y !== lastY) direction = y > lastY ? 1 : -1;
-      lastY = y;
-      scrolledAt = performance.now();
-      schedule();
+      if (!frame) frame = requestAnimationFrame(measure);
     };
-    // The bloom where WebGL draws it (never in tests: jsdom has no canvas).
-    const canvas = canvasRef.current;
-    if (canvas && !/jsdom/i.test(navigator.userAgent)) {
-      bloom = createWorldBloom(canvas, () => {
-        bloom = null;
-        delete main.dataset.worldBloom;
-        schedule();
-      });
-      if (bloom) main.dataset.worldBloom = "";
-    }
-    const onResize = () => {
-      bloom?.resize();
-      schedule();
-    };
-    main.dataset.worldLive = "";
-    frame(performance.now());
-    schedule();
+    measure();
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onResize);
+    window.addEventListener("resize", onScroll);
     return () => {
-      destroyed = true;
-      if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onResize);
-      bloom?.destroy();
+      window.removeEventListener("resize", onScroll);
+      if (frame) cancelAnimationFrame(frame);
       delete main.dataset.worldLive;
-      delete main.dataset.worldBloom;
-      delete main.dataset.worldMoving;
-      for (const v of ["--hw-turn", "--hw-veil", "--hw-sky", "--hw-draw"]) main.style.removeProperty(v);
+      main.style.removeProperty("--hw-p");
     };
   }, []);
   return (
     <>
       <div aria-hidden="true" className="home-world">
+        <div className="home-world-bloom" />
         <div className="home-world-veil" />
-        <canvas ref={canvasRef} className="home-world-bloom" />
         <div className="home-world-sky" data-theme="sky">
           <div className="cr-light" />
         </div>

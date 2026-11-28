@@ -590,6 +590,12 @@ FEATURES: Final[list[dict]] = [
         "updates": [
             {
                 "date": "2026-11-28",
+                "kind": "FIXED",
+                "title": "The change from the red room to the blue one is smooth at any scrolling speed",
+                "details": "It no longer lags, jumps or flickers when you scroll fast or slow. The blue night still rises from below as a soft glow, but now it moves exactly with your scrolling, frame by frame, handled by the browser itself.",
+            },
+            {
+                "date": "2026-11-28",
                 "kind": "IMPROVED",
                 "title": "A soft glow carries you from the red room to the blue one",
                 "details": "The turning screen is gone. As you scroll past Upcoming, the blue room's night now spreads up from below like a soft glow, passing through dark on the way, with no line or band anywhere, and the blue light comes up once it fills the screen. It follows your scrolling both ways and finishes by itself when you stop.",
