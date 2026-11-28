@@ -51,6 +51,7 @@ from cornerroom.api.v1.covers import router as covers_router
 from cornerroom.api.v1.presale_campaigns import router as presale_campaigns_router
 from cornerroom.api.v1.teasers import router as teasers_router
 from cornerroom.api.v1.trending import router as trending_router
+from cornerroom.api.v1.wraps import router as wraps_router
 from cornerroom.api.v1.users import router as users_router
 from cornerroom.api.v1.venues import router as venues_router
 from cornerroom.infra.error_tracking import init_error_tracking
@@ -186,6 +187,7 @@ def create_app(settings: Settings | None = None, *, enable_lifespan: bool = True
     app.include_router(presale_campaigns_router, prefix="/api/v1")
     app.include_router(teasers_router, prefix="/api/v1")
     app.include_router(trending_router, prefix="/api/v1")
+    app.include_router(wraps_router, prefix="/api/v1")
     return app
 
 

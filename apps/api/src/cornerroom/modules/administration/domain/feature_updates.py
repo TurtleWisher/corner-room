@@ -16,6 +16,38 @@ AREAS: Final = ("Music", "Listening", "Events", "Money", "Artists", "Fans", "Sta
 
 FEATURES: Final[list[dict]] = [
     {
+        "id": "corner-room-wrap",
+        "name": "Corner Room Wrap",
+        "area": "Fans",
+        "audience": ["Fans", "Staff"],
+        "summary": "Each listener's own look back at a stretch of time: the songs, acts, events and gifts that made it.",
+        "description": (
+            "Once staff open a Wrap, every signed-in listener gets their own, built from what they really did in its "
+            "period: the songs and acts they heard most, how many minutes they listened, the hour they listen most "
+            "and the listener that makes them, their busiest month and longest run of days, music new to them, what "
+            "they bought, the events they had tickets for and the gifts they gave. It plays as a full-screen story "
+            "of carnival cards over a moving dithered light, with their top songs ready to play, and ends with a "
+            "story picture they can share to Instagram, Facebook, WhatsApp and other apps or save. Never money, and "
+            "nothing about anyone else: a rank among an act's listeners shows only as a share, once enough people "
+            "listened. Platform staff run each Wrap in Staff > Marketing > Corner Room Wrap: the period, when it "
+            "opens and closes, the look, the dither, the speed, which cards show and in what order, every headline, "
+            "who gets one and whether it can be shared, with a preview built from their own listening, and counts "
+            "of how many opened, finished and shared it."
+        ),
+        "updates": [
+            {
+                "date": "2026-11-28",
+                "kind": "NEW",
+                "title": "Corner Room Wrap",
+                "details": (
+                    "Your own Corner Room Wrap: your top songs and acts, minutes, listening hours, streaks, discoveries, "
+                    "music bought, events and gifts, told as a carnival story and shared as a story picture. Staff set "
+                    "up every part of it."
+                ),
+            },
+        ],
+    },
+    {
         "id": "teasers",
         "name": "Previews",
         "area": "Music",
@@ -556,6 +588,12 @@ FEATURES: Final[list[dict]] = [
             "player for the disc in front. The hero and the New releases row show the five newest releases."
         ),
         "updates": [
+            {
+                "date": "2026-11-28",
+                "kind": "IMPROVED",
+                "title": "The whole home page moves in depth",
+                "details": "Every section now rises into place as you scroll and finishes when you stop. Cards, release covers, event rows, buttons and the Trending Corner case lean toward your mouse, lift a little and catch the light, and the top of the page drifts apart in layers under it. Between the red room and the blue one, the whole screen now turns like a cube: the red room tips away and the lit blue room swings up from below.",
+            },
             {
                 "date": "2026-11-28",
                 "kind": "FIXED",

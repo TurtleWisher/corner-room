@@ -99,36 +99,23 @@ export function worldProgress(zoneTop: number, zoneBottom: number, windowHeight:
   return Math.min(1, Math.max(0, travelled / distance));
 }
 
-/** Ember's light is gone before Sky's arrives (brand D1): the two never overlap. */
-export function worldLayers(progress: number): { veil: number; sky: number } {
-  const p = Math.min(1, Math.max(0, progress));
-  return { veil: Math.min(1, p * 2), sky: Math.max(0, p * 2 - 1) };
+/**
+ * The room turns from Ember to Sky (owner, 2026-11-28, D-WORLD-03): the whole window behind the page
+ * is a cube whose Ember face turns up and away while its Sky face comes up from below. How far it has
+ * turned (0 Ember, 1 Sky) for the hand-over's `progress`, eased at both ends so it starts and lands
+ * softly. Each face fills the window only when square on, so the two lights never share a pixel.
+ */
+export function worldTurn(progress: number): number {
+  const p = Math.min(1, Math.max(0, Number.isFinite(progress) ? progress : 0));
+  return p * p * (3 - 2 * p);
 }
 
 /**
- * The hand-over as a dithered curtain (owner, 2026-11-28, D-WORLD-02): where WebGL draws it, the Sky
- * night rises over the Ember room pixel by pixel instead of fading as one sheet. Every pixel is fully
- * Ember or fully Sky night, never a mix (brand D1: no purple between). `curtain` is how far it has
- * risen (0 to 1, drawn while between); once it has covered the window, the plain veil takes over at
- * full (`veil` jumps to 1 at the exact moment the curtain is whole, so the hand-off can't show).
+ * Where a turn finishes once the reader stops scrolling: never left half-turned. Part-way, it carries
+ * on in the way they were going (`direction` 1 down, -1 up); square on a face, it stays.
  */
-export function worldCurtain(progress: number): { curtain: number; drawing: boolean; veil: number; sky: number } {
-  const { veil, sky } = worldLayers(progress);
-  const whole = veil >= 1;
-  return { curtain: veil, drawing: veil > 0 && !whole, veil: whole ? 1 : 0, sky };
-}
-
-/** How tall the curtain's soft grain is, as a share of the window (owner: no hard edge, no line). */
-export const CURTAIN_BAND = 0.6;
-/** How far the field runs: the window's height plus the arc by which the middle leads the sides. */
-export const CURTAIN_SPAN = 1.06;
-
-/**
- * Where the curtain stands for `curtain` (0 to 1), in the shader's field units: from the foot of the
- * window (nothing drawn) to a whole band past the top of the field (every pixel night), so the first
- * and last frames are wholly Ember and wholly night and the hand-off to the veil can't show.
- */
-export function curtainEdge(curtain: number, band = CURTAIN_BAND, span = CURTAIN_SPAN): number {
-  const c = Math.min(1, Math.max(0, curtain));
-  return c * (span + band);
+export function settleTurn(turn: number, direction: number): number {
+  if (!(turn > 0.002)) return 0;
+  if (!(turn < 0.998)) return 1;
+  return direction < 0 ? 0 : 1;
 }

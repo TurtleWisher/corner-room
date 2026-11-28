@@ -1,7 +1,7 @@
 "use client";
 
 /*
- * Staff activity (owner, 2026-11-28; /staff/activity, URL-15): which staff member did which thing.
+ * Staff activity (owner, 2026-11-28; /staff/activity, URL-16): which staff member did which thing.
  * Read from the audit log for staff accounts only (`GET /staff/activity`, `audit.read`). One card per
  * staff member filters by person; area chips filter by part of Corner Room; sign-ins are hidden
  * unless asked for. The home page shows the latest rows through `ActivityFeed`.

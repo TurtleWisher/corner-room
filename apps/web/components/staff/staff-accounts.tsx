@@ -1,7 +1,7 @@
 "use client";
 
 /*
- * Staff accounts (owner, 2026-11-28, D-STAFF-ACCOUNTS-01; /staff/team, URL-15). Admins add people by
+ * Staff accounts (owner, 2026-11-28, D-STAFF-ACCOUNTS-01; /staff/team, URL-16). Admins add people by
  * email as Admin (the whole portal) or Staff (chosen areas); the person signs in with Continue with
  * Google using that address, and an existing fan account with it becomes their staff account. Only
  * the owner adds or removes admins. The API checks every rule; the page only offers what it allows.

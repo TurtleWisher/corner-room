@@ -336,7 +336,12 @@
   align-items: center;
 }
 
-/* ---------- The whole window changes world (brand D1, full screen) ---------- */
+/* ---------- The whole window changes world: a room cube turns (brand D1; owner, 2026-11-28, D-WORLD-03) ----------
+   WorldShift (home-sections.tsx) writes --hw-turn, 0 (Ember square on) to 1 (Sky square on). The
+   window behind the page is a cube: the Ember face turns up and away and darkens as it leaves, the
+   Sky face swings up from below, lit, and brightens as it arrives. Each face is one world, so the two
+   lights never mix in a pixel; between them is the cube's own edge, not a drawn line. Faces are wider
+   than the window so the turned cube still fills it. Transform and opacity only. */
 [data-module="home"] .home-world {
   display: none;
 }
@@ -345,41 +350,49 @@
   position: fixed;
   inset: 0;
   z-index: -1;
+  overflow: hidden;
   pointer-events: none;
+  background: #080506;
+  perspective: 140vh;
+  perspective-origin: 50% 50%;
 }
-[data-module="home"] .home-world-veil,
-[data-module="home"] .home-world-sky {
+[data-module="home"] .home-world-cube {
   position: absolute;
   inset: 0;
-  will-change: opacity;
+  transform-style: preserve-3d;
+  transform: translateZ(-50vh) rotateX(calc(var(--hw-turn, 0) * 90deg));
 }
-/* Sky's own night. Ember's Night and this are both near black, so the way between is dark, never purple. */
-[data-module="home"] .home-world-veil {
+[data-module="home"] .home-world-face {
+  position: absolute;
+  left: -35vw;
+  width: 170vw;
+  top: calc(50% - 50vh);
+  height: 100vh;
+  overflow: hidden;
+  backface-visibility: hidden;
+}
+/* Ember: the page's own Night, shaded as it turns away from the light. */
+[data-module="home"] .home-world-ember {
+  transform: translateZ(50vh);
+  background:
+    linear-gradient(to bottom, rgb(0 0 0 / calc(var(--hw-turn, 0) * 0.8)), rgb(0 0 0 / calc(var(--hw-turn, 0) * 0.45))),
+    radial-gradient(70% 55% at 50% 100%, rgb(255 90 78 / 0.07), transparent 75%),
+    #140707;
+}
+/* Sky: its Night with its corner light, dim while it lies below, full once square on. */
+[data-module="home"] .home-world-sky {
+  transform: rotateX(-90deg) translateZ(50vh);
   background: #120f26;
-  opacity: var(--hw-veil, 0);
 }
-[data-module="home"] .home-world-sky {
-  opacity: var(--hw-sky, 0);
-  /* The Sky light settles into place as it comes up, from a little below and a little larger. */
-  transform-origin: 0 0;
-  transform: translate3d(0, calc((1 - var(--hw-sky, 0)) * 6%), 0) scale(calc(1.1 - var(--hw-sky, 0) * 0.1));
+[data-module="home"] .home-world-sky > .cr-light {
+  opacity: calc(0.15 + var(--hw-turn, 0) * 0.85);
 }
-
-/* ---------- The grain curtain (owner, 2026-11-28, D-WORLD-02) ----------
-   components/home/world-curtain.ts draws the Sky night rising over Ember as a soft fine grain on
-   this canvas, only while between the worlds (--hw-draw); the solid veil takes over once it is
-   whole. The page's sections stay still: only the light behind them changes. */
-[data-module="home"] .home-world-curtain {
-  display: none;
-}
-[data-module="home"][data-world-curtain] .home-world-curtain {
-  display: block;
+/* Light catches the leading edge only while the room is turning: gone at either rest. */
+[data-module="home"] .home-world-sheen {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: var(--hw-draw, 0);
-  image-rendering: pixelated;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--cr-accent) 20%, transparent), transparent 30%);
+  opacity: sin(calc(var(--hw-turn, 0) * 180deg));
 }
 
 /* With the window itself carrying the change, the strip and the Sky band stop painting their own
@@ -418,5 +431,5 @@
 /* The page's Ember pointer light is drawn after the world layers, so it would glow red over the Sky
    night. It leaves with Ember; the Sky band carries its own pointer light from there on. */
 [data-module="home"][data-world-live] > .cr-pl-clip.cr-pl-page {
-  opacity: calc(1 - var(--hw-out, var(--hw-veil, 0)));
+  opacity: calc(1 - var(--hw-turn, 0));
 }

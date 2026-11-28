@@ -1,7 +1,7 @@
 """Staff accounts added by email, and each artist's royalty rate. Additive only.
 
-Revision ID: 0067_staff_accounts_royalty_rates
-Revises: 0066_lyric_line_ends
+Revision ID: 0068_staff_accounts_royalty_rates
+Revises: 0067_corner_room_wrap
 Create Date: 2026-11-28
 
 Owner, 2026-11-28 (D-STAFF-ACCOUNTS-01): admins add staff and admin accounts by email in the
@@ -24,8 +24,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0067_staff_accounts_royalty_rates"
-down_revision: Union[str, Sequence[str], None] = "0066_lyric_line_ends"
+revision: str = "0068_staff_accounts_royalty_rates"
+down_revision: Union[str, Sequence[str], None] = "0067_corner_room_wrap"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
