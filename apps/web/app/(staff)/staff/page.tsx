@@ -6,6 +6,10 @@
  * (counts read from the same review queues the pages show; a queue this person may not read simply
  * shows no number), then every section of the console. Visibility is UX only: every page and the
  * API still check permissions.
+ *
+ * Owner, 2026-11-28: one page for all of Corner Room. Above the queues sit the numbers of every
+ * part this person may read (StaffOverviewBlocks), and beside them the latest staff actions
+ * (ActivityFeed, who did what, for audit readers).
  */
 
 import Link from "next/link";
@@ -16,6 +20,8 @@ import { SpotlightRegion } from "@/components/ds/spotlight";
 import { NavIcon } from "@/components/shell/nav-icons";
 import { Protected } from "@/components/staff/kit";
 import { STAFF_QUEUES, useStaffQueues } from "@/components/staff/staff-queues";
+import { ActivityFeed } from "@/components/staff/staff-activity";
+import { StaffOverviewBlocks } from "@/components/staff/staff-overview";
 import { useWorkspace } from "@/components/workspace-provider";
 import { staffNavSections } from "@/lib/nav-view";
 import { waitingTotal } from "@/lib/staff-console-view";
@@ -78,7 +84,7 @@ function ConsoleHome() {
     <div className="space-y-6">
       <div className="st-pagehead">
         <div>
-          <h1 className="st-h1">Staff console</h1>
+          <h1 className="st-h1">Corner Room at a glance</h1>
           <p className="st-sub">
             {currentOrg ? (
               <>
@@ -94,7 +100,15 @@ function ConsoleHome() {
         </p>
       </div>
 
-      <Waiting />
+      <div className="sp-grid">
+        <div className="min-w-0 space-y-4">
+          <StaffOverviewBlocks />
+        </div>
+        <div className="min-w-0 space-y-4">
+          <Waiting />
+          {(user?.permissions ?? []).includes("audit.read") ? <ActivityFeed limit={10} /> : null}
+        </div>
+      </div>
 
       <SpotlightRegion className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {sections.map((section) => (

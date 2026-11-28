@@ -230,3 +230,8 @@ CAMPAIGN_STARTED = "CampaignStarted"
 CAMPAIGN_COMPLETED = "CampaignCompleted"
 CAMPAIGN_TASK_ASSIGNED = "CampaignTaskAssigned"
 CAMPAIGN_TASK_COMPLETED = "CampaignTaskCompleted"
+# D-STAFF-ACCOUNTS-01 (owner, 2026-11-28): an admin added a staff or admin account by email.
+STAFF_ACCOUNT_INVITED = "StaffAccountInvited"
+# D-ROYALTY-RATE-01 (owner, 2026-11-28): staff set or ended an artist's royalty rate.
+ARTIST_ROYALTY_RATE_SET = "ArtistRoyaltyRateSet"
+ARTIST_ROYALTY_RATE_ENDED = "ArtistRoyaltyRateEnded"

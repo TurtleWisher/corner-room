@@ -1,5 +1,7 @@
 import {
   UserRoundPen,
+  ShieldCheck,
+  ListChecks,
   Activity,
   AudioWaveform,
   Flame,
@@ -89,6 +91,8 @@ const ICONS: Record<string, LucideIcon> = {
   "/staff/ops": Activity,
   "/staff/audit": ScrollText,
   "/staff/users": Users,
+  "/staff/team": ShieldCheck,
+  "/staff/activity": ListChecks,
   "/staff/organizations": Building2,
   "/staff/updates": Newspaper,
 };

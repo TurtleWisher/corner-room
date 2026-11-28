@@ -1,0 +1,360 @@
+/*
+ * Staff portal pages (owner, 2026-11-28): Staff accounts, Staff activity, the staff home's overview
+ * and Royalties > Artist rates. Built on the `.cx` surfaces of staff-customers.css (raised tiles,
+ * sunken wells, cut corners from .cr-cut). Never put ::before or ::after on a .cr-cut element:
+ * they are its fill and edge. Motion stops under reduced motion.
+ */
+
+/* ----- staff accounts --------------------------------------------------------------------- */
+
+.sa-row {
+  --cut-fill: var(--cx-raise);
+  --cut-border: var(--cx-edge);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.875rem;
+  padding: 0.875rem 1rem;
+  transition: --cut-border 160ms ease, transform 160ms ease;
+}
+.sa-row:hover {
+  --cut-border: var(--cx-edge-lit);
+}
+.sa-row[data-waiting] {
+  --cut-fill: var(--cx-sink);
+}
+.sa-row-side {
+  flex: 1 1 14rem;
+  min-width: 0;
+  text-align: left;
+}
+@media (min-width: 768px) {
+  .sa-row-side {
+    flex: 0 0 15rem;
+    text-align: right;
+  }
+  .sa-row-side > div {
+    justify-content: flex-end;
+  }
+}
+.sa-tag {
+  border-radius: 999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--cr-fg);
+  background: rgb(246 236 230 / 0.07);
+  border: 1px solid rgb(246 236 230 / 0.1);
+}
+
+.sa-area,
+.sa-level {
+  --cut-fill: var(--cx-sink);
+  --cut-border: var(--cx-edge);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  min-height: 100%;
+  padding: 0.625rem 0.75rem;
+  cursor: pointer;
+  transition: --cut-border 160ms ease;
+}
+.sa-area:hover,
+.sa-level:hover {
+  --cut-border: var(--cx-edge-lit);
+}
+.sa-area[data-on],
+.sa-level[data-on] {
+  --cut-fill: var(--cx-raise);
+  --cut-border: var(--cr-highlight);
+}
+.sa-level[data-off] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.sa-check {
+  margin-top: 0.2rem;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  accent-color: var(--cr-highlight);
+}
+.sa-area:focus-within,
+.sa-level:focus-within {
+  outline: 2px solid var(--cr-focus, var(--cr-highlight));
+  outline-offset: 2px;
+}
+
+/* ----- staff home overview ---------------------------------------------------------------- */
+
+.sp-grid {
+  display: grid;
+  gap: 1rem;
+}
+@media (min-width: 1024px) {
+  .sp-grid {
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.sp-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.625rem;
+}
+.sp-block-head a {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.sp-bars {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: end;
+  gap: 3px;
+  height: 3.25rem;
+  margin-top: 0.5rem;
+}
+.sp-bar {
+  min-height: 2px;
+  height: calc(var(--h, 0) * 100%);
+  border-radius: 2px 2px 0 0;
+  background: linear-gradient(180deg, var(--cr-highlight), color-mix(in srgb, var(--cr-highlight) 35%, transparent));
+  transform-origin: bottom;
+  animation: sp-grow 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 22ms);
+}
+.sp-bar[data-zero] {
+  background: rgb(246 236 230 / 0.12);
+}
+@keyframes sp-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+/* The activity feed (home page and Staff activity). */
+.sp-feed {
+  display: grid;
+  gap: 0.375rem;
+}
+.sp-act {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.5rem;
+  transition: background-color 140ms ease;
+}
+.sp-act:hover {
+  background: rgb(246 236 230 / 0.045);
+}
+.sp-act-what {
+  min-width: 0;
+}
+.sp-act-what > p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-act-when {
+  font-size: 0.75rem;
+  color: var(--cr-fg-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sp-area {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0 0.4375rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cr-fg-muted);
+  border: 1px solid rgb(246 236 230 / 0.12);
+}
+.sp-day {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cr-highlight);
+}
+
+/* People strip on Staff activity: one card per staff member, pressed when it filters. */
+.sp-people {
+  display: grid;
+  gap: 0.625rem;
+  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+}
+.sp-person {
+  --cut-fill: var(--cx-raise);
+  --cut-border: var(--cx-edge);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.25rem 0.75rem;
+  align-items: center;
+  padding: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  transition: --cut-border 160ms ease, transform 160ms ease;
+}
+.sp-person:hover {
+  transform: translateY(-1px);
+  --cut-border: var(--cx-edge-lit);
+}
+.sp-person[aria-pressed="true"] {
+  --cut-border: var(--cr-highlight);
+}
+.sp-person-n {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--cr-fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.sp-person-n strong {
+  color: var(--cr-fg);
+  font-weight: 700;
+}
+
+/* ----- royalties: artist rates ------------------------------------------------------------ */
+
+.rr-layout {
+  display: grid;
+  gap: 1rem;
+}
+@media (min-width: 1100px) {
+  .rr-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    align-items: start;
+  }
+  .rr-detail {
+    position: sticky;
+    top: 4.5rem;
+  }
+}
+.rr-list {
+  display: grid;
+  gap: 0.375rem;
+}
+.rr-item {
+  --cut-fill: var(--cx-raise);
+  --cut-border: var(--cx-edge);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  cursor: pointer;
+  transition: --cut-border 160ms ease;
+}
+.rr-item:hover {
+  --cut-border: var(--cx-edge-lit);
+}
+.rr-item[aria-current="true"] {
+  --cut-border: var(--cr-highlight);
+}
+.rr-rate {
+  font-family: var(--font-ui, inherit);
+  font-size: 1.125rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--cr-fg);
+  white-space: nowrap;
+}
+.rr-rate[data-none] {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--cr-warning);
+}
+.rr-big {
+  font-size: clamp(2.5rem, 6vw, 3.75rem);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.rr-big small {
+  font-size: 0.45em;
+  font-weight: 700;
+  color: var(--cr-fg-muted);
+}
+.rr-well {
+  --cut-fill: var(--cx-sink);
+  --cut-border: var(--cx-edge);
+  padding: 1rem;
+}
+.rr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+.rr-table th {
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cr-fg-muted);
+  padding: 0.375rem 0.5rem;
+  border-bottom: 1px solid rgb(246 236 230 / 0.1);
+}
+.rr-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid rgb(246 236 230 / 0.06);
+  vertical-align: top;
+}
+.rr-table td.rr-num,
+.rr-table th.rr-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.rr-history {
+  display: grid;
+  gap: 0.5rem;
+  border-left: 2px solid rgb(246 236 230 / 0.12);
+  padding-left: 0.875rem;
+}
+.rr-history li[data-current] {
+  position: relative;
+}
+.rr-history li[data-current] .rr-dot {
+  background: var(--cr-highlight);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--cr-highlight) 22%, transparent);
+}
+.rr-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-left: -1.22rem;
+  margin-right: 0.72rem;
+  border-radius: 999px;
+  background: rgb(246 236 230 / 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-bar {
+    animation: none;
+  }
+  .sa-row,
+  .sa-area,
+  .sa-level,
+  .sp-person,
+  .rr-item,
+  .sp-act {
+    transition: none;
+  }
+  .sp-person:hover {
+    transform: none;
+  }
+}

@@ -67,6 +67,10 @@ ROLE_PERMISSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
     "legal": ("Legal", ("music.takedown",)),
     "admin": ("Administrator", ("user.admin", "org.admin", "audit.read")),
     "super_admin": ("Super Admin", FOUNDATION_PERMISSIONS),
+    # D-STAFF-ACCOUNTS-01 (owner, 2026-11-28): an Admin added in the staff portal runs every part
+    # of it. Editing roles themselves (`role.admin`) stays with the owner, so only the owner can
+    # add or remove admins.
+    "staff_admin": ("Admin", tuple(k for k in FOUNDATION_PERMISSIONS if k != "role.admin")),
     "venue_partner": ("Venue Partner", ("venue.read", "venue.write")),
     "sponsor": ("Sponsor", ()),
     "producer": ("Producer", ()),

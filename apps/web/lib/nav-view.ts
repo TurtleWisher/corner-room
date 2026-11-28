@@ -164,7 +164,8 @@ export function staffNavSections(permissions: string[] | undefined): NavSection[
   // All customers and followers, with CSV download (owner, 2026-10-27): admins and finance staff.
   if (flags.showFinance || flags.showUsers) money.push({ href: "/staff/customers", label: "Customers and users" });
   if (flags.showFinance) money.push({ href: "/staff/finance", label: "Finance" });
-  money.push({ href: "/staff/royalties", label: "Royalty ops" });
+  // Artist rates and royalty runs (owner, 2026-11-28, D-ROYALTY-RATE-01).
+  money.push({ href: "/staff/royalties", label: "Royalties" });
 
   const sections: NavSection[] = [
     {
@@ -200,6 +201,9 @@ export function staffNavSections(permissions: string[] | undefined): NavSection[
   sections.push({ label: "Updates", items: [{ href: "/staff/updates", label: "Feature updates" }] });
 
   const admin: NavItem[] = [];
+  // Staff accounts and who did what (owner, 2026-11-28, D-STAFF-ACCOUNTS-01, URL-16).
+  if (flags.showUsers) admin.push({ href: "/staff/team", label: "Staff accounts" });
+  if (flags.showOps) admin.push({ href: "/staff/activity", label: "Staff activity" });
   if (flags.showOps) admin.push({ href: "/staff/ops", label: "Ops" }, { href: "/staff/audit", label: "Audit log" });
   if (flags.showUsers) admin.push({ href: "/staff/users", label: "Users" });
   if (flags.showOrgs) admin.push({ href: "/staff/organizations", label: "Organizations" });
